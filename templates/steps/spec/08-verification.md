@@ -31,7 +31,7 @@ Spawn a subagent with a **fresh context** (use your Task/Agent tool). Give it ex
 - the path to the staged spec, `.spektacular/tmp/spec_template.md`, to read; and
 - the reviewer brief below, pasted verbatim.
 
-Tell the subagent explicitly: **review only what is written in that file.** Do not read the working files, `.spektacular/context.md`, the conversation, or any other source; do not ask the caller for intent. Judge the spec purely as a naive reader would. Return a flat list of findings — for each: `section`, `quote` (the offending text), `issue_type` (leak / misplaced-hard-rule / duplication / missing-constraint / format / unclear / incomplete), and `suggested_fix`. If nothing is wrong, return an empty list.
+Tell the subagent explicitly: **review only what is written in that file.** Do not read the working files, `.spektacular/working-context.md`, the conversation, or any other source; do not ask the caller for intent. Judge the spec purely as a naive reader would. Return a flat list of findings — for each: `section`, `quote` (the offending text), `issue_type` (leak / misplaced-hard-rule / duplication / missing-constraint / format / unclear / incomplete), and `suggested_fix`. If nothing is wrong, return an empty list.
 
 > If you have no way to spawn a subagent, fall back to reviewing the staged file yourself — but read **only** `.spektacular/tmp/spec_template.md`, ignore everything you remember from the interview, and apply the brief as strictly as a stranger would.
 
@@ -118,8 +118,3 @@ Then advance:
 ```
 {{config.command}} spec goto --data '{"step":"{{next_step}}"}'
 ```
-
-
----
-
-**Before you advance:** refresh `.spektacular/context.md` with your cross-cutting working context only — the key decisions and substitutions made, the answers the user gave to your questions, and learnings worth carrying forward. Keep it to learnings and decisions, not a transcript and not a copy of content already captured elsewhere (such as a section's own working file). Use your own file tools. This file is git-tracked, and a resumed session reads it back to pick up where you left off, so keep it current every time before running the `goto` command above.

@@ -2,7 +2,18 @@
 
 Write tests for the code you just implemented. This step runs in a **sub-agent** so the test-authoring context doesn't pollute the main implementation context. Do not write tests in the main context.
 
-### Delegate to the follow-test-patterns skill
+### Step 1: Load the current phase
+
+Do not rely on an earlier step's output still being in your context. Read the phase from the plan itself:
+
+1. Run `{{config.command}} plan file read {{plan_name}}/plan.md` and take the first unchecked `#### - [ ] Phase N.M:` heading under `## Milestones & Phases` as the current phase.
+2. Run `{{config.command}} plan file read {{plan_name}}/context.md` and read that phase's `### Phase N.M:` section of the plan's `context.md` in full.
+
+If the section is missing, unreadable, or empty, STOP and ask the user whether to fix the plan's `context.md` before proceeding. This is a plan/reality mismatch — do not guess.
+
+Pass the current phase's acceptance criteria and its section of the plan's `context.md` to the sub-agent.
+
+### Step 2: Delegate to the follow-test-patterns skill
 
 Launch a sub-agent with the instructions from:
 
@@ -15,7 +26,7 @@ The sub-agent should:
 1. Read the project's test conventions (typically documented in `thoughts/notes/testing.md` or discoverable via the existing plan/spec step tests).
 2. Identify the package or packages the new code lives in.
 3. Write `*_test.go` files that match the conventions — `stretchr/testify/require` assertions, `t.TempDir()` for fixtures, co-located with the package under test, inside the source of the repo the phase attributes the work to.
-4. Cover the phase's acceptance criteria from `{{plan_path}}` — each criterion should have a corresponding passing test assertion.
+4. Cover the phase's acceptance criteria from the current phase in the plan's `plan.md` — each criterion should have a corresponding passing test assertion.
 5. Cover any **success metric** that the plan's `## Testing Approach` flagged as a behavioural test and that this phase delivers — write the actual test (e.g. a latency or throughput assertion). If a metric the plan expected to be automatable proves otherwise against the real code, do not force it: note it so the later `test_plan` step captures it as a manual procedure instead.
 6. Return a concise summary: which files were written/modified and what each test asserts.
 
@@ -30,7 +41,3 @@ Once tests are written and the sub-agent has returned its summary:
 ```
 {{config.command}} implement goto --data '{"step":"{{next_step}}"}'
 ```
-
----
-
-**Before you advance:** refresh `.spektacular/context.md` with your cross-cutting working context only — the key decisions and substitutions made, the answers the user gave to your questions, and learnings worth carrying forward. Keep it to learnings and decisions, not a transcript and not a copy of content already captured elsewhere (such as a section's own working file). Use your own file tools. This file is git-tracked, and a resumed session reads it back to pick up where you left off, so keep it current every time before running the `goto` command above.

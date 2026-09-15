@@ -4,15 +4,15 @@ Identify the current phase, then research the codebase touchpoints before writin
 
 ### Step 1: Pick the current phase
 
-Re-read plan.md through the plan store — `{{config.command}} plan file read {{plan_name}}/plan.md` — and locate the first unchecked `#### - [ ] Phase N.M:` heading under `## Milestones & Phases`. That is **the current phase**. Record its number (e.g. `1.2`), its title, and its `*Technical detail:*` link to a section in context.md.
+Re-read plan.md through the plan store — `{{config.command}} plan file read {{plan_name}}/plan.md` — and locate the first unchecked `#### - [ ] Phase N.M:` heading under `## Milestones & Phases`. That is **the current phase**. Record its number (e.g. `1.2`), its title, and its `*Technical detail:*` link to a section in the plan's `context.md`.
 
 If every phase is already checked, STOP — this should only happen if the user manually advanced the workflow past `update_changelog` without looping. Report the situation and ask the user what to do.
 
 ### Step 2: Read the phase's technical detail
 
-Read context.md through the plan store — `{{config.command}} plan file read {{plan_name}}/context.md` — and find the `### Phase N.M:` heading the `*Technical detail:*` link points to. Read the entire phase section. It should contain file:line references, complexity, token estimate, and an agent strategy.
+Read the plan's `context.md` through the plan store — `{{config.command}} plan file read {{plan_name}}/context.md` — and find the `### Phase N.M:` heading the `*Technical detail:*` link points to. Read the entire phase section. It should contain file:line references, complexity, token estimate, and an agent strategy.
 
-Always read the plan documents with `{{config.command}} plan file read`, never with the `Read` tool. If the section is missing, unreadable, or empty, STOP and ask the user whether to fix context.md before proceeding. This is a plan/reality mismatch — do not guess.
+Always read the plan documents with `{{config.command}} plan file read`, never with the `Read` tool. If the section is missing, unreadable, or empty, STOP and ask the user whether to fix the plan's `context.md` before proceeding. This is a plan/reality mismatch — do not guess.
 
 ### Step 3: Delegate codebase research to sub-agents
 
@@ -24,7 +24,7 @@ For non-trivial phases (Medium or High complexity), delegate the codebase resear
 
 The research should cover:
 
-1. Every file:line reference listed in the context.md phase section — confirm each still exists and the line numbers are approximately correct (drift may have moved them slightly).
+1. Every file:line reference listed in the phase section of the plan's `context.md` — confirm each still exists and the line numbers are approximately correct (drift may have moved them slightly).
 2. The integration points where new code will sit — imports, callers, interfaces that need to be satisfied.
 3. Existing patterns to follow — similar implementations elsewhere in the codebase that the new code should match in shape.
 4. Tests that will need to be updated or added.
@@ -42,7 +42,3 @@ Once analysis is complete and you have a clear picture of the files, patterns, a
 ```
 {{config.command}} implement goto --data '{"step":"{{next_step}}"}'
 ```
-
----
-
-**Before you advance:** refresh `.spektacular/context.md` with your cross-cutting working context only — the key decisions and substitutions made, the answers the user gave to your questions, and learnings worth carrying forward. Keep it to learnings and decisions, not a transcript and not a copy of content already captured elsewhere (such as a section's own working file). Use your own file tools. This file is git-tracked, and a resumed session reads it back to pick up where you left off, so keep it current every time before running the `goto` command above.

@@ -26,7 +26,7 @@ A common failure mode is silently dropping a section when assembling. Check each
 10. `## Open Questions`
 11. `## Out of Scope`
 
-**context.md — required `##` sections** (in order):
+**The plan's context.md — required `##` sections** (in order):
 
 1. `## Current State Analysis`
 2. `## Per-Phase Technical Notes`
@@ -50,7 +50,7 @@ A common failure mode is silently dropping a section when assembling. Check each
 ### Step 2: Quality
 
 - **plan.md** — readable in under a minute; every phase has a `**Repo:**` line, a summary paragraph, a `*Technical detail:*` link, and outcome-based acceptance criteria; no shell commands anywhere. In a project with more than one registered repo, confirm the `**Repo:**` line is actually present on every single phase, not just the phases that read as obviously cross-repo — this is the check most likely to be skipped.
-- **context.md** — per-phase technical notes under headings matching plan.md's `*Technical detail:*` anchors.
+- **The plan's context.md** — per-phase technical notes under headings matching plan.md's `*Technical detail:*` anchors.
 - **research.md** — alternatives considered and rejected with citations. Dense enough to rehydrate a cold session.
 
 ### Step 3: Fix and re-stage
@@ -64,7 +64,3 @@ Then advance:
 ```
 {{config.command}} plan goto --data '{"step":"{{next_step}}"}'
 ```
-
----
-
-**Before you advance:** refresh `.spektacular/context.md` with your cross-cutting working context only — the key decisions and substitutions made, the answers the user gave to your questions, and learnings worth carrying forward. Keep it to learnings and decisions, not a transcript and not a copy of content already captured elsewhere (such as a section's own working file). Use your own file tools. This file is git-tracked, and a resumed session reads it back to pick up where you left off, so keep it current every time before running the `goto` command above.

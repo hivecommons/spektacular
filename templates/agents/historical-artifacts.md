@@ -55,9 +55,9 @@ merely because the code does something else — that difference is work to
 do, not evidence against the entry. If you genuinely believe an entry is
 wrong, say so to the user and ask; do not silently overrule it.
 
-More broadly, the remainder of `.spektacular/` — `context.md` and
+More broadly, the remainder of `.spektacular/` — `working-context.md` and
 changelog records — is generated output *about* the codebase, not the
 codebase itself. A broad grep or file scan run to understand
 current-state behavior should treat `.spektacular/specs/`,
-`.spektacular/plans/`, `context.md` and the changelog as out of scope,
+`.spektacular/plans/`, `working-context.md` and the changelog as out of scope,
 unless the task explicitly concerns them.

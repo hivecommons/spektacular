@@ -28,7 +28,7 @@ On each turn, the CLI returns JSON containing an `instruction` field. That instr
 
 # Reading and writing plan files
 
-The CLI owns the plan documents — `plan.md`, `context.md`, and `research.md`. **Never read or write them with the `Write`, `Edit`, or `Read` tools** — those bypass Spektacular and the configured plan directory. All plan document access goes through `{{command}} plan file`:
+The CLI owns the plan documents — `plan.md`, the plan's `context.md`, and `research.md`. **Never read or write them with the `Write`, `Edit`, or `Read` tools** — those bypass Spektacular and the configured plan directory. All plan document access goes through `{{command}} plan file`:
 
 - `{{command}} plan file read <name>/<doc>.md` — read a plan document from the plan store.
 - `{{command}} plan file write <name>/<doc>.md --from <source-path>` — write a plan document into the plan store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
@@ -37,6 +37,10 @@ The CLI owns the plan documents — `plan.md`, `context.md`, and `research.md`. 
 This includes the edits the implement workflow makes to `plan.md` — ticking phase checkboxes and appending changelog entries. Read the document with `plan file read`, apply the change, and commit it with `plan file write`. Never edit a plan document in place with the `Edit` tool. Path arguments are plan-directory-relative document paths (e.g. `my-feature/plan.md`).
 
 # How to start
+
+## The plan documents
+
+{{> partials/implement-plan-documents}}
 
 > **Cross-repo implementation.** When the plan attributes work to registered member repos, carry each part of the work out in its attributed repo's code (`{{command}} repo list` reports where it lives as `root`), and follow the workflow's changelog instructions to write the central record plus one derived entry per affected repo via `{{command}} changelog file write ... --repo <name>`.
 
@@ -55,11 +59,15 @@ Start the implement workflow by running:
 **First check the report's `kind`.** If it is **not** `implement`, a *different* workflow (a spec or plan run) is in progress — you cannot resume it from the implement skill, and the CLI will refuse to. Do **not** run an `implement goto`. Instead follow the report's `instruction`: tell the user a `<kind>` workflow is in progress and let them choose — continue it with that workflow's skill (`{{command}} <kind> goto`), or discard it and start the implement run with `{{command}} implement new --force`. Only proceed with the steps below when the report's `kind` is `implement`.
 
 1. Ask the user whether to **resume** the in-progress implement run or **start a new one**. (The report's `instruction` field restates both options.)
-2. **To resume**, first read `.spektacular/context.md` — the git-tracked working-context file the previous session left behind — to recover its learnings and the answers you gave to the user's questions, then run the resume command using the report's `current_step`:
+2. **To resume**, work through these in order:
+   1. Read the plan documents listed under **The plan documents** above, in full, before anything else, whichever step the run stopped at.
+   2. Read `.spektacular/working-context.md`, the git-tracked working-context file the previous session left behind, for its learnings and the answers the user gave to your questions. It is a session log, not the plan.
+   3. Find the current phase as the first unchecked `#### - [ ] Phase` heading in `plan.md`.
+   4. Run the resume command using the report's `current_step`:
 
-   ```
-   {{command}} implement goto --data '{"step":"<current_step>"}'
-   ```
+      ```
+      {{command}} implement goto --data '{"step":"<current_step>"}'
+      ```
 3. **To start fresh** (discarding the in-progress workflow — it remains recoverable via git), re-run with `--force`:
 
    ```

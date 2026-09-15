@@ -6,7 +6,7 @@ Draft the **Component Breakdown** section of `plan.md`. This section lists the c
 
 - One bullet or short paragraph per component.
 - For each component: name it, state what it owns, and describe its relationship to the other components.
-- Do NOT list file paths or line numbers in plan.md — those belong in context.md. Component responsibilities, not implementation sites.
+- Do NOT list file paths or line numbers in plan.md — those belong in the plan's `context.md`. Component responsibilities, not implementation sites.
 - Reuse existing components wherever possible; a new component needs justification.
 - Cover both new components and meaningfully-changed existing ones.
 
@@ -30,7 +30,3 @@ Before advancing, save this section to its working file. Using your own `Write` 
 Once the drafted component list is saved, advance:
 
 {{config.command}} plan goto --data '{"step":"{{next_step}}"}'
-
----
-
-**Before you advance:** refresh `.spektacular/context.md` with your cross-cutting working context only — the key decisions and substitutions made, the answers the user gave to your questions, and learnings worth carrying forward. Keep it to learnings and decisions, not a transcript and not a copy of content already captured elsewhere (such as a section's own working file). Use your own file tools. This file is git-tracked, and a resumed session reads it back to pick up where you left off, so keep it current every time before running the `goto` command above.

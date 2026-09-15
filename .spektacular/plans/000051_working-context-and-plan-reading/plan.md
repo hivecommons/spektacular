@@ -188,7 +188,7 @@ Almost all of this feature is agent-facing prose, so the load-bearing tests are 
 
 **Validation point**: Running any step of any workflow emits the new name and never the old one. Every continuing step ends in the identical footer and terminal steps have none. No emitted next command lacks its prefix. The installed skills and `AGENTS.md` in this repo are regenerated with the new name, the website tutorial shows it, and the full test suite passes.
 
-#### - [ ] Phase 1.1: Write the standing footer once and render it for every continuing step
+#### - [x] Phase 1.1: Write the standing footer once and render it for every continuing step
 
 **Repo:** `spektacular`
 
@@ -198,14 +198,14 @@ The keep-context-current paragraph is currently copied into 45 step instructions
 
 **Acceptance criteria**:
 
-- [ ] Every continuing step in the spec, plan, implement and repo workflows ends with exactly one copy of the same keep-context-current paragraph, and no finished step carries it.
-- [ ] Changing the footer's wording means editing one file, and no step instruction file still contains its own copy.
-- [ ] Starting a new spec shows the next command with the configured command prefix, and it now ends with the standing footer like every other continuing step.
-- [ ] No emitted step, resume or skill instruction shows a `spec goto`, `plan goto`, `implement goto` or `repo goto` without the command prefix in front of it.
-- [ ] Instructions that include no shared fragment render exactly as they did before, apart from the footer now being supplied by the renderer.
-- [ ] The full test suite passes.
+- [x] Every continuing step in the spec, plan, implement and repo workflows ends with exactly one copy of the same keep-context-current paragraph, and no finished step carries it.
+- [x] Changing the footer's wording means editing one file, and no step instruction file still contains its own copy.
+- [x] Starting a new spec shows the next command with the configured command prefix, and it now ends with the standing footer like every other continuing step.
+- [x] No emitted step, resume or skill instruction shows a `spec goto`, `plan goto`, `implement goto` or `repo goto` without the command prefix in front of it.
+- [x] Instructions that include no shared fragment render exactly as they did before, apart from the footer now being supplied by the renderer.
+- [x] The full test suite passes.
 
-#### - [ ] Phase 1.2: Rename the working context to working-context everywhere
+#### - [x] Phase 1.2: Rename the working context to working-context everywhere
 
 **Repo:** `spektacular`
 
@@ -215,15 +215,15 @@ This phase moves the agent's working context from `.spektacular/context.md` to `
 
 **Acceptance criteria**:
 
-- [ ] Starting a spec clears `.spektacular/working-context.md` and never creates or writes a `.spektacular/context.md`.
-- [ ] The spec, plan, implement and repo-add workflows each emit instructions that read or refresh the working context under its new name, and their skills say the same.
-- [ ] No emitted instruction, installed skill or managed `AGENTS.md` section mentions `.spektacular/context.md`.
-- [ ] An existing `.spektacular/context.md` from an earlier version is neither moved, read, nor reported as an error.
-- [ ] Existing plans, including their own `context.md`, still read and write without change.
-- [ ] The installed `.claude/` and `.bob/` skills and `AGENTS.md` in this repo show the new name.
-- [ ] The full test suite passes.
+- [x] Starting a spec clears `.spektacular/working-context.md` and never creates or writes a `.spektacular/context.md`.
+- [x] The spec, plan, implement and repo-add workflows each emit instructions that read or refresh the working context under its new name, and their skills say the same.
+- [x] No emitted instruction, installed skill or managed `AGENTS.md` section mentions `.spektacular/context.md`.
+- [x] An existing `.spektacular/context.md` from an earlier version is neither moved, read, nor reported as an error.
+- [x] Existing plans, including their own `context.md`, still read and write without change.
+- [x] The installed `.claude/` and `.bob/` skills and `AGENTS.md` in this repo show the new name.
+- [x] The full test suite passes.
 
-#### - [ ] Phase 1.3: Show the new name in the website tutorial
+#### - [x] Phase 1.3: Show the new name in the website tutorial
 
 **Repo:** `docs`
 
@@ -241,10 +241,10 @@ The quoted footer inside the tutorial's fenced `markdown` block changes only in 
 
 **Acceptance criteria**:
 
-- [ ] The tutorial's quoted instruction shows `.spektacular/working-context.md` and matches the footer agents now receive.
-- [ ] The website's other mentions of the plan's `context.md` are unchanged.
-- [ ] The site builds and type-checks cleanly, and no layout markup has been added to page bodies.
-- [ ] The unrelated uncommitted change already in the docs repo is left untouched.
+- [x] The tutorial's quoted instruction shows `.spektacular/working-context.md` and matches the footer agents now receive.
+- [x] The website's other mentions of the plan's `context.md` are unchanged.
+- [x] The site builds and type-checks cleanly, and no layout markup has been added to page bodies.
+- [x] The unrelated uncommitted change already in the docs repo is left untouched.
 
 ### Milestone 2: Implementations read the plan when they start and when they resume
 
@@ -252,7 +252,7 @@ The quoted footer inside the tutorial's fenced `markdown` block changes only in 
 
 **Validation point**: The implement skill's start instructions and the `read_plan` step list the three plan documents with descriptions and read commands, identical to the resume instruction's list. For an implementation interrupted at each of its steps, the resume instruction orders read-the-plan before the continue command and carries only the additive items. The `implement`, `test` and `verify` steps each include the phase-detail read command. No emitted instruction mentions `context.md` without qualifying it as the plan's. The full test suite and a harbor run pass.
 
-#### - [ ] Phase 2.1: Define the plan documents once and show them when an implementation starts
+#### - [x] Phase 2.1: Define the plan documents once and show them when an implementation starts
 
 **Repo:** `spektacular`
 
@@ -262,14 +262,14 @@ This phase writes a single shared description of the three plan documents: `plan
 
 **Acceptance criteria**:
 
-- [ ] The installed implement skill's start instructions name `plan.md`, the plan's `context.md` and `research.md`, state what each contains, and give the command to read each.
-- [ ] The implement workflow's first step shows the same plan-documents description, word for word, and still directs a full read of all three before validation.
-- [ ] The plan-documents description distinguishes the plan's `context.md` from the working context.
-- [ ] A skill or step that includes a shared fragment that does not exist fails to render instead of silently omitting it.
-- [ ] Skills that include no fragment install exactly as before.
-- [ ] The full test suite passes.
+- [x] The installed implement skill's start instructions name `plan.md`, the plan's `context.md` and `research.md`, state what each contains, and give the command to read each.
+- [x] The implement workflow's first step shows the same plan-documents description, word for word, and still directs a full read of all three before validation.
+- [x] The plan-documents description distinguishes the plan's `context.md` from the working context.
+- [x] A skill or step that includes a shared fragment that does not exist fails to render instead of silently omitting it.
+- [x] Skills that include no fragment install exactly as before.
+- [x] The full test suite passes.
 
-#### - [ ] Phase 2.2: Make a resumed implementation read the plan first
+#### - [x] Phase 2.2: Make a resumed implementation read the plan first
 
 **Repo:** `spektacular`
 
@@ -279,15 +279,15 @@ When an interrupted implementation is found, the resume instruction now comes fr
 
 **Acceptance criteria**:
 
-- [ ] For an implementation interrupted at each of its steps, the resume instruction tells the agent to read the plan documents, and that instruction comes before the command to continue the interrupted step.
-- [ ] The resume instruction describes the plan documents in exactly the words the start instructions use.
-- [ ] The resume instruction tells the agent to determine the current phase from the plan as its first unchecked phase.
-- [ ] The resume path carries only the in-progress statement, read the plan, read the working context, find the next phase and the continue command, and no other procedural steps.
-- [ ] The implement skill's resume path lists the same items and refers to its plan-documents section rather than restating it.
-- [ ] Resuming a spec, plan or repo-add workflow produces the same instruction as before apart from the working-context name.
-- [ ] The full test suite passes.
+- [x] For an implementation interrupted at each of its steps, the resume instruction tells the agent to read the plan documents, and that instruction comes before the command to continue the interrupted step.
+- [x] The resume instruction describes the plan documents in exactly the words the start instructions use.
+- [x] The resume instruction tells the agent to determine the current phase from the plan as its first unchecked phase.
+- [x] The resume path carries only the in-progress statement, read the plan, read the working context, find the next phase and the continue command, and no other procedural steps.
+- [x] The implement skill's resume path lists the same items and refers to its plan-documents section rather than restating it.
+- [x] Resuming a spec, plan or repo-add workflow produces the same instruction as before apart from the working-context name.
+- [x] The full test suite passes.
 
-#### - [ ] Phase 2.3: Have phase steps fetch their own detail and name the plan's context.md unambiguously
+#### - [x] Phase 2.3: Have phase steps fetch their own detail and name the plan's context.md unambiguously
 
 **Repo:** `spektacular`
 
@@ -297,10 +297,10 @@ The steps that write code, write tests and verify a phase stop assuming earlier 
 
 **Acceptance criteria**:
 
-- [ ] The instructions for writing code, writing tests and verifying a phase each include the command to read the current phase's technical detail from the plan.
-- [ ] None of those instructions says an earlier step's summaries or analysis are already available.
-- [ ] Every mention of `context.md` in every emitted step instruction, resume instruction and skill is qualified as belonging to the plan, in words or by a path or command containing the plan's name.
-- [ ] A new, unqualified mention of `context.md` added to any instruction fails the test suite.
+- [x] The instructions for writing code, writing tests and verifying a phase each include the command to read the current phase's technical detail from the plan.
+- [x] None of those instructions says an earlier step's summaries or analysis are already available.
+- [x] Every mention of `context.md` in every emitted step instruction, resume instruction and skill is qualified as belonging to the plan, in words or by a path or command containing the plan's name.
+- [x] A new, unqualified mention of `context.md` added to any instruction fails the test suite.
 - [ ] The full test suite passes, and the harbor plan and spec suites pass on a verification run.
 
 ## Open Questions
@@ -325,3 +325,135 @@ Any drift the harbor verification run turns up is ordinary verification work, no
 - **Other website pages that mention `context.md`.** Those refer to the plan document and are correct as they stand.
 - **A new harbor E2E suite for an interrupted-then-resumed implement run.** Real-agent resume behaviour is covered by the manual test plan the implement workflow produces. The existing harbor plan and spec suites are only re-run for drift.
 - **Fixing the skills' description of the resume report as `"resumable": true`.** The CLI actually returns a `workflow_in_progress` error envelope. This mismatch predates the spec and is not part of it. Worth a separate issue.
+
+## Changelog
+
+### 2026-09-15 — Phase 1.1: Write the standing footer once and render it for every continuing step
+
+**What was done**: The keep-context-current paragraph now lives once in `templates/partials/working-context-footer.md`, and `stepkit.WriteStepResult` appends it (after a `---` rule) to every step that has a next step; the 45 copied footers were removed from the step templates. `RenderTemplate` now resolves mustache partials from the embedded templates FS through a new `FSPartials` provider that errors on a missing partial, the standard step vars gain `command`, and `spec/00-new.md` renders its next command with `{{config.command}}`.
+
+**Deviations**: No `{{command}}`-renders-in-a-step unit test was added: after the `00-new.md` fix no template uses `{{command}}`, so it would only duplicate `TestNextCommandsCarryPrefix`. The `command` var gets coverage in Phase 2.1 when the plan-documents partial uses it. The skill installer lookup is `agent.Lookup` (the plan wrote `agent.Get`).
+
+**Files changed**:
+- `spektacular: internal/stepkit/stepkit.go`
+- `spektacular: internal/stepkit/stepkit_test.go`
+- `spektacular: templates/partials/working-context-footer.md`
+- `spektacular: templates/steps/{spec,plan,implement,repo}/*.md` (45 footer removals; `spec/00-new.md` prefix fix)
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: templates/context_directive_test.go` (deleted)
+- `spektacular: templates/guided_add_conversation_test.go`
+
+**Discoveries**: `cbroglie/mustache` v1.4.0 propagates a `PartialProvider.Get` error out of `RenderPartials`, so `FSPartials` makes missing includes fail loudly. `cmd/instruction_contract_test.go` now holds the reusable harness (`stepTemplateTable`, `renderAllStepInstructions`) that later phases' guards build on; its completeness walk forces a new step template to be added to the hand-written table.
+
+### 2026-09-15 — Phase 1.2: Rename the working context to working-context everywhere
+
+**What was done**: The working-context file moved from `.spektacular/context.md` to `.spektacular/working-context.md`. The change covers the `workingcontext.RelPath` constant (which the `spec new` reset picks up), the footer partial, and every step template, the shared resume template, the four workflow skills and the historical-artifacts AGENTS.md section that named it. The tracked `.claude/` and `.bob/` skills and `AGENTS.md` were regenerated with `init claude` and `init bob`; the diff is rename-only. An old `.spektacular/context.md` is ignored: never read, moved or reported.
+
+**Deviations**: None. Helper skills (`skill_*.md`) are served raw by `cmd/skill.go`, not rendered, so the contract test fetches them through the real `skill` command path rather than a renderer. Following the plan's dogfooding note, this run's working context was copied by hand to `.spektacular/working-context.md`; the old file is left for the user to delete.
+
+**Files changed**:
+- `spektacular: internal/workingcontext/workingcontext.go`
+- `spektacular: internal/workingcontext/workingcontext_test.go`
+- `spektacular: internal/steps/spec/steps.go`
+- `spektacular: internal/steps/spec/steps_test.go`
+- `spektacular: internal/stepkit/stepkit_test.go`
+- `spektacular: templates/partials/working-context-footer.md`
+- `spektacular: templates/steps/spec/00-new.md`
+- `spektacular: templates/steps/spec/00b-interview.md`
+- `spektacular: templates/steps/spec/08-verification.md`
+- `spektacular: templates/steps/plan/13-assemble.md`
+- `spektacular: templates/steps/resume.md`
+- `spektacular: templates/skills/workflows/spek-new/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-plan/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-manage-repos/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: templates/agents/historical-artifacts.md`
+- `spektacular: templates/skill_resume_test.go`
+- `spektacular: templates/guided_add_skill_test.go`
+- `spektacular: cmd/resume_test.go`
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: .claude/skills/{spek-new,spek-plan,spek-implement,spek-manage-repos}/SKILL.md`
+- `spektacular: .bob/skills/{spek-new,spek-plan,spek-implement,spek-manage-repos}/SKILL.md`
+- `spektacular: AGENTS.md`
+
+**Discoveries**: Helper skills served by `skill <name>` are returned verbatim, not rendered; today none of them uses a mustache placeholder. The contract test file now shares `installClaudeInto` and `workflowInstructionCorpus` across guards.
+
+
+### 2026-09-15 — Phase 1.3: Show the new name in the website tutorial
+
+**What was done**: The footer quoted in the unknown-criteria tutorial's fenced `markdown` block now names `.spektacular/working-context.md`. The quoted line is byte-identical to the paragraph in `templates/partials/working-context-footer.md`.
+
+**Deviations**: None.
+
+**Files changed**:
+- `docs: src/content/tutorials/unknown-criteria.mdx`
+
+**Discoveries**: None.
+
+### 2026-09-15 — Phase 2.1: Define the plan documents once and show them when an implementation starts
+
+**What was done**: The new partial `templates/partials/implement-plan-documents.md` names `plan.md`, the plan's `context.md` and `research.md`, says what each holds, gives the `plan file read` command for each, and marks all three as separate from the working context. The spek-implement skill (a new `## The plan documents` section under `# How to start`) and the `read_plan` step both include it. The skill installer now renders with `mustache.RenderPartials` over `stepkit.FSPartials{sourceFS}`, so a missing partial fails the install. The tracked `.claude/` and `.bob/` skills were regenerated.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: templates/partials/implement-plan-documents.md`
+- `spektacular: internal/agent/skills.go`
+- `spektacular: internal/agent/agent_test.go`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: templates/steps/implement/01-read_plan.md`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: .claude/skills/spek-implement/SKILL.md`
+- `spektacular: .bob/skills/spek-implement/SKILL.md`
+
+**Discoveries**: The command-wrapper installer (`internal/agent/commands.go`) and the managed-section installers still use plain `mustache.Render`. Neither renders skill bodies, so they need no partial support today, but a fragment included from an AGENTS.md section template would render empty-tag errors until they switch to `RenderPartials`.
+
+### 2026-09-15 — Phase 2.2: Make a resumed implementation read the plan first
+
+**What was done**: `resumeInstruction` now renders the new `templates/steps/resume_implement.md` for implement workflows. Its resume path has exactly four items: read the plan documents via the shared partial, read `.spektacular/working-context.md`, find the current phase as the plan's first unchecked phase, then run the full `implement goto` for the interrupted step. The resume-or-new framing and the `--force` alternative stay. Both resume renderers now pass `command`. The spek-implement skill's resume path became the same four-item sub-list, pointing back to its **The plan documents** section. Spec, plan and repo resumes still use the shared `steps/resume.md`.
+
+**Deviations**: The plan's extension of `TestImplementStartListsPlanDocuments` to the resume instruction was not added. `TestResumeImplement_ReadsPlanFirstAtEveryStep` already checks the resume against the same rendered partial that the start test checks the skill and `read_plan` against, so the three surfaces are proven identical without a duplicate assertion. The ordering check anchors on item 2's line, because the partial itself also names the working-context path.
+
+**Files changed**:
+- `spektacular: cmd/resume.go`
+- `spektacular: cmd/resume_test.go`
+- `spektacular: templates/steps/resume_implement.md`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: templates/skill_resume_test.go`
+- `spektacular: .claude/skills/spek-implement/SKILL.md`
+- `spektacular: .bob/skills/spek-implement/SKILL.md`
+
+**Discoveries**: Running `implement new` against this in-progress run showed the new report end to end, with state left untouched. An indented standalone partial include indents the partial's lines, so any cross-surface comparison of an included fragment must normalise indentation.
+
+### 2026-09-15 — Phase 2.3: Have phase steps fetch their own detail and name the plan's context.md unambiguously
+
+**What was done**: The `implement`, `test` and `verify` step instructions each open with a "Load the current phase" block. It runs `plan file read <plan>/plan.md` to find the first unchecked phase and `plan file read <plan>/context.md` to read that phase's section, so none of them relies on `analyze` output still being in context. Their raw `{{plan_path}}`/`{{context_path}}` pointers now name the plan's documents. Every bare `context.md` mention across the implement and plan step templates, the spek-plan skill and the verify-implementation helper skill is now qualified as the plan's. The new `TestContextMdAlwaysQualified` guard enforces this over every agent-facing surface.
+
+**Deviations**: The harbor plan and spec suites were not run. The Docker daemon was not running in this environment, and the suites also need agent credentials. That half of the last acceptance criterion stays unchecked and is carried into the manual test plan; `go test ./...` passes. The phase-load block says "Run `... plan file read ...`" rather than "Read", because it names a command.
+
+**Files changed**:
+- `spektacular: templates/steps/implement/01-read_plan.md`
+- `spektacular: templates/steps/implement/02-analyze.md`
+- `spektacular: templates/steps/implement/03-implement.md`
+- `spektacular: templates/steps/implement/04-test.md`
+- `spektacular: templates/steps/implement/05-verify.md`
+- `spektacular: templates/steps/plan/03-architecture.md`
+- `spektacular: templates/steps/plan/04-components.md`
+- `spektacular: templates/steps/plan/05-data_structures.md`
+- `spektacular: templates/steps/plan/06-implementation_detail.md`
+- `spektacular: templates/steps/plan/08-testing_approach.md`
+- `spektacular: templates/steps/plan/10-phases.md`
+- `spektacular: templates/steps/plan/13-assemble.md`
+- `spektacular: templates/steps/plan/14-verification.md`
+- `spektacular: templates/steps/plan/16-write_context.md`
+- `spektacular: templates/steps/plan/18-walkthrough.md`
+- `spektacular: templates/skills/workflows/spek-plan/SKILL.md`
+- `spektacular: templates/skills/skill_verify-implementation.md`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: .claude/skills/spek-plan/SKILL.md`
+- `spektacular: .bob/skills/spek-plan/SKILL.md`
+
+**Discoveries**: `templates/scaffold/plan.md` still mentions `context.md` bare, but it is a plan document scaffold written into the plan store, not an emitted instruction, so the guard's corpus correctly excludes it. The helper skills served by `skill <name>` are part of the guard corpus through `agentFacingCorpus`.
+

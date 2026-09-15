@@ -35,7 +35,7 @@ func TestWorkflowSkillsAreResumeAware(t *testing.T) {
 		// read the working-context file, and offer a forced fresh start.
 		require.Containsf(t, body, "resumable",
 			"%s must describe recognising a resume report (\"resumable\": true)", skill)
-		require.Containsf(t, body, ".spektacular/context.md",
+		require.Containsf(t, body, ".spektacular/working-context.md",
 			"%s must tell the agent to read the working-context file on resume", skill)
 		require.Containsf(t, body, "--force",
 			"%s must give the start-fresh (new --force) command", skill)
@@ -59,4 +59,19 @@ func TestWorkflowSkillsAreResumeAware(t *testing.T) {
 				"%s must describe the per-section working files under .spektacular/work/", skill)
 		}
 	}
+}
+
+// TestImplementSkillResumeReadsPlanFirst verifies the implement playbook's
+// resume path points at the plan documents and the first unchecked phase,
+// while the plan-documents partial is included only once in the skill (in its
+// "The plan documents" section) rather than repeated in the resume steps.
+func TestImplementSkillResumeReadsPlanFirst(t *testing.T) {
+	content, err := FS.ReadFile("skills/workflows/spek-implement/SKILL.md")
+	require.NoError(t, err)
+	body := string(content)
+
+	require.Contains(t, body, "The plan documents")
+	require.Contains(t, body, "first unchecked")
+	require.Equal(t, 1, strings.Count(body, "{{> partials/implement-plan-documents}}"),
+		"the plan-documents partial must be included exactly once")
 }

@@ -33,7 +33,3 @@ Once the name is agreed, move to the next step by running the command:
 **If they hand the rest over.** If they accept the offer, or say anything of the shape "just use what you think", do not ask the remaining questions at all. Draft the description, role and tags yourself and carry all four values together in one call, which skips those questions entirely:
 
 {{config.command}} repo goto --data '{"step":"placement","name":"<name>","description":"<description>","role":"<role>","tags":["<tag>"]}'
-
----
-
-**Before you advance:** refresh `.spektacular/context.md` with your cross-cutting working context only — the key decisions and substitutions made, the answers the user gave to your questions, and learnings worth carrying forward. Keep it to learnings and decisions, not a transcript and not a copy of content already captured elsewhere (such as a section's own working file). Use your own file tools. This file is git-tracked, and a resumed session reads it back to pick up where you left off, so keep it current every time before running the `goto` command above.

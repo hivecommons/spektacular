@@ -36,7 +36,7 @@ Draft 2-4 short paragraphs describing:
 - Why this direction beats the alternatives
 - A cross-reference to `research.md#alternatives-considered-and-rejected` so plan.md readers can drill into the evidence
 
-Keep this section self-contained. Do NOT write `see context.md for …` — plan.md must stand on its own for readers outside the Milestones & Phases block.
+Keep this section self-contained. Do NOT write `see context.md for …` (pointing at the plan's `context.md`) — plan.md must stand on its own for readers outside the Milestones & Phases block.
 
 Before advancing, save this section to its working file. Using your own `Write` tool, write the drafted **Architecture & Design Decisions** content (body only — no `## ` heading line) to `.spektacular/work/{{plan_name}}/architecture.md`. This working file is git-tracked and is read back on resume and when the plan documents are assembled, so it must hold the final content. It is **not** a plan store document — write it directly with your file tools and do **not** route it through `{{config.command}} plan file write` (that command is only for the final plan documents).
 
@@ -62,7 +62,3 @@ Save the result to its working file. Using your own `Write` tool, write the **Co
 Once the chosen direction is recorded in the assumption log and the draft is saved, advance:
 
 {{config.command}} plan goto --data '{"step":"{{next_step}}"}'
-
----
-
-**Before you advance:** refresh `.spektacular/context.md` with your cross-cutting working context only — the key decisions and substitutions made, the answers the user gave to your questions, and learnings worth carrying forward. Keep it to learnings and decisions, not a transcript and not a copy of content already captured elsewhere (such as a section's own working file). Use your own file tools. This file is git-tracked, and a resumed session reads it back to pick up where you left off, so keep it current every time before running the `goto` command above.

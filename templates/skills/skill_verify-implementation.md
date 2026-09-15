@@ -12,7 +12,7 @@ Read the current phase's acceptance criteria in `plan.md` and map each criterion
 
 - **`thoughts/notes/commands.md`** — project-wide command reference documenting `make test`, `make lint`, `go test ./...`, etc.
 - **The plan's `## Testing Approach` section** — names the overall test strategy.
-- **The phase-specific notes in `context.md`** — may list phase-specific verification commands.
+- **The phase-specific notes in the plan's `context.md`** — may list phase-specific verification commands.
 
 If no commands are documented, fall back to the standard Go pipeline: `go build ./...`, `go test ./...`, and whatever linter the project uses.
 

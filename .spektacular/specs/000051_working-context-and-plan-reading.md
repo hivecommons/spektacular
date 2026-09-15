@@ -30,40 +30,40 @@ When a coding agent picks an interrupted implementation back up, it can mistake 
 -->
 ## Requirements
 
-- [ ] **Session notes have a name of their own**
+- [x] **Session notes have a name of their own**
   The working context an agent keeps across a session must have a name that no plan document shares, so no instruction can refer to one in a way that reads as the other.
 
-- [ ] **Every workflow keeps using the working context**
+- [x] **Every workflow keeps using the working context**
   The spec, plan, implement and repo-add workflows must all continue to read and refresh the working context under its new name.
 
-- [ ] **Starting an implementation states which plan documents to read**
+- [x] **Starting an implementation states which plan documents to read**
   The instructions for starting an implementation must name each plan document, say what each one holds, and say how to read it.
 
-- [ ] **Starting and resuming describe the plan documents consistently**
+- [x] **Starting and resuming describe the plan documents consistently**
   Starting and resuming an implementation must name the same plan documents and describe them the same way.
 
-- [ ] **A resumed implementation reads the plan before continuing**
+- [x] **A resumed implementation reads the plan before continuing**
   When an interrupted implementation is resumed, the agent must be told, plainly and before anything else it does to continue, to read the plan documents, whichever step the run was interrupted at.
 
-- [ ] **A resumed implementation finds its place from the plan**
+- [x] **A resumed implementation finds its place from the plan**
   Resuming must direct the agent to identify the current phase from the plan itself.
 
-- [ ] **Resuming adds only what differs from starting**
+- [x] **Resuming adds only what differs from starting**
   The resume instructions for an implementation must say only that a run is already in progress, to read the plan, to read the working context, to find the next phase, and to continue from the interrupted step.
 
-- [ ] **Steps that act on a phase fetch its detail themselves**
+- [x] **Steps that act on a phase fetch its detail themselves**
   The steps that write code, write tests and verify a phase must each read the current phase's technical detail from the plan, so none of them depends on an earlier step's output still being in the agent's context.
 
-- [ ] **The plan's technical detail is always named unambiguously**
+- [x] **The plan's technical detail is always named unambiguously**
   Every agent instruction that refers to the plan's per-phase technical detail must make clear it belongs to the plan, so it cannot be mistaken for the working context.
 
-- [ ] **The keep-context-current instruction is identical in every step**
+- [x] **The keep-context-current instruction is identical in every step**
   Every step instruction that continues to a further step must end with the same instruction to refresh the working context before advancing.
 
-- [ ] **Every next command is shown in full**
+- [x] **Every next command is shown in full**
   Every instruction that directs the agent to run a next command must show that command in full, including its command prefix.
 
-- [ ] **Published documentation shows the current name**
+- [x] **Published documentation shows the current name**
   Documentation on the project's website that quotes agent instructions must show the working context's new name.
 
 <!--
@@ -93,40 +93,40 @@ When a coding agent picks an interrupted implementation back up, it can mistake 
 -->
 ## Acceptance Criteria
 
-- [ ] **The working-context file no longer shares a plan document's name**
+- [x] **The working-context file no longer shares a plan document's name**
   After running any workflow step, the working-context file on disk has a name that differs from every document in a plan's directory, and no file named `context.md` is created or written outside a plan's directory.
 
-- [ ] **Each workflow still reads and refreshes the working context**
+- [x] **Each workflow still reads and refreshes the working context**
   Running a step in each of the spec, plan, implement and repo-add workflows produces an instruction that tells the agent to read or refresh the working context under its new name.
 
-- [ ] **The implement start lists the plan documents**
+- [x] **The implement start lists the plan documents**
   The instructions an agent receives when starting an implementation name the plan's `plan.md`, its `context.md` and its `research.md`, state what each contains, and give the command to read each one.
 
-- [ ] **Start and resume describe the same plan documents**
+- [x] **Start and resume describe the same plan documents**
   The resume instructions for an implementation name the same plan documents as the start instructions, with the same description of each.
 
-- [ ] **Resuming at any step says to read the plan first**
+- [x] **Resuming at any step says to read the plan first**
   For an implementation interrupted at each of its steps in turn, the resume instructions tell the agent to read the plan documents, and that instruction appears before the command to continue the interrupted step.
 
-- [ ] **Resume says to find the current phase from the plan**
+- [x] **Resume says to find the current phase from the plan**
   The resume instructions for an implementation tell the agent to determine the current phase from the plan.
 
-- [ ] **Resume instructions carry only the additive items**
+- [x] **Resume instructions carry only the additive items**
   The resume instructions for an implementation contain the statement that a run is in progress, the read-the-plan instruction, the read-the-working-context instruction, the find-the-next-phase instruction and the continue command, and no other procedural steps.
 
-- [ ] **Code, test and verify steps each read the phase detail**
+- [x] **Code, test and verify steps each read the phase detail**
   The instructions for the steps that write code, write tests and verify a phase each include the command to read the current phase's technical detail from the plan, and none of them states that an earlier step's summaries are already available.
 
-- [ ] **No instruction refers to the plan's detail ambiguously**
+- [x] **No instruction refers to the plan's detail ambiguously**
   Across every instruction the workflows emit, every occurrence of `context.md` is qualified as belonging to the plan, either in words (such as "the plan's `context.md`") or by a path or command that includes the plan's name.
 
-- [ ] **Every continuing step ends with the same refresh instruction**
+- [x] **Every continuing step ends with the same refresh instruction**
   Every step instruction that continues to a further step ends with identical keep-context-current wording.
 
-- [ ] **Every next command is shown in full**
+- [x] **Every next command is shown in full**
   Every emitted instruction that names a next command shows it beginning with the configured command prefix; none shows a bare `spec goto`, `plan goto` or `implement goto`.
 
-- [ ] **The website tutorial shows the new name**
+- [x] **The website tutorial shows the new name**
   The tutorial page on the project website that quotes the keep-context-current instruction shows the working context's new name.
 
 <!--

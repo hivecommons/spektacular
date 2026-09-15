@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"encoding/json"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/jumppad-labs/spektacular/internal/output"
+	"github.com/jumppad-labs/spektacular/internal/stepkit"
 	"github.com/jumppad-labs/spektacular/internal/workflow"
 	"github.com/stretchr/testify/require"
 )
@@ -65,7 +68,7 @@ func TestResumeInstruction_AsksResumeVsNewWithBothCommands(t *testing.T) {
 
 	require.Contains(t, out, `spektacular spec goto --data '{"step":"overview"}'`)
 	require.Contains(t, out, "spektacular spec new --force")
-	require.Contains(t, out, ".spektacular/context.md")
+	require.Contains(t, out, ".spektacular/working-context.md")
 
 	require.Contains(t, out, "resume")
 	require.Contains(t, out, "new")
@@ -121,7 +124,89 @@ func TestResumeInstruction_InterpolatesAcrossKinds(t *testing.T) {
 			require.Contains(t, out, tt.currentStep)
 			require.Contains(t, out, tt.wantGoto)
 			require.Contains(t, out, tt.wantNew)
-			require.Contains(t, out, ".spektacular/context.md")
+			require.Contains(t, out, ".spektacular/working-context.md")
+		})
+	}
+}
+
+// implementResumeSteps is a hand-maintained list of every implement workflow
+// step a run can be interrupted at. It is deliberately not derived from the
+// workflow definition: the resume prompt must read the plan first whichever
+// of these steps the run stopped at.
+var implementResumeSteps = []string{
+	"read_plan",
+	"analyze",
+	"implement",
+	"test",
+	"verify",
+	"update_plan",
+	"update_changelog",
+	"test_plan",
+	"update_feature_changelog",
+	"reconcile_spec",
+}
+
+var numberedItemLine = regexp.MustCompile(`^\d+\. `)
+
+func TestResumeImplement_ReadsPlanFirstAtEveryStep(t *testing.T) {
+	const command = "spekx"
+
+	block, err := stepkit.RenderTemplate("partials/implement-plan-documents.md", map[string]any{"command": command})
+	require.NoError(t, err)
+	block = normalizeIndent(strings.TrimSpace(block))
+	require.NotEmpty(t, block)
+
+	for _, step := range implementResumeSteps {
+		t.Run(step, func(t *testing.T) {
+			out, err := resumeInstruction(command, "implement", "demo-feature", step)
+			require.NoError(t, err)
+
+			require.Contains(t, normalizeIndent(out), block,
+				"the implement resume must include the shared plan-documents block")
+			require.Contains(t, out, "first unchecked")
+
+			planRead := command + " plan file read <plan_name>/plan.md"
+			// The partial also names the working-context path, so anchor on
+			// the numbered item that tells the agent to read it.
+			workingContext := "\n2. Read `.spektacular/working-context.md`"
+			gotoCmd := command + ` implement goto --data '{"step":"` + step + `"}'`
+
+			planIdx := strings.Index(out, planRead)
+			wcIdx := strings.Index(out, workingContext)
+			gotoIdx := strings.Index(out, gotoCmd)
+			require.NotEqual(t, -1, planIdx, "must read plan.md")
+			require.NotEqual(t, -1, wcIdx, "must read the working context as item 2")
+			require.NotEqual(t, -1, gotoIdx, "must give the goto command for the stopped step")
+			require.Less(t, planIdx, wcIdx, "the plan must be read before the working context")
+			require.Less(t, wcIdx, gotoIdx, "the working context must be read before resuming")
+
+			require.NotContains(t, out, "repo list")
+			require.NotContains(t, out, ".spektacular/work/")
+
+			start := strings.Index(out, "### To resume")
+			end := strings.Index(out, "### To discard")
+			require.NotEqual(t, -1, start)
+			require.Greater(t, end, start)
+			items := 0
+			for _, line := range strings.Split(out[start:end], "\n") {
+				if numberedItemLine.MatchString(line) {
+					items++
+				}
+			}
+			require.Equal(t, 4, items, "the resume section must hold exactly four numbered items")
+		})
+	}
+}
+
+func TestResumeNonImplementUsesSharedTemplate(t *testing.T) {
+	for _, kind := range []string{"spec", "plan", "repo"} {
+		t.Run(kind, func(t *testing.T) {
+			out, err := resumeInstruction("spekx", kind, "demo-feature", "overview")
+			require.NoError(t, err)
+
+			require.Contains(t, out, "spekx repo list")
+			require.Contains(t, out, ".spektacular/work/demo-feature/")
+			require.NotContains(t, out, "Read the plan before anything else")
 		})
 	}
 }

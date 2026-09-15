@@ -27,18 +27,18 @@ Assemble all three scaffolds from the per-section working files — no placehold
 - `milestones.md` + `phases_plan.md` → `## Milestones & Phases`
 - `open_questions.md` → `## Open Questions`
 - `out_of_scope.md` → `## Out of Scope`
-- `## Overview` ← derive from the spec you read in step 01 and your `.spektacular/context.md` notes.
+- `## Overview` ← derive from the spec you read in step 01 and your `.spektacular/working-context.md` notes.
 
-**context.md** ← files under `.spektacular/work/{{plan_name}}/`:
+**The plan's context.md** ← files under `.spektacular/work/{{plan_name}}/`:
 - `phases_context.md` → `## Per-Phase Technical Notes`
 - `testing_approach.md` → `## Testing Strategy` (recast at per-phase granularity)
-- `## Current State Analysis`, `## Project References`, `## Token Management Strategy`, `## Migration Notes`, `## Performance Considerations` ← your research findings in `research.md` and `.spektacular/context.md`.
+- `## Current State Analysis`, `## Project References`, `## Token Management Strategy`, `## Migration Notes`, `## Performance Considerations` ← your research findings in `research.md` and `.spektacular/working-context.md`.
 
 **research.md** ← files under `.spektacular/work/{{plan_name}}/`:
 - `research.md` → the research sections it maps directly onto (alternatives through rehydration cues)
 - `assumptions.md` → `## Drafting assumptions`
 
-If a required working file is missing, the matching gathering step was not completed — STOP and complete it before assembling. In particular, confirm both `phases_plan.md` and `phases_context.md` exist, since the phases step writes two files that feed plan.md and context.md respectively. The one exception is `assumptions.md`: a plan can legitimately record zero judgement calls, so if it is missing do **not** STOP — write an explicit "No drafting assumptions were recorded." line under `## Drafting assumptions` instead.
+If a required working file is missing, the matching gathering step was not completed — STOP and complete it before assembling. In particular, confirm both `phases_plan.md` and `phases_context.md` exist, since the phases step writes two files that feed plan.md and the plan's `context.md` respectively. The one exception is `assumptions.md`: a plan can legitimately record zero judgement calls, so if it is missing do **not** STOP — write an explicit "No drafting assumptions were recorded." line under `## Drafting assumptions` instead.
 
 #### plan.md scaffold
 
@@ -46,7 +46,7 @@ If a required working file is missing, the matching gathering step was not compl
 {{plan_template}}
 ```
 
-#### context.md scaffold
+#### The plan's context.md scaffold
 
 ```markdown
 {{context_template}}
@@ -63,7 +63,7 @@ If a required working file is missing, the matching gathering step was not compl
 Using your own `Write` tool, write each assembled document to its scratch path under `.spektacular/tmp/`. These staged files are what the verification step reads and what the write steps commit — **nothing is written to the plan store in this step**:
 
 - plan.md → `.spektacular/tmp/plan_template.md`
-- context.md → `.spektacular/tmp/context_template.md`
+- the plan's `context.md` → `.spektacular/tmp/context_template.md`
 - research.md → `.spektacular/tmp/research_template.md`
 
 Staging to `.spektacular/tmp/` with your own `Write` tool is correct here. Do **not** run `{{config.command}} plan file write` yet — committing to the plan store happens in the write steps.
@@ -73,7 +73,3 @@ Then advance:
 ```
 {{config.command}} plan goto --data '{"step":"{{next_step}}"}'
 ```
-
----
-
-**Before you advance:** refresh `.spektacular/context.md` with your cross-cutting working context only — the key decisions and substitutions made, the answers the user gave to your questions, and learnings worth carrying forward. Keep it to learnings and decisions, not a transcript and not a copy of content already captured elsewhere (such as a section's own working file). Use your own file tools. This file is git-tracked, and a resumed session reads it back to pick up where you left off, so keep it current every time before running the `goto` command above.

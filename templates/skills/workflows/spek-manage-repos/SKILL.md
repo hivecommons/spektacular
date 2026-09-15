@@ -71,7 +71,7 @@ From there, follow the loop above: do what the instruction says, then run the `g
 **First check the report's `kind`.** If it is not `repo`, a different workflow is in progress and you cannot resume it from here. Follow the report's `instruction`: tell the user which workflow is in progress and let them choose to continue it with that workflow's skill, or to discard it. Only proceed below when the report's `kind` is `repo`.
 
 1. Ask the user whether to **resume** the in-progress add or **start a new one**. The report's `instruction` restates both options.
-2. **To resume**, first read `.spektacular/context.md` with your own file tools, for the cross-cutting learnings and the answers the user gave you. Unlike a spec or a plan, an add has no per-section working files to read back: every answer already agreed travels inside the workflow itself and comes back with it. Then run the resume command using the report's `current_step`:
+2. **To resume**, first read `.spektacular/working-context.md` with your own file tools, for the cross-cutting learnings and the answers the user gave you. Unlike a spec or a plan, an add has no per-section working files to read back: every answer already agreed travels inside the workflow itself and comes back with it. Then run the resume command using the report's `current_step`:
 
    ```
    {{command}} repo goto --data '{"step":"<current_step>"}'
