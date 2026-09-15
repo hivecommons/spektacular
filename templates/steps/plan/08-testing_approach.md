@@ -4,9 +4,9 @@ Draft the **Testing Approach** section of `plan.md`.
 
 ### This section is high-level only
 
-Describe the overall testing strategy and test types. This section is **high-level only**. Per-phase testing detail — which specific tests live in which specific files — stays in `context.md`.
+Describe the overall testing strategy and test types. This section is **high-level only**. Per-phase testing detail — which specific tests live in which specific files — stays in the plan's `context.md`.
 
-If you find yourself writing "a test in file X asserts Y on line Z", stop and move that content to context.md.
+If you find yourself writing "a test in file X asserts Y on line Z", stop and move that content to the plan's `context.md`.
 
 ### What to include
 
@@ -51,7 +51,3 @@ Before advancing, save this section to its working file. Using your own `Write` 
 Once the drafted testing strategy is saved, advance:
 
 {{config.command}} plan goto --data '{"step":"{{next_step}}"}'
-
----
-
-**Before you advance:** refresh `.spektacular/context.md` with your cross-cutting working context only — the key decisions and substitutions made, the answers the user gave to your questions, and learnings worth carrying forward. Keep it to learnings and decisions, not a transcript and not a copy of content already captured elsewhere (such as a section's own working file). Use your own file tools. This file is git-tracked, and a resumed session reads it back to pick up where you left off, so keep it current every time before running the `goto` command above.

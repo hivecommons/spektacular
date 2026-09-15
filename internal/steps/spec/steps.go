@@ -64,7 +64,7 @@ func writeStep(stepName, nextStep, templatePath string, data workflow.Data, out 
 	)
 }
 
-// new creates the spec file, clears context.md, and returns an instruction
+// new creates the spec file, clears the working context, and returns an instruction
 // to write conversation context before proceeding to overview.
 func new() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
@@ -87,12 +87,12 @@ func new() workflow.StepCallback {
 			return "", err
 		}
 
-		// Reset context.md for fresh conversation context: drop the previous
+		// Reset the working context for fresh conversation context: drop the previous
 		// session's content so nothing carries over. The relative path
 		// resolves against the current working directory (which is the
 		// project root when running `go run . spec new`).
 		if err := workingcontext.Reset(filepath.FromSlash(workingcontext.RelPath)); err != nil {
-			return "", fmt.Errorf("resetting context.md: %w", err)
+			return "", fmt.Errorf("resetting working context: %w", err)
 		}
 
 		return "", writeStep("new", "interview", "steps/spec/00-new.md", data, out, st, cfg, nil)

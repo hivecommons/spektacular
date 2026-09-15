@@ -7,6 +7,7 @@ package stepkit
 
 import (
 	"fmt"
+	"io/fs"
 	"maps"
 	"strings"
 
@@ -45,8 +46,18 @@ type StepRequest struct {
 // and the rendered instruction text.
 type ResultBuilder func(stepName, instanceName, primaryPath, instruction string) any
 
+// workingContextFooterPath is the shared fragment WriteStepResult appends to
+// every step instruction that has a next step.
+const workingContextFooterPath = "partials/working-context-footer.md"
+
 // WriteStepResult renders the step's template, builds a workflow-specific
 // result via the supplied builder, and writes it to the output writer.
+//
+// When the step has a next step, the rendered working-context footer
+// (templates/partials/working-context-footer.md) is appended after a
+// horizontal rule, so every continuing step ends with the identical
+// keep-context-current paragraph and step templates never carry their own
+// copy. Terminal steps (NextStep == "") get no footer.
 //
 // The variable merge order is: standard vars → strategy path vars → extras.
 // Later entries win, so Extra can override both standard vars and strategy
@@ -80,6 +91,9 @@ func WriteStepResult(
 		"title":     StepTitle(req.StepName),
 		"next_step": req.NextStep,
 		"config":    map[string]any{"command": cfg.Command},
+		// command is the spelling shared fragments use, so one fragment
+		// renders identically here and in install-time skills.
+		"command": cfg.Command,
 	}
 	maps.Copy(vars, pathVars)
 	maps.Copy(vars, req.Extra)
@@ -87,6 +101,13 @@ func WriteStepResult(
 	instruction, err := RenderTemplate(req.TemplatePath, vars)
 	if err != nil {
 		return err
+	}
+	if req.NextStep != "" {
+		footer, err := RenderTemplate(workingContextFooterPath, vars)
+		if err != nil {
+			return err
+		}
+		instruction = strings.TrimRight(instruction, "\n") + "\n\n---\n\n" + footer
 	}
 
 	primaryPath, _ := pathVars[req.Strategy.PrimaryPathField()].(string)
@@ -117,11 +138,29 @@ func GetString(data workflow.Data, key string) string {
 }
 
 // RenderTemplate loads a mustache template from the embedded templates FS and
-// renders it against the supplied data.
+// renders it against the supplied data. Partial includes such as
+// {{> partials/implement-plan-documents}} resolve from the same FS.
 func RenderTemplate(templatePath string, data map[string]any) (string, error) {
 	tmplBytes, err := templates.FS.ReadFile(templatePath)
 	if err != nil {
 		return "", fmt.Errorf("loading template %s: %w", templatePath, err)
 	}
-	return mustache.Render(string(tmplBytes), data)
+	return mustache.RenderPartials(string(tmplBytes), FSPartials{FS: templates.FS}, data)
+}
+
+// FSPartials resolves mustache partial includes ({{> partials/<name>}}) from
+// an fs.FS by reading "<name>.md". Unlike mustache's own providers, a missing
+// partial is an error rather than a silent empty render, so a mistyped include
+// can never quietly drop shared prose from an instruction.
+type FSPartials struct{ FS fs.FS }
+
+var _ mustache.PartialProvider = FSPartials{}
+
+// Get returns the raw template text of the named partial.
+func (p FSPartials) Get(name string) (string, error) {
+	b, err := fs.ReadFile(p.FS, name+".md")
+	if err != nil {
+		return "", fmt.Errorf("loading partial %s: %w", name, err)
+	}
+	return string(b), nil
 }

@@ -7,13 +7,11 @@ This step is the **validation and drift gate** for the implement workflow. Nothi
 
 ### Step 1: Full plan read
 
-Read the three plan documents **in full** through the plan store. The plan documents are the implement workflow's own live artifact — this workflow owns them while it is actively running, which is why reading them here fits the AGENTS.md "specs and plans are historical" rule rather than breaking it. The plan documents are owned by spektacular — always read them with `{{config.command}} plan file read`, never with the `Read` tool, which bypasses the CLI:
+Read the three plan documents **in full** through the plan store. The plan documents are the implement workflow's own live artifact — this workflow owns them while it is actively running, which is why reading them here fits the AGENTS.md "specs and plans are historical" rule rather than breaking it. The plan documents are owned by spektacular — always read them with `{{config.command}} plan file read`, never with the `Read` tool, which bypasses the CLI.
 
-```
-{{config.command}} plan file read {{plan_name}}/plan.md
-{{config.command}} plan file read {{plan_name}}/context.md
-{{config.command}} plan file read {{plan_name}}/research.md
-```
+{{> partials/implement-plan-documents}}
+
+Here `<plan_name>` is `{{plan_name}}`. Read all three now, before any check below.
 
 These are the source of truth for every downstream step.
 
@@ -35,7 +33,7 @@ Verify `{{plan_path}}` has the complete plan-scaffold shape. Every one of these 
 Then verify the phase structure:
 
 - At least one `#### - [ ] Phase N.M:` checkbox heading exists under `## Milestones & Phases`.
-- Every phase has a `*Technical detail:* [context.md#phase-NM](./context.md#...)` link.
+- In the plan's `plan.md`, every phase has a `*Technical detail:*` link into the plan's `context.md`, in the form `[context.md#phase-NM](./context.md#...)`.
 - Every `*Technical detail:*` link target resolves to a matching `### Phase N.M:` heading inside `{{context_path}}`.
 
 If any structural check fails, STOP and report the failures to the user.
@@ -110,7 +108,3 @@ Once validation passes, drift is resolved, and changelog mode is known:
 ```
 {{config.command}} implement goto --data '{"step":"{{next_step}}"}'
 ```
-
----
-
-**Before you advance:** refresh `.spektacular/context.md` with your cross-cutting working context only — the key decisions and substitutions made, the answers the user gave to your questions, and learnings worth carrying forward. Keep it to learnings and decisions, not a transcript and not a copy of content already captured elsewhere (such as a section's own working file). Use your own file tools. This file is git-tracked, and a resumed session reads it back to pick up where you left off, so keep it current every time before running the `goto` command above.

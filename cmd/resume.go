@@ -10,18 +10,28 @@ import (
 	"github.com/jumppad-labs/spektacular/internal/workflow"
 )
 
-// resumeInstruction renders the shared resume-prompt template into the
-// NextAction of an in-progress-workflow ErrorResponse. It tells the driving agent to ask the
+// resumeInstruction renders the resume-prompt template into the NextAction of
+// an in-progress-workflow ErrorResponse. It tells the driving agent to ask the
 // user resume-vs-new and embeds both follow-up commands: resume via
 // `<command> <kind> goto` on the current step, or start fresh via
 // `<command> <kind> new --force`.
 //
+// An implement workflow gets its own template (steps/resume_implement.md),
+// which has the agent read the plan documents before anything else and find
+// the current phase from the plan. Spec, plan and repo workflows share
+// steps/resume.md.
+//
 // command is the CLI invocation prefix (workflow.Config.Command), rendered into
 // the template via {{config.command}} to match the convention used by every
-// other runtime-rendered step template.
+// other runtime-rendered step template, and as {{command}} for shared partials.
 func resumeInstruction(command, kind, name, currentStep string) (string, error) {
-	return stepkit.RenderTemplate("steps/resume.md", map[string]any{
+	templatePath := "steps/resume.md"
+	if kind == "implement" {
+		templatePath = "steps/resume_implement.md"
+	}
+	return stepkit.RenderTemplate(templatePath, map[string]any{
 		"config":       map[string]any{"command": command},
+		"command":      command,
 		"kind":         kind,
 		"name":         name,
 		"current_step": currentStep,
@@ -38,6 +48,7 @@ func resumeInstruction(command, kind, name, currentStep string) (string, error) 
 func mismatchInstruction(command, kind, requestedKind, name, currentStep string) (string, error) {
 	return stepkit.RenderTemplate("steps/resume_mismatch.md", map[string]any{
 		"config":         map[string]any{"command": command},
+		"command":        command,
 		"kind":           kind,
 		"requested_kind": requestedKind,
 		"name":           name,

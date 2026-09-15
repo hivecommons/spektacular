@@ -1,10 +1,13 @@
 // Package workingcontext manages the agent's working context file,
-// .spektacular/context.md.
+// .spektacular/working-context.md.
 //
 // The file belongs entirely to the agent: it records the cross-cutting
 // learnings and user answers a session leaves behind for a resumed session to
 // read back. The CLI's only involvement is clearing it at the start of a
 // fresh workflow.
+//
+// A file under the previous name, .spektacular/context.md, is deliberately
+// ignored: it is never read, migrated, removed or reported as an error.
 //
 // Where each repo's code lives is deliberately not written here. It is
 // reported live by `repo list`, and the "Where the Code Lives" section
@@ -21,7 +24,7 @@ import (
 
 // RelPath is the working-context file's location relative to the project
 // root.
-const RelPath = ".spektacular/context.md"
+const RelPath = ".spektacular/working-context.md"
 
 // Path returns the working-context file's absolute path under root.
 func Path(root string) string {

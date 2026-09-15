@@ -2,8 +2,11 @@ package stepkit
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
+	"testing/fstest"
 
+	"github.com/cbroglie/mustache"
 	"github.com/jumppad-labs/spektacular/internal/store"
 	"github.com/jumppad-labs/spektacular/internal/workflow"
 	"github.com/stretchr/testify/require"
@@ -210,5 +213,64 @@ func TestWriteStepResultRequiresBuilder(t *testing.T) {
 		workflow.Config{},
 		nil,
 	)
+	require.Error(t, err)
+}
+
+// workingContextFooter is a hand-maintained copy of the rendered
+// templates/partials/working-context-footer.md: the leading mustache comment
+// line is dropped by rendering, leaving the paragraph and its newline.
+const workingContextFooter = "**Before you advance:** refresh `.spektacular/working-context.md` with your cross-cutting working context only — the key decisions and substitutions made, the answers the user gave to your questions, and learnings worth carrying forward. Keep it to learnings and decisions, not a transcript and not a copy of content already captured elsewhere (such as a section's own working file). Use your own file tools. This file is git-tracked, and a resumed session reads it back to pick up where you left off, so keep it current every time before running the `goto` command above.\n"
+
+func renderStepInstruction(t *testing.T, stepName, nextStep, templatePath string) string {
+	t.Helper()
+	writer := &captureWriter{}
+	err := WriteStepResult(
+		StepRequest{
+			StepName:     stepName,
+			NextStep:     nextStep,
+			TemplatePath: templatePath,
+			Strategy:     fakeStrategy{},
+		},
+		&testData{values: map[string]any{"name": "widget"}},
+		writer, nil, workflow.Config{Command: "spektacular"},
+		buildFakeResult,
+	)
+	require.NoError(t, err)
+	return writer.result.(fakeResult).Instruction
+}
+
+func TestWriteStepResultAppendsFooterWhenNextStepSet(t *testing.T) {
+	got := renderStepInstruction(t, "overview", "discovery", "steps/plan/01-overview.md")
+
+	require.True(t, strings.HasSuffix(got, "\n\n---\n\n"+workingContextFooter),
+		"a continuing step must end with a rule and the working-context footer, got tail:\n%s",
+		got[max(0, len(got)-800):])
+}
+
+func TestWriteStepResultOmitsFooterOnTerminalStep(t *testing.T) {
+	got := renderStepInstruction(t, "finished", "", "steps/plan/19-finished.md")
+
+	require.NotContains(t, got, "**Before you advance:**")
+}
+
+func TestFSPartialsResolvesMarkdownFile(t *testing.T) {
+	p := FSPartials{FS: fstest.MapFS{
+		"partials/x.md": &fstest.MapFile{Data: []byte("shared prose")},
+	}}
+
+	got, err := p.Get("partials/x")
+	require.NoError(t, err)
+	require.Equal(t, "shared prose", got)
+
+	_, err = p.Get("partials/missing")
+	require.Error(t, err)
+}
+
+func TestMissingPartialFailsRender(t *testing.T) {
+	p := FSPartials{FS: fstest.MapFS{
+		"partials/x.md": &fstest.MapFile{Data: []byte("shared prose")},
+	}}
+
+	_, err := mustache.RenderPartials("before {{> partials/nope}} after", p, nil)
 	require.Error(t, err)
 }

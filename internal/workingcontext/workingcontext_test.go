@@ -9,7 +9,7 @@ import (
 )
 
 func TestPath(t *testing.T) {
-	require.Equal(t, filepath.Join("/proj", ".spektacular", "context.md"), Path("/proj"))
+	require.Equal(t, filepath.Join("/proj", ".spektacular", "working-context.md"), Path("/proj"))
 }
 
 func TestResetCreatesMissingFileEmpty(t *testing.T) {
@@ -36,7 +36,7 @@ func TestResetDiscardsPreviousSessionContent(t *testing.T) {
 	require.Empty(t, string(body))
 }
 
-// The roster is reported live by `repo list`, never cached into context.md:
+// The roster is reported live by `repo list`, never cached into working-context.md:
 // a stale roster in the file an agent reads first is exactly the failure the
 // AGENTS.md "Where the Code Lives" section exists to prevent.
 func TestResetWritesNoRepoRoster(t *testing.T) {

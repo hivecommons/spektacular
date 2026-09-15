@@ -77,7 +77,3 @@ Re-read plan.md with `{{config.command}} plan file read {{plan_name}}/plan.md` a
 ### STOP-on-mismatch
 
 If the plan file's state after Step 2 is inconsistent (e.g. you just wrote a changelog entry for Phase N.M but that phase's checkbox is still unchecked after the previous `update_plan` step), STOP and report the inconsistency to the user.
-
----
-
-**Before you advance:** refresh `.spektacular/context.md` with your cross-cutting working context only — the key decisions and substitutions made, the answers the user gave to your questions, and learnings worth carrying forward. Keep it to learnings and decisions, not a transcript and not a copy of content already captured elsewhere (such as a section's own working file). Use your own file tools. This file is git-tracked, and a resumed session reads it back to pick up where you left off, so keep it current every time before running the `goto` command above.

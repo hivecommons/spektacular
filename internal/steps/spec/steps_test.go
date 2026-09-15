@@ -137,7 +137,7 @@ func TestVerificationStepPassesSpecTemplate(t *testing.T) {
 func TestNewStepWritesScaffold(t *testing.T) {
 	tmp := t.TempDir()
 
-	// Create .spektacular directory for context.md
+	// Create .spektacular directory for working-context.md
 	spektacularDir := filepath.Join(tmp, ".spektacular")
 	require.NoError(t, os.MkdirAll(spektacularDir, 0755))
 
@@ -169,7 +169,7 @@ func TestSpecFilePath_UsesConfiguredDirectory(t *testing.T) {
 func TestNewStep_WritesUnderConfiguredSpecDir(t *testing.T) {
 	tmp := t.TempDir()
 
-	// Create .spektacular directory for context.md
+	// Create .spektacular directory for working-context.md
 	spektacularDir := filepath.Join(tmp, ".spektacular")
 	require.NoError(t, os.MkdirAll(spektacularDir, 0755))
 
@@ -189,40 +189,56 @@ func TestNewStep_WritesUnderConfiguredSpecDir(t *testing.T) {
 	require.False(t, st.Exists(SpecFilePath("specs", "fixture")), "spec must not land under default specs")
 }
 
-// TestNewStep_ResetsContextMd verifies that the new step drops the previous
-// session's working context, leaving the file empty for this run. The CLI
-// writes no roster into it: `repo list` is the live source for where code
-// lives.
-func TestNewStep_ResetsContextMd(t *testing.T) {
-	tmp := t.TempDir()
+// TestNewStep_ResetsWorkingContext verifies that the new step drops the
+// previous session's working context, leaving .spektacular/working-context.md
+// empty for this run. The CLI writes no roster into it: `repo list` is the
+// live source for where code lives. A legacy .spektacular/context.md is
+// deliberately ignored: left byte-for-byte as it was.
+func TestNewStep_ResetsWorkingContext(t *testing.T) {
+	tmp := setupNewStepEnv(t)
 
 	spektacularDir := filepath.Join(tmp, ".spektacular")
-	require.NoError(t, os.MkdirAll(spektacularDir, 0755))
-	contextPath := filepath.Join(spektacularDir, "context.md")
-	require.NoError(t, os.WriteFile(contextPath, []byte("old context"), 0644))
-
-	origWd, err := os.Getwd()
-	require.NoError(t, err)
-	require.NoError(t, os.Chdir(tmp))
-	defer os.Chdir(origWd)
+	workingContextPath := filepath.Join(spektacularDir, "working-context.md")
+	require.NoError(t, os.WriteFile(workingContextPath, []byte("old context"), 0644))
+	legacyPath := filepath.Join(spektacularDir, "context.md")
+	require.NoError(t, os.WriteFile(legacyPath, []byte("legacy"), 0644))
 
 	data := &testData{values: map[string]any{"name": "fixture"}}
 	writer := &captureWriter{}
 	st := store.NewFileStore(tmp, "project")
 
-	_, err = new()(data, writer, st, workflow.Config{Command: "spektacular", SpecDir: "specs"})
+	_, err := new()(data, writer, st, workflow.Config{Command: "spektacular", SpecDir: "specs"})
 	require.NoError(t, err)
 
-	content, err := os.ReadFile(contextPath)
+	content, err := os.ReadFile(workingContextPath)
 	require.NoError(t, err)
-	body := string(content)
-	require.NotContains(t, body, "old context", "the previous session's working context must be dropped")
-	require.Empty(t, body, "the reset must leave the file entirely to the agent")
+	require.Empty(t, string(content), "the previous session's working context must be dropped, leaving the file to the agent")
+
+	legacy, err := os.ReadFile(legacyPath)
+	require.NoError(t, err)
+	require.Equal(t, "legacy", string(legacy), "a legacy .spektacular/context.md must be left untouched")
+}
+
+// TestNewStep_CreatesNoLegacyContextFile verifies that, in a project with no
+// .spektacular/context.md, the new step does not create one: the reset
+// targets working-context.md only.
+func TestNewStep_CreatesNoLegacyContextFile(t *testing.T) {
+	tmp := setupNewStepEnv(t)
+
+	data := &testData{values: map[string]any{"name": "fixture"}}
+	writer := &captureWriter{}
+	st := store.NewFileStore(tmp, "project")
+
+	_, err := new()(data, writer, st, workflow.Config{Command: "spektacular", SpecDir: "specs"})
+	require.NoError(t, err)
+
+	_, err = os.Stat(filepath.Join(tmp, ".spektacular", "context.md"))
+	require.ErrorIs(t, err, os.ErrNotExist, "no legacy context.md may be created")
 }
 
 // TestNewStep_ReturnsInstructionToWriteContext verifies that the new step
 // returns an instruction (via writeStep) telling the agent to write
-// conversation context to .spektacular/context.md (Phase 2.1).
+// conversation context to .spektacular/working-context.md (Phase 2.1).
 func TestNewStep_ReturnsInstructionToWriteContext(t *testing.T) {
 	tmp := t.TempDir()
 
@@ -245,7 +261,7 @@ func TestNewStep_ReturnsInstructionToWriteContext(t *testing.T) {
 
 	// Verify instruction was written
 	require.NotEmpty(t, writer.result.Instruction, "new step should return an instruction")
-	require.Contains(t, writer.result.Instruction, "context.md", "instruction should mention context.md")
+	require.Contains(t, writer.result.Instruction, ".spektacular/working-context.md", "instruction should name the working-context file")
 	require.Contains(t, writer.result.Instruction, "conversation context", "instruction should mention conversation context")
 }
 
@@ -282,9 +298,9 @@ func TestNewStep_InstructionIncludesDetailedFormat(t *testing.T) {
 
 // --- Phase 1.5: metadata stamping and terminal-step closure ---
 
-// setupNewStepEnv creates a temp dir with `.spektacular/context.md` and chdirs
-// into it, returning the dir and a cleanup func that restores the original
-// working directory. new() writes context.md to a relative path off the cwd,
+// setupNewStepEnv creates a temp dir with an empty `.spektacular/` directory,
+// chdirs into it (restoring the original working directory on cleanup) and
+// returns the dir. new() resets working-context.md at a relative path off the cwd,
 // so callers exercising new() must run inside a suitable working directory.
 func setupNewStepEnv(t *testing.T) string {
 	t.Helper()

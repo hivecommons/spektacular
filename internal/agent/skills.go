@@ -9,6 +9,7 @@ import (
 
 	"github.com/cbroglie/mustache"
 	"github.com/jumppad-labs/spektacular/internal/config"
+	"github.com/jumppad-labs/spektacular/internal/stepkit"
 	"github.com/jumppad-labs/spektacular/templates"
 )
 
@@ -36,8 +37,9 @@ var sourceFS fs.FS = templates.FS
 
 // installWorkflowSkills writes each workflow skill into
 // <projectPath>/<targetSkillsDir>/<skill-name>/SKILL.md, rendering the
-// {{command}} placeholder from cfg. One line per installed file is written
-// to out.
+// {{command}} placeholder from cfg. Partial includes such as
+// {{> partials/implement-plan-documents}} resolve from sourceFS, and a missing
+// partial fails the install. One line per installed file is written to out.
 func installWorkflowSkills(projectPath, targetSkillsDir string, cfg config.Config, out io.Writer) error {
 	for _, s := range workflowSkills {
 		tmplBytes, err := fs.ReadFile(sourceFS, s.TemplatePath)
@@ -45,7 +47,7 @@ func installWorkflowSkills(projectPath, targetSkillsDir string, cfg config.Confi
 			return fmt.Errorf("reading embedded skill template %s: %w", s.TemplatePath, err)
 		}
 
-		rendered, err := mustache.Render(string(tmplBytes), map[string]string{"command": cfg.Command})
+		rendered, err := mustache.RenderPartials(string(tmplBytes), stepkit.FSPartials{FS: sourceFS}, map[string]string{"command": cfg.Command})
 		if err != nil {
 			return fmt.Errorf("rendering skill template %s: %w", s.TemplatePath, err)
 		}

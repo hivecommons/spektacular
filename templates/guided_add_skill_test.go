@@ -136,7 +136,7 @@ func TestManageReposSkillResumesWithoutWorkingFiles(t *testing.T) {
 
 	require.NotContains(t, body, ".spektacular/work/",
 		"an add has no per-section working files, so the skill must not point at that directory")
-	require.Contains(t, body, ".spektacular/context.md",
+	require.Contains(t, body, ".spektacular/working-context.md",
 		"the skill must still tell the agent to read the working-context file on resume")
 }
 

@@ -311,21 +311,11 @@ func TestGuidedAddConfirmationNamesEveryFact(t *testing.T) {
 		"the confirmation step must rule out an unvoiced objection as agreement")
 }
 
-// contextDirectiveFooterPrefix opens the standing refresh-context paragraph.
-// That paragraph is quoted verbatim from the spec, plan and implement step
-// templates and carries em dashes of its own, so it is excluded before the
-// authored prose around it is checked.
-const contextDirectiveFooterPrefix = "**Before you advance:**"
-
 // TestGuidedAddInstructionsUseNoEmDashes verifies the project's prose
-// convention across every guided-add instruction. The standing footer is
-// excluded because it is quoted, not authored here; changing it would mean
-// diverging from the identical directive every other workflow carries.
+// convention across every guided-add instruction. The standing
+// working-context footer is appended at render time rather than carried in
+// the template files, so every line of each file is authored prose.
 func TestGuidedAddInstructionsUseNoEmDashes(t *testing.T) {
-	// Hand-written: the terminal instruction carries no footer, so exactly
-	// eight of the nine have one to exclude.
-	const expectedFooters = 8
-	footers := 0
 	checked := 0
 
 	err := fs.WalkDir(FS, "steps/repo", func(p string, d fs.DirEntry, err error) error {
@@ -335,16 +325,7 @@ func TestGuidedAddInstructionsUseNoEmDashes(t *testing.T) {
 		}
 		checked++
 
-		var authored []string
-		for _, line := range strings.Split(mustReadTemplate(t, p), "\n") {
-			if strings.HasPrefix(line, contextDirectiveFooterPrefix) {
-				footers++
-				continue
-			}
-			authored = append(authored, line)
-		}
-
-		require.NotContainsf(t, strings.Join(authored, "\n"), "—",
+		require.NotContainsf(t, mustReadTemplate(t, p), "—",
 			"%s uses an em dash in its authored prose", p)
 		return nil
 	})
@@ -352,8 +333,6 @@ func TestGuidedAddInstructionsUseNoEmDashes(t *testing.T) {
 
 	require.Equal(t, len(guidedAddOrder), checked,
 		"every guided-add instruction must be checked for em dashes")
-	require.Equal(t, expectedFooters, footers,
-		"the excluded footer must be the standing directive on the eight non-terminal instructions")
 }
 
 // templateSection returns the body of a Mustache section from a template.

@@ -242,8 +242,11 @@ func TestReadPlanStepContainsFullReadDirective(t *testing.T) {
 	require.Contains(t, lower, "in full", "read_plan must direct a full read of the plan documents")
 	// Plan documents are read through the CLI, never the built-in Read tool.
 	require.Contains(t, out, "plan file read", "read_plan must read the plan documents via `plan file read`")
-	require.Contains(t, out, "context.md")
-	require.Contains(t, out, "research.md")
+	// The shared plan-documents partial renders {{command}} from the step's
+	// config, so each read command carries the configured prefix.
+	require.Contains(t, out, "spektacular plan file read <plan_name>/plan.md")
+	require.Contains(t, out, "spektacular plan file read <plan_name>/context.md")
+	require.Contains(t, out, "spektacular plan file read <plan_name>/research.md")
 }
 
 func TestReadPlanStepMentionsChangelog(t *testing.T) {
@@ -327,6 +330,29 @@ func TestVerifyStepReferencesVerifyImplementation(t *testing.T) {
 	out := renderStep(t, verify())
 	require.Contains(t, out, "skill verify-implementation")
 	require.Contains(t, strings.ToLower(out), "pass/fail")
+}
+
+// The implement, test and verify steps each load the current phase from the
+// plan store themselves rather than trusting an earlier step's output to
+// still be in the agent's context (it may have been compacted or resumed).
+func TestPhaseStepsReadPhaseDetail(t *testing.T) {
+	for name, cb := range map[string]workflow.StepCallback{
+		"implement": implementStep(),
+		"test":      testStep(),
+		"verify":    verify(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			out := renderStep(t, cb)
+			require.Contains(t, out, "spektacular plan file read test/plan.md",
+				"%s must read the plan to find the current phase", name)
+			require.Contains(t, out, "spektacular plan file read test/context.md",
+				"%s must read the phase's technical detail from the plan's context.md", name)
+			for _, stale := range []string{"analysis summaries", "from the previous step", "already available"} {
+				require.NotContains(t, out, stale,
+					"%s must not assume an earlier step's output is still in context", name)
+			}
+		})
+	}
 }
 
 func TestUpdatePlanStepDirectsCheckboxMarking(t *testing.T) {

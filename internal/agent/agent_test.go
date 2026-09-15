@@ -133,6 +133,47 @@ func TestInstallWorkflowSkills_WritesFourSkillFiles(t *testing.T) {
 	require.Len(t, skillFiles, 5, "expected exactly five SKILL.md files, got %v", skillFiles)
 }
 
+// skillFixtureWithImplement returns a source FS holding every workflow skill
+// template, with spek-implement's body set to implementBody, plus any extra
+// files given.
+func skillFixtureWithImplement(implementBody string, extra fstest.MapFS) fstest.MapFS {
+	fsys := fstest.MapFS{
+		"skills/workflows/spek-new/SKILL.md":          &fstest.MapFile{Data: []byte("new skill\n")},
+		"skills/workflows/spek-plan/SKILL.md":         &fstest.MapFile{Data: []byte("plan skill\n")},
+		"skills/workflows/spek-implement/SKILL.md":    &fstest.MapFile{Data: []byte(implementBody)},
+		"skills/workflows/spek-knowledge/SKILL.md":    &fstest.MapFile{Data: []byte("knowledge skill\n")},
+		"skills/workflows/spek-manage-repos/SKILL.md": &fstest.MapFile{Data: []byte("repos skill\n")},
+	}
+	for name, f := range extra {
+		fsys[name] = f
+	}
+	return fsys
+}
+
+func TestInstallWorkflowSkills_RendersPartialWithCommand(t *testing.T) {
+	withSourceFS(t, skillFixtureWithImplement(
+		"# Implement\n\n{{> partials/p}}\nafter\n",
+		fstest.MapFS{
+			"partials/p.md": &fstest.MapFile{Data: []byte("read with `{{command}} plan file read`\n")},
+		},
+	))
+
+	tmp := t.TempDir()
+	err := installWorkflowSkills(tmp, ".claude/skills", config.Config{Command: "spekx"}, io.Discard)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(filepath.Join(tmp, ".claude", "skills", "spek-implement", "SKILL.md"))
+	require.NoError(t, err)
+	require.Equal(t, "# Implement\n\nread with `spekx plan file read`\nafter\n", string(data))
+}
+
+func TestInstallWorkflowSkills_MissingPartialFails(t *testing.T) {
+	withSourceFS(t, skillFixtureWithImplement("# Implement\n\n{{> partials/p}}\n", nil))
+
+	err := installWorkflowSkills(t.TempDir(), ".claude/skills", config.Config{Command: "spekx"}, io.Discard)
+	require.ErrorContains(t, err, "partials/p", "a missing partial must fail the install, naming the partial")
+}
+
 func TestInstallCommandWrappers_UsesFilenameFunc(t *testing.T) {
 	withSourceFS(t, fstest.MapFS{
 		"commands/wrapper.md": &fstest.MapFile{
