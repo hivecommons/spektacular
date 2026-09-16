@@ -321,7 +321,7 @@ func finished() workflow.StepCallback {
 			if !incomplete {
 				for _, doc := range planDocs {
 					path := doc.path(cfg.PlanDir, planName)
-					if err := metadata.Close(st, path, metadata.StatusCompleted); err != nil {
+					if err := metadata.Close(st, path, metadata.StatusFinal); err != nil {
 						if errors.Is(err, store.ErrNotFound) {
 							continue
 						}

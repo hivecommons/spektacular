@@ -68,51 +68,10 @@ func today() time.Time {
 	return time.Now().UTC().Truncate(24 * time.Hour)
 }
 
-// resetWriteStatusFlag clears the --status flag on the write subcommand of
-// the given kind's `file` command. Cobra flag state is package-global — a
-// closure `statusFlag` variable persists across Execute() calls — so tests
-// that set --status must reset it, or a subsequent test with no --status
-// silently inherits the last-set value.
-func resetWriteStatusFlag(t *testing.T, kind string) {
-	t.Helper()
-	// Walk root -> kind -> file -> write and clear its --status.
-	kindCmd, _, err := rootCmd.Find([]string{kind, "file", "write"})
-	require.NoError(t, err)
-	require.NotNil(t, kindCmd)
-	reset := func() { require.NoError(t, kindCmd.Flags().Set("status", "")) }
-	reset()
-	t.Cleanup(reset)
-}
-
-// resetSetStatusFlag clears the --status flag on the set-status subcommand of
-// the given kind's `file` command. Cobra flag state is package-global — the
-// closure `setStatusFlag` variable in newStoreFileCmd persists across
-// Execute() calls the same way `statusFlag` does for `write` — so tests that
-// set --status on set-status must reset it, or a subsequent test with no
-// --status silently inherits the last-set value (and the required-flag gate
-// then fails to trip because the flag has already been "set" from a prior
-// call). MarkFlagRequired also tracks its own "was set" state, which cobra
-// clears when the flag's Set() is called; clearing the value alone is not
-// enough, so we also flip the "changed" bit off after resetting.
-func resetSetStatusFlag(t *testing.T, kind string) {
-	t.Helper()
-	kindCmd, _, err := rootCmd.Find([]string{kind, "file", "set-status"})
-	require.NoError(t, err)
-	require.NotNil(t, kindCmd)
-	reset := func() {
-		require.NoError(t, kindCmd.Flags().Set("status", ""))
-		if f := kindCmd.Flags().Lookup("status"); f != nil {
-			f.Changed = false
-		}
-	}
-	reset()
-	t.Cleanup(reset)
-}
-
 // TestStoreFileWrite_FreshWriteStampsMetadata asserts criterion 1: a fresh
 // write through `<kind> file write` produces a stored file whose top begins
 // with a YAML frontmatter block containing created_date set to today and
-// status: in-progress. Exercised for all three per-kind write commands.
+// document_status: draft. Exercised for all three per-kind write commands.
 func TestStoreFileWrite_FreshWriteStampsMetadata(t *testing.T) {
 	for _, fx := range kindFixtures() {
 		t.Run(fx.kind, func(t *testing.T) {
@@ -134,11 +93,11 @@ func TestStoreFileWrite_FreshWriteStampsMetadata(t *testing.T) {
 			meta, body, err := metadata.Split(content)
 			require.NoError(t, err)
 			require.NotNil(t, meta, "fresh write must produce a frontmatter block")
-			require.Equal(t, metadata.StatusInProgress, meta.Status)
+			require.Equal(t, metadata.StatusDraft, meta.DocumentStatus)
 			require.True(t, meta.CreatedDate.Equal(today()),
 				"created_date must be today (%s), got %s", today(), meta.CreatedDate)
 			require.True(t, meta.ClosedDate.IsZero(),
-				"in-progress artifact must have zero closed_date, got %s", meta.ClosedDate)
+				"draft artifact must have zero closed_date, got %s", meta.ClosedDate)
 			require.Equal(t, "fresh body", string(body))
 		})
 	}
@@ -162,8 +121,8 @@ func TestStoreFileWrite_ExistingArtifactPreservesCreatedDate(t *testing.T) {
 			// created_date from earlier in the year, so any preservation
 			// failure will be obvious (today != earlier).
 			seeded, err := metadata.Render(metadata.Metadata{
-				CreatedDate: earlier,
-				Status:      metadata.StatusInProgress,
+				CreatedDate:    earlier,
+				DocumentStatus: metadata.StatusDraft,
 			}, []byte("original body"))
 			require.NoError(t, err)
 
@@ -187,15 +146,15 @@ func TestStoreFileWrite_ExistingArtifactPreservesCreatedDate(t *testing.T) {
 			require.NotNil(t, meta, "rewrite must retain a frontmatter block")
 			require.True(t, meta.CreatedDate.Equal(earlier),
 				"created_date must be preserved (%s), got %s", earlier, meta.CreatedDate)
-			require.Equal(t, metadata.StatusInProgress, meta.Status)
+			require.Equal(t, metadata.StatusDraft, meta.DocumentStatus)
 			require.Equal(t, "updated body", string(body))
 		})
 	}
 }
 
 // TestStoreFileWrite_StatusFlagTransitionsAndStampsClosedDate asserts
-// criterion 3: writing with `--status completed` on an artifact currently
-// in-progress transitions the status and stamps closed_date to today.
+// criterion 3: writing with `--document-status final` on an artifact currently
+// draft transitions the status and stamps closed_date to today.
 // Exercised for all three per-kind write commands.
 func TestStoreFileWrite_StatusFlagTransitionsAndStampsClosedDate(t *testing.T) {
 	earlier := time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC)
@@ -207,8 +166,8 @@ func TestStoreFileWrite_StatusFlagTransitionsAndStampsClosedDate(t *testing.T) {
 			writeSpecCommandConfig(t, dir, fx.configYAML)
 
 			seeded, err := metadata.Render(metadata.Metadata{
-				CreatedDate: earlier,
-				Status:      metadata.StatusInProgress,
+				CreatedDate:    earlier,
+				DocumentStatus: metadata.StatusDraft,
 			}, []byte("original body"))
 			require.NoError(t, err)
 
@@ -219,9 +178,9 @@ func TestStoreFileWrite_StatusFlagTransitionsAndStampsClosedDate(t *testing.T) {
 			srcPath := filepath.Join(t.TempDir(), "source.md")
 			require.NoError(t, os.WriteFile(srcPath, []byte("final body"), 0o644))
 
-			resetWriteStatusFlag(t, fx.kind)
+			resetRootCmd(t)
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--status", "completed"})
+			rootCmd.SetArgs([]string{fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--document-status", "final"})
 
 			require.NoError(t, rootCmd.Execute())
 
@@ -231,7 +190,7 @@ func TestStoreFileWrite_StatusFlagTransitionsAndStampsClosedDate(t *testing.T) {
 			meta, body, err := metadata.Split(content)
 			require.NoError(t, err)
 			require.NotNil(t, meta)
-			require.Equal(t, metadata.StatusCompleted, meta.Status)
+			require.Equal(t, metadata.StatusFinal, meta.DocumentStatus)
 			require.True(t, meta.CreatedDate.Equal(earlier),
 				"created_date must be preserved across status transition (%s), got %s", earlier, meta.CreatedDate)
 			require.True(t, meta.ClosedDate.Equal(today()),
@@ -244,7 +203,7 @@ func TestStoreFileWrite_StatusFlagTransitionsAndStampsClosedDate(t *testing.T) {
 // TestStoreFileWrite_BareArtifactIsUpgradedInPlace asserts criterion 4:
 // writing an existing artifact that has no prior frontmatter is treated as
 // a first write — the artifact gains a metadata block on its next write,
-// created_date is stamped to today, status defaults to in-progress, and no
+// created_date is stamped to today, status defaults to draft, and no
 // error is raised. Exercised for all three per-kind write commands.
 func TestStoreFileWrite_BareArtifactIsUpgradedInPlace(t *testing.T) {
 	for _, fx := range kindFixtures() {
@@ -274,7 +233,7 @@ func TestStoreFileWrite_BareArtifactIsUpgradedInPlace(t *testing.T) {
 			meta, body, err := metadata.Split(content)
 			require.NoError(t, err)
 			require.NotNil(t, meta, "bare artifact must gain a frontmatter block on next write")
-			require.Equal(t, metadata.StatusInProgress, meta.Status)
+			require.Equal(t, metadata.StatusDraft, meta.DocumentStatus)
 			require.True(t, meta.CreatedDate.Equal(today()),
 				"created_date on bare-artifact upgrade must be today (%s), got %s", today(), meta.CreatedDate)
 			require.True(t, meta.ClosedDate.IsZero())
@@ -284,7 +243,7 @@ func TestStoreFileWrite_BareArtifactIsUpgradedInPlace(t *testing.T) {
 }
 
 // TestStoreFileWrite_FreshWriteWithClosedStatusStampsBothDates asserts the
-// symmetric first-write case for --status: passing --status completed on a
+// symmetric first-write case for --document-status: passing --document-status final on a
 // brand-new artifact stamps both created_date and closed_date to today.
 // This complements criterion 3 (which covers the transition path) by
 // exercising the first-write branch of the same flag.
@@ -298,9 +257,9 @@ func TestStoreFileWrite_FreshWriteWithClosedStatusStampsBothDates(t *testing.T) 
 			srcPath := filepath.Join(t.TempDir(), "source.md")
 			require.NoError(t, os.WriteFile(srcPath, []byte("closed body"), 0o644))
 
-			resetWriteStatusFlag(t, fx.kind)
+			resetRootCmd(t)
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--status", "completed"})
+			rootCmd.SetArgs([]string{fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--document-status", "final"})
 
 			require.NoError(t, rootCmd.Execute())
 
@@ -310,40 +269,84 @@ func TestStoreFileWrite_FreshWriteWithClosedStatusStampsBothDates(t *testing.T) 
 			meta, body, err := metadata.Split(content)
 			require.NoError(t, err)
 			require.NotNil(t, meta)
-			require.Equal(t, metadata.StatusCompleted, meta.Status)
+			require.Equal(t, metadata.StatusFinal, meta.DocumentStatus)
 			require.True(t, meta.CreatedDate.Equal(today()))
 			require.True(t, meta.ClosedDate.Equal(today()),
-				"fresh write with --status completed must stamp closed_date to today, got %s", meta.ClosedDate)
+				"fresh write with --document-status final must stamp closed_date to today, got %s", meta.ClosedDate)
 			require.Equal(t, "closed body", string(body))
 		})
 	}
 }
 
-// TestStoreFileWrite_RejectsInvalidStatusFlag asserts that --status must be
-// one of the four enum values; any other value is rejected with an actionable
-// error naming both the offending value and the four allowed alternatives,
-// and the destination file is not created. This guards the CLI-layer
-// validation that metadataOptsForStatus performs before Merge sees the value.
-func TestStoreFileWrite_RejectsInvalidStatusFlag(t *testing.T) {
+// documentStatusNextAction is the remediation every rejected
+// --document-status value must carry, naming the four allowed values in
+// lifecycle order.
+const documentStatusNextAction = "Pass --document-status with one of draft, final, superseded, archived."
+
+// rejectedDocumentStatuses are --document-status values the CLI must refuse:
+// the two retired values and an unknown one.
+var rejectedDocumentStatuses = []string{"completed", "in-progress", "bogus"}
+
+// requireInvalidDocumentStatus asserts a runRootCmd result is the
+// invalid_document_status error envelope for bad.
+func requireInvalidDocumentStatus(t *testing.T, bad, stdout, stderr string, code int) {
+	t.Helper()
+	require.Equal(t, 1, code)
+	require.Empty(t, stderr)
+	var er output.ErrorResponse
+	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
+	require.True(t, er.IsError)
+	require.Equal(t, "invalid_document_status", er.Code)
+	require.Equal(t, `--document-status "`+bad+`" is not one of the four allowed values`, er.Message)
+	require.Equal(t, documentStatusNextAction, er.NextAction)
+}
+
+// TestStoreFileWrite_RejectsInvalidDocumentStatusFlag asserts that
+// --document-status must be one of the four enum values; the retired
+// completed and in-progress and an unknown value are rejected with
+// invalid_document_status and a remediation listing the four values. A
+// seeded artifact keeps its exact bytes, and a fresh destination is not
+// created. This guards the CLI-layer validation that
+// metadataOptsForDocumentStatus performs before Merge sees the value.
+func TestStoreFileWrite_RejectsInvalidDocumentStatusFlag(t *testing.T) {
 	for _, fx := range kindFixtures() {
-		t.Run(fx.kind, func(t *testing.T) {
-			dir := t.TempDir()
-			t.Chdir(dir)
-			writeSpecCommandConfig(t, dir, fx.configYAML)
+		for _, bad := range rejectedDocumentStatuses {
+			t.Run(fx.kind+"/"+bad, func(t *testing.T) {
+				dir := t.TempDir()
+				t.Chdir(dir)
+				writeSpecCommandConfig(t, dir, fx.configYAML)
 
-			srcPath := filepath.Join(t.TempDir(), "source.md")
-			require.NoError(t, os.WriteFile(srcPath, []byte("body"), 0o644))
+				srcPath := filepath.Join(t.TempDir(), "source.md")
+				require.NoError(t, os.WriteFile(srcPath, []byte("new body"), 0o644))
 
-			resetWriteStatusFlag(t, fx.kind)
-			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--status", "bogus"})
+				t.Run("fresh destination is not created", func(t *testing.T) {
+					resetRootCmd(t)
+					stdout, stderr, code := runRootCmd(t, fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--document-status", bad)
+					requireInvalidDocumentStatus(t, bad, stdout, stderr, code)
+					require.NoFileExists(t, filepath.Join(dir, fx.storeRelPath),
+						"a rejected --document-status must not create the destination file")
+				})
 
-			err := rootCmd.Execute()
-			require.Error(t, err)
-			require.ErrorContains(t, err, "bogus")
-			require.NoFileExists(t, filepath.Join(dir, fx.storeRelPath),
-				"a rejected --status must not create the destination file")
-		})
+				t.Run("seeded artifact is byte-for-byte unchanged", func(t *testing.T) {
+					seedArtifactWithMetadata(t, dir, fx.storeRelPath, metadata.Metadata{
+						CreatedDate:    time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC),
+						DocumentStatus: metadata.StatusDraft,
+					}, []byte("original body\n"))
+					abs := filepath.Join(dir, fx.storeRelPath)
+					before, err := os.ReadFile(abs)
+					require.NoError(t, err)
+
+					resetRootCmd(t)
+					stdout, stderr, code := runRootCmd(t, fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--document-status", bad)
+					requireInvalidDocumentStatus(t, bad, stdout, stderr, code)
+
+					after, err := os.ReadFile(abs)
+					require.NoError(t, err)
+					require.Equal(t, before, after,
+						"a rejected --document-status must leave the file's bytes untouched")
+				})
+			})
+		}
 	}
 }
 
@@ -359,15 +362,15 @@ func seedArtifactWithMetadata(t *testing.T, dir, storeRelPath string, m metadata
 	require.NoError(t, os.WriteFile(abs, rendered, 0o644))
 }
 
-// TestStoreFileSetStatus_MutatesFrontmatterOnly_PreservesBody asserts
-// acceptance criterion 1: `set-status` mutates only the frontmatter block of
+// TestStoreFileSetDocumentStatus_MutatesFrontmatterOnly_PreservesBody asserts
+// acceptance criterion 1: `set-document-status` mutates only the frontmatter block of
 // the target artifact and leaves the body bytes untouched. For each kind, we
-// seed an in-progress artifact with a known older created_date and a body
-// containing shell-sensitive and multi-line content, then flip to `completed`
-// and assert (a) the frontmatter now shows status: completed with today's
+// seed a draft artifact with a known older created_date and a body
+// containing shell-sensitive and multi-line content, then flip to `final`
+// and assert (a) the frontmatter now shows document_status: final with today's
 // closed_date, (b) created_date is unchanged, and (c) the body bytes are
 // byte-identical to what was seeded.
-func TestStoreFileSetStatus_MutatesFrontmatterOnly_PreservesBody(t *testing.T) {
+func TestStoreFileSetDocumentStatus_MutatesFrontmatterOnly_PreservesBody(t *testing.T) {
 	earlier := time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC)
 	body := []byte("body line 1 with `backticks` and $dollar\nline 2\n")
 
@@ -378,13 +381,13 @@ func TestStoreFileSetStatus_MutatesFrontmatterOnly_PreservesBody(t *testing.T) {
 			writeSpecCommandConfig(t, dir, fx.configYAML)
 
 			seedArtifactWithMetadata(t, dir, fx.storeRelPath, metadata.Metadata{
-				CreatedDate: earlier,
-				Status:      metadata.StatusInProgress,
+				CreatedDate:    earlier,
+				DocumentStatus: metadata.StatusDraft,
 			}, body)
 
-			resetSetStatusFlag(t, fx.kind)
+			resetRootCmd(t)
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "set-status", fx.artifactName, "--status", "completed"})
+			rootCmd.SetArgs([]string{fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", "final"})
 
 			require.NoError(t, rootCmd.Execute())
 
@@ -394,7 +397,7 @@ func TestStoreFileSetStatus_MutatesFrontmatterOnly_PreservesBody(t *testing.T) {
 			meta, gotBody, err := metadata.Split(content)
 			require.NoError(t, err)
 			require.NotNil(t, meta)
-			require.Equal(t, metadata.StatusCompleted, meta.Status)
+			require.Equal(t, metadata.StatusFinal, meta.DocumentStatus)
 			require.True(t, meta.CreatedDate.Equal(earlier),
 				"created_date must be preserved (%s), got %s", earlier, meta.CreatedDate)
 			require.True(t, meta.ClosedDate.Equal(today()),
@@ -405,52 +408,52 @@ func TestStoreFileSetStatus_MutatesFrontmatterOnly_PreservesBody(t *testing.T) {
 	}
 }
 
-// TestStoreFileSetStatus_RejectsInvalidStatus_LeavesFileUntouched asserts
-// acceptance criterion 2: a --status value outside the four-value enum is
-// rejected with an actionable error and the on-disk bytes of the target
-// artifact are unchanged. This guards the CLI-layer validation performed by
-// metadataOptsForStatus before any write is attempted.
-func TestStoreFileSetStatus_RejectsInvalidStatus_LeavesFileUntouched(t *testing.T) {
+// TestStoreFileSetDocumentStatus_RejectsInvalidStatus_LeavesFileUntouched
+// asserts that a --document-status value outside the four-value enum, the
+// retired completed and in-progress included, is rejected with
+// invalid_document_status and a remediation listing the four values, and the
+// on-disk bytes of the target artifact are unchanged. This guards the
+// CLI-layer validation performed by metadataOptsForDocumentStatus before any
+// write is attempted.
+func TestStoreFileSetDocumentStatus_RejectsInvalidStatus_LeavesFileUntouched(t *testing.T) {
 	earlier := time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC)
 	body := []byte("preserved body\n")
 
 	for _, fx := range kindFixtures() {
-		t.Run(fx.kind, func(t *testing.T) {
-			dir := t.TempDir()
-			t.Chdir(dir)
-			writeSpecCommandConfig(t, dir, fx.configYAML)
+		for _, bad := range rejectedDocumentStatuses {
+			t.Run(fx.kind+"/"+bad, func(t *testing.T) {
+				dir := t.TempDir()
+				t.Chdir(dir)
+				writeSpecCommandConfig(t, dir, fx.configYAML)
 
-			seedArtifactWithMetadata(t, dir, fx.storeRelPath, metadata.Metadata{
-				CreatedDate: earlier,
-				Status:      metadata.StatusInProgress,
-			}, body)
+				seedArtifactWithMetadata(t, dir, fx.storeRelPath, metadata.Metadata{
+					CreatedDate:    earlier,
+					DocumentStatus: metadata.StatusDraft,
+				}, body)
 
-			abs := filepath.Join(dir, fx.storeRelPath)
-			before, err := os.ReadFile(abs)
-			require.NoError(t, err)
+				abs := filepath.Join(dir, fx.storeRelPath)
+				before, err := os.ReadFile(abs)
+				require.NoError(t, err)
 
-			resetSetStatusFlag(t, fx.kind)
-			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "set-status", fx.artifactName, "--status", "wibble"})
+				resetRootCmd(t)
+				stdout, stderr, code := runRootCmd(t, fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", bad)
+				requireInvalidDocumentStatus(t, bad, stdout, stderr, code)
 
-			err = rootCmd.Execute()
-			require.Error(t, err)
-			require.ErrorContains(t, err, "wibble")
-
-			after, err := os.ReadFile(abs)
-			require.NoError(t, err)
-			require.Equal(t, before, after,
-				"a rejected --status must leave the file's bytes untouched")
-		})
+				after, err := os.ReadFile(abs)
+				require.NoError(t, err)
+				require.Equal(t, before, after,
+					"a rejected --document-status must leave the file's bytes untouched")
+			})
+		}
 	}
 }
 
-// TestStoreFileSetStatus_OnBareArtifact_AttachesFrontmatter asserts
-// acceptance criterion 3: running set-status on an artifact with no prior
+// TestStoreFileSetDocumentStatus_OnBareArtifact_AttachesFrontmatter asserts
+// acceptance criterion 3: running set-document-status on an artifact with no prior
 // frontmatter attaches a new block with created_date=today, the requested
 // status, and (when the status is a closed value) closed_date=today. The
 // body bytes of the bare artifact must survive verbatim.
-func TestStoreFileSetStatus_OnBareArtifact_AttachesFrontmatter(t *testing.T) {
+func TestStoreFileSetDocumentStatus_OnBareArtifact_AttachesFrontmatter(t *testing.T) {
 	body := []byte("legacy body without frontmatter\n")
 
 	for _, fx := range kindFixtures() {
@@ -463,9 +466,9 @@ func TestStoreFileSetStatus_OnBareArtifact_AttachesFrontmatter(t *testing.T) {
 			require.NoError(t, os.MkdirAll(filepath.Dir(abs), 0o755))
 			require.NoError(t, os.WriteFile(abs, body, 0o644))
 
-			resetSetStatusFlag(t, fx.kind)
+			resetRootCmd(t)
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "set-status", fx.artifactName, "--status", "archived"})
+			rootCmd.SetArgs([]string{fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", "archived"})
 
 			require.NoError(t, rootCmd.Execute())
 
@@ -475,25 +478,25 @@ func TestStoreFileSetStatus_OnBareArtifact_AttachesFrontmatter(t *testing.T) {
 			meta, gotBody, err := metadata.Split(content)
 			require.NoError(t, err)
 			require.NotNil(t, meta,
-				"bare artifact must gain a frontmatter block after set-status")
-			require.Equal(t, metadata.StatusArchived, meta.Status)
+				"bare artifact must gain a frontmatter block after set-document-status")
+			require.Equal(t, metadata.StatusArchived, meta.DocumentStatus)
 			require.True(t, meta.CreatedDate.Equal(today()),
-				"created_date on a bare-artifact set-status must be today (%s), got %s", today(), meta.CreatedDate)
+				"created_date on a bare-artifact set-document-status must be today (%s), got %s", today(), meta.CreatedDate)
 			require.True(t, meta.ClosedDate.Equal(today()),
-				"closed_date on a closed-status set-status must be today (%s), got %s", today(), meta.ClosedDate)
+				"closed_date on a closed-status set-document-status must be today (%s), got %s", today(), meta.ClosedDate)
 			require.Equal(t, body, gotBody,
-				"body bytes of a bare artifact must survive set-status unchanged")
+				"body bytes of a bare artifact must survive set-document-status unchanged")
 		})
 	}
 }
 
-// TestStoreFileSetStatus_Idempotent asserts acceptance criterion 4: running
-// set-status twice with the same value is a no-op on the second call. The
+// TestStoreFileSetDocumentStatus_Idempotent asserts acceptance criterion 4: running
+// set-document-status twice with the same value is a no-op on the second call. The
 // closed_date stamped by the first call must survive the second (it is not
 // re-stamped to a later "today" value even in the trivial same-day case),
 // and the on-disk bytes after the second call must be byte-identical to the
 // bytes after the first call.
-func TestStoreFileSetStatus_Idempotent(t *testing.T) {
+func TestStoreFileSetDocumentStatus_Idempotent(t *testing.T) {
 	earlier := time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC)
 	body := []byte("stable body\n")
 
@@ -504,43 +507,42 @@ func TestStoreFileSetStatus_Idempotent(t *testing.T) {
 			writeSpecCommandConfig(t, dir, fx.configYAML)
 
 			seedArtifactWithMetadata(t, dir, fx.storeRelPath, metadata.Metadata{
-				CreatedDate: earlier,
-				Status:      metadata.StatusInProgress,
+				CreatedDate:    earlier,
+				DocumentStatus: metadata.StatusDraft,
 			}, body)
 
-			// First set-status: transitions to completed, stamps closed_date.
-			resetSetStatusFlag(t, fx.kind)
+			// First set-document-status: transitions to final, stamps closed_date.
+			resetRootCmd(t)
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "set-status", fx.artifactName, "--status", "completed"})
+			rootCmd.SetArgs([]string{fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", "final"})
 			require.NoError(t, rootCmd.Execute())
 
 			abs := filepath.Join(dir, fx.storeRelPath)
 			afterFirst, err := os.ReadFile(abs)
 			require.NoError(t, err)
 
-			// Second set-status with the same value: must leave bytes
+			// Second set-document-status with the same value: must leave bytes
 			// untouched — including the closed_date stamped on the first call.
-			resetSetStatusFlag(t, fx.kind)
+			resetRootCmd(t)
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "set-status", fx.artifactName, "--status", "completed"})
+			rootCmd.SetArgs([]string{fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", "final"})
 			require.NoError(t, rootCmd.Execute())
 
 			afterSecond, err := os.ReadFile(abs)
 			require.NoError(t, err)
 
 			require.Equal(t, afterFirst, afterSecond,
-				"repeat set-status with the same value must be byte-idempotent")
+				"repeat set-document-status with the same value must be byte-idempotent")
 		})
 	}
 }
 
-// TestStoreFileSetStatus_MissingStatusIsError asserts that invoking
-// set-status without --status is rejected — whether via cobra's
-// MarkFlagRequired machinery or via the CLI's own missing_status guard,
-// whichever fires first. The destination file must not be created in either
-// path. This binds the contract that --status is mandatory on set-status,
-// distinct from `write` where --status is optional.
-func TestStoreFileSetStatus_MissingStatusIsError(t *testing.T) {
+// TestStoreFileSetDocumentStatus_MissingStatusIsError asserts that invoking
+// set-document-status without --document-status is rejected by cobra's
+// MarkFlagRequired gate with a required-flag error, and the file is left
+// untouched. This binds the contract that --document-status is mandatory on
+// set-document-status, distinct from `write` where it is optional.
+func TestStoreFileSetDocumentStatus_MissingStatusIsError(t *testing.T) {
 	for _, fx := range kindFixtures() {
 		t.Run(fx.kind, func(t *testing.T) {
 			dir := t.TempDir()
@@ -550,20 +552,23 @@ func TestStoreFileSetStatus_MissingStatusIsError(t *testing.T) {
 			// Seed an existing file so a "not found" error can't be what we
 			// accidentally observe instead of a missing-flag error.
 			seedArtifactWithMetadata(t, dir, fx.storeRelPath, metadata.Metadata{
-				CreatedDate: today(),
-				Status:      metadata.StatusInProgress,
+				CreatedDate:    today(),
+				DocumentStatus: metadata.StatusDraft,
 			}, []byte("body\n"))
 
 			abs := filepath.Join(dir, fx.storeRelPath)
 			before, err := os.ReadFile(abs)
 			require.NoError(t, err)
 
-			resetSetStatusFlag(t, fx.kind)
-			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "set-status", fx.artifactName})
+			resetRootCmd(t)
+			stdout, stderr, code := runRootCmd(t, fx.kind, "file", "set-document-status", fx.artifactName)
+			require.Equal(t, 1, code, "set-document-status without --document-status must error")
+			require.Empty(t, stderr)
 
-			err = rootCmd.Execute()
-			require.Error(t, err, "set-status without --status must error")
+			var er output.ErrorResponse
+			require.NoError(t, json.Unmarshal([]byte(stdout), &er))
+			require.True(t, er.IsError)
+			require.Equal(t, `required flag(s) "document-status" not set`, er.Message)
 
 			after, err := os.ReadFile(abs)
 			require.NoError(t, err)
@@ -573,21 +578,21 @@ func TestStoreFileSetStatus_MissingStatusIsError(t *testing.T) {
 	}
 }
 
-// TestStoreFileSetStatus_MissingFileIsError asserts that running set-status
+// TestStoreFileSetDocumentStatus_MissingFileIsError asserts that running set-document-status
 // against a non-existent path returns the standard `not_found` error envelope
 // (via runRoot, which mirrors production Execute wrapping) with the requested
 // path named in the resource field, and does not create the target file as a
-// side-effect. This binds the contract that set-status is a mutation of an
+// side-effect. This binds the contract that set-document-status is a mutation of an
 // existing artifact, never a create.
-func TestStoreFileSetStatus_MissingFileIsError(t *testing.T) {
+func TestStoreFileSetDocumentStatus_MissingFileIsError(t *testing.T) {
 	for _, fx := range kindFixtures() {
 		t.Run(fx.kind, func(t *testing.T) {
 			dir := t.TempDir()
 			t.Chdir(dir)
 			writeSpecCommandConfig(t, dir, fx.configYAML)
 
-			resetSetStatusFlag(t, fx.kind)
-			stdout, stderr, code := runRootCmd(t, fx.kind, "file", "set-status", fx.artifactName, "--status", "completed")
+			resetRootCmd(t)
+			stdout, stderr, code := runRootCmd(t, fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", "final")
 
 			require.Equal(t, 1, code)
 			require.Empty(t, stderr)
@@ -622,14 +627,14 @@ func TestStoreFileWrite_IdempotentUnderRepeatedWrites(t *testing.T) {
 			// matching the shape a buggy handler produces by re-wrapping its
 			// own output. This is what actually accumulates on disk.
 			one, err := metadata.Render(metadata.Metadata{
-				CreatedDate: today(),
-				Status:      metadata.StatusInProgress,
+				CreatedDate:    today(),
+				DocumentStatus: metadata.StatusDraft,
 			}, []byte("real body"))
 			require.NoError(t, err)
 			// Prepend two more frontmatter blocks. Render already outputs
 			// `---\n<yaml>---\n\n<body>`; nesting is `---\n<yaml>---\n\n` +
 			// prior content.
-			blockPrefix := []byte("---\ncreated_date: \"2026-07-28\"\nstatus: in-progress\n---\n\n")
+			blockPrefix := []byte("---\ncreated_date: \"2026-07-28\"\nstatus: draft\n---\n\n")
 			stacked := append([]byte{}, blockPrefix...)
 			stacked = append(stacked, blockPrefix...)
 			stacked = append(stacked, one...)
@@ -656,6 +661,129 @@ func TestStoreFileWrite_IdempotentUnderRepeatedWrites(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, extra,
 				"stored artifact must not carry a second frontmatter block underneath the first")
+		})
+	}
+}
+
+// TestStoreFileDocumentStatus_SetOnWriteAndChangeForEveryValue asserts that
+// each of the four document statuses can be set with `<kind> file write
+// --document-status` and then changed with `<kind> file
+// set-document-status`, for every per-kind command family. Each write sets
+// one value and the follow-up set-document-status moves to a different one,
+// so both commands are exercised for all four values.
+func TestStoreFileDocumentStatus_SetOnWriteAndChangeForEveryValue(t *testing.T) {
+	transitions := []struct{ write, change string }{
+		{write: "draft", change: "final"},
+		{write: "final", change: "superseded"},
+		{write: "superseded", change: "archived"},
+		{write: "archived", change: "draft"},
+	}
+
+	for _, fx := range kindFixtures() {
+		for _, tr := range transitions {
+			t.Run(fx.kind+"/"+tr.write+"->"+tr.change, func(t *testing.T) {
+				dir := t.TempDir()
+				t.Chdir(dir)
+				writeSpecCommandConfig(t, dir, fx.configYAML)
+
+				srcPath := filepath.Join(t.TempDir(), "source.md")
+				require.NoError(t, os.WriteFile(srcPath, []byte("body\n"), 0o644))
+				abs := filepath.Join(dir, fx.storeRelPath)
+
+				resetRootCmd(t)
+				stdout, _, code := runRootCmd(t, fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--document-status", tr.write)
+				require.Equalf(t, 0, code, "write failed: %s", stdout)
+
+				content, err := os.ReadFile(abs)
+				require.NoError(t, err)
+				meta, _, err := metadata.Split(content)
+				require.NoError(t, err)
+				require.NotNil(t, meta)
+				require.Equal(t, tr.write, string(meta.DocumentStatus))
+
+				resetRootCmd(t)
+				stdout, _, code = runRootCmd(t, fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", tr.change)
+				require.Equalf(t, 0, code, "set-document-status failed: %s", stdout)
+
+				var resp map[string]any
+				require.NoError(t, json.Unmarshal([]byte(stdout), &resp))
+				require.Equal(t, tr.change, resp["document_status"])
+				require.NotContains(t, resp, "status")
+
+				content, err = os.ReadFile(abs)
+				require.NoError(t, err)
+				meta, body, err := metadata.Split(content)
+				require.NoError(t, err)
+				require.NotNil(t, meta)
+				require.Equal(t, tr.change, string(meta.DocumentStatus))
+				require.Equal(t, "body\n", string(body))
+			})
+		}
+	}
+}
+
+// TestStoreFile_RetiredStatusFlagAndSubcommandAreUnknown asserts the old
+// command surface is gone: `--status` on `<kind> file write` and `<kind>
+// file list`, and the old `set-status` subcommand invoked as it used to be,
+// all fail naming the unknown flag, and the seeded artifact is untouched.
+// `--status` is passed before any other flag so a parse failure cannot leave
+// a sibling flag set for later tests.
+func TestStoreFile_RetiredStatusFlagAndSubcommandAreUnknown(t *testing.T) {
+	for _, fx := range kindFixtures() {
+		t.Run(fx.kind, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Chdir(dir)
+			writeSpecCommandConfig(t, dir, fx.configYAML)
+
+			seedArtifactWithMetadata(t, dir, fx.storeRelPath, metadata.Metadata{
+				CreatedDate:    time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC),
+				DocumentStatus: metadata.StatusDraft,
+			}, []byte("body\n"))
+			abs := filepath.Join(dir, fx.storeRelPath)
+			before, err := os.ReadFile(abs)
+			require.NoError(t, err)
+
+			srcPath := filepath.Join(t.TempDir(), "source.md")
+			require.NoError(t, os.WriteFile(srcPath, []byte("new body"), 0o644))
+
+			cases := map[string][]string{
+				"write --status":      {fx.kind, "file", "write", fx.artifactName, "--status", "final", "--from", srcPath},
+				"list --status":       {fx.kind, "file", "list", "--status", "final"},
+				"set-status --status": {fx.kind, "file", "set-status", fx.artifactName, "--status", "final"},
+			}
+			for name, args := range cases {
+				t.Run(name, func(t *testing.T) {
+					stdout, stderr, code := runRootCmd(t, args...)
+					require.Equal(t, 1, code)
+					require.Empty(t, stderr)
+
+					var er output.ErrorResponse
+					require.NoError(t, json.Unmarshal([]byte(stdout), &er))
+					require.True(t, er.IsError)
+					require.Equal(t, "unknown flag: --status", er.Message)
+
+					after, err := os.ReadFile(abs)
+					require.NoError(t, err)
+					require.Equal(t, before, after)
+				})
+			}
+
+			t.Run("set-status without flags", func(t *testing.T) {
+				stdout, stderr, code := runRootCmd(t, fx.kind, "file", "set-status", fx.artifactName)
+				require.Equal(t, 1, code)
+				require.Empty(t, stderr)
+
+				var er output.ErrorResponse
+				require.NoError(t, json.Unmarshal([]byte(stdout), &er))
+				require.True(t, er.IsError)
+				require.Equal(t, "unknown_subcommand", er.Code)
+				require.Contains(t, er.Message, `unknown subcommand "set-status"`)
+				require.Contains(t, er.NextAction, "set-document-status")
+
+				after, err := os.ReadFile(abs)
+				require.NoError(t, err)
+				require.Equal(t, before, after)
+			})
 		})
 	}
 }

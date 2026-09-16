@@ -110,7 +110,7 @@ FINISHED_TEMPLATE_MARKER = "This is the terminal state of the implement workflow
 # record path, the agent bypassed the CLI — a hard failure.
 BUILTIN_FILE_TOOLS = frozenset({"Write", "Edit", "MultiEdit", "NotebookEdit"})
 
-STATUS_COMPLETED = "completed"
+STATUS_FINAL = "final"
 
 
 # ---------------------------------------------------------------------------
@@ -284,19 +284,19 @@ def test_project_and_repo_records_have_distinct_content():
 
 
 # ---------------------------------------------------------------------------
-# Layer 3: metadata — finished step must stamp status=completed on the
+# Layer 3: metadata — finished step must stamp document_status=final on the
 # project-level record. This exercises the changelog-artifact half of the
 # finished-step guard: had the guard swallowed ErrNotFound (the pre-fix
-# behaviour), no status would ever get stamped.
+# behaviour), no document status would ever get stamped.
 # ---------------------------------------------------------------------------
 
 
-def test_project_changelog_frontmatter_status_completed():
+def test_project_changelog_frontmatter_document_status_final():
     fm = parse_frontmatter(PROJECT_CHANGELOG_PATH.read_text())
-    assert fm.get("status") == STATUS_COMPLETED, (
-        f"project-level changelog status is {fm.get('status')!r}, expected {STATUS_COMPLETED!r} — "
-        "the finished step's metadata.Close(changelogPath, StatusCompleted) call did not "
-        "run or did not persist. If status is `in-progress`, the finished step returned "
+    assert fm.get("document_status") == STATUS_FINAL, (
+        f"project-level changelog document_status is {fm.get('document_status')!r}, expected {STATUS_FINAL!r} — "
+        "the finished step's metadata.Close(changelogPath, StatusFinal) call did not "
+        "run or did not persist. If document_status is `draft`, the finished step returned "
         "early or its post-condition on the changelog was skipped"
     )
 

@@ -9,6 +9,8 @@ import (
 
 	"github.com/jumppad-labs/spektacular/internal/output"
 	"github.com/jumppad-labs/spektacular/internal/sessionlog"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,44 +23,42 @@ import (
 // tests here only exercise a representative success and failure per family to
 // prove the wrapper itself behaves correctly.
 
-// resetPlanCommandFlags clears the persistent and per-command flags used by
-// the plan command tree between runs, mirroring resetSpecCommandFlags /
-// resetKnowledgeFlags, so a flag set by one subtest does not leak into the
-// next.
-func resetPlanCommandFlags(t *testing.T) {
+// resetRootCmd returns the package-global rootCmd tree to its pristine state,
+// both now and when t ends. Every command is a package global, so a flag
+// parsed by one test otherwise stays set for whichever test runs next, which
+// makes results depend on test order. It resets every flag on every command,
+// its backing variable and its Changed bit together, rather than a
+// hand-maintained list, so a newly added flag cannot be missed. Output
+// streams are left to the caller (see setupImplementCmd).
+func resetRootCmd(t *testing.T) {
 	t.Helper()
 	reset := func() {
-		require.NoError(t, planCmd.PersistentFlags().Set("schema", "false"))
-		require.NoError(t, planCmd.PersistentFlags().Set("dry-run", "false"))
-		require.NoError(t, planNewCmd.Flags().Set("data", ""))
-		require.NoError(t, planNewCmd.Flags().Set("force", "false"))
-		require.NoError(t, planNewCmd.Flags().Set("stdin", ""))
-		require.NoError(t, planNewCmd.Flags().Set("file", ""))
-		require.NoError(t, planGotoCmd.Flags().Set("data", ""))
-		require.NoError(t, planGotoCmd.Flags().Set("stdin", ""))
-		require.NoError(t, planGotoCmd.Flags().Set("file", ""))
+		resetCommandFlags(t, rootCmd)
+		rootCmd.SetArgs(nil)
 	}
 	reset()
 	t.Cleanup(reset)
 }
 
-// resetImplementCommandFlags is the implement-command-tree equivalent of
-// resetPlanCommandFlags.
-func resetImplementCommandFlags(t *testing.T) {
+// resetCommandFlags resets every local and persistent flag on c and its
+// descendants to its default value.
+func resetCommandFlags(t *testing.T, c *cobra.Command) {
 	t.Helper()
-	reset := func() {
-		require.NoError(t, implementCmd.PersistentFlags().Set("schema", "false"))
-		require.NoError(t, implementCmd.PersistentFlags().Set("dry-run", "false"))
-		require.NoError(t, implementNewCmd.Flags().Set("data", ""))
-		require.NoError(t, implementNewCmd.Flags().Set("force", "false"))
-		require.NoError(t, implementNewCmd.Flags().Set("stdin", ""))
-		require.NoError(t, implementNewCmd.Flags().Set("file", ""))
-		require.NoError(t, implementGotoCmd.Flags().Set("data", ""))
-		require.NoError(t, implementGotoCmd.Flags().Set("stdin", ""))
-		require.NoError(t, implementGotoCmd.Flags().Set("file", ""))
+	for _, fs := range []*pflag.FlagSet{c.Flags(), c.PersistentFlags()} {
+		fs.VisitAll(func(f *pflag.Flag) {
+			// A slice flag's Set appends, so its default can only be
+			// restored by replacing the whole value.
+			if sv, ok := f.Value.(pflag.SliceValue); ok {
+				require.NoError(t, sv.Replace(nil), "resetting flag --%s on %q", f.Name, c.CommandPath())
+			} else {
+				require.NoError(t, f.Value.Set(f.DefValue), "resetting flag --%s on %q", f.Name, c.CommandPath())
+			}
+			f.Changed = false
+		})
 	}
-	reset()
-	t.Cleanup(reset)
+	for _, sub := range c.Commands() {
+		resetCommandFlags(t, sub)
+	}
 }
 
 // runRootCmd invokes rootCmd's args through runRoot — the same wrapper
@@ -99,7 +99,7 @@ func TestWrapper_SuccessAndFailureBothStreamOnStdoutOnly(t *testing.T) {
 			dir := t.TempDir()
 			t.Chdir(dir)
 			writeSpecCommandConfig(t, dir, "")
-			resetSpecCommandFlags(t)
+			resetRootCmd(t)
 			stdout, stderr, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 			require.Equal(t, 0, code)
 			require.NotEmpty(t, stdout)
@@ -109,7 +109,7 @@ func TestWrapper_SuccessAndFailureBothStreamOnStdoutOnly(t *testing.T) {
 			dir := t.TempDir()
 			t.Chdir(dir)
 			writeSpecCommandConfig(t, dir, "")
-			resetSpecCommandFlags(t)
+			resetRootCmd(t)
 			stdout, stderr, code := runRootCmd(t, "spec", "new", "--data", `{"name":" billing"}`)
 			require.Equal(t, 1, code)
 			require.NotEmpty(t, stdout)
@@ -122,13 +122,13 @@ func TestWrapper_SuccessAndFailureBothStreamOnStdoutOnly(t *testing.T) {
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "")
 
-		resetPlanCommandFlags(t)
+		resetRootCmd(t)
 		stdout, stderr, code := runRootCmd(t, "plan", "new", "--data", `{"name":"myplan"}`)
 		require.Equal(t, 0, code)
 		require.NotEmpty(t, stdout)
 		require.Empty(t, stderr)
 
-		resetPlanCommandFlags(t)
+		resetRootCmd(t)
 		stdout, stderr, code = runRootCmd(t, "plan", "new")
 		require.Equal(t, 1, code)
 		require.NotEmpty(t, stdout)
@@ -142,13 +142,13 @@ func TestWrapper_SuccessAndFailureBothStreamOnStdoutOnly(t *testing.T) {
 		writeSpecCommandConfig(t, dir, "")
 		writeFixturePlan(t, dataDir, "fixture")
 
-		resetImplementCommandFlags(t)
+		resetRootCmd(t)
 		stdout, stderr, code := runRootCmd(t, "implement", "new", "--data", `{"name":"fixture"}`)
 		require.Equal(t, 0, code)
 		require.NotEmpty(t, stdout)
 		require.Empty(t, stderr)
 
-		resetImplementCommandFlags(t)
+		resetRootCmd(t)
 		stdout, stderr, code = runRootCmd(t, "implement", "new", "--data", `{"name":"nosuch"}`)
 		require.Equal(t, 1, code)
 		require.NotEmpty(t, stdout)
@@ -220,7 +220,7 @@ func TestWrapper_SuccessAndFailureBothStreamOnStdoutOnly(t *testing.T) {
 		// reading it fails with a genuine (non-IsNotExist) error.
 		t.Run("success", func(t *testing.T) {
 			t.Chdir(t.TempDir())
-			resetVersionCheckFlags(t)
+			resetRootCmd(t)
 			stdout, stderr, code := runRootCmd(t, "version", "check")
 			require.Equal(t, 0, code)
 			require.NotEmpty(t, stdout)
@@ -230,7 +230,7 @@ func TestWrapper_SuccessAndFailureBothStreamOnStdoutOnly(t *testing.T) {
 			dir := t.TempDir()
 			t.Chdir(dir)
 			require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spektacular", "version"), 0o755))
-			resetVersionCheckFlags(t)
+			resetRootCmd(t)
 			stdout, stderr, code := runRootCmd(t, "version", "check")
 			require.Equal(t, 1, code)
 			require.NotEmpty(t, stdout)
@@ -269,7 +269,7 @@ func TestWrapper_ErrorDiscriminantAndExitCode(t *testing.T) {
 			dir := t.TempDir()
 			t.Chdir(dir)
 			writeSpecCommandConfig(t, dir, "")
-			resetSpecCommandFlags(t)
+			resetRootCmd(t)
 			stdout, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 			assertSuccessEnvelope(t, stdout, code)
 		})
@@ -277,7 +277,7 @@ func TestWrapper_ErrorDiscriminantAndExitCode(t *testing.T) {
 			dir := t.TempDir()
 			t.Chdir(dir)
 			writeSpecCommandConfig(t, dir, "")
-			resetSpecCommandFlags(t)
+			resetRootCmd(t)
 			stdout, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":" billing"}`)
 			assertFailureEnvelope(t, stdout, code)
 		})
@@ -288,11 +288,11 @@ func TestWrapper_ErrorDiscriminantAndExitCode(t *testing.T) {
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "")
 
-		resetPlanCommandFlags(t)
+		resetRootCmd(t)
 		stdout, _, code := runRootCmd(t, "plan", "new", "--data", `{"name":"myplan"}`)
 		assertSuccessEnvelope(t, stdout, code)
 
-		resetPlanCommandFlags(t)
+		resetRootCmd(t)
 		stdout, _, code = runRootCmd(t, "plan", "new")
 		assertFailureEnvelope(t, stdout, code)
 	})
@@ -304,11 +304,11 @@ func TestWrapper_ErrorDiscriminantAndExitCode(t *testing.T) {
 		writeSpecCommandConfig(t, dir, "")
 		writeFixturePlan(t, dataDir, "fixture")
 
-		resetImplementCommandFlags(t)
+		resetRootCmd(t)
 		stdout, _, code := runRootCmd(t, "implement", "new", "--data", `{"name":"fixture"}`)
 		assertSuccessEnvelope(t, stdout, code)
 
-		resetImplementCommandFlags(t)
+		resetRootCmd(t)
 		stdout, _, code = runRootCmd(t, "implement", "new", "--data", `{"name":"nosuch"}`)
 		assertFailureEnvelope(t, stdout, code)
 	})
@@ -362,7 +362,7 @@ func TestWrapper_ErrorDiscriminantAndExitCode(t *testing.T) {
 	t.Run("version", func(t *testing.T) {
 		t.Run("success", func(t *testing.T) {
 			t.Chdir(t.TempDir())
-			resetVersionCheckFlags(t)
+			resetRootCmd(t)
 			stdout, _, code := runRootCmd(t, "version", "check")
 			assertSuccessEnvelope(t, stdout, code)
 		})
@@ -370,7 +370,7 @@ func TestWrapper_ErrorDiscriminantAndExitCode(t *testing.T) {
 			dir := t.TempDir()
 			t.Chdir(dir)
 			require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spektacular", "version"), 0o755))
-			resetVersionCheckFlags(t)
+			resetRootCmd(t)
 			stdout, _, code := runRootCmd(t, "version", "check")
 			assertFailureEnvelope(t, stdout, code)
 		})
@@ -395,7 +395,7 @@ func TestWrapper_FailureIsPrintedExactlyOnceWithNoCobraBoilerplate(t *testing.T)
 		dir := t.TempDir()
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "")
-		resetSpecCommandFlags(t)
+		resetRootCmd(t)
 		stdout, stderr, code := runRootCmd(t, "spec", "new", "--data", `{"name":" billing"}`)
 		assertNoCobraBoilerplate(t, stdout, stderr, code)
 	})
@@ -404,7 +404,7 @@ func TestWrapper_FailureIsPrintedExactlyOnceWithNoCobraBoilerplate(t *testing.T)
 		dir := t.TempDir()
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "")
-		resetPlanCommandFlags(t)
+		resetRootCmd(t)
 		stdout, stderr, code := runRootCmd(t, "plan", "new")
 		assertNoCobraBoilerplate(t, stdout, stderr, code)
 	})
@@ -413,7 +413,7 @@ func TestWrapper_FailureIsPrintedExactlyOnceWithNoCobraBoilerplate(t *testing.T)
 		dir := t.TempDir()
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "")
-		resetImplementCommandFlags(t)
+		resetRootCmd(t)
 		stdout, stderr, code := runRootCmd(t, "implement", "new", "--data", `{"name":"nosuch"}`)
 		assertNoCobraBoilerplate(t, stdout, stderr, code)
 	})
@@ -447,7 +447,7 @@ func TestWrapper_FailureIsPrintedExactlyOnceWithNoCobraBoilerplate(t *testing.T)
 		dir := t.TempDir()
 		t.Chdir(dir)
 		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spektacular", "version"), 0o755))
-		resetVersionCheckFlags(t)
+		resetRootCmd(t)
 		stdout, stderr, code := runRootCmd(t, "version", "check")
 		assertNoCobraBoilerplate(t, stdout, stderr, code)
 	})
@@ -529,19 +529,17 @@ func TestUnknownSubcommand_ReturnsStructuredErrorNamingValidSubcommands(t *testi
 // no --data at all) before finding the correct flag shape.
 func TestGotoStepRequired_ReturnsStructuredErrorAcrossAllKinds(t *testing.T) {
 	kinds := []struct {
-		kind       string
-		resetFlags func(t *testing.T)
-		stepsHint  string
+		kind      string
+		stepsHint string
 	}{
-		{"spec", resetSpecCommandFlags, "spec steps"},
-		{"plan", resetPlanCommandFlags, "plan steps"},
-		{"implement", resetImplementCommandFlags, "implement steps"},
+		{"spec", "spec steps"},
+		{"plan", "plan steps"},
+		{"implement", "implement steps"},
 	}
 
 	for _, k := range kinds {
 		t.Run(k.kind, func(t *testing.T) {
 			t.Run("no --data at all", func(t *testing.T) {
-				k.resetFlags(t)
 				stdout, _, code := runRootCmd(t, k.kind, "goto")
 				require.Equal(t, 1, code)
 
@@ -554,7 +552,6 @@ func TestGotoStepRequired_ReturnsStructuredErrorAcrossAllKinds(t *testing.T) {
 			})
 
 			t.Run("--data with no step key", func(t *testing.T) {
-				k.resetFlags(t)
 				stdout, _, code := runRootCmd(t, k.kind, "goto", "--data", `{}`)
 				require.Equal(t, 1, code)
 
@@ -606,7 +603,7 @@ func TestSessionLog_DisabledProducesNoRecordFile(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "")
-		resetSpecCommandFlags(t)
+		resetRootCmd(t)
 
 		stdout, stderr, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 		require.Equal(t, 0, code)
@@ -620,7 +617,7 @@ func TestSessionLog_DisabledProducesNoRecordFile(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "debug:\n  enabled: false\n")
-		resetSpecCommandFlags(t)
+		resetRootCmd(t)
 
 		stdout, stderr, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 		require.Equal(t, 0, code)
@@ -661,7 +658,7 @@ func TestSessionLog_EnabledRecordsSuccessAndRejection(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\n")
-		resetSpecCommandFlags(t)
+		resetRootCmd(t)
 
 		stdout, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 		require.Equal(t, 0, code)
@@ -677,7 +674,7 @@ func TestSessionLog_EnabledRecordsSuccessAndRejection(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\n")
-		resetSpecCommandFlags(t)
+		resetRootCmd(t)
 
 		stdout, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":" billing"}`)
 		require.Equal(t, 1, code)
@@ -701,7 +698,7 @@ func TestSessionLog_EnabledRecordsSuccessAndRejection(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\n")
-		resetSpecCommandFlags(t)
+		resetRootCmd(t)
 
 		stdout, _, code := runRootCmd(t, "spec", "new", "--data", `{not-json`)
 		require.Equal(t, 1, code)
@@ -740,13 +737,16 @@ func TestSessionLog_EnabledDoesNotChangeCallerVisibleOutput(t *testing.T) {
 
 	// Both runs get a project config — the project gate makes one mandatory
 	// for project-operating commands — so the debug toggle is the only
-	// difference between the compared invocations.
+	// difference between the compared invocations. Spec IDs use the counter
+	// method: the default timestamp method would name the two runs' specs
+	// differently whenever they straddle a second boundary.
 	withDebug := func(t *testing.T, dir string, debugOn bool) {
+		const base = "spec:\n  id_method: counter\n"
 		if !debugOn {
-			writeSpecCommandConfig(t, dir, "")
+			writeSpecCommandConfig(t, dir, base)
 			return
 		}
-		writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\n")
+		writeSpecCommandConfig(t, dir, base+"debug:\n  enabled: true\n")
 	}
 
 	families := []family{
@@ -756,7 +756,7 @@ func TestSessionLog_EnabledDoesNotChangeCallerVisibleOutput(t *testing.T) {
 				dir := t.TempDir()
 				t.Chdir(dir)
 				withDebug(t, dir, debugOn)
-				resetSpecCommandFlags(t)
+				resetRootCmd(t)
 				return dir, []string{"spec", "new", "--data", `{"name":"billing"}`}
 			},
 		},
@@ -766,7 +766,7 @@ func TestSessionLog_EnabledDoesNotChangeCallerVisibleOutput(t *testing.T) {
 				dir := t.TempDir()
 				t.Chdir(dir)
 				withDebug(t, dir, debugOn)
-				resetPlanCommandFlags(t)
+				resetRootCmd(t)
 				return dir, []string{"plan", "new", "--data", `{"name":"myplan"}`}
 			},
 		},
@@ -779,7 +779,7 @@ func TestSessionLog_EnabledDoesNotChangeCallerVisibleOutput(t *testing.T) {
 				require.NoError(t, os.MkdirAll(dataDir, 0o755))
 				writeFixturePlan(t, dataDir, "fixture")
 				withDebug(t, dir, debugOn)
-				resetImplementCommandFlags(t)
+				resetRootCmd(t)
 				return dir, []string{"implement", "new", "--data", `{"name":"fixture"}`}
 			},
 		},
@@ -794,7 +794,7 @@ func TestSessionLog_EnabledDoesNotChangeCallerVisibleOutput(t *testing.T) {
 					require.NoError(t, err)
 					require.NoError(t, f.Close())
 				}
-				resetKnowledgeFlags(t)
+				resetRootCmd(t)
 				return root, []string{"knowledge", "sources"}
 			},
 		},
@@ -858,7 +858,7 @@ func TestSessionLog_AdvancedTrueWhenStateChanges(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\n")
-		resetSpecCommandFlags(t)
+		resetRootCmd(t)
 
 		_, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 		require.Equal(t, 0, code)
@@ -877,7 +877,7 @@ func TestSessionLog_AdvancedTrueWhenStateChanges(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\n")
-		resetSpecCommandFlags(t)
+		resetRootCmd(t)
 
 		_, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 		require.Equal(t, 0, code)
@@ -911,7 +911,7 @@ func TestSessionLog_AdvancedFalseWhenGotoRepeatsCurrentStep(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\n")
-	resetSpecCommandFlags(t)
+	resetRootCmd(t)
 
 	_, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 	require.Equal(t, 0, code)
@@ -942,7 +942,7 @@ func TestSessionLog_UnrelatedCommandRecordsNothingToAdvance(t *testing.T) {
 	_, err = f.WriteString("debug:\n  enabled: true\n")
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
-	resetKnowledgeFlags(t)
+	resetRootCmd(t)
 
 	require.NoFileExists(t, filepath.Join(root, ".spektacular", "state.json"), "no workflow has ever run in this project")
 
@@ -970,7 +970,7 @@ func TestSessionLog_SameSessionIDAcrossFoundingAndResumedCalls(t *testing.T) {
 	// ("000001_billing") rather than timestamp-based, so the session id can
 	// be asserted as an exact string.
 	writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\nspec:\n  id_method: counter\n")
-	resetSpecCommandFlags(t)
+	resetRootCmd(t)
 
 	_, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 	require.Equal(t, 0, code)
@@ -1000,7 +1000,7 @@ func TestSessionLog_DistinctSessionIDsForDifferentNamedWork(t *testing.T) {
 		// id_method: counter makes the resolved spec name deterministic
 		// ("000001_<name>") rather than timestamp-based.
 		writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\nspec:\n  id_method: counter\n")
-		resetSpecCommandFlags(t)
+		resetRootCmd(t)
 
 		_, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"`+name+`"}`)
 		require.Equal(t, 0, code)
@@ -1015,7 +1015,7 @@ func TestSessionLog_DistinctSessionIDsForDifferentNamedWork(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 		writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\n")
-		resetPlanCommandFlags(t)
+		resetRootCmd(t)
 
 		_, _, code := runRootCmd(t, "plan", "new", "--data", `{"name":"`+name+`"}`)
 		require.Equal(t, 0, code)
@@ -1055,7 +1055,7 @@ func TestSessionLog_NoActiveWorkflowSessionIDBeforeAnyWorkflow(t *testing.T) {
 	_, err = f.WriteString("debug:\n  enabled: true\n")
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
-	resetKnowledgeFlags(t)
+	resetRootCmd(t)
 
 	require.NoFileExists(t, filepath.Join(root, ".spektacular", "state.json"), "no workflow has ever run in this project")
 
@@ -1077,7 +1077,7 @@ func TestSessionLog_FilenameEncodesAgentAndSessionID(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\nagent: testbot\n")
-	resetPlanCommandFlags(t)
+	resetRootCmd(t)
 
 	_, _, code := runRootCmd(t, "plan", "new", "--data", `{"name":"billing"}`)
 	require.Equal(t, 0, code)
@@ -1098,7 +1098,7 @@ func TestSessionLog_ForceRestartStartsANewFileNotAppendingToPrevious(t *testing.
 	dir := t.TempDir()
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\n")
-	resetPlanCommandFlags(t)
+	resetRootCmd(t)
 
 	_, _, code := runRootCmd(t, "plan", "new", "--data", `{"name":"billing"}`)
 	require.Equal(t, 0, code)
@@ -1152,13 +1152,13 @@ func TestSchema_NonKnowledgeFamiliesPublishExactlyInputAndOutput(t *testing.T) {
 				t.Run(sub, func(t *testing.T) {
 					switch family {
 					case "spec":
-						resetSpecCommandFlags(t)
+						resetRootCmd(t)
 					case "plan":
-						resetPlanCommandFlags(t)
+						resetRootCmd(t)
 					case "implement":
-						resetImplementCommandFlags(t)
+						resetRootCmd(t)
 					case "repo":
-						resetRepoFlags(t)
+						resetRootCmd(t)
 					}
 
 					stdout, stderr, code := runRootCmd(t, family, sub, "--schema")

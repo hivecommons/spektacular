@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,37 +20,10 @@ import (
 // artifacts without reconfiguring per subtest.
 const artifactsListConfigYAML = "spec:\n  config:\n    directory: docs/specs\nplan:\n  config:\n    directory: docs/plans\nchangelog:\n  config:\n    directory: docs/changelog\n"
 
-// artifactsListFlagNames enumerates the six per-subtest cobra flags exposed by
-// `spektacular artifacts list`. Every one of them is a package-global closure
-// on artifactsCmd's list subcommand, so a flag set by one test leaks into the
-// next unless reset — the same trap resetListFilterFlags / resetWriteStatusFlag
-// / resetSetStatusFlag guard for their respective subcommands.
-var artifactsListFlagNames = []string{"kind", "status", "created-after", "created-before", "closed-after", "closed-before"}
-
-// resetArtifactsListFlags clears every flag on `artifacts list` and its
-// `Changed` bit, both immediately and via t.Cleanup, so no state leaks into
-// or out of the current test.
-func resetArtifactsListFlags(t *testing.T) {
-	t.Helper()
-	listCmd, _, err := rootCmd.Find([]string{"artifacts", "list"})
-	require.NoError(t, err)
-	require.NotNil(t, listCmd)
-	reset := func() {
-		for _, name := range artifactsListFlagNames {
-			require.NoError(t, listCmd.Flags().Set(name, ""))
-			if f := listCmd.Flags().Lookup(name); f != nil {
-				f.Changed = false
-			}
-		}
-	}
-	reset()
-	t.Cleanup(reset)
-}
-
 // artifactsResponse is the shape `spektacular artifacts list` writes on
 // success: `{"error": false, "artifacts": [...]}`. Each entry carries at
 // minimum kind, name, and path; frontmatter-bearing entries additionally
-// carry created_date, status, and (when non-zero) closed_date.
+// carry created_date, document_status, and (when non-zero) closed_date.
 type artifactsResponse struct {
 	Error     bool             `json:"error"`
 	Artifacts []map[string]any `json:"artifacts"`
@@ -106,7 +80,7 @@ func TestArtifactsList_EmptyStoreReturnsEmptyEnvelope(t *testing.T) {
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, artifactsListConfigYAML)
 
-	resetArtifactsListFlags(t)
+	resetRootCmd(t)
 	resp := runArtifactsListJSON(t)
 
 	require.NotNil(t, resp.Artifacts, "the artifacts key must always be present, even when empty")
@@ -123,7 +97,7 @@ func TestArtifactsList_UnfilteredReturnsAllKindsTagged(t *testing.T) {
 	writeSpecCommandConfig(t, dir, artifactsListConfigYAML)
 
 	created := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC)
-	m := metadata.Metadata{CreatedDate: created, Status: metadata.StatusInProgress}
+	m := metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusDraft}
 
 	// One spec, one plan directory with all four sibling docs, two changelog entries.
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260709000000-feature.md"), m, []byte("spec body"))
@@ -134,7 +108,7 @@ func TestArtifactsList_UnfilteredReturnsAllKindsTagged(t *testing.T) {
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "changelog", "testproj", "20260710000000-first.md"), m, []byte("changelog 1"))
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "changelog", "testproj", "20260711000000-second.md"), m, []byte("changelog 2"))
 
-	resetArtifactsListFlags(t)
+	resetRootCmd(t)
 	resp := runArtifactsListJSON(t)
 
 	require.Len(t, resp.Artifacts, 7, "one entry per seeded artifact across all three classes")
@@ -163,7 +137,7 @@ func TestArtifactsList_UnfilteredReturnsAllKindsTagged(t *testing.T) {
 func TestArtifactsList_KindFilterNarrowsToRequestedClasses(t *testing.T) {
 	seed := func(t *testing.T, dir string) {
 		created := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC)
-		m := metadata.Metadata{CreatedDate: created, Status: metadata.StatusInProgress}
+		m := metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusDraft}
 		seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260709000000-feature.md"), m, []byte("spec"))
 		seedArtifactWithMetadata(t, dir, filepath.Join("docs", "plans", "20260709000000-feature", "plan.md"), m, []byte("plan"))
 		seedArtifactWithMetadata(t, dir, filepath.Join("docs", "plans", "20260709000000-feature", "context.md"), m, []byte("context"))
@@ -179,7 +153,7 @@ func TestArtifactsList_KindFilterNarrowsToRequestedClasses(t *testing.T) {
 		writeSpecCommandConfig(t, dir, artifactsListConfigYAML)
 		seed(t, dir)
 
-		resetArtifactsListFlags(t)
+		resetRootCmd(t)
 		resp := runArtifactsListJSON(t, "--kind", "plan.context")
 
 		require.Len(t, resp.Artifacts, 1)
@@ -193,7 +167,7 @@ func TestArtifactsList_KindFilterNarrowsToRequestedClasses(t *testing.T) {
 		writeSpecCommandConfig(t, dir, artifactsListConfigYAML)
 		seed(t, dir)
 
-		resetArtifactsListFlags(t)
+		resetRootCmd(t)
 		resp := runArtifactsListJSON(t, "--kind", "spec,changelog")
 
 		require.Len(t, resp.Artifacts, 3, "1 spec + 2 changelog = 3")
@@ -206,7 +180,7 @@ func TestArtifactsList_KindFilterNarrowsToRequestedClasses(t *testing.T) {
 		writeSpecCommandConfig(t, dir, artifactsListConfigYAML)
 		seed(t, dir)
 
-		resetArtifactsListFlags(t)
+		resetRootCmd(t)
 		stdout, _, code := runRootCmd(t, "artifacts", "list", "--kind", "bogus")
 		require.Equal(t, 1, code)
 
@@ -219,10 +193,10 @@ func TestArtifactsList_KindFilterNarrowsToRequestedClasses(t *testing.T) {
 }
 
 // TestArtifactsList_StatusFilterAppliedAcrossAllKinds asserts acceptance
-// criterion 3: --status filters uniformly across every scanned class, not
-// just one — a mixed seed of in-progress and completed artifacts across
-// specs, plan siblings, and changelog entries returns exactly the completed
-// subset when --status completed is set.
+// criterion 3: --document-status filters uniformly across every scanned class, not
+// just one — a mixed seed of draft and final artifacts across
+// specs, plan siblings, and changelog entries returns exactly the final
+// subset when --document-status final is set.
 func TestArtifactsList_StatusFilterAppliedAcrossAllKinds(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -230,10 +204,10 @@ func TestArtifactsList_StatusFilterAppliedAcrossAllKinds(t *testing.T) {
 
 	created := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC)
 	closed := time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC)
-	ip := metadata.Metadata{CreatedDate: created, Status: metadata.StatusInProgress}
-	done := metadata.Metadata{CreatedDate: created, Status: metadata.StatusCompleted, ClosedDate: closed}
+	ip := metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusDraft}
+	done := metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusFinal, ClosedDate: closed}
 
-	// One in-progress + one completed of each class (specs, plan siblings, changelog).
+	// One draft + one final of each class (specs, plan siblings, changelog).
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260701000000-open.md"), ip, []byte("open"))
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260702000000-done.md"), done, []byte("done"))
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "plans", "20260709000000-feature", "plan.md"), ip, []byte("open"))
@@ -241,16 +215,16 @@ func TestArtifactsList_StatusFilterAppliedAcrossAllKinds(t *testing.T) {
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "changelog", "testproj", "20260710000000-open.md"), ip, []byte("open"))
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "changelog", "testproj", "20260711000000-done.md"), done, []byte("done"))
 
-	resetArtifactsListFlags(t)
-	resp := runArtifactsListJSON(t, "--status", "completed")
+	resetRootCmd(t)
+	resp := runArtifactsListJSON(t, "--document-status", "final")
 
-	require.Len(t, resp.Artifacts, 3, "3 completed artifacts across 3 classes")
+	require.Len(t, resp.Artifacts, 3, "3 final artifacts across 3 classes")
 
-	// Every returned entry must carry status: completed.
+	// Every returned entry must carry document_status: final.
 	for _, a := range resp.Artifacts {
-		require.Equal(t, "completed", a["status"])
+		require.Equal(t, "final", a["document_status"])
 	}
-	// And they must span the classes seeded as completed — not all in one class.
+	// And they must span the classes seeded as final — not all in one class.
 	require.Equal(t, []string{"changelog", "plan.context", "spec"}, artifactKinds(resp))
 }
 
@@ -278,13 +252,13 @@ func TestArtifactsList_CreatedDateRangeFiltersAcrossAllKinds(t *testing.T) {
 		{jan15, "jan15"},
 		{jan31, "jan31"},
 	} {
-		m := metadata.Metadata{CreatedDate: d.when, Status: metadata.StatusInProgress}
+		m := metadata.Metadata{CreatedDate: d.when, DocumentStatus: metadata.StatusDraft}
 		seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260701000000-"+d.suf+".md"), m, []byte(d.suf))
 		seedArtifactWithMetadata(t, dir, filepath.Join("docs", "plans", "20260709000000-"+d.suf, "plan.md"), m, []byte(d.suf))
 		seedArtifactWithMetadata(t, dir, filepath.Join("docs", "changelog", "testproj", "20260710000000-"+d.suf+".md"), m, []byte(d.suf))
 	}
 
-	resetArtifactsListFlags(t)
+	resetRootCmd(t)
 	resp := runArtifactsListJSON(t, "--created-after", "2026-01-10", "--created-before", "2026-01-20")
 
 	require.Len(t, resp.Artifacts, 3, "one Jan 15 artifact per class must survive the range")
@@ -296,9 +270,9 @@ func TestArtifactsList_CreatedDateRangeFiltersAcrossAllKinds(t *testing.T) {
 }
 
 // TestArtifactsList_CombinedFiltersIntersect asserts acceptance criterion 3's
-// AND semantics: combining --kind and --status yields the intersection, not
-// the union. Only specs that are also completed must appear — a completed
-// changelog and an in-progress spec both fall outside the intersection.
+// AND semantics: combining --kind and --document-status yields the intersection, not
+// the union. Only specs that are also final must appear — a final
+// changelog and a draft spec both fall outside the intersection.
 func TestArtifactsList_CombinedFiltersIntersect(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -306,23 +280,23 @@ func TestArtifactsList_CombinedFiltersIntersect(t *testing.T) {
 
 	created := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC)
 	closed := time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC)
-	ip := metadata.Metadata{CreatedDate: created, Status: metadata.StatusInProgress}
-	done := metadata.Metadata{CreatedDate: created, Status: metadata.StatusCompleted, ClosedDate: closed}
+	ip := metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusDraft}
+	done := metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusFinal, ClosedDate: closed}
 
-	// Two specs: one in-progress, one completed. Two changelog entries: same.
-	// Only spec+completed satisfies --kind spec --status completed.
+	// Two specs: one draft, one final. Two changelog entries: same.
+	// Only spec+final satisfies --kind spec --document-status final.
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260701000000-open.md"), ip, []byte("open"))
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260702000000-done.md"), done, []byte("done"))
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "changelog", "testproj", "20260710000000-open.md"), ip, []byte("open"))
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "changelog", "testproj", "20260711000000-done.md"), done, []byte("done"))
 
-	resetArtifactsListFlags(t)
-	resp := runArtifactsListJSON(t, "--kind", "spec", "--status", "completed")
+	resetRootCmd(t)
+	resp := runArtifactsListJSON(t, "--kind", "spec", "--document-status", "final")
 
-	require.Len(t, resp.Artifacts, 1, "only spec + completed survives the intersection")
+	require.Len(t, resp.Artifacts, 1, "only spec + final survives the intersection")
 	require.Equal(t, "spec", resp.Artifacts[0]["kind"])
 	require.Equal(t, "20260702000000-done.md", resp.Artifacts[0]["name"])
-	require.Equal(t, "completed", resp.Artifacts[0]["status"])
+	require.Equal(t, "final", resp.Artifacts[0]["document_status"])
 }
 
 // TestArtifactsList_BareArtifactsSurfaceInUnfilteredButNotFiltered asserts the
@@ -336,8 +310,8 @@ func TestArtifactsList_BareArtifactsSurfaceInUnfilteredButNotFiltered(t *testing
 	writeSpecCommandConfig(t, dir, artifactsListConfigYAML)
 
 	created := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC)
-	ip := metadata.Metadata{CreatedDate: created, Status: metadata.StatusInProgress}
-	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260701000000-in-progress.md"), ip, []byte("open"))
+	ip := metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusDraft}
+	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260701000000-draft.md"), ip, []byte("open"))
 
 	// Bare spec: raw body with no frontmatter block at all.
 	bareAbs := filepath.Join(dir, "docs", "specs", "20260702000000-bare.md")
@@ -345,7 +319,7 @@ func TestArtifactsList_BareArtifactsSurfaceInUnfilteredButNotFiltered(t *testing
 	require.NoError(t, os.WriteFile(bareAbs, []byte("bare legacy body"), 0o644))
 
 	// Unfiltered: both surface, bare carrying only kind/name/path.
-	resetArtifactsListFlags(t)
+	resetRootCmd(t)
 	resp := runArtifactsListJSON(t)
 	require.Len(t, resp.Artifacts, 2)
 
@@ -354,20 +328,20 @@ func TestArtifactsList_BareArtifactsSurfaceInUnfilteredButNotFiltered(t *testing
 	require.Contains(t, bare, "kind")
 	require.Contains(t, bare, "name")
 	require.Contains(t, bare, "path")
-	_, hasStatus := bare["status"]
-	require.False(t, hasStatus, "a bare artifact must not carry a status field")
+	_, hasStatus := bare["document_status"]
+	require.False(t, hasStatus, "a bare artifact must not carry a document_status field")
 	_, hasCreated := bare["created_date"]
 	require.False(t, hasCreated, "a bare artifact must not carry a created_date field")
 
 	// Filtered: bare artifact is silently dropped.
-	resetArtifactsListFlags(t)
-	resp = runArtifactsListJSON(t, "--status", "in-progress")
+	resetRootCmd(t)
+	resp = runArtifactsListJSON(t, "--document-status", "draft")
 	require.Len(t, resp.Artifacts, 1, "any metadata filter must exclude bare artifacts")
-	require.Equal(t, "20260701000000-in-progress.md", resp.Artifacts[0]["name"])
+	require.Equal(t, "20260701000000-draft.md", resp.Artifacts[0]["name"])
 }
 
 // TestArtifactsList_MetadataFieldsPresentPerEntry asserts acceptance
-// criterion 2 for both a completed (closed_date present) and an in-progress
+// criterion 2 for both a final (closed_date present) and a draft
 // (closed_date absent) artifact — a positive assertion that every carried
 // field lands in the entry, complementing the bare-artifact test's negative
 // assertion.
@@ -380,11 +354,11 @@ func TestArtifactsList_MetadataFieldsPresentPerEntry(t *testing.T) {
 	closed := time.Date(2026, time.February, 5, 0, 0, 0, 0, time.UTC)
 
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260701000000-open.md"),
-		metadata.Metadata{CreatedDate: created, Status: metadata.StatusInProgress}, []byte("open"))
+		metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusDraft}, []byte("open"))
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260702000000-done.md"),
-		metadata.Metadata{CreatedDate: created, Status: metadata.StatusCompleted, ClosedDate: closed}, []byte("done"))
+		metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusFinal, ClosedDate: closed}, []byte("done"))
 
-	resetArtifactsListFlags(t)
+	resetRootCmd(t)
 	resp := runArtifactsListJSON(t)
 
 	require.Len(t, resp.Artifacts, 2)
@@ -395,9 +369,9 @@ func TestArtifactsList_MetadataFieldsPresentPerEntry(t *testing.T) {
 	require.Equal(t, "20260701000000-open.md", open["name"])
 	require.Contains(t, open, "path")
 	require.Equal(t, "2026-01-10", open["created_date"])
-	require.Equal(t, "in-progress", open["status"])
+	require.Equal(t, "draft", open["document_status"])
 	_, hasClosed := open["closed_date"]
-	require.False(t, hasClosed, "an in-progress artifact must not carry closed_date")
+	require.False(t, hasClosed, "a draft artifact must not carry closed_date")
 
 	done := findArtifactByKindAndName(resp.Artifacts, "spec", "20260702000000-done.md")
 	require.NotNil(t, done)
@@ -405,7 +379,7 @@ func TestArtifactsList_MetadataFieldsPresentPerEntry(t *testing.T) {
 	require.Equal(t, "20260702000000-done.md", done["name"])
 	require.Contains(t, done, "path")
 	require.Equal(t, "2026-01-10", done["created_date"])
-	require.Equal(t, "completed", done["status"])
+	require.Equal(t, "final", done["document_status"])
 	require.Equal(t, "2026-02-05", done["closed_date"])
 }
 
@@ -421,7 +395,7 @@ func TestArtifactsList_MissingConfiguredDirectoriesAreTreatedAsEmpty(t *testing.
 	writeSpecCommandConfig(t, dir, artifactsListConfigYAML)
 
 	// Deliberately do not create docs/specs, docs/plans, or docs/changelog.
-	resetArtifactsListFlags(t)
+	resetRootCmd(t)
 	resp := runArtifactsListJSON(t)
 
 	require.NotNil(t, resp.Artifacts)
@@ -439,9 +413,9 @@ func TestArtifactsList_ChangelogEntriesListedFromProjectNamespaceFolder(t *testi
 
 	created := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC)
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "changelog", "testproj", "000002_x.md"),
-		metadata.Metadata{CreatedDate: created, Status: metadata.StatusInProgress}, []byte("changelog body"))
+		metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusDraft}, []byte("changelog body"))
 
-	resetArtifactsListFlags(t)
+	resetRootCmd(t)
 	resp := runArtifactsListJSON(t)
 
 	require.Len(t, resp.Artifacts, 1)
@@ -449,7 +423,7 @@ func TestArtifactsList_ChangelogEntriesListedFromProjectNamespaceFolder(t *testi
 	require.NotNil(t, entry, "the namespaced changelog entry must appear in the listing")
 	require.Equal(t, "docs/changelog/testproj/000002_x.md", entry["path"])
 	require.Equal(t, "2026-01-10", entry["created_date"])
-	require.Equal(t, "in-progress", entry["status"])
+	require.Equal(t, "draft", entry["document_status"])
 }
 
 // Criterion 2: a project whose changelog namespace folder does not exist yet
@@ -466,9 +440,9 @@ func TestArtifactsList_MissingChangelogNamespaceFolderListsCleanly(t *testing.T)
 
 	created := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC)
 	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260709000000-feature.md"),
-		metadata.Metadata{CreatedDate: created, Status: metadata.StatusInProgress}, []byte("spec body"))
+		metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusDraft}, []byte("spec body"))
 
-	resetArtifactsListFlags(t)
+	resetRootCmd(t)
 	resp := runArtifactsListJSON(t)
 
 	require.Len(t, resp.Artifacts, 1, "only the spec must appear; the missing namespace folder is empty, not an error")
@@ -520,4 +494,170 @@ func TestParseKindFlag_CommaSeparatedNarrows(t *testing.T) {
 	require.False(t, set[artifactKindPlanPlan])
 	require.False(t, set[artifactKindPlanResearch])
 	require.False(t, set[artifactKindPlanTestPlan])
+}
+
+// artifactsNamesByKind returns "kind:name" for every artifact in resp,
+// sorted, for stable set comparisons.
+func artifactsNamesByKind(resp artifactsResponse) []string {
+	out := make([]string, 0, len(resp.Artifacts))
+	for _, a := range resp.Artifacts {
+		out = append(out, fmt.Sprintf("%v:%v", a["kind"], a["name"]))
+	}
+	sort.Strings(out)
+	return out
+}
+
+// TestArtifactsList_FiltersByEveryDocumentStatus asserts `artifacts list
+// --document-status <v>` returns exactly the spec, plan and changelog stored
+// with that value, for each of the four values, and that every entry carries
+// a document_status key and no status key.
+func TestArtifactsList_FiltersByEveryDocumentStatus(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, artifactsListConfigYAML)
+
+	created := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC)
+	closed := time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC)
+	seeds := []struct {
+		id string
+		m  metadata.Metadata
+	}{
+		{"20260701000000-draft", metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusDraft}},
+		{"20260702000000-final", metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusFinal, ClosedDate: closed}},
+		{"20260703000000-superseded", metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusSuperseded, ClosedDate: closed}},
+		{"20260704000000-archived", metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusArchived, ClosedDate: closed}},
+	}
+	for _, s := range seeds {
+		seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", s.id+".md"), s.m, []byte("spec"))
+		seedArtifactWithMetadata(t, dir, filepath.Join("docs", "plans", s.id, "plan.md"), s.m, []byte("plan"))
+		seedArtifactWithMetadata(t, dir, filepath.Join("docs", "changelog", "testproj", s.id+".md"), s.m, []byte("changelog"))
+	}
+
+	resetRootCmd(t)
+	all := runArtifactsListJSON(t)
+	require.Len(t, all.Artifacts, 12)
+	for _, a := range all.Artifacts {
+		require.Contains(t, a, "document_status", "entry %v", a["name"])
+		require.NotContains(t, a, "status", "entry %v", a["name"])
+	}
+
+	want := map[string][]string{
+		"draft":      {"changelog:20260701000000-draft.md", "plan.plan:plan.md", "spec:20260701000000-draft.md"},
+		"final":      {"changelog:20260702000000-final.md", "plan.plan:plan.md", "spec:20260702000000-final.md"},
+		"superseded": {"changelog:20260703000000-superseded.md", "plan.plan:plan.md", "spec:20260703000000-superseded.md"},
+		"archived":   {"changelog:20260704000000-archived.md", "plan.plan:plan.md", "spec:20260704000000-archived.md"},
+	}
+	for value, names := range want {
+		t.Run(value, func(t *testing.T) {
+			resetRootCmd(t)
+			resp := runArtifactsListJSON(t, "--document-status", value)
+			require.Equal(t, names, artifactsNamesByKind(resp))
+			for _, a := range resp.Artifacts {
+				require.Equal(t, value, a["document_status"])
+			}
+		})
+	}
+}
+
+// TestArtifactsList_LegacyAndUnknownStatusReadAsBlank asserts the cross-kind
+// list reads stored frontmatter leniently: in every class, an artifact with
+// only the retired `status` key and one with an unknown document_status list
+// with an empty document_status when unfiltered, and are excluded by
+// --document-status draft and --document-status final.
+func TestArtifactsList_LegacyAndUnknownStatusReadAsBlank(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, artifactsListConfigYAML)
+
+	created := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC)
+	closed := time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC)
+	draft := metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusDraft}
+	final := metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusFinal, ClosedDate: closed}
+
+	writeRawArtifact(t, dir, filepath.Join("docs", "specs", "20260701000000-legacy.md"), legacyStatusArtifact)
+	writeRawArtifact(t, dir, filepath.Join("docs", "specs", "20260702000000-bogus.md"), bogusDocumentStatusArtifact)
+	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "specs", "20260703000000-draft.md"), draft, []byte("spec"))
+	writeRawArtifact(t, dir, filepath.Join("docs", "plans", "20260701000000-legacy", "plan.md"), legacyStatusArtifact)
+	writeRawArtifact(t, dir, filepath.Join("docs", "plans", "20260701000000-legacy", "context.md"), bogusDocumentStatusArtifact)
+	seedArtifactWithMetadata(t, dir, filepath.Join("docs", "plans", "20260701000000-legacy", "research.md"), final, []byte("research"))
+	writeRawArtifact(t, dir, filepath.Join("docs", "changelog", "testproj", "20260701000000-legacy.md"), legacyStatusArtifact)
+	writeRawArtifact(t, dir, filepath.Join("docs", "changelog", "testproj", "20260702000000-bogus.md"), bogusDocumentStatusArtifact)
+
+	resetRootCmd(t)
+	all := runArtifactsListJSON(t)
+	require.Equal(t, []string{
+		"changelog:20260701000000-legacy.md",
+		"changelog:20260702000000-bogus.md",
+		"plan.context:context.md",
+		"plan.plan:plan.md",
+		"plan.research:research.md",
+		"spec:20260701000000-legacy.md",
+		"spec:20260702000000-bogus.md",
+		"spec:20260703000000-draft.md",
+	}, artifactsNamesByKind(all))
+	blank := map[string]bool{
+		"changelog:20260701000000-legacy.md": true,
+		"changelog:20260702000000-bogus.md":  true,
+		"plan.context:context.md":            true,
+		"plan.plan:plan.md":                  true,
+		"spec:20260701000000-legacy.md":      true,
+		"spec:20260702000000-bogus.md":       true,
+	}
+	for _, a := range all.Artifacts {
+		key := fmt.Sprintf("%v:%v", a["kind"], a["name"])
+		require.NotContains(t, a, "status", key)
+		if blank[key] {
+			require.Equal(t, "", a["document_status"], key)
+		}
+	}
+
+	resetRootCmd(t)
+	drafts := runArtifactsListJSON(t, "--document-status", "draft")
+	require.Equal(t, []string{"spec:20260703000000-draft.md"}, artifactsNamesByKind(drafts))
+
+	resetRootCmd(t)
+	finals := runArtifactsListJSON(t, "--document-status", "final")
+	require.Equal(t, []string{"plan.research:research.md"}, artifactsNamesByKind(finals))
+}
+
+// TestArtifactsList_RejectsInvalidDocumentStatus asserts `artifacts list`
+// refuses the retired completed and in-progress and an unknown value with
+// invalid_document_status and a remediation listing the four values, leaving
+// the seeded artifact byte-for-byte unchanged.
+func TestArtifactsList_RejectsInvalidDocumentStatus(t *testing.T) {
+	for _, bad := range rejectedDocumentStatuses {
+		t.Run(bad, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Chdir(dir)
+			writeSpecCommandConfig(t, dir, artifactsListConfigYAML)
+			rel := filepath.Join("docs", "specs", "20260701000000-legacy.md")
+			writeRawArtifact(t, dir, rel, legacyStatusArtifact)
+
+			resetRootCmd(t)
+			stdout, stderr, code := runRootCmd(t, "artifacts", "list", "--document-status", bad)
+			requireInvalidDocumentStatus(t, bad, stdout, stderr, code)
+
+			after, err := os.ReadFile(filepath.Join(dir, rel))
+			require.NoError(t, err)
+			require.Equal(t, legacyStatusArtifact, string(after))
+		})
+	}
+}
+
+// TestArtifactsList_RetiredStatusFlagIsUnknown asserts the old `--status`
+// flag is gone from `artifacts list` and fails as an unknown flag.
+func TestArtifactsList_RetiredStatusFlagIsUnknown(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, artifactsListConfigYAML)
+
+	resetRootCmd(t)
+	stdout, stderr, code := runRootCmd(t, "artifacts", "list", "--status", "final")
+	require.Equal(t, 1, code)
+	require.Empty(t, stderr)
+
+	var er output.ErrorResponse
+	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
+	require.True(t, er.IsError)
+	require.Equal(t, "unknown flag: --status", er.Message)
 }

@@ -1,6 +1,6 @@
 ---
 created_date: "2026-01-01"
-status: in-progress
+document_status: draft
 ---
 
 # Test Plan: 20260101000000-jwt-auth

@@ -33,7 +33,7 @@ func TestSpecFileWrite_ResolvesConfiguredDirectory(t *testing.T) {
 	meta, body, err := metadata.Split(content)
 	require.NoError(t, err)
 	require.NotNil(t, meta, "write must produce a frontmatter block")
-	require.Equal(t, metadata.StatusInProgress, meta.Status)
+	require.Equal(t, metadata.StatusDraft, meta.DocumentStatus)
 	require.Equal(t, "spec body", string(body))
 }
 
@@ -63,7 +63,7 @@ func TestSpecFileWrite_PreservesProblematicCharacters(t *testing.T) {
 	meta, gotBody, err := metadata.Split(content)
 	require.NoError(t, err)
 	require.NotNil(t, meta, "write must produce a frontmatter block")
-	require.Equal(t, metadata.StatusInProgress, meta.Status)
+	require.Equal(t, metadata.StatusDraft, meta.DocumentStatus)
 	require.Equal(t, body, gotBody)
 }
 

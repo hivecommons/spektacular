@@ -28,10 +28,10 @@ func TestArtifactFilter_ZeroValueIsInactiveAndMatchesEverything(t *testing.T) {
 
 	cases := []metadata.Metadata{
 		{},
-		{Status: metadata.StatusInProgress, CreatedDate: mustDate(t, "2026-01-15")},
-		{Status: metadata.StatusCompleted, CreatedDate: mustDate(t, "2026-02-15"), ClosedDate: mustDate(t, "2026-03-01")},
-		{Status: metadata.StatusArchived},
-		{Status: metadata.StatusSuperseded, CreatedDate: mustDate(t, "2025-12-31"), ClosedDate: mustDate(t, "2026-01-01")},
+		{DocumentStatus: metadata.StatusDraft, CreatedDate: mustDate(t, "2026-01-15")},
+		{DocumentStatus: metadata.StatusFinal, CreatedDate: mustDate(t, "2026-02-15"), ClosedDate: mustDate(t, "2026-03-01")},
+		{DocumentStatus: metadata.StatusArchived},
+		{DocumentStatus: metadata.StatusSuperseded, CreatedDate: mustDate(t, "2025-12-31"), ClosedDate: mustDate(t, "2026-01-01")},
 	}
 	for i, m := range cases {
 		require.Truef(t, f.matches(m), "zero filter must match every metadata (case %d)", i)
@@ -47,11 +47,11 @@ func TestParseListFilter_EmptyReturnsInactive(t *testing.T) {
 }
 
 // TestParseListFilter_StatusSetsActive asserts a valid status alone activates
-// the filter and lands in the parsed struct as the typed metadata.Status.
+// the filter and lands in the parsed struct as the typed metadata.DocumentStatus.
 func TestParseListFilter_StatusSetsActive(t *testing.T) {
-	for _, s := range []metadata.Status{
-		metadata.StatusInProgress,
-		metadata.StatusCompleted,
+	for _, s := range []metadata.DocumentStatus{
+		metadata.StatusDraft,
+		metadata.StatusFinal,
 		metadata.StatusSuperseded,
 		metadata.StatusArchived,
 	} {
@@ -59,7 +59,7 @@ func TestParseListFilter_StatusSetsActive(t *testing.T) {
 			f, err := parseListFilter(string(s), "", "", "", "")
 			require.NoError(t, err)
 			require.True(t, f.active())
-			require.Equal(t, s, f.status)
+			require.Equal(t, s, f.documentStatus)
 		})
 	}
 }
@@ -79,17 +79,19 @@ func TestParseListFilter_DateFlagsParseAsUTC(t *testing.T) {
 	require.Equal(t, time.UTC, f.closedBefore.Location())
 }
 
-// TestParseListFilter_InvalidStatusReturnsInvalidStatusCode asserts a status
-// value outside the four-value enum is rejected with the "invalid_status"
-// error code and an actionable message naming the offending value.
-func TestParseListFilter_InvalidStatusReturnsInvalidStatusCode(t *testing.T) {
-	for _, bad := range []string{"bogus", "IN-PROGRESS", "done", "in_progress"} {
+// TestParseListFilter_InvalidDocumentStatusReturnsInvalidDocumentStatusCode
+// asserts a document status outside the four-value enum, the retired
+// in-progress and completed included, is rejected with the
+// "invalid_document_status" error code and an actionable message naming the
+// offending value.
+func TestParseListFilter_InvalidDocumentStatusReturnsInvalidDocumentStatusCode(t *testing.T) {
+	for _, bad := range []string{"bogus", "in-progress", "completed", "IN-PROGRESS", "done", "in_progress"} {
 		t.Run(bad, func(t *testing.T) {
 			_, err := parseListFilter(bad, "", "", "", "")
 			require.Error(t, err)
 			var er *output.ErrorResponse
 			require.ErrorAs(t, err, &er)
-			require.Equal(t, "invalid_status", er.Code)
+			require.Equal(t, "invalid_document_status", er.Code)
 			require.Contains(t, er.Message, bad)
 			require.NotEmpty(t, er.NextAction)
 		})
@@ -142,12 +144,12 @@ func TestParseListFilter_InvalidDateReturnsInvalidDateCode(t *testing.T) {
 // TestArtifactFilter_StatusMatchesOnlyEqual asserts the status filter matches
 // only artifacts whose stored status is byte-equal to the filter's status.
 func TestArtifactFilter_StatusMatchesOnlyEqual(t *testing.T) {
-	f := artifactFilter{status: metadata.StatusCompleted}
+	f := artifactFilter{documentStatus: metadata.StatusFinal}
 	require.True(t, f.active())
-	require.True(t, f.matches(metadata.Metadata{Status: metadata.StatusCompleted}))
-	require.False(t, f.matches(metadata.Metadata{Status: metadata.StatusInProgress}))
-	require.False(t, f.matches(metadata.Metadata{Status: metadata.StatusSuperseded}))
-	require.False(t, f.matches(metadata.Metadata{Status: metadata.StatusArchived}))
+	require.True(t, f.matches(metadata.Metadata{DocumentStatus: metadata.StatusFinal}))
+	require.False(t, f.matches(metadata.Metadata{DocumentStatus: metadata.StatusDraft}))
+	require.False(t, f.matches(metadata.Metadata{DocumentStatus: metadata.StatusSuperseded}))
+	require.False(t, f.matches(metadata.Metadata{DocumentStatus: metadata.StatusArchived}))
 	require.False(t, f.matches(metadata.Metadata{}))
 }
 
@@ -177,39 +179,39 @@ func TestArtifactFilter_ClosedDateBoundariesInclusive(t *testing.T) {
 		closedBefore: mustDate(t, "2026-02-15"),
 	}
 	require.True(t, f.matches(metadata.Metadata{
-		Status:      metadata.StatusCompleted,
-		ClosedDate:  mustDate(t, "2026-02-15"),
-		CreatedDate: mustDate(t, "2026-02-01"),
+		DocumentStatus: metadata.StatusFinal,
+		ClosedDate:     mustDate(t, "2026-02-15"),
+		CreatedDate:    mustDate(t, "2026-02-01"),
 	}))
 	require.False(t, f.matches(metadata.Metadata{
-		Status:     metadata.StatusCompleted,
-		ClosedDate: mustDate(t, "2026-02-14"),
+		DocumentStatus: metadata.StatusFinal,
+		ClosedDate:     mustDate(t, "2026-02-14"),
 	}))
 	require.False(t, f.matches(metadata.Metadata{
-		Status:     metadata.StatusCompleted,
-		ClosedDate: mustDate(t, "2026-02-16"),
+		DocumentStatus: metadata.StatusFinal,
+		ClosedDate:     mustDate(t, "2026-02-16"),
 	}))
 }
 
 // TestArtifactFilter_ClosedDateFiltersRejectZeroClosedDate asserts the load-
-// bearing "in-progress artifacts have no closed_date" semantics: any active
+// bearing "draft artifacts have no closed_date" semantics: any active
 // closed-date filter must reject a Metadata whose ClosedDate is the zero
-// time.Time. Without this, an in-progress artifact would silently satisfy a
+// time.Time. Without this, a draft artifact would silently satisfy a
 // `--closed-after 2020-01-01` query.
 func TestArtifactFilter_ClosedDateFiltersRejectZeroClosedDate(t *testing.T) {
-	inProgress := metadata.Metadata{
-		Status:      metadata.StatusInProgress,
-		CreatedDate: mustDate(t, "2026-01-15"),
+	draft := metadata.Metadata{
+		DocumentStatus: metadata.StatusDraft,
+		CreatedDate:    mustDate(t, "2026-01-15"),
 	}
-	require.True(t, inProgress.ClosedDate.IsZero(),
-		"precondition: an in-progress artifact has a zero closed_date")
+	require.True(t, draft.ClosedDate.IsZero(),
+		"precondition: a draft artifact has a zero closed_date")
 
 	afterOnly := artifactFilter{closedAfter: mustDate(t, "2020-01-01")}
-	require.False(t, afterOnly.matches(inProgress),
+	require.False(t, afterOnly.matches(draft),
 		"closed-after must reject an artifact with no closed_date")
 
 	beforeOnly := artifactFilter{closedBefore: mustDate(t, "2099-12-31")}
-	require.False(t, beforeOnly.matches(inProgress),
+	require.False(t, beforeOnly.matches(draft),
 		"closed-before must reject an artifact with no closed_date")
 }
 
@@ -218,34 +220,34 @@ func TestArtifactFilter_ClosedDateFiltersRejectZeroClosedDate(t *testing.T) {
 // must satisfy every set predicate to match.
 func TestArtifactFilter_CombinedFiltersIntersect(t *testing.T) {
 	f := artifactFilter{
-		status:        metadata.StatusCompleted,
-		createdAfter:  mustDate(t, "2026-02-01"),
-		createdBefore: mustDate(t, "2026-02-28"),
-		closedAfter:   mustDate(t, "2026-03-01"),
+		documentStatus: metadata.StatusFinal,
+		createdAfter:   mustDate(t, "2026-02-01"),
+		createdBefore:  mustDate(t, "2026-02-28"),
+		closedAfter:    mustDate(t, "2026-03-01"),
 	}
 	require.True(t, f.active())
 
 	require.True(t, f.matches(metadata.Metadata{
-		Status:      metadata.StatusCompleted,
-		CreatedDate: mustDate(t, "2026-02-15"),
-		ClosedDate:  mustDate(t, "2026-03-10"),
+		DocumentStatus: metadata.StatusFinal,
+		CreatedDate:    mustDate(t, "2026-02-15"),
+		ClosedDate:     mustDate(t, "2026-03-10"),
 	}), "an artifact satisfying every predicate must match")
 
 	require.False(t, f.matches(metadata.Metadata{
-		Status:      metadata.StatusInProgress,
-		CreatedDate: mustDate(t, "2026-02-15"),
-		ClosedDate:  mustDate(t, "2026-03-10"),
+		DocumentStatus: metadata.StatusDraft,
+		CreatedDate:    mustDate(t, "2026-02-15"),
+		ClosedDate:     mustDate(t, "2026-03-10"),
 	}), "wrong status must exclude even when dates satisfy the range")
 
 	require.False(t, f.matches(metadata.Metadata{
-		Status:      metadata.StatusCompleted,
-		CreatedDate: mustDate(t, "2026-01-15"),
-		ClosedDate:  mustDate(t, "2026-03-10"),
+		DocumentStatus: metadata.StatusFinal,
+		CreatedDate:    mustDate(t, "2026-01-15"),
+		ClosedDate:     mustDate(t, "2026-03-10"),
 	}), "created_date outside the range must exclude even with matching status and closed_date")
 
 	require.False(t, f.matches(metadata.Metadata{
-		Status:      metadata.StatusCompleted,
-		CreatedDate: mustDate(t, "2026-02-15"),
-		ClosedDate:  mustDate(t, "2026-02-20"),
+		DocumentStatus: metadata.StatusFinal,
+		CreatedDate:    mustDate(t, "2026-02-15"),
+		ClosedDate:     mustDate(t, "2026-02-20"),
 	}), "closed_date outside the range must exclude even with matching status and created_date")
 }

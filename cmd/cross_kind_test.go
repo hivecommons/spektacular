@@ -13,15 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// resetSpecGotoFlags clears the goto --data flag so it does not leak across
-// tests sharing the package-global cobra commands.
-func resetSpecGotoFlags(t *testing.T) {
-	t.Helper()
-	reset := func() { require.NoError(t, specGotoCmd.Flags().Set("data", "")) }
-	reset()
-	t.Cleanup(reset)
-}
-
 // TestSpecNew_CrossKindReturnsMismatchError asserts that running `spec new`
 // while a *plan* workflow is in progress does not resume the plan as a spec:
 // it fails with the shared cross_kind_workflow_in_progress error (naming both
@@ -45,7 +36,7 @@ func TestSpecNew_CrossKindReturnsMismatchError(t *testing.T) {
 	before, err := os.ReadFile(filepath.Join(dataDir, "state.json"))
 	require.NoError(t, err)
 
-	resetSpecCommandFlags(t)
+	resetRootCmd(t)
 	stdout, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"whatever"}`)
 	require.Equal(t, 1, code)
 
@@ -87,7 +78,7 @@ func TestSpecGoto_CrossKindRefusesAndPreservesState(t *testing.T) {
 	before, err := os.ReadFile(filepath.Join(dataDir, "state.json"))
 	require.NoError(t, err)
 
-	resetSpecGotoFlags(t)
+	resetRootCmd(t)
 	stdout, _, code := runRootCmd(t, "spec", "goto", "--data", `{"step":"overview"}`)
 	require.Equal(t, 1, code)
 
@@ -173,7 +164,7 @@ func TestImplementGoto_AfterOtherKindFinishedReportsNoActiveWorkflow(t *testing.
 		Data:           map[string]any{"name": "000045_config-file-migration"},
 	})
 
-	resetImplementCommandFlags(t)
+	resetRootCmd(t)
 	stdout, _, code := runRootCmd(t, "implement", "goto", "--data", `{"step":"analyze"}`)
 	require.Equal(t, 1, code)
 
@@ -314,7 +305,7 @@ func TestSpecNew_NotRefusedWhileAGuidedAddIsInProgress(t *testing.T) {
 	repoWorkflowStep(t, "new", "--data", repoAddJSON(t, map[string]any{"location": target}))
 	require.Equal(t, "name", repoWorkflowStep(t, "goto", "--data", repoGotoData(t, "name", nil)).Step)
 
-	resetSpecCommandFlags(t)
+	resetRootCmd(t)
 	stdout, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing-export"}`)
 	require.Equal(t, 0, code, "an in-progress guided add must not block a new spec; got %s", stdout)
 

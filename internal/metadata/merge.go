@@ -5,14 +5,14 @@ import (
 )
 
 // UpdateOptions carries caller-supplied field updates for Merge. Every field
-// is optional. Status nil means "no status change" (or "in-progress" on a
-// first-ever write). Today is caller-injected for determinism in tests; when
+// is optional. DocumentStatus nil means "no document status change" (or
+// "draft" on a first-ever write); an existing blank status stays blank. Today is caller-injected for determinism in tests; when
 // zero, time.Now().UTC() truncated to day is used.
 type UpdateOptions struct {
-	Status *Status
-	Today  time.Time
+	DocumentStatus *DocumentStatus
+	Today          time.Time
 	// Provenance updates for derived changelog entries. Same semantics as
-	// Status: an empty value means "no change", a non-empty incoming value
+	// DocumentStatus: an empty value means "no change", a non-empty incoming value
 	// wins, and existing values are preserved otherwise.
 	Project       string
 	ProjectSource string
@@ -24,13 +24,15 @@ type UpdateOptions struct {
 // blob with caller-supplied field updates and a new body. Invariants:
 //
 //   - On first write (existing has no metadata), CreatedDate is stamped to
-//     today and Status defaults to StatusInProgress unless overridden.
+//     today and DocumentStatus defaults to StatusDraft unless overridden.
 //   - On subsequent writes, CreatedDate is preserved.
-//   - Status is enum-validated when opts.Status is non-nil.
-//   - ClosedDate is stamped exactly once, on the transition from in-progress
-//     to any closed status; subsequent same-or-different closed states keep
-//     the first-transition date.
-//   - A transition back to in-progress clears ClosedDate.
+//   - DocumentStatus is validated when opts.DocumentStatus is non-nil.
+//   - ClosedDate is stamped exactly once, on the first transition to a closed
+//     status (final, superseded, archived); later closed states, and an
+//     artifact that already carries a ClosedDate, keep the existing date.
+//   - A transition back to draft clears ClosedDate.
+//   - With no DocumentStatus update, the existing status is preserved, blank
+//     included, along with its ClosedDate.
 //   - Malformed existing frontmatter propagates as an error rather than being
 //     silently replaced.
 func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) {
@@ -60,19 +62,19 @@ func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) 
 		result.Spec = opts.Spec
 		result.Plan = opts.Plan
 		result.CreatedDate = today
-		result.Status = StatusInProgress
-		if opts.Status != nil {
-			if err := validateStatus(*opts.Status); err != nil {
+		result.DocumentStatus = StatusDraft
+		if opts.DocumentStatus != nil {
+			if err := validateDocumentStatus(*opts.DocumentStatus); err != nil {
 				return nil, err
 			}
-			result.Status = *opts.Status
-			if isClosed(result.Status) {
+			result.DocumentStatus = *opts.DocumentStatus
+			if isClosed(result.DocumentStatus) {
 				result.ClosedDate = today
 			}
 		}
 	} else {
 		result.CreatedDate = current.CreatedDate
-		result.Status = current.Status
+		result.DocumentStatus = current.DocumentStatus
 		result.ClosedDate = current.ClosedDate
 		result.Project = current.Project
 		result.ProjectSource = current.ProjectSource
@@ -90,12 +92,12 @@ func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) 
 		if opts.Plan != "" {
 			result.Plan = opts.Plan
 		}
-		if opts.Status != nil {
-			if err := validateStatus(*opts.Status); err != nil {
+		if opts.DocumentStatus != nil {
+			if err := validateDocumentStatus(*opts.DocumentStatus); err != nil {
 				return nil, err
 			}
-			result.Status = *opts.Status
-			if isClosed(result.Status) {
+			result.DocumentStatus = *opts.DocumentStatus
+			if isClosed(result.DocumentStatus) {
 				if result.ClosedDate.IsZero() {
 					result.ClosedDate = today
 				}

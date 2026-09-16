@@ -15,8 +15,8 @@ func fixedToday() time.Time {
 	return time.Date(2026, time.July, 28, 0, 0, 0, 0, time.UTC)
 }
 
-// statusPtr returns a pointer to s, since UpdateOptions.Status is *Status.
-func statusPtr(s Status) *Status { return &s }
+// documentStatusPtr returns a pointer to s, since UpdateOptions.DocumentStatus is *Status.
+func documentStatusPtr(s DocumentStatus) *DocumentStatus { return &s }
 
 func TestSplit(t *testing.T) {
 	tests := []struct {
@@ -37,12 +37,12 @@ func TestSplit(t *testing.T) {
 			name: "with well-formed frontmatter parses meta and returns body",
 			input: "---\n" +
 				"created_date: 2026-07-01\n" +
-				"status: in-progress\n" +
+				"document_status: draft\n" +
 				"---\n\n" +
 				"# Body heading\n",
 			wantMeta: &Metadata{
-				CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
-				Status:      StatusInProgress,
+				CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+				DocumentStatus: StatusDraft,
 			},
 			wantBody: "# Body heading\n",
 		},
@@ -50,14 +50,14 @@ func TestSplit(t *testing.T) {
 			name: "with closed_date parses the optional field",
 			input: "---\n" +
 				"created_date: 2026-07-01\n" +
-				"status: completed\n" +
+				"document_status: final\n" +
 				"closed_date: 2026-07-15\n" +
 				"---\n\n" +
 				"body\n",
 			wantMeta: &Metadata{
-				CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
-				Status:      StatusCompleted,
-				ClosedDate:  time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC),
+				CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+				DocumentStatus: StatusFinal,
+				ClosedDate:     time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC),
 			},
 			wantBody: "body\n",
 		},
@@ -65,7 +65,7 @@ func TestSplit(t *testing.T) {
 			name: "unterminated frontmatter is an actionable error",
 			input: "---\n" +
 				"created_date: 2026-07-01\n" +
-				"status: in-progress\n" +
+				"document_status: draft\n" +
 				"body without closing fence\n",
 			wantErr:     true,
 			wantErrText: "malformed frontmatter",
@@ -80,14 +80,71 @@ func TestSplit(t *testing.T) {
 			wantErrText: "malformed frontmatter",
 		},
 		{
-			name: "invalid status enum in frontmatter is an actionable error",
+			name: "unrecognised document_status reads as blank",
 			input: "---\n" +
 				"created_date: 2026-07-01\n" +
-				"status: bogus\n" +
+				"document_status: bogus\n" +
 				"---\n\n" +
 				"body\n",
-			wantErr:     true,
-			wantErrText: "malformed frontmatter",
+			wantMeta: &Metadata{CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)},
+			wantBody: "body\n",
+		},
+		{
+			name: "retired in-progress value reads as blank",
+			input: "---\n" +
+				"created_date: 2026-07-01\n" +
+				"document_status: in-progress\n" +
+				"---\n\n" +
+				"body\n",
+			wantMeta: &Metadata{CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)},
+			wantBody: "body\n",
+		},
+		{
+			name: "retired completed value reads as blank and keeps closed_date",
+			input: "---\n" +
+				"created_date: 2026-07-01\n" +
+				"document_status: completed\n" +
+				"closed_date: 2026-07-15\n" +
+				"---\n\n" +
+				"body\n",
+			wantMeta: &Metadata{
+				CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+				ClosedDate:  time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC),
+			},
+			wantBody: "body\n",
+		},
+		{
+			name: "non-string document_status reads as blank",
+			input: "---\n" +
+				"created_date: 2026-07-01\n" +
+				"document_status: [a, b]\n" +
+				"---\n\n" +
+				"body\n",
+			wantMeta: &Metadata{CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)},
+			wantBody: "body\n",
+		},
+		{
+			name: "missing document_status reads as blank",
+			input: "---\n" +
+				"created_date: 2026-07-01\n" +
+				"---\n\n" +
+				"body\n",
+			wantMeta: &Metadata{CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)},
+			wantBody: "body\n",
+		},
+		{
+			name: "legacy status key is ignored and reads as blank",
+			input: "---\n" +
+				"created_date: 2026-07-01\n" +
+				"status: completed\n" +
+				"closed_date: 2026-07-15\n" +
+				"---\n\n" +
+				"body\n",
+			wantMeta: &Metadata{
+				CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+				ClosedDate:  time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC),
+			},
+			wantBody: "body\n",
 		},
 	}
 
@@ -106,7 +163,7 @@ func TestSplit(t *testing.T) {
 				require.NotNil(t, meta)
 				require.True(t, meta.CreatedDate.Equal(tt.wantMeta.CreatedDate),
 					"CreatedDate: got %s want %s", meta.CreatedDate, tt.wantMeta.CreatedDate)
-				require.Equal(t, tt.wantMeta.Status, meta.Status)
+				require.Equal(t, tt.wantMeta.DocumentStatus, meta.DocumentStatus)
 				require.True(t, meta.ClosedDate.Equal(tt.wantMeta.ClosedDate),
 					"ClosedDate: got %s want %s", meta.ClosedDate, tt.wantMeta.ClosedDate)
 			}
@@ -124,10 +181,10 @@ func TestRender_ShapeAndOptionalClosedDate(t *testing.T) {
 		wantMiss []string
 	}{
 		{
-			name: "in-progress omits closed_date",
+			name: "draft omits closed_date",
 			meta: Metadata{
-				CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
-				Status:      StatusInProgress,
+				CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+				DocumentStatus: StatusDraft,
 			},
 			body: "# Body\n",
 			wantHas: []string{
@@ -138,23 +195,23 @@ func TestRender_ShapeAndOptionalClosedDate(t *testing.T) {
 				// present without pinning the exact quoting.
 				"created_date: ",
 				"2026-07-01",
-				"status: in-progress\n",
+				"document_status: draft\n",
 				"# Body\n",
 			},
 			wantMiss: []string{"closed_date"},
 		},
 		{
-			name: "completed with closed_date includes it as YYYY-MM-DD",
+			name: "final with closed_date includes it as YYYY-MM-DD",
 			meta: Metadata{
-				CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
-				Status:      StatusCompleted,
-				ClosedDate:  time.Date(2026, time.July, 28, 0, 0, 0, 0, time.UTC),
+				CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+				DocumentStatus: StatusFinal,
+				ClosedDate:     time.Date(2026, time.July, 28, 0, 0, 0, 0, time.UTC),
 			},
 			body: "# Body\n",
 			wantHas: []string{
 				"created_date: ",
 				"2026-07-01",
-				"status: completed\n",
+				"document_status: final\n",
 				"closed_date: ",
 				"2026-07-28",
 			},
@@ -180,11 +237,49 @@ func TestRender_ShapeAndOptionalClosedDate(t *testing.T) {
 	}
 }
 
+// TestMerge_LegacyStatusKeyIsDropped asserts a rewrite of an artifact that
+// still carries the retired `status` key writes no `status` key back and
+// renders its blank document status explicitly.
+func TestMerge_LegacyStatusKeyIsDropped(t *testing.T) {
+	legacy := "---\n" +
+		"created_date: 2026-07-01\n" +
+		"status: completed\n" +
+		"closed_date: 2026-07-15\n" +
+		"---\n\n" +
+		"# Body\n"
+
+	got, err := Merge([]byte(legacy), []byte("# Body\n"), UpdateOptions{Today: fixedToday()})
+	require.NoError(t, err)
+
+	fm, _, found := strings.Cut(strings.TrimPrefix(string(got), "---\n"), "\n---\n")
+	require.True(t, found, "output must carry a frontmatter block")
+	require.NotContains(t, "\n"+fm, "\nstatus:", "the legacy status key must not be written back")
+	require.Contains(t, fm, `document_status: ""`, "a blank status is rendered explicitly")
+	require.Contains(t, fm, "2026-07-01", "created_date must be preserved")
+	require.Contains(t, fm, "2026-07-15", "closed_date must be preserved")
+}
+
+// TestParseDocumentStatus asserts the validator accepts exactly the four
+// named values and rejects blank and retired or unknown values.
+func TestParseDocumentStatus(t *testing.T) {
+	for _, raw := range []string{"draft", "final", "superseded", "archived"} {
+		got, ok := ParseDocumentStatus(raw)
+		require.True(t, ok, "%q must be accepted", raw)
+		require.Equal(t, DocumentStatus(raw), got)
+	}
+	for _, raw := range []string{"", "in-progress", "completed", "bogus", "Draft"} {
+		got, ok := ParseDocumentStatus(raw)
+		require.False(t, ok, "%q must be rejected", raw)
+		require.Equal(t, DocumentStatus(""), got)
+	}
+	require.Equal(t, []DocumentStatus{StatusDraft, StatusFinal, StatusSuperseded, StatusArchived}, DocumentStatuses())
+}
+
 func TestRender_SplitRoundTrip(t *testing.T) {
 	meta := Metadata{
-		CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
-		Status:      StatusCompleted,
-		ClosedDate:  time.Date(2026, time.July, 28, 0, 0, 0, 0, time.UTC),
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusFinal,
+		ClosedDate:     time.Date(2026, time.July, 28, 0, 0, 0, 0, time.UTC),
 	}
 	body := []byte("# Body heading\n\nSome text.\n")
 
@@ -195,7 +290,7 @@ func TestRender_SplitRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gotMeta)
 	require.True(t, gotMeta.CreatedDate.Equal(meta.CreatedDate))
-	require.Equal(t, meta.Status, gotMeta.Status)
+	require.Equal(t, meta.DocumentStatus, gotMeta.DocumentStatus)
 	require.True(t, gotMeta.ClosedDate.Equal(meta.ClosedDate))
 	require.Equal(t, string(body), string(gotBody))
 }
@@ -205,16 +300,29 @@ func TestMerge(t *testing.T) {
 	earlier := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
 	closedEarlier := time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC)
 
-	inProgressEarlier := "---\n" +
+	draftEarlier := "---\n" +
 		"created_date: 2026-07-01\n" +
-		"status: in-progress\n" +
+		"document_status: draft\n" +
 		"---\n\n" +
 		"# Existing body\n"
 
-	completedEarlier := "---\n" +
+	finalEarlier := "---\n" +
+		"created_date: 2026-07-01\n" +
+		"document_status: final\n" +
+		"closed_date: 2026-07-15\n" +
+		"---\n\n" +
+		"# Existing body\n"
+
+	legacyClosed := "---\n" +
 		"created_date: 2026-07-01\n" +
 		"status: completed\n" +
 		"closed_date: 2026-07-15\n" +
+		"---\n\n" +
+		"# Existing body\n"
+
+	legacyOpen := "---\n" +
+		"created_date: 2026-07-01\n" +
+		"status: in-progress\n" +
 		"---\n\n" +
 		"# Existing body\n"
 
@@ -226,7 +334,7 @@ func TestMerge(t *testing.T) {
 		wantErr     bool
 		wantErrText string
 		wantCreated time.Time
-		wantStatus  Status
+		wantStatus  DocumentStatus
 		wantClosed  time.Time // zero means the field must be omitted
 		wantBody    string
 		// wantSameAsExisting, when true, asserts that Merge output equals
@@ -234,21 +342,21 @@ func TestMerge(t *testing.T) {
 		wantSameAsExisting bool
 	}{
 		{
-			name:        "fresh write stamps created_date today and defaults to in-progress",
+			name:        "fresh write stamps created_date today and defaults to draft",
 			existing:    "",
 			newBody:     "# New body\n",
 			opts:        UpdateOptions{Today: today},
 			wantCreated: today,
-			wantStatus:  StatusInProgress,
+			wantStatus:  StatusDraft,
 			wantBody:    "# New body\n",
 		},
 		{
 			name:        "fresh write honors explicit closed status and stamps closed_date",
 			existing:    "",
 			newBody:     "# New body\n",
-			opts:        UpdateOptions{Status: statusPtr(StatusCompleted), Today: today},
+			opts:        UpdateOptions{DocumentStatus: documentStatusPtr(StatusFinal), Today: today},
 			wantCreated: today,
-			wantStatus:  StatusCompleted,
+			wantStatus:  StatusFinal,
 			wantClosed:  today,
 			wantBody:    "# New body\n",
 		},
@@ -258,66 +366,112 @@ func TestMerge(t *testing.T) {
 			newBody:     "# Updated body\n",
 			opts:        UpdateOptions{Today: today},
 			wantCreated: today,
-			wantStatus:  StatusInProgress,
+			wantStatus:  StatusDraft,
 			wantBody:    "# Updated body\n",
 		},
 		{
 			name:        "existing metadata preserves created_date across rewrite",
-			existing:    inProgressEarlier,
+			existing:    draftEarlier,
 			newBody:     "# Updated body\n",
 			opts:        UpdateOptions{Today: today},
 			wantCreated: earlier,
-			wantStatus:  StatusInProgress,
+			wantStatus:  StatusDraft,
 			wantBody:    "# Updated body\n",
 		},
 		{
-			name:        "transition in-progress -> completed stamps closed_date once",
-			existing:    inProgressEarlier,
+			name:        "transition draft -> final stamps closed_date once",
+			existing:    draftEarlier,
 			newBody:     "# Updated body\n",
-			opts:        UpdateOptions{Status: statusPtr(StatusCompleted), Today: today},
+			opts:        UpdateOptions{DocumentStatus: documentStatusPtr(StatusFinal), Today: today},
 			wantCreated: earlier,
-			wantStatus:  StatusCompleted,
+			wantStatus:  StatusFinal,
 			wantClosed:  today,
 			wantBody:    "# Updated body\n",
 		},
 		{
-			name:               "idempotent completed -> completed preserves original closed_date",
-			existing:           completedEarlier,
+			name:               "idempotent final -> final preserves original closed_date",
+			existing:           finalEarlier,
 			newBody:            "# Existing body\n",
-			opts:               UpdateOptions{Status: statusPtr(StatusCompleted), Today: today},
+			opts:               UpdateOptions{DocumentStatus: documentStatusPtr(StatusFinal), Today: today},
 			wantCreated:        earlier,
-			wantStatus:         StatusCompleted,
+			wantStatus:         StatusFinal,
 			wantClosed:         closedEarlier,
 			wantBody:           "# Existing body\n",
 			wantSameAsExisting: true,
 		},
 		{
 			name:        "closed -> different closed status keeps first-transition closed_date",
-			existing:    completedEarlier,
+			existing:    finalEarlier,
 			newBody:     "# Existing body\n",
-			opts:        UpdateOptions{Status: statusPtr(StatusSuperseded), Today: today},
+			opts:        UpdateOptions{DocumentStatus: documentStatusPtr(StatusSuperseded), Today: today},
 			wantCreated: earlier,
 			wantStatus:  StatusSuperseded,
 			wantClosed:  closedEarlier,
 			wantBody:    "# Existing body\n",
 		},
 		{
-			name:        "closed -> in-progress clears closed_date",
-			existing:    completedEarlier,
+			name:        "closed -> draft clears closed_date",
+			existing:    finalEarlier,
 			newBody:     "# Existing body\n",
-			opts:        UpdateOptions{Status: statusPtr(StatusInProgress), Today: today},
+			opts:        UpdateOptions{DocumentStatus: documentStatusPtr(StatusDraft), Today: today},
 			wantCreated: earlier,
-			wantStatus:  StatusInProgress,
+			wantStatus:  StatusDraft,
 			wantClosed:  time.Time{},
 			wantBody:    "# Existing body\n",
 		},
 		{
-			name:        "nil status on existing artifact leaves status and closed_date untouched",
-			existing:    completedEarlier,
+			name:        "nil status on legacy artifact keeps blank status and closed_date",
+			existing:    legacyClosed,
 			newBody:     "# Updated body\n",
 			opts:        UpdateOptions{Today: today},
 			wantCreated: earlier,
-			wantStatus:  StatusCompleted,
+			wantStatus:  "",
+			wantClosed:  closedEarlier,
+			wantBody:    "# Updated body\n",
+		},
+		{
+			name:        "blank -> final keeps an existing closed_date",
+			existing:    legacyClosed,
+			newBody:     "# Existing body\n",
+			opts:        UpdateOptions{DocumentStatus: documentStatusPtr(StatusFinal), Today: today},
+			wantCreated: earlier,
+			wantStatus:  StatusFinal,
+			wantClosed:  closedEarlier,
+			wantBody:    "# Existing body\n",
+		},
+		{
+			name:        "blank -> final without a closed_date stamps today",
+			existing:    legacyOpen,
+			newBody:     "# Existing body\n",
+			opts:        UpdateOptions{DocumentStatus: documentStatusPtr(StatusFinal), Today: today},
+			wantCreated: earlier,
+			wantStatus:  StatusFinal,
+			wantClosed:  today,
+			wantBody:    "# Existing body\n",
+		},
+		{
+			name:        "blank status cannot be set explicitly",
+			existing:    legacyOpen,
+			newBody:     "# body\n",
+			opts:        UpdateOptions{DocumentStatus: documentStatusPtr(""), Today: today},
+			wantErr:     true,
+			wantErrText: "invalid document status",
+		},
+		{
+			name:        "retired value cannot be set explicitly",
+			existing:    draftEarlier,
+			newBody:     "# body\n",
+			opts:        UpdateOptions{DocumentStatus: documentStatusPtr(DocumentStatus("completed")), Today: today},
+			wantErr:     true,
+			wantErrText: "invalid document status",
+		},
+		{
+			name:        "nil status on existing artifact leaves status and closed_date untouched",
+			existing:    finalEarlier,
+			newBody:     "# Updated body\n",
+			opts:        UpdateOptions{Today: today},
+			wantCreated: earlier,
+			wantStatus:  StatusFinal,
 			wantClosed:  closedEarlier,
 			wantBody:    "# Updated body\n",
 		},
@@ -325,23 +479,23 @@ func TestMerge(t *testing.T) {
 			name:        "invalid enum on fresh write is rejected with actionable error",
 			existing:    "",
 			newBody:     "# body\n",
-			opts:        UpdateOptions{Status: statusPtr(Status("bogus")), Today: today},
+			opts:        UpdateOptions{DocumentStatus: documentStatusPtr(DocumentStatus("bogus")), Today: today},
 			wantErr:     true,
-			wantErrText: "invalid status",
+			wantErrText: "invalid document status",
 		},
 		{
 			name:        "invalid enum on existing artifact is rejected with actionable error",
-			existing:    inProgressEarlier,
+			existing:    draftEarlier,
 			newBody:     "# body\n",
-			opts:        UpdateOptions{Status: statusPtr(Status("bogus")), Today: today},
+			opts:        UpdateOptions{DocumentStatus: documentStatusPtr(DocumentStatus("bogus")), Today: today},
 			wantErr:     true,
-			wantErrText: "invalid status",
+			wantErrText: "invalid document status",
 		},
 		{
 			name: "malformed frontmatter propagates as an actionable error",
 			existing: "---\n" +
 				"created_date: 2026-07-01\n" +
-				"status: in-progress\n" +
+				"document_status: draft\n" +
 				"body-with-no-closing-fence\n",
 			newBody:     "# body\n",
 			opts:        UpdateOptions{Today: today},
@@ -380,7 +534,7 @@ func TestMerge(t *testing.T) {
 
 			require.True(t, meta.CreatedDate.Equal(tt.wantCreated),
 				"CreatedDate: got %s want %s", meta.CreatedDate, tt.wantCreated)
-			require.Equal(t, tt.wantStatus, meta.Status)
+			require.Equal(t, tt.wantStatus, meta.DocumentStatus)
 			require.True(t, meta.ClosedDate.Equal(tt.wantClosed),
 				"ClosedDate: got %s want %s", meta.ClosedDate, tt.wantClosed)
 
@@ -392,6 +546,12 @@ func TestMerge(t *testing.T) {
 					"closed_date must be omitted when zero")
 			}
 
+			// Merge never writes the retired `status` key, on a fresh
+			// write or otherwise. Checked at line start because
+			// `document_status:` contains `status:` as a substring.
+			require.NotContains(t, "\n"+string(got), "\nstatus:",
+				"Merge output must not carry a legacy status key")
+
 			require.Equal(t, tt.wantBody, string(body))
 		})
 	}
@@ -402,12 +562,12 @@ func TestMerge(t *testing.T) {
 // Render → Split with every field intact alongside the date/status fields.
 func TestRender_SplitRoundTripProvenanceFields(t *testing.T) {
 	meta := Metadata{
-		CreatedDate:   time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
-		Status:        StatusInProgress,
-		Project:       "testproj",
-		ProjectSource: "https://github.com/example/testproj",
-		Spec:          "000039_project-level-capabilities",
-		Plan:          "000039_project-level-capabilities",
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
+		Project:        "testproj",
+		ProjectSource:  "https://github.com/example/testproj",
+		Spec:           "000039_project-level-capabilities",
+		Plan:           "000039_project-level-capabilities",
 	}
 	body := []byte("# Changelog record\n")
 
@@ -422,7 +582,7 @@ func TestRender_SplitRoundTripProvenanceFields(t *testing.T) {
 	require.Equal(t, meta.Spec, gotMeta.Spec)
 	require.Equal(t, meta.Plan, gotMeta.Plan)
 	require.True(t, gotMeta.CreatedDate.Equal(meta.CreatedDate))
-	require.Equal(t, meta.Status, gotMeta.Status)
+	require.Equal(t, meta.DocumentStatus, gotMeta.DocumentStatus)
 	require.Equal(t, string(body), string(gotBody))
 }
 
@@ -431,7 +591,7 @@ func TestRender_SplitRoundTripProvenanceFields(t *testing.T) {
 func TestSplit_MissingProvenanceKeysParseAsEmpty(t *testing.T) {
 	raw := "---\n" +
 		"created_date: 2026-07-01\n" +
-		"status: in-progress\n" +
+		"document_status: draft\n" +
 		"---\n\n" +
 		"body\n"
 
@@ -449,8 +609,8 @@ func TestSplit_MissingProvenanceKeysParseAsEmpty(t *testing.T) {
 // suddenly grow empty `project:` / `spec:` / `plan:` lines on rewrite.
 func TestRender_OmitsEmptyProvenanceKeys(t *testing.T) {
 	rendered, err := Render(Metadata{
-		CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
-		Status:      StatusInProgress,
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
 	}, []byte("body\n"))
 	require.NoError(t, err)
 
@@ -481,7 +641,7 @@ func TestMerge_FreshWriteStampsProvenance(t *testing.T) {
 	require.Equal(t, "000039_spec", meta.Spec)
 	require.Equal(t, "000039_plan", meta.Plan)
 	require.True(t, meta.CreatedDate.Equal(fixedToday()))
-	require.Equal(t, StatusInProgress, meta.Status)
+	require.Equal(t, StatusDraft, meta.DocumentStatus)
 }
 
 // Criterion 3: Merge on existing content preserves the stored provenance when
@@ -490,7 +650,7 @@ func TestMerge_FreshWriteStampsProvenance(t *testing.T) {
 func TestMerge_ExistingProvenancePreservedWhenOptsEmpty(t *testing.T) {
 	existing := "---\n" +
 		"created_date: 2026-07-01\n" +
-		"status: in-progress\n" +
+		"document_status: draft\n" +
 		"project: testproj\n" +
 		"project_source: https://github.com/example/testproj\n" +
 		"spec: 000039_spec\n" +
@@ -517,7 +677,7 @@ func TestMerge_ExistingProvenancePreservedWhenOptsEmpty(t *testing.T) {
 func TestMerge_ExistingProvenanceOverwrittenWhenOptsSet(t *testing.T) {
 	existing := "---\n" +
 		"created_date: 2026-07-01\n" +
-		"status: in-progress\n" +
+		"document_status: draft\n" +
 		"project: oldproj\n" +
 		"project_source: https://old.example\n" +
 		"spec: 000001_old\n" +
@@ -543,7 +703,7 @@ func TestMerge_ExistingProvenanceOverwrittenWhenOptsSet(t *testing.T) {
 	require.Equal(t, "000002_new", meta.Plan)
 	require.True(t, meta.CreatedDate.Equal(time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)),
 		"created_date must survive a provenance overwrite")
-	require.Equal(t, StatusInProgress, meta.Status)
+	require.Equal(t, StatusDraft, meta.DocumentStatus)
 }
 
 // TestMerge_UsesInjectedClock double-checks that the caller-injected clock is
@@ -560,5 +720,5 @@ func TestMerge_UsesInjectedClock(t *testing.T) {
 	require.NotNil(t, meta)
 	require.True(t, meta.CreatedDate.Equal(arbitraryPast),
 		"CreatedDate must come from opts.Today, got %s", meta.CreatedDate)
-	require.Equal(t, StatusInProgress, meta.Status)
+	require.Equal(t, StatusDraft, meta.DocumentStatus)
 }

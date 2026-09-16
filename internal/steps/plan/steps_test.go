@@ -258,7 +258,7 @@ func TestPlanFilePaths_UseConfiguredDirectory(t *testing.T) {
 // --- Phase 1.5: terminal-step closure across all three siblings ---
 
 // seedFilledPlanDocs writes a filled (non-scaffold) body wrapped in an
-// in-progress frontmatter block dated `created` for every planDoc under
+// draft frontmatter block dated `created` for every planDoc under
 // planDir. Returns the created date so callers can assert preservation.
 func seedFilledPlanDocs(t *testing.T, st store.Store, planDir, planName string, created time.Time) {
 	t.Helper()
@@ -268,8 +268,8 @@ func seedFilledPlanDocs(t *testing.T, st store.Store, planDir, planName string, 
 		filled := append([]byte{}, []byte(scaffold)...)
 		filled = append(filled, "\n\n## Real content\n"...)
 		wrapped, err := metadata.Render(metadata.Metadata{
-			CreatedDate: created,
-			Status:      metadata.StatusInProgress,
+			CreatedDate:    created,
+			DocumentStatus: metadata.StatusDraft,
 		}, filled)
 		require.NoError(t, err)
 		require.NoError(t, st.Write(doc.path(planDir, planName), wrapped))
@@ -278,7 +278,7 @@ func seedFilledPlanDocs(t *testing.T, st store.Store, planDir, planName string, 
 
 // TestPlanFinished_ClosesAllThreeSiblings seeds the store with filled plan,
 // context and research docs and asserts finished() transitions every one of
-// them to completed with today's closed_date, preserving each original
+// them to final with today's closed_date, preserving each original
 // created_date.
 func TestPlanFinished_ClosesAllThreeSiblings(t *testing.T) {
 	tmp := t.TempDir()
@@ -303,7 +303,7 @@ func TestPlanFinished_ClosesAllThreeSiblings(t *testing.T) {
 		meta, _, err := metadata.Split(raw)
 		require.NoError(t, err, "%s must carry parseable frontmatter", p)
 		require.NotNil(t, meta)
-		require.Equal(t, metadata.StatusCompleted, meta.Status, "%s must be completed", p)
+		require.Equal(t, metadata.StatusFinal, meta.DocumentStatus, "%s must be final", p)
 		require.True(t, meta.CreatedDate.Equal(created), "%s created_date must be preserved, got %s", p, meta.CreatedDate)
 		require.True(t, meta.ClosedDate.Equal(today()), "%s closed_date must be today, got %s", p, meta.ClosedDate)
 	}
@@ -311,7 +311,7 @@ func TestPlanFinished_ClosesAllThreeSiblings(t *testing.T) {
 
 // TestPlanFinished_LeavesUnwrittenPlanAlone seeds two filled docs and one
 // still-scaffold doc, then asserts finished() does not transition ANY of the
-// three to completed — the incomplete gate short-circuits before the close
+// three to final — the incomplete gate short-circuits before the close
 // loop runs.
 func TestPlanFinished_LeavesUnwrittenPlanAlone(t *testing.T) {
 	tmp := t.TempDir()
@@ -322,7 +322,7 @@ func TestPlanFinished_LeavesUnwrittenPlanAlone(t *testing.T) {
 	created := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
 
 	// Fill plan.md and context.md; leave research.md as a bare scaffold with
-	// in-progress frontmatter so planDocStillScaffold reports it unwritten.
+	// draft frontmatter so planDocStillScaffold reports it unwritten.
 	for i, doc := range planDocs {
 		scaffold, err := stepkit.RenderTemplate(doc.scaffold, map[string]any{"name": planName})
 		require.NoError(t, err)
@@ -331,8 +331,8 @@ func TestPlanFinished_LeavesUnwrittenPlanAlone(t *testing.T) {
 			body = append(body, "\n\n## Real content\n"...)
 		}
 		wrapped, err := metadata.Render(metadata.Metadata{
-			CreatedDate: created,
-			Status:      metadata.StatusInProgress,
+			CreatedDate:    created,
+			DocumentStatus: metadata.StatusDraft,
 		}, body)
 		require.NoError(t, err)
 		require.NoError(t, st.Write(doc.path(cfg.PlanDir, planName), wrapped))
@@ -344,7 +344,7 @@ func TestPlanFinished_LeavesUnwrittenPlanAlone(t *testing.T) {
 	_, err := finished()(data, writer, st, cfg)
 	require.NoError(t, err, "finished() must not error when a plan doc is still the scaffold")
 
-	// Assert none of the docs transitioned to completed.
+	// Assert none of the docs transitioned to final.
 	for _, doc := range planDocs {
 		p := doc.path(cfg.PlanDir, planName)
 		raw, err := st.Read(p)
@@ -352,8 +352,8 @@ func TestPlanFinished_LeavesUnwrittenPlanAlone(t *testing.T) {
 		meta, _, err := metadata.Split(raw)
 		require.NoError(t, err)
 		require.NotNil(t, meta)
-		require.Equal(t, metadata.StatusInProgress, meta.Status,
-			"%s must remain in-progress when the plan is incomplete", p)
+		require.Equal(t, metadata.StatusDraft, meta.DocumentStatus,
+			"%s must remain draft when the plan is incomplete", p)
 		require.True(t, meta.ClosedDate.IsZero(), "%s must not gain a closed_date", p)
 	}
 }
@@ -374,8 +374,8 @@ func TestPlanFinished_SkipsClose_WhenPlanIncomplete(t *testing.T) {
 	scaffold, err := stepkit.RenderTemplate(planDocs[0].scaffold, map[string]any{"name": planName})
 	require.NoError(t, err)
 	bareScaffold, err := metadata.Render(metadata.Metadata{
-		CreatedDate: created,
-		Status:      metadata.StatusInProgress,
+		CreatedDate:    created,
+		DocumentStatus: metadata.StatusDraft,
 	}, []byte(scaffold))
 	require.NoError(t, err)
 	require.NoError(t, st.Write(planDocs[0].path(cfg.PlanDir, planName), bareScaffold))
@@ -387,8 +387,8 @@ func TestPlanFinished_SkipsClose_WhenPlanIncomplete(t *testing.T) {
 		filled := append([]byte{}, []byte(scaffold)...)
 		filled = append(filled, "\n\n## Real content\n"...)
 		wrapped, err := metadata.Render(metadata.Metadata{
-			CreatedDate: created,
-			Status:      metadata.StatusInProgress,
+			CreatedDate:    created,
+			DocumentStatus: metadata.StatusDraft,
 		}, filled)
 		require.NoError(t, err)
 		require.NoError(t, st.Write(doc.path(cfg.PlanDir, planName), wrapped))
@@ -404,7 +404,7 @@ func TestPlanFinished_SkipsClose_WhenPlanIncomplete(t *testing.T) {
 	// finished template gates on the plan_incomplete extra.
 	require.NotEmpty(t, writer.result.Instruction, "finished() must emit an instruction")
 
-	// None of the sibling artifacts should have flipped to completed.
+	// None of the sibling artifacts should have flipped to final.
 	for _, doc := range planDocs {
 		p := doc.path(cfg.PlanDir, planName)
 		raw, err := st.Read(p)
@@ -412,7 +412,7 @@ func TestPlanFinished_SkipsClose_WhenPlanIncomplete(t *testing.T) {
 		meta, _, err := metadata.Split(raw)
 		require.NoError(t, err)
 		require.NotNil(t, meta)
-		require.NotEqual(t, metadata.StatusCompleted, meta.Status,
+		require.NotEqual(t, metadata.StatusFinal, meta.DocumentStatus,
 			"%s must not be closed when the plan is incomplete", p)
 	}
 }
@@ -519,7 +519,7 @@ func TestWalkthroughStepOffersKnowledgeCaptureForRevealingCorrections(t *testing
 // TestPlanFinishedSuccessBranchHasNoWalkthroughOffer asserts the terminal
 // step's success branch no longer offers or conducts a walkthrough (Phase 1.1,
 // acceptance criterion 3): sign-off already happened on the walkthrough step,
-// so finished only stamps the documents completed and reports completion.
+// so finished only stamps the documents final and reports completion.
 func TestPlanFinishedSuccessBranchHasNoWalkthroughOffer(t *testing.T) {
 	tmp := t.TempDir()
 	st := store.NewFileStore(tmp, "project")
@@ -536,7 +536,7 @@ func TestPlanFinishedSuccessBranchHasNoWalkthroughOffer(t *testing.T) {
 
 	out := writer.result.Instruction
 	require.Contains(t, out, "signed off", "finished must report the user already signed off during the walkthrough")
-	require.Contains(t, out, "marked completed", "finished must report the documents were stamped completed")
+	require.Contains(t, out, "marked final", "finished must report the documents were stamped final")
 	require.NotContains(t, out, "offer a choice", "finished must no longer offer a walkthrough")
 	require.NotContains(t, out, "If the user accepts", "finished must no longer conduct a conditional walkthrough")
 }

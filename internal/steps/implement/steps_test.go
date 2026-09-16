@@ -71,8 +71,8 @@ func renderFinishedStep(t *testing.T) string {
 
 	cfg := workflow.Config{Command: "spektacular"}
 	seed, err := metadata.Render(metadata.Metadata{
-		CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
-		Status:      metadata.StatusInProgress,
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: metadata.StatusDraft,
 	}, []byte("# body\n"))
 	require.NoError(t, err)
 	require.NoError(t, st.Write(ChangelogFilePath(cfg.ChangelogDir, "test"), seed))
@@ -614,8 +614,8 @@ func TestReconcileSpecStepMentionsSourcesAndCommitCommand(t *testing.T) {
 
 // TestImplementFinished_ClosesTestPlanAndChangelog seeds both terminal
 // artifacts (test-plan.md under PlanDir and the project-namespaced <name>.md
-// under ChangelogDir) with in-progress metadata dated in the past, then
-// asserts finished() transitions both to completed with today's closed_date
+// under ChangelogDir) with draft metadata dated in the past, then
+// asserts finished() transitions both to final with today's closed_date
 // while preserving created_date.
 func TestImplementFinished_ClosesTestPlanAndChangelog(t *testing.T) {
 	tmp := t.TempDir()
@@ -634,8 +634,8 @@ func TestImplementFinished_ClosesTestPlanAndChangelog(t *testing.T) {
 
 	for _, p := range []string{testPlanPath, changelogPath} {
 		seed, err := metadata.Render(metadata.Metadata{
-			CreatedDate: created,
-			Status:      metadata.StatusInProgress,
+			CreatedDate:    created,
+			DocumentStatus: metadata.StatusDraft,
 		}, []byte("# Body of "+p+"\n"))
 		require.NoError(t, err)
 		require.NoError(t, st.Write(p, seed))
@@ -653,7 +653,7 @@ func TestImplementFinished_ClosesTestPlanAndChangelog(t *testing.T) {
 		meta, _, err := metadata.Split(raw)
 		require.NoError(t, err)
 		require.NotNil(t, meta, "%s must carry frontmatter", p)
-		require.Equal(t, metadata.StatusCompleted, meta.Status, "%s must be completed", p)
+		require.Equal(t, metadata.StatusFinal, meta.DocumentStatus, "%s must be final", p)
 		require.True(t, meta.CreatedDate.Equal(created), "%s created_date must be preserved, got %s", p, meta.CreatedDate)
 		require.True(t, meta.ClosedDate.Equal(today()), "%s closed_date must be today, got %s", p, meta.ClosedDate)
 	}
@@ -704,8 +704,8 @@ func TestImplementFinished_TolerantOfMissingTestPlan(t *testing.T) {
 
 	changelogPath := filepath.Join(cfg.ChangelogDir, planName+".md")
 	seed, err := metadata.Render(metadata.Metadata{
-		CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
-		Status:      metadata.StatusInProgress,
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: metadata.StatusDraft,
 	}, []byte("# body\n"))
 	require.NoError(t, err)
 	require.NoError(t, st.Write(changelogPath, seed))

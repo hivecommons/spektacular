@@ -20,19 +20,6 @@ import (
 // `version` var), asserted as that literal and never derived from the
 // `version` var or versionString() at runtime.
 
-// resetVersionCheckFlags clears the schema flag on `version check` between
-// runs, mirroring resetSpecCommandFlags: cobra flag values persist on the
-// package-level command, so a --schema run would otherwise leak into every
-// later invocation in the same test binary.
-func resetVersionCheckFlags(t *testing.T) {
-	t.Helper()
-	reset := func() {
-		require.NoError(t, versionCheckCmd.Flags().Set("schema", "false"))
-	}
-	reset()
-	t.Cleanup(reset)
-}
-
 // writeVersionCheckFile seeds dir/.spektacular/version with content.
 func writeVersionCheckFile(t *testing.T, dir, content string) string {
 	t.Helper()
@@ -47,7 +34,7 @@ func writeVersionCheckFile(t *testing.T, dir, content string) string {
 // map so tests can assert both present and absent keys.
 func runVersionCheckJSON(t *testing.T) (m map[string]any, code int) {
 	t.Helper()
-	resetVersionCheckFlags(t)
+	resetRootCmd(t)
 	stdout, stderr, code := runRootCmd(t, "version", "check")
 	require.Empty(t, stderr)
 	require.NoError(t, json.Unmarshal([]byte(stdout), &m))
@@ -146,7 +133,7 @@ func TestVersionCheck_Mismatch(t *testing.T) {
 func TestVersionCheck_MismatchComposesInitCommandFromConfig(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	resetInitFlags(t)
+	resetRootCmd(t)
 
 	rootCmd.SetArgs([]string{"init", "claude"})
 	require.NoError(t, rootCmd.Execute())
@@ -202,7 +189,7 @@ func TestVersionCheck_UnreadableFileIsGenuineFault(t *testing.T) {
 	t.Chdir(dir)
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spektacular", "version"), 0o755))
 
-	resetVersionCheckFlags(t)
+	resetRootCmd(t)
 	stdout, stderr, code := runRootCmd(t, "version", "check")
 	require.Equal(t, 1, code)
 	require.Empty(t, stderr)
@@ -217,7 +204,7 @@ func TestVersionCheck_UnreadableFileIsGenuineFault(t *testing.T) {
 // access and prints the output contract, including the status enum.
 func TestVersionCheck_Schema(t *testing.T) {
 	t.Chdir(t.TempDir())
-	resetVersionCheckFlags(t)
+	resetRootCmd(t)
 
 	stdout, stderr, code := runRootCmd(t, "version", "check", "--schema")
 	require.Equal(t, 0, code)

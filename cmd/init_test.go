@@ -15,17 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// resetInitFlags clears the --name flag on the package-level init command
-// between runs so a name set by one test does not leak into the next.
-func resetInitFlags(t *testing.T) {
-	t.Helper()
-	reset := func() {
-		require.NoError(t, initCmd.Flags().Set("name", ""))
-	}
-	reset()
-	t.Cleanup(reset)
-}
-
 // snapshotDir maps every file under root (as a slash-separated relative path)
 // to a sha256 of its content, so two snapshots compare both the file list and
 // every file's bytes.
@@ -54,6 +43,7 @@ func snapshotDir(t *testing.T, root string) map[string]string {
 }
 
 func TestInit_Claude(t *testing.T) {
+	resetRootCmd(t)
 	dir := t.TempDir()
 	t.Chdir(dir)
 
@@ -94,6 +84,7 @@ func TestInit_Claude(t *testing.T) {
 }
 
 func TestInit_RewritesStaleVersionFile(t *testing.T) {
+	resetRootCmd(t)
 	dir := t.TempDir()
 	t.Chdir(dir)
 
@@ -114,6 +105,7 @@ func TestInit_RewritesStaleVersionFile(t *testing.T) {
 }
 
 func TestInit_Bob(t *testing.T) {
+	resetRootCmd(t)
 	dir := t.TempDir()
 	t.Chdir(dir)
 
@@ -157,6 +149,7 @@ func TestInit_Bob(t *testing.T) {
 }
 
 func TestInit_Codex(t *testing.T) {
+	resetRootCmd(t)
 	dir := t.TempDir()
 	t.Chdir(dir)
 
@@ -190,6 +183,7 @@ func TestInit_Codex(t *testing.T) {
 }
 
 func TestInit_InvalidAgent(t *testing.T) {
+	resetRootCmd(t)
 	dir := t.TempDir()
 	t.Chdir(dir)
 
@@ -203,6 +197,7 @@ func TestInit_InvalidAgent(t *testing.T) {
 }
 
 func TestInit_CustomCommand(t *testing.T) {
+	resetRootCmd(t)
 	dir := t.TempDir()
 	t.Chdir(dir)
 
@@ -233,6 +228,7 @@ func TestInit_CustomCommand(t *testing.T) {
 }
 
 func TestInit_Idempotent(t *testing.T) {
+	resetRootCmd(t)
 	dir := t.TempDir()
 	t.Chdir(dir)
 
@@ -265,7 +261,7 @@ func TestInit_Idempotent(t *testing.T) {
 func TestInit_SecondRunProducesNoChanges(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	resetInitFlags(t)
+	resetRootCmd(t)
 
 	rootCmd.SetArgs([]string{"init", "claude"})
 	require.NoError(t, rootCmd.Execute())
@@ -286,7 +282,7 @@ func TestInit_RepairsBrokenMemberFootprint(t *testing.T) {
 	project := t.TempDir()
 	member := t.TempDir()
 	t.Chdir(project)
-	resetInitFlags(t)
+	resetRootCmd(t)
 
 	rootCmd.SetArgs([]string{"init", "claude"})
 	require.NoError(t, rootCmd.Execute())
@@ -325,7 +321,7 @@ func initProjectWithAbsentRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Chdir(dir)
-	resetInitFlags(t)
+	resetRootCmd(t)
 
 	rootCmd.SetArgs([]string{"init", "claude"})
 	require.NoError(t, rootCmd.Execute())
@@ -362,6 +358,7 @@ func TestInit_NoticesUnmaterializedRepo(t *testing.T) {
 // Cascade never creates: init with a registry entry whose location is not
 // on disk neither creates that location nor materializes a clone for it.
 func TestInit_CascadeNeverClonesUnmaterializedRepo(t *testing.T) {
+	resetRootCmd(t)
 	dir := initProjectWithAbsentRepo(t)
 
 	rootCmd.SetArgs([]string{"init", "claude"})
@@ -376,7 +373,7 @@ func TestInit_CascadeNeverClonesUnmaterializedRepo(t *testing.T) {
 func TestInit_NameFlagSetsProjectName(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	resetInitFlags(t)
+	resetRootCmd(t)
 
 	rootCmd.SetArgs([]string{"init", "claude", "--name", "custom-name"})
 	require.NoError(t, rootCmd.Execute())
@@ -391,7 +388,7 @@ func TestInit_NameFlagSetsProjectName(t *testing.T) {
 func TestInit_NameFlagOverridesStoredName(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	resetInitFlags(t)
+	resetRootCmd(t)
 
 	rootCmd.SetArgs([]string{"init", "claude", "--name", "first-name"})
 	require.NoError(t, rootCmd.Execute())
@@ -412,7 +409,7 @@ func TestInit_RerunLeavesColocatedFileSourceUntouched(t *testing.T) {
 	project := t.TempDir()
 	elsewhere := t.TempDir()
 	t.Chdir(project)
-	resetInitFlags(t)
+	resetRootCmd(t)
 	require.NoError(t, os.WriteFile(filepath.Join(elsewhere, "main.go"), []byte("package main\n"), 0o644))
 
 	rootCmd.SetArgs([]string{"init", "claude"})

@@ -186,19 +186,32 @@ func TestResolve_CounterEnumeratesConfiguredDir(t *testing.T) {
 	require.Equal(t, "000008_billing-export", got.Name)
 }
 
-func TestResolve_ExplicitIDOverridesGeneratedMethod(t *testing.T) {
-	st := identifierStore(t)
+func TestResolve_ExplicitIDRejectedUnderGeneratedMethod(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+	}{
+		{name: "default timestamp"},
+		{name: "timestamp", method: MethodTimestamp},
+		{name: "counter", method: MethodCounter},
+	}
 
-	got, err := Resolve(Request{
-		Name:     "Billing Export",
-		ID:       "EXT.User@123",
-		Method:   MethodCounter,
-		Store:    st,
-		PathFunc: docPath,
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := identifierStore(t)
 
-	require.NoError(t, err)
-	require.Equal(t, "ext-user-123-billing-export", got.Name)
+			_, err := Resolve(Request{
+				Name:     "Billing Export",
+				ID:       "36",
+				Method:   tt.method,
+				Store:    st,
+				PathFunc: docPath,
+			})
+
+			var notAllowed *IDNotAllowedError
+			require.ErrorAs(t, err, &notAllowed)
+		})
+	}
 }
 
 func TestResolve_ExplicitIDCollisionFails(t *testing.T) {
@@ -208,6 +221,7 @@ func TestResolve_ExplicitIDCollisionFails(t *testing.T) {
 	_, err := Resolve(Request{
 		Name:     "billing",
 		ID:       "EXT.123",
+		Method:   MethodExternal,
 		Store:    st,
 		PathFunc: docPath,
 	})

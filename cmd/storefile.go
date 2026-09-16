@@ -39,23 +39,21 @@ func stripLeadingFrontmatterBlocks(raw []byte) []byte {
 	}
 }
 
-// metadataOptsForStatus parses the shared `--status` flag value into an
-// UpdateOptions payload. An empty value means "no status change" (Merge picks
-// the default for a fresh write and preserves for an existing artifact); any
-// other value must match the four-value enum, and is rejected with an
-// actionable error otherwise.
-func metadataOptsForStatus(raw string) (metadata.UpdateOptions, error) {
+// metadataOptsForDocumentStatus parses the shared `--document-status` flag
+// value into an UpdateOptions payload. An empty value means "no document
+// status change" (Merge picks the default for a fresh write and preserves an
+// existing artifact's status, blank included); any other value must be one of
+// the four document statuses, and is rejected with an actionable error
+// otherwise.
+func metadataOptsForDocumentStatus(raw string) (metadata.UpdateOptions, error) {
 	if raw == "" {
 		return metadata.UpdateOptions{}, nil
 	}
-	s := metadata.Status(raw)
-	switch s {
-	case metadata.StatusInProgress, metadata.StatusCompleted, metadata.StatusSuperseded, metadata.StatusArchived:
-		return metadata.UpdateOptions{Status: &s}, nil
+	s, err := parseDocumentStatusFlag(raw)
+	if err != nil {
+		return metadata.UpdateOptions{}, err
 	}
-	return metadata.UpdateOptions{}, output.NewError("invalid_status",
-		fmt.Sprintf("--status %q is not one of the four allowed values", raw)).
-		WithNextAction("Pass one of in-progress, completed, superseded, archived.")
+	return metadata.UpdateOptions{DocumentStatus: &s}, nil
 }
 
 // validateIDPrefix checks that the leading path segment of a store-relative
@@ -169,7 +167,7 @@ func provenanceOpts(cfg config.Config, writePath string) metadata.UpdateOptions 
 // of the central one, and writes are auto-stamped with provenance front
 // matter. Only the changelog group opts in.
 func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool) *cobra.Command {
-	fileCmd := &cobra.Command{Use: "file", Short: short}
+	fileCmd := &cobra.Command{Use: "file", Short: short, RunE: runUnknownSubcommand}
 
 	// resolveStore picks the central store or, when repoRouted and the
 	// command's --repo flag is set, the named member repo's store.
@@ -181,9 +179,9 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool)
 	}
 
 	var (
-		fromPath      string
-		statusFlag    string
-		writeRepoName string
+		fromPath           string
+		documentStatusFlag string
+		writeRepoName      string
 	)
 	write := &cobra.Command{
 		Use:   "write <path>",
@@ -212,7 +210,7 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool)
 			if err != nil && !errors.Is(err, store.ErrNotFound) {
 				return err
 			}
-			opts, err := metadataOptsForStatus(statusFlag)
+			opts, err := metadataOptsForDocumentStatus(documentStatusFlag)
 			if err != nil {
 				return err
 			}
@@ -233,7 +231,7 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool)
 	}
 	write.Flags().StringVar(&fromPath, "from", "", "Path to the source file whose contents will be written into the store")
 	_ = write.MarkFlagRequired("from")
-	write.Flags().StringVar(&statusFlag, "status", "", "Optional lifecycle status to apply: one of in-progress, completed, superseded, archived")
+	write.Flags().StringVar(&documentStatusFlag, "document-status", "", "Optional document status to apply: one of "+documentStatusValues())
 
 	var readRepoName string
 	read := &cobra.Command{
@@ -272,19 +270,19 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool)
 	}
 
 	var (
-		listStatus        string
-		listCreatedAfter  string
-		listCreatedBefore string
-		listClosedAfter   string
-		listClosedBefore  string
-		listRepoName      string
+		listDocumentStatus string
+		listCreatedAfter   string
+		listCreatedBefore  string
+		listClosedAfter    string
+		listClosedBefore   string
+		listRepoName       string
 	)
 	list := &cobra.Command{
 		Use:   "list [path]",
 		Short: "List files in the store, optionally filtered by metadata",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			filter, err := parseListFilter(listStatus, listCreatedAfter, listCreatedBefore, listClosedAfter, listClosedBefore)
+			filter, err := parseListFilter(listDocumentStatus, listCreatedAfter, listCreatedBefore, listClosedAfter, listClosedBefore)
 			if err != nil {
 				return err
 			}
@@ -315,7 +313,7 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool)
 						if parsed, _, splitErr := metadata.Split(raw); splitErr == nil && parsed != nil {
 							fm = parsed
 							item["created_date"] = parsed.CreatedDate.Format("2006-01-02")
-							item["status"] = string(parsed.Status)
+							item["document_status"] = string(parsed.DocumentStatus)
 							if !parsed.ClosedDate.IsZero() {
 								item["closed_date"] = parsed.ClosedDate.Format("2006-01-02")
 							}
@@ -335,7 +333,7 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool)
 			return output.Write(cmd.OutOrStdout(), map[string]any{"files": files}, "")
 		},
 	}
-	list.Flags().StringVar(&listStatus, "status", "", "Filter to artifacts whose lifecycle status matches; one of in-progress, completed, superseded, archived")
+	list.Flags().StringVar(&listDocumentStatus, "document-status", "", "Filter to artifacts whose document status matches; one of "+documentStatusValues())
 	list.Flags().StringVar(&listCreatedAfter, "created-after", "", "Filter to artifacts whose created_date is on or after this YYYY-MM-DD date")
 	list.Flags().StringVar(&listCreatedBefore, "created-before", "", "Filter to artifacts whose created_date is on or before this YYYY-MM-DD date")
 	list.Flags().StringVar(&listClosedAfter, "closed-after", "", "Filter to artifacts whose closed_date is on or after this YYYY-MM-DD date")
@@ -348,10 +346,10 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool)
 		list.Flags().StringVar(&listRepoName, "repo", "", repoFlagHelp)
 	}
 
-	var setStatusFlag string
-	setStatus := &cobra.Command{
-		Use:   "set-status <path>",
-		Short: "Update the lifecycle status of a stored artifact without rewriting its body",
+	var setDocumentStatusFlag string
+	setDocumentStatus := &cobra.Command{
+		Use:   "set-document-status <path>",
+		Short: "Update the document status of a stored artifact without rewriting its body",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig()
@@ -363,14 +361,14 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool)
 					return err
 				}
 			}
-			opts, err := metadataOptsForStatus(setStatusFlag)
+			opts, err := metadataOptsForDocumentStatus(setDocumentStatusFlag)
 			if err != nil {
 				return err
 			}
-			if opts.Status == nil {
-				return output.NewError("missing_status",
-					"--status is required for set-status").
-					WithNextAction("Pass --status with one of in-progress, completed, superseded, archived.")
+			if opts.DocumentStatus == nil {
+				return output.NewError("missing_document_status",
+					"--document-status is required for set-document-status").
+					WithNextAction(fmt.Sprintf("Pass --document-status with one of %s.", documentStatusValues()))
 			}
 			st, storeDir, err := storeFileStore(dir)
 			if err != nil {
@@ -398,8 +396,8 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool)
 			}
 			fm, _, splitErr := metadata.Split(merged)
 			payload := map[string]any{
-				"path":   args[0],
-				"status": string(*opts.Status),
+				"path":            args[0],
+				"document_status": string(*opts.DocumentStatus),
 			}
 			if splitErr == nil && fm != nil && !fm.ClosedDate.IsZero() {
 				payload["closed_date"] = fm.ClosedDate.Format("2006-01-02")
@@ -407,9 +405,9 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool)
 			return output.Write(cmd.OutOrStdout(), payload, "")
 		},
 	}
-	setStatus.Flags().StringVar(&setStatusFlag, "status", "", "Lifecycle status to apply: one of in-progress, completed, superseded, archived")
-	_ = setStatus.MarkFlagRequired("status")
+	setDocumentStatus.Flags().StringVar(&setDocumentStatusFlag, "document-status", "", "Document status to apply: one of "+documentStatusValues())
+	_ = setDocumentStatus.MarkFlagRequired("document-status")
 
-	fileCmd.AddCommand(write, read, del, list, setStatus)
+	fileCmd.AddCommand(write, read, del, list, setDocumentStatus)
 	return fileCmd
 }

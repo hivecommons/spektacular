@@ -175,7 +175,7 @@ func finished() workflow.StepCallback {
 			if unwritten {
 				extra = map[string]any{"spec_unwritten": true}
 			} else {
-				if err := metadata.Close(st, SpecFilePath(cfg.SpecDir, stepkit.GetString(data, "name")), metadata.StatusCompleted); err != nil && !errors.Is(err, store.ErrNotFound) {
+				if err := metadata.Close(st, SpecFilePath(cfg.SpecDir, stepkit.GetString(data, "name")), metadata.StatusFinal); err != nil && !errors.Is(err, store.ErrNotFound) {
 					return "", err
 				}
 			}

@@ -316,7 +316,7 @@ func setupNewStepEnv(t *testing.T) string {
 }
 
 // TestSpecNew_StampsMetadataOnFirstWrite asserts new() routes its scaffold
-// write through metadata.Merge so the stored spec carries an in-progress
+// write through metadata.Merge so the stored spec carries a draft
 // frontmatter block with created_date=today and no closed_date.
 func TestSpecNew_StampsMetadataOnFirstWrite(t *testing.T) {
 	tmp := setupNewStepEnv(t)
@@ -334,25 +334,25 @@ func TestSpecNew_StampsMetadataOnFirstWrite(t *testing.T) {
 	meta, _, err := metadata.Split(raw)
 	require.NoError(t, err)
 	require.NotNil(t, meta, "new() must attach frontmatter to the initial scaffold write")
-	require.Equal(t, metadata.StatusInProgress, meta.Status, "initial write must be in-progress")
+	require.Equal(t, metadata.StatusDraft, meta.DocumentStatus, "initial write must be draft")
 	require.True(t, meta.CreatedDate.Equal(today()), "created_date must be today, got %s", meta.CreatedDate)
-	require.True(t, meta.ClosedDate.IsZero(), "closed_date must be absent on an in-progress artifact")
+	require.True(t, meta.ClosedDate.IsZero(), "closed_date must be absent on a draft artifact")
 }
 
 // TestSpecFinished_ClosesTheSpec seeds the store with a filled (non-scaffold)
-// spec body carrying an in-progress frontmatter block dated in the past and
-// asserts finished() transitions the metadata to completed with today's
+// spec body carrying a draft frontmatter block dated in the past and
+// asserts finished() transitions the metadata to final with today's
 // closed_date while preserving the seeded created_date.
 func TestSpecFinished_ClosesTheSpec(t *testing.T) {
 	tmp := t.TempDir()
 	st := store.NewFileStore(tmp, "project")
 	cfg := workflow.Config{Command: "spektacular", SpecDir: "specs"}
 
-	// Seed a filled body with in-progress frontmatter dated in the past.
+	// Seed a filled body with draft frontmatter dated in the past.
 	created := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
 	filled, err := metadata.Render(metadata.Metadata{
-		CreatedDate: created,
-		Status:      metadata.StatusInProgress,
+		CreatedDate:    created,
+		DocumentStatus: metadata.StatusDraft,
 	}, []byte("# Fixture\n\nFilled body that is not the scaffold.\n"))
 	require.NoError(t, err)
 	require.NoError(t, st.Write(SpecFilePath("specs", "fixture"), filled))
@@ -369,14 +369,14 @@ func TestSpecFinished_ClosesTheSpec(t *testing.T) {
 	meta, _, err := metadata.Split(raw)
 	require.NoError(t, err)
 	require.NotNil(t, meta)
-	require.Equal(t, metadata.StatusCompleted, meta.Status, "finished() must transition status to completed")
+	require.Equal(t, metadata.StatusFinal, meta.DocumentStatus, "finished() must transition status to final")
 	require.True(t, meta.CreatedDate.Equal(created), "created_date must be preserved from seed, got %s", meta.CreatedDate)
 	require.True(t, meta.ClosedDate.Equal(today()), "closed_date must be today, got %s", meta.ClosedDate)
 }
 
 // TestSpecFinished_LeavesUnwrittenSpecAlone writes a scaffold-only spec (still
-// wearing an in-progress frontmatter block from a hypothetical new() call) and
-// asserts finished() does NOT transition it to completed — the still-scaffold
+// wearing a draft frontmatter block from a hypothetical new() call) and
+// asserts finished() does NOT transition it to final — the still-scaffold
 // gate should prevent the close.
 func TestSpecFinished_LeavesUnwrittenSpecAlone(t *testing.T) {
 	tmp := t.TempDir()
@@ -387,8 +387,8 @@ func TestSpecFinished_LeavesUnwrittenSpecAlone(t *testing.T) {
 	require.NoError(t, err)
 	created := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
 	seed, err := metadata.Render(metadata.Metadata{
-		CreatedDate: created,
-		Status:      metadata.StatusInProgress,
+		CreatedDate:    created,
+		DocumentStatus: metadata.StatusDraft,
 	}, []byte(scaffold))
 	require.NoError(t, err)
 	require.NoError(t, st.Write(SpecFilePath("specs", "fixture"), seed))
@@ -407,7 +407,7 @@ func TestSpecFinished_LeavesUnwrittenSpecAlone(t *testing.T) {
 	meta, _, err := metadata.Split(raw)
 	require.NoError(t, err)
 	require.NotNil(t, meta)
-	require.Equal(t, metadata.StatusInProgress, meta.Status, "still-scaffold artifact must remain in-progress")
+	require.Equal(t, metadata.StatusDraft, meta.DocumentStatus, "still-scaffold artifact must remain draft")
 	require.True(t, meta.ClosedDate.IsZero(), "still-scaffold artifact must not gain a closed_date")
 }
 
@@ -424,8 +424,8 @@ func TestSpecStillScaffold_FrontmatterTolerant(t *testing.T) {
 	scaffoldBytes := []byte(scaffold)
 
 	fm := metadata.Metadata{
-		CreatedDate: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
-		Status:      metadata.StatusInProgress,
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: metadata.StatusDraft,
 	}
 
 	t.Run("scaffold_with_frontmatter_is_still_scaffold", func(t *testing.T) {

@@ -54,12 +54,12 @@ var artifactsCmd = &cobra.Command{
 
 func init() {
 	var (
-		listKinds         string
-		listStatus        string
-		listCreatedAfter  string
-		listCreatedBefore string
-		listClosedAfter   string
-		listClosedBefore  string
+		listKinds          string
+		listDocumentStatus string
+		listCreatedAfter   string
+		listCreatedBefore  string
+		listClosedAfter    string
+		listClosedBefore   string
 	)
 	listCmd := &cobra.Command{
 		Use:   "list",
@@ -70,7 +70,7 @@ func init() {
 			if err != nil {
 				return err
 			}
-			filter, err := parseListFilter(listStatus, listCreatedAfter, listCreatedBefore, listClosedAfter, listClosedBefore)
+			filter, err := parseListFilter(listDocumentStatus, listCreatedAfter, listCreatedBefore, listClosedAfter, listClosedBefore)
 			if err != nil {
 				return err
 			}
@@ -101,7 +101,7 @@ func init() {
 		},
 	}
 	listCmd.Flags().StringVar(&listKinds, "kind", "", "Comma-separated list of artifact kinds to include (default: all). One or more of: spec, plan.plan, plan.context, plan.research, plan.test-plan, changelog")
-	listCmd.Flags().StringVar(&listStatus, "status", "", "Filter to artifacts whose lifecycle status matches; one of in-progress, completed, superseded, archived")
+	listCmd.Flags().StringVar(&listDocumentStatus, "document-status", "", "Filter to artifacts whose document status matches; one of "+documentStatusValues())
 	listCmd.Flags().StringVar(&listCreatedAfter, "created-after", "", "Filter to artifacts whose created_date is on or after this YYYY-MM-DD date")
 	listCmd.Flags().StringVar(&listCreatedBefore, "created-before", "", "Filter to artifacts whose created_date is on or before this YYYY-MM-DD date")
 	listCmd.Flags().StringVar(&listClosedAfter, "closed-after", "", "Filter to artifacts whose closed_date is on or after this YYYY-MM-DD date")
@@ -165,7 +165,7 @@ func scanArtifact(st store.Store, kind, storePath, name string, filter artifactF
 	fm, _, splitErr := metadata.Split(raw)
 	if splitErr == nil && fm != nil {
 		entry["created_date"] = fm.CreatedDate.Format("2006-01-02")
-		entry["status"] = string(fm.Status)
+		entry["document_status"] = string(fm.DocumentStatus)
 		if !fm.ClosedDate.IsZero() {
 			entry["closed_date"] = fm.ClosedDate.Format("2006-01-02")
 		}

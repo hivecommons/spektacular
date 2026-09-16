@@ -42,7 +42,7 @@ func TestNoProject_ProjectOperatingCommandFailsExplicitly(t *testing.T) {
 	t.Run("knowledge sources", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
-		resetKnowledgeFlags(t)
+		resetRootCmd(t)
 
 		stdout, _, code := runRootCmd(t, "knowledge", "sources")
 		assertNoProjectEnvelope(t, dir, stdout, code)
@@ -51,7 +51,7 @@ func TestNoProject_ProjectOperatingCommandFailsExplicitly(t *testing.T) {
 	t.Run("spec new", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
-		resetSpecCommandFlags(t)
+		resetRootCmd(t)
 
 		stdout, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 		assertNoProjectEnvelope(t, dir, stdout, code)
@@ -77,7 +77,7 @@ func TestNoProject_InitStillWorksInUninitializedDir(t *testing.T) {
 func TestNoProject_VersionCheckStillWorksInUninitializedDir(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	resetVersionCheckFlags(t)
+	resetRootCmd(t)
 
 	stdout, _, code := runRootCmd(t, "version", "check")
 	require.Equal(t, 0, code)
@@ -109,7 +109,7 @@ func TestNoProject_SubdirectoryOfProjectIsNotTheProject(t *testing.T) {
 	sub := filepath.Join(dir, "subdir")
 	require.NoError(t, os.MkdirAll(sub, 0o755))
 	t.Chdir(sub)
-	resetKnowledgeFlags(t)
+	resetRootCmd(t)
 
 	stdout, _, code := runRootCmd(t, "knowledge", "sources")
 	require.Equal(t, 1, code)

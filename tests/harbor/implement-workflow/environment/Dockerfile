@@ -46,7 +46,7 @@ COPY docs-repo.yaml /app/repos/docs/.spektacular/repo.yaml
 RUN mkdir -p /opt/docs-repo/docs && printf '# auth-service docs\n' > /opt/docs-repo/README.md \
     && printf '# API reference\n' > /opt/docs-repo/docs/api.md
 
-# The pre-seeded spec, plan, and test-plan files each carry in-progress
+# The pre-seeded spec, plan, and test-plan files each carry draft
 # frontmatter directly (see environment/*.md). The finished step's
-# metadata.Close(StatusCompleted) call updates them to completed. No
+# metadata.Close(StatusFinal) call updates them to final. No
 # runtime frontmatter injection is needed.
