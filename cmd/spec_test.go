@@ -144,16 +144,20 @@ func TestSpecNew_TimestampCollisionBumpsSeconds(t *testing.T) {
 	require.FileExists(t, result.SpecPath)
 }
 
-func TestSpecNew_ExplicitIDOverridesGeneratedMethod(t *testing.T) {
+func TestSpecNew_ExplicitIDUnderCounterModeRejectedWithoutSideEffects(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
+	dataDir := filepath.Join(dir, ".spektacular")
 	writeSpecCommandConfig(t, dir, "spec:\n  id_method: counter\n")
 
-	result, err := runSpecNewForTest(t, "--data", `{"name":"Billing Export","id":"EXT.User@123"}`)
-	require.NoError(t, err)
+	_, err := runSpecNewForTest(t, "--data", `{"name":"Billing Export","id":"36"}`)
 
-	require.Equal(t, "ext-user-123-billing-export", result.SpecName)
-	require.FileExists(t, result.SpecPath)
+	var cliErr *output.ErrorResponse
+	require.ErrorAs(t, err, &cliErr)
+	require.Equal(t, "id_not_allowed", cliErr.Code)
+	require.Contains(t, cliErr.NextAction, `without "id"`)
+	require.NoDirExists(t, filepath.Join(dataDir, "specs"))
+	require.NoFileExists(t, filepath.Join(dataDir, "state.json"))
 }
 
 func TestSpecNew_ExternalModeWithIDCreatesSpec(t *testing.T) {

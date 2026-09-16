@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -230,6 +231,12 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 		Now:     specIdentifierNow,
 	})
 	if err != nil {
+		var notAllowed *identifier.IDNotAllowedError
+		if errors.As(err, &notAllowed) {
+			return output.NewError("id_not_allowed",
+				fmt.Sprintf("an explicit id was supplied, but spec.id_method is %q; ids are only accepted when spec.id_method is %q", notAllowed.Method, identifier.MethodExternal)).
+				WithNextAction(fmt.Sprintf(`re-run without "id" so the CLI mints a %s ID: --data '{"name":%q}'`, notAllowed.Method, input.Name))
+		}
 		return err
 	}
 

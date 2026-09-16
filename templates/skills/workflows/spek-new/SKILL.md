@@ -69,11 +69,13 @@ Ask the user for a spec name now. If the user needs to see what names already ex
 {{command}} spec new --data '{"name": "<spec_name>"}'
 ```
 
-External systems may also supply an identifier with:
+**Only when `spec.id_method` is `external`** (check `.spektacular/config.yaml`), an external system's identifier must be supplied with:
 
 ```
 {{command}} spec new --data '{"name": "<spec_name>", "id": "<external_id>"}'
 ```
+
+Under `timestamp` or `counter` (the default is `timestamp`), **never pass `id`** — not even when the spec comes from a GitHub issue or ticket with its own number. The CLI mints the ID itself and rejects an explicit one, because a name without the configured ID prefix would be refused by every later plan and changelog write.
 
 The CLI may normalize and prefix the requested name. Always use the returned `spec_name` and `spec_path` as the source of truth for follow-up workflows.
 

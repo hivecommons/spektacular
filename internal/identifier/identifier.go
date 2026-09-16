@@ -84,6 +84,12 @@ func Resolve(req Request) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
+		// An explicit ID only fits the external scheme: under a generated
+		// method it would produce a name HasPrefix rejects, so every later
+		// ID-prefixed write for the document would fail.
+		if method != MethodExternal {
+			return Result{}, &IDNotAllowedError{Method: method}
+		}
 		resolved, err := resolveWithPrefix(req.Store, req.PathFunc, dir, id, name)
 		if err != nil {
 			return Result{}, err
@@ -177,6 +183,17 @@ type UnsupportedMethodError struct {
 
 func (e *UnsupportedMethodError) Error() string {
 	return fmt.Sprintf("unsupported id_method %q", e.Method)
+}
+
+// IDNotAllowedError reports an explicit ID supplied while a generated
+// id_method (timestamp or counter) is configured. It carries the method so a
+// caller can render the message against its own config field.
+type IDNotAllowedError struct {
+	Method string
+}
+
+func (e *IDNotAllowedError) Error() string {
+	return fmt.Sprintf("an explicit id is only accepted when id_method is %q, not %q", MethodExternal, e.Method)
 }
 
 func validateMethod(method string) error {

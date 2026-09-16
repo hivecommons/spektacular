@@ -1,23 +1,31 @@
 {
-  "kind": "implement",
+  "kind": "plan",
   "current_step": "finished",
   "completed_steps": [
     "new",
-    "read_plan",
-    "analyze",
-    "implement",
-    "test",
-    "verify",
-    "update_plan",
-    "update_changelog",
-    "test_plan",
-    "update_feature_changelog",
-    "reconcile_spec",
+    "overview",
+    "discovery",
+    "architecture",
+    "components",
+    "data_structures",
+    "implementation_detail",
+    "dependencies",
+    "testing_approach",
+    "milestones",
+    "phases",
+    "open_questions",
+    "out_of_scope",
+    "assemble",
+    "verification",
+    "write_plan",
+    "write_context",
+    "write_research",
+    "walkthrough",
     "finished"
   ],
-  "created_at": "2026-09-15T14:37:13.147558997Z",
-  "updated_at": "2026-09-15T15:00:32.869684995Z",
+  "created_at": "2026-09-16T11:09:15.094754376Z",
+  "updated_at": "2026-09-16T11:20:03.155259758Z",
   "data": {
-    "name": "000051_working-context-and-plan-reading"
+    "name": "000052_document-status-vocabulary"
   }
 }
