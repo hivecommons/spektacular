@@ -36,33 +36,13 @@ type repoAddResult struct {
 	MetadataNote string `json:"metadata_note"`
 }
 
-// resetRepoFlags clears the persistent and per-command flags between runs so
-// a flag set by one subtest does not leak into the next.
-func resetRepoFlags(t *testing.T) {
-	t.Helper()
-	reset := func() {
-		require.NoError(t, repoCmd.PersistentFlags().Set("schema", "false"))
-		require.NoError(t, repoCmd.PersistentFlags().Set("dry-run", "false"))
-		require.NoError(t, repoAddCmd.Flags().Set("data", ""))
-		require.NoError(t, repoNewCmd.Flags().Set("data", ""))
-		require.NoError(t, repoNewCmd.Flags().Set("force", "false"))
-		require.NoError(t, repoNewCmd.Flags().Set("stdin", ""))
-		require.NoError(t, repoNewCmd.Flags().Set("file", ""))
-		require.NoError(t, repoGotoCmd.Flags().Set("data", ""))
-		require.NoError(t, repoGotoCmd.Flags().Set("stdin", ""))
-		require.NoError(t, repoGotoCmd.Flags().Set("file", ""))
-	}
-	reset()
-	t.Cleanup(reset)
-}
-
 // runRepo invokes the repo command tree via runRoot (the same wrapper Execute
 // uses) and returns the captured stdout and stderr buffers. On failure, err
 // is the *output.ErrorResponse unmarshaled from stdout, matching what a real
 // invocation of the CLI returns.
 func runRepo(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
-	resetRepoFlags(t)
+	resetRootCmd(t)
 	out, errBuf := setupImplementCmd(t)
 	rootCmd.SetArgs(append([]string{"repo"}, args...))
 	if code := runRoot(); code != 0 {

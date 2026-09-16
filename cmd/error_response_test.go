@@ -37,7 +37,7 @@ func TestGoto_UnreachableStepReturnsActionableError(t *testing.T) {
 	// returns "overview", so `plan new` auto-advances one step further and
 	// genuinely rests on "overview" — this is the real, traceable
 	// consequence of plan.Steps()'s wiring, not an assumption.
-	resetPlanCommandFlags(t)
+	resetRootCmd(t)
 	seedStdout, seedStderr, seedCode := runRootCmd(t, "plan", "new", "--data", `{"name":"billing"}`)
 	require.Equal(t, 0, seedCode)
 	require.Empty(t, seedStderr)
@@ -45,7 +45,7 @@ func TestGoto_UnreachableStepReturnsActionableError(t *testing.T) {
 
 	// 2. Issue the unreachable goto — mirroring the original incident's
 	// "overview" -> "milestones" jump.
-	resetPlanCommandFlags(t)
+	resetRootCmd(t)
 	stdout, stderr, code := runRootCmd(t, "plan", "goto", "--data", `{"step":"milestones"}`)
 
 	// Exit code is non-zero and stderr is completely empty: no fallback to

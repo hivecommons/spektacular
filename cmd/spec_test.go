@@ -53,20 +53,6 @@ func writeSpecCommandFile(t *testing.T, dir, name string) {
 	require.NoError(t, os.WriteFile(path, []byte("existing"), 0o644))
 }
 
-func resetSpecCommandFlags(t *testing.T) {
-	t.Helper()
-	reset := func() {
-		require.NoError(t, specCmd.PersistentFlags().Set("schema", "false"))
-		require.NoError(t, specCmd.PersistentFlags().Set("dry-run", "false"))
-		require.NoError(t, specNewCmd.Flags().Set("data", ""))
-		require.NoError(t, specNewCmd.Flags().Set("stdin", ""))
-		require.NoError(t, specNewCmd.Flags().Set("file", ""))
-		require.NoError(t, specNewCmd.Flags().Set("force", "false"))
-	}
-	reset()
-	t.Cleanup(reset)
-}
-
 func setSpecIdentifierNow(t *testing.T, now time.Time) {
 	t.Helper()
 	original := specIdentifierNow
@@ -78,7 +64,7 @@ func setSpecIdentifierNow(t *testing.T, now time.Time) {
 
 func runSpecNewForTest(t *testing.T, args ...string) (specCommandResult, error) {
 	t.Helper()
-	resetSpecCommandFlags(t)
+	resetRootCmd(t)
 	stdout, _ := setupImplementCmd(t)
 	rootCmd.SetArgs(append([]string{"spec", "new"}, args...))
 
@@ -94,7 +80,7 @@ func runSpecNewForTest(t *testing.T, args ...string) (specCommandResult, error) 
 
 func runSpecNewSchemaForTest(t *testing.T) commandSchema {
 	t.Helper()
-	resetSpecCommandFlags(t)
+	resetRootCmd(t)
 	stdout, _ := setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"spec", "new", "--schema"})
 
@@ -306,7 +292,7 @@ func TestSpecNew_InProgressReturnsWorkflowInProgressErrorAndPreservesState(t *te
 	before, err := os.ReadFile(filepath.Join(dataDir, "state.json"))
 	require.NoError(t, err)
 
-	resetSpecCommandFlags(t)
+	resetRootCmd(t)
 	stdout, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"whatever"}`)
 	require.Equal(t, 1, code)
 
@@ -349,7 +335,7 @@ func TestSpecNew_InProgressNoDataReturnsWorkflowInProgressError(t *testing.T) {
 	before, err := os.ReadFile(filepath.Join(dataDir, "state.json"))
 	require.NoError(t, err)
 
-	resetSpecCommandFlags(t)
+	resetRootCmd(t)
 	stdout, _, code := runRootCmd(t, "spec", "new")
 	require.Equal(t, 1, code)
 
@@ -381,7 +367,7 @@ func TestSpecNew_ForceStartsFreshOverInProgress(t *testing.T) {
 		Data:           map[string]any{"name": "000024_resume"},
 	})
 
-	resetSpecCommandFlags(t)
+	resetRootCmd(t)
 	stdout, _ := setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"spec", "new", "--force", "--data", `{"name":"billing"}`})
 	require.NoError(t, rootCmd.Execute())
@@ -400,7 +386,7 @@ func TestSpecNew_CleanDirSucceedsWithoutError(t *testing.T) {
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "")
 
-	resetSpecCommandFlags(t)
+	resetRootCmd(t)
 	stdout, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 	require.Equal(t, 0, code)
 
@@ -426,7 +412,7 @@ func TestSpecNew_KindlessInProgressStateErrorsWithoutClobber(t *testing.T) {
 	before, err := os.ReadFile(filepath.Join(dataDir, "state.json"))
 	require.NoError(t, err)
 
-	resetSpecCommandFlags(t)
+	resetRootCmd(t)
 	setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"spec", "new", "--data", `{"name":"whatever"}`})
 	err = rootCmd.Execute()

@@ -1,6 +1,6 @@
 // Package metadata owns the artifact-frontmatter schema Spektacular writes at
 // the top of every workflow-produced document. It is the single Go module that
-// parses, renders, and merges the `created_date` / `status` / `closed_date`
+// parses, renders, and merges the `created_date` / `document_status` / `closed_date`
 // block; every write site in the codebase — the CLI `<kind> file write`
 // handler and each workflow's own `st.Write` callbacks — routes through this
 // package so the schema stays consistent across sites.
@@ -13,33 +13,53 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Status is the lifecycle state of a workflow-produced artifact. It is one of
-// the four values declared below; any other value is rejected at the type
-// boundary.
-type Status string
+// DocumentStatus is where a workflow-produced document stands in its
+// lifecycle. A named status is one of the four values declared below; the
+// empty value is the blank status a stored artifact reads as when its
+// document_status is missing or unrecognised.
+type DocumentStatus string
 
 const (
-	// StatusInProgress marks an artifact whose owning workflow is still open.
-	StatusInProgress Status = "in-progress"
-	// StatusCompleted marks an artifact whose owning workflow reached its
-	// terminal step successfully.
-	StatusCompleted Status = "completed"
-	// StatusSuperseded marks an artifact replaced by a later document.
-	StatusSuperseded Status = "superseded"
-	// StatusArchived marks an artifact removed from active view.
-	StatusArchived Status = "archived"
+	// StatusDraft marks a document that is still being written or revised.
+	StatusDraft DocumentStatus = "draft"
+	// StatusFinal marks a document its owning workflow signed off.
+	StatusFinal DocumentStatus = "final"
+	// StatusSuperseded marks a document replaced by a later document.
+	StatusSuperseded DocumentStatus = "superseded"
+	// StatusArchived marks a document removed from active view.
+	StatusArchived DocumentStatus = "archived"
 )
+
+// DocumentStatuses returns the four named document statuses in lifecycle
+// order. It is the single list of allowed values; flag help text and error
+// messages derive from it.
+func DocumentStatuses() []DocumentStatus {
+	return []DocumentStatus{StatusDraft, StatusFinal, StatusSuperseded, StatusArchived}
+}
+
+// ParseDocumentStatus reports whether raw is one of the four named document
+// statuses, returning it typed when it is. The blank value is not a named
+// status and reports false. Callers validating user input treat false as an
+// error; the frontmatter parser treats it as blank.
+func ParseDocumentStatus(raw string) (DocumentStatus, bool) {
+	for _, s := range DocumentStatuses() {
+		if raw == string(s) {
+			return s, true
+		}
+	}
+	return "", false
+}
 
 const dateFormat = "2006-01-02"
 
 // Metadata is the in-memory mirror of an artifact's YAML frontmatter block.
 // CreatedDate is stamped on first write and preserved thereafter. ClosedDate
-// is zero while Status is in-progress and stamped once at the transition to
-// any closed status.
+// is zero until the first transition to a closed document status and is
+// stamped once at that transition. A blank DocumentStatus counts as open.
 type Metadata struct {
-	CreatedDate time.Time
-	Status      Status
-	ClosedDate  time.Time
+	CreatedDate    time.Time
+	DocumentStatus DocumentStatus
+	ClosedDate     time.Time
 	// Provenance fields carried by derived per-repo changelog entries: the
 	// project that produced the entry, its source URL when set, and the spec
 	// and plan identifiers. Empty on artifacts that don't carry provenance.
@@ -53,24 +73,36 @@ type Metadata struct {
 // It carries the two dates as YYYY-MM-DD strings so day precision is enforced
 // at the type boundary rather than at every call site.
 type yamlShape struct {
-	CreatedDate   string `yaml:"created_date"`
-	Status        Status `yaml:"status"`
-	ClosedDate    string `yaml:"closed_date,omitempty"`
-	Project       string `yaml:"project,omitempty"`
-	ProjectSource string `yaml:"project_source,omitempty"`
-	Spec          string `yaml:"spec,omitempty"`
-	Plan          string `yaml:"plan,omitempty"`
+	CreatedDate    string         `yaml:"created_date"`
+	DocumentStatus DocumentStatus `yaml:"document_status"`
+	ClosedDate     string         `yaml:"closed_date,omitempty"`
+	Project        string         `yaml:"project,omitempty"`
+	ProjectSource  string         `yaml:"project_source,omitempty"`
+	Spec           string         `yaml:"spec,omitempty"`
+	Plan           string         `yaml:"plan,omitempty"`
+}
+
+// yamlInShape is the decode-side twin of yamlShape. It holds document_status
+// as a raw node so a non-string value cannot fail the decode.
+type yamlInShape struct {
+	CreatedDate    string    `yaml:"created_date"`
+	DocumentStatus yaml.Node `yaml:"document_status"`
+	ClosedDate     string    `yaml:"closed_date"`
+	Project        string    `yaml:"project"`
+	ProjectSource  string    `yaml:"project_source"`
+	Spec           string    `yaml:"spec"`
+	Plan           string    `yaml:"plan"`
 }
 
 // MarshalYAML implements yaml.Marshaler.
 func (m Metadata) MarshalYAML() (interface{}, error) {
 	out := yamlShape{
-		CreatedDate:   m.CreatedDate.Format(dateFormat),
-		Status:        m.Status,
-		Project:       m.Project,
-		ProjectSource: m.ProjectSource,
-		Spec:          m.Spec,
-		Plan:          m.Plan,
+		CreatedDate:    m.CreatedDate.Format(dateFormat),
+		DocumentStatus: m.DocumentStatus,
+		Project:        m.Project,
+		ProjectSource:  m.ProjectSource,
+		Spec:           m.Spec,
+		Plan:           m.Plan,
 	}
 	if !m.ClosedDate.IsZero() {
 		out.ClosedDate = m.ClosedDate.Format(dateFormat)
@@ -79,9 +111,12 @@ func (m Metadata) MarshalYAML() (interface{}, error) {
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler. It parses the two date fields as
-// YYYY-MM-DD and rejects a status value outside the four-value enum.
+// YYYY-MM-DD. Reading is lenient about document status: a missing,
+// unrecognised, retired or non-string value reads as blank and never fails
+// the parse, and a legacy `status` key is ignored. Input validation is strict
+// and lives in ParseDocumentStatus's callers instead.
 func (m *Metadata) UnmarshalYAML(node *yaml.Node) error {
-	var in yamlShape
+	var in yamlInShape
 	if err := node.Decode(&in); err != nil {
 		return err
 	}
@@ -90,10 +125,12 @@ func (m *Metadata) UnmarshalYAML(node *yaml.Node) error {
 		return fmt.Errorf("parsing created_date %q: %w", in.CreatedDate, err)
 	}
 	m.CreatedDate = created
-	if err := validateStatus(in.Status); err != nil {
-		return err
+	m.DocumentStatus = ""
+	if in.DocumentStatus.Kind == yaml.ScalarNode {
+		if s, ok := ParseDocumentStatus(in.DocumentStatus.Value); ok {
+			m.DocumentStatus = s
+		}
 	}
-	m.Status = in.Status
 	if in.ClosedDate != "" {
 		closed, err := time.Parse(dateFormat, in.ClosedDate)
 		if err != nil {
@@ -108,17 +145,18 @@ func (m *Metadata) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-// validateStatus returns an error if s is not one of the four enum values.
-func validateStatus(s Status) error {
-	switch s {
-	case StatusInProgress, StatusCompleted, StatusSuperseded, StatusArchived:
+// validateDocumentStatus returns an error if s is not one of the four named
+// document statuses. The blank value is rejected: it is a state an artifact
+// can read as, not one a caller can set.
+func validateDocumentStatus(s DocumentStatus) error {
+	if _, ok := ParseDocumentStatus(string(s)); ok {
 		return nil
 	}
-	return fmt.Errorf("invalid status %q; must be one of %q, %q, %q, %q",
-		s, StatusInProgress, StatusCompleted, StatusSuperseded, StatusArchived)
+	return fmt.Errorf("invalid document status %q; must be one of %v", s, DocumentStatuses())
 }
 
-// isClosed reports whether s is any status other than in-progress.
-func isClosed(s Status) bool {
-	return s == StatusCompleted || s == StatusSuperseded || s == StatusArchived
+// isClosed reports whether s is final, superseded or archived. Draft and
+// blank are open.
+func isClosed(s DocumentStatus) bool {
+	return s == StatusFinal || s == StatusSuperseded || s == StatusArchived
 }

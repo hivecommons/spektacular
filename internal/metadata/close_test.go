@@ -42,27 +42,27 @@ func today() time.Time {
 	return time.Now().UTC().Truncate(24 * time.Hour)
 }
 
-// TestClose_TransitionsInProgressToCompleted seeds the fake store with an
-// in-progress artifact and asserts Close rewrites its frontmatter to completed
+// TestClose_TransitionsDraftToFinal seeds the fake store with an
+// draft artifact and asserts Close rewrites its frontmatter to final
 // with today's date stamped as closed_date, preserving created_date.
-func TestClose_TransitionsInProgressToCompleted(t *testing.T) {
+func TestClose_TransitionsDraftToFinal(t *testing.T) {
 	fake := newFakeStore()
 	created := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
 	seed, err := Render(Metadata{
-		CreatedDate: created,
-		Status:      StatusInProgress,
+		CreatedDate:    created,
+		DocumentStatus: StatusDraft,
 	}, []byte("# Body\n"))
 	require.NoError(t, err)
 	require.NoError(t, fake.Write("doc.md", seed))
 
-	require.NoError(t, Close(fake, "doc.md", StatusCompleted))
+	require.NoError(t, Close(fake, "doc.md", StatusFinal))
 
 	got := fake.data["doc.md"]
 	meta, body, err := Split(got)
 	require.NoError(t, err)
 	require.NotNil(t, meta)
 	require.True(t, meta.CreatedDate.Equal(created), "created_date must be preserved")
-	require.Equal(t, StatusCompleted, meta.Status)
+	require.Equal(t, StatusFinal, meta.DocumentStatus)
 	require.True(t, meta.ClosedDate.Equal(today()), "closed_date must be stamped to today")
 	require.Equal(t, "# Body\n", string(body), "body must be preserved byte-for-byte")
 }
@@ -82,30 +82,30 @@ func TestClose_OnBareArtifactAttachesFrontmatter(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, meta, "Close must attach frontmatter to a bare artifact")
 	require.True(t, meta.CreatedDate.Equal(today()), "created_date must be today")
-	require.Equal(t, StatusArchived, meta.Status)
+	require.Equal(t, StatusArchived, meta.DocumentStatus)
 	require.True(t, meta.ClosedDate.Equal(today()), "closed_date must be stamped to today")
 	require.Equal(t, "# Just a heading\n", string(body), "body must be preserved")
 }
 
-// TestClose_Idempotent seeds the fake store with an already-completed artifact
-// and asserts calling Close(..., StatusCompleted) reproduces the same bytes
+// TestClose_Idempotent seeds the fake store with an already-final artifact
+// and asserts calling Close(..., StatusFinal) reproduces the same bytes
 // byte-for-byte — the first-transition closed_date is preserved.
 func TestClose_Idempotent(t *testing.T) {
 	fake := newFakeStore()
 	created := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
 	closed := time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC)
 	seed, err := Render(Metadata{
-		CreatedDate: created,
-		Status:      StatusCompleted,
-		ClosedDate:  closed,
+		CreatedDate:    created,
+		DocumentStatus: StatusFinal,
+		ClosedDate:     closed,
 	}, []byte("# Body\n"))
 	require.NoError(t, err)
 	require.NoError(t, fake.Write("doc.md", seed))
 
-	require.NoError(t, Close(fake, "doc.md", StatusCompleted))
+	require.NoError(t, Close(fake, "doc.md", StatusFinal))
 
 	require.Equal(t, string(seed), string(fake.data["doc.md"]),
-		"a second Close on an already-completed artifact must reproduce the same bytes")
+		"a second Close on an already-final artifact must reproduce the same bytes")
 
 	// closed_date must specifically be preserved from the seed, not re-stamped
 	// to today.
@@ -122,7 +122,7 @@ func TestClose_PropagatesReadError(t *testing.T) {
 	sentinel := errors.New("fake read failure")
 	fake := &fakeStore{data: map[string][]byte{}, readErr: sentinel}
 
-	err := Close(fake, "any.md", StatusCompleted)
+	err := Close(fake, "any.md", StatusFinal)
 	require.ErrorIs(t, err, sentinel, "Close must return the store's Read error unchanged")
 	require.Empty(t, fake.data, "Close must not write anything when Read fails")
 }

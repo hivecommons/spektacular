@@ -92,40 +92,6 @@ var knowledgeNarrowingCmds = []*cobra.Command{
 	knowledgeTagsCmd,
 }
 
-// resetKnowledgeFlags clears the persistent and per-command flags between runs
-// so a flag set by one subtest does not leak into the next.
-//
-// --tier and --filter are registered on all four fan-out commands and are
-// backed by two package-level variables shared between them, so narrowing set
-// on one command is visible to every other until it is cleared. Both the
-// backing variables and each command's own flag bookkeeping are reset here;
-// missing either leaks narrowing into the next subtest, where it shows up as
-// an intermittent, order-dependent failure rather than an obvious one.
-func resetKnowledgeFlags(t *testing.T) {
-	t.Helper()
-	reset := func() {
-		require.NoError(t, knowledgeCmd.PersistentFlags().Set("schema", "false"))
-		require.NoError(t, knowledgeReadCmd.Flags().Set("data", ""))
-		require.NoError(t, knowledgeWriteCmd.Flags().Set("data", ""))
-		require.NoError(t, knowledgeWriteCmd.Flags().Set("file", ""))
-		for _, c := range knowledgeNarrowingCmds {
-			require.NoError(t, c.Flags().Set("tier", "all"))
-			c.Flags().Lookup("tier").Changed = false
-			c.Flags().Lookup("filter").Changed = false
-		}
-		// --tag is registered on search alone, so it is reset on search alone.
-		// Its backing slice is shared with the flag's value, which appends on
-		// every Set after the first, so clearing the variable is what stops one
-		// subtest's tags accumulating into the next.
-		knowledgeSearchCmd.Flags().Lookup("tag").Changed = false
-		knowledgeTier = "all"
-		knowledgeFilter = nil
-		knowledgeTags = nil
-	}
-	reset()
-	t.Cleanup(reset)
-}
-
 // twoScopeProject lays out a temp project rooted at a t.TempDir() and chdirs
 // into it. Two file-backed knowledge stores are configured. The first comes
 // from the colocated repo's config defaults (its repo.yaml declares the
@@ -180,7 +146,7 @@ func twoScopeProject(t *testing.T) (root, projectLoc, teamLoc string) {
 // invocation of the CLI returns.
 func runKnowledge(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
-	resetKnowledgeFlags(t)
+	resetRootCmd(t)
 	out, errBuf := setupImplementCmd(t)
 	rootCmd.SetArgs(append([]string{"knowledge"}, args...))
 	if code := runRoot(); code != 0 {
@@ -681,7 +647,7 @@ func alwaysAppliedProject(t *testing.T) string {
 func TestKnowledge_RoundTripAfterInit_SoloRepo(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	resetInitFlags(t)
+	resetRootCmd(t)
 
 	rootCmd.SetArgs([]string{"init", "claude"})
 	require.NoError(t, rootCmd.Execute())

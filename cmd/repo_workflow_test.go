@@ -35,7 +35,7 @@ var repoGuidedSteps = []string{
 // captured stdout together with the process exit code.
 func runRepoWorkflow(t *testing.T, args ...string) (stdout string, code int) {
 	t.Helper()
-	resetRepoFlags(t)
+	resetRootCmd(t)
 	out, errBuf, code := runRootCmd(t, append([]string{"repo"}, args...)...)
 	require.Empty(t, errBuf, "the repo workflow commands report on stdout only")
 	return out, code

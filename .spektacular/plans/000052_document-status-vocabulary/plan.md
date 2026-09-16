@@ -1,6 +1,6 @@
 ---
 created_date: "2026-09-16"
-status: completed
+document_status: ""
 closed_date: "2026-09-16"
 ---
 
@@ -155,7 +155,7 @@ func DocumentStatuses() []DocumentStatus
 
 **Validation point**: The full Go test suite still passes. The website builds and type-checks cleanly, with no layout markup in its pages. A manual run of the implement-workflow end-to-end suite passes. No agent template, repo doc or website page uses `in-progress`/`completed` as a lifecycle value, or shows a `status:` frontmatter key.
 
-#### - [ ] Phase 1.1: Document status vocabulary and lenient reading in the metadata package
+#### - [x] Phase 1.1: Document status vocabulary and lenient reading in the metadata package
 
 **Repo:** spektacular
 
@@ -164,13 +164,13 @@ The metadata package renames its lifecycle field to `document_status`, adopts th
 *Technical detail:* [context.md#phase-11](./context.md#phase-11-document-status-vocabulary-and-lenient-reading-in-the-metadata-package)
 
 **Acceptance criteria**:
-- [ ] Newly written artifacts carry `document_status: draft` and never a `status` key.
-- [ ] Finished spec, plan and implement workflows leave their artifacts at `final`.
-- [ ] An artifact holding `status: completed`, `document_status: bogus`, or no status at all reads without error and reports a blank status.
-- [ ] Rewriting a legacy artifact drops the old `status` key, keeps the status blank, and keeps its created and closed dates.
-- [ ] Moving an artifact to `final` stamps a closed date only when it has none, and moving it back to `draft` clears the date.
+- [x] Newly written artifacts carry `document_status: draft` and never a `status` key.
+- [x] Finished spec, plan and implement workflows leave their artifacts at `final`.
+- [x] An artifact holding `status: completed`, `document_status: bogus`, or no status at all reads without error and reports a blank status.
+- [x] Rewriting a legacy artifact drops the old `status` key, keeps the status blank, and keeps its created and closed dates.
+- [x] Moving an artifact to `final` stamps a closed date only when it has none, and moving it back to `draft` clears the date.
 
-#### - [ ] Phase 1.2: CLI speaks document status
+#### - [x] Phase 1.2: CLI speaks document status
 
 **Repo:** spektacular
 
@@ -179,13 +179,13 @@ The `file write`, `file list` and `artifacts list` commands take `--document-sta
 *Technical detail:* [context.md#phase-12](./context.md#phase-12-cli-speaks-document-status)
 
 **Acceptance criteria**:
-- [ ] Users can set, filter by and change a document status with each of the four values from the command line.
-- [ ] Passing `completed`, `in-progress` or a typo to any document-status option fails with an error listing the four valid values, and leaves the artifact untouched.
-- [ ] The old `--status` option and `set-status` command are reported as unknown.
-- [ ] Listings from both the per-kind and cross-kind list commands show `document_status`, with an empty value for legacy artifacts.
-- [ ] A blank-status artifact appears in an unfiltered listing, and in neither a `draft` nor a `final` filtered listing.
+- [x] Users can set, filter by and change a document status with each of the four values from the command line.
+- [x] Passing `completed`, `in-progress` or a typo to any document-status option fails with an error listing the four valid values, and leaves the artifact untouched.
+- [x] The old `--status` option and `set-status` command are reported as unknown.
+- [x] Listings from both the per-kind and cross-kind list commands show `document_status`, with an empty value for legacy artifacts.
+- [x] A blank-status artifact appears in an unfiltered listing, and in neither a `draft` nor a `final` filtered listing.
 
-#### - [ ] Phase 2.1: Agent wording and end-to-end suite use the new vocabulary
+#### - [x] Phase 2.1: Agent wording and end-to-end suite use the new vocabulary
 
 **Repo:** spektacular
 
@@ -194,11 +194,11 @@ The plan workflow's closing message tells the agent that the documents are now m
 *Technical detail:* [context.md#phase-21](./context.md#phase-21-agent-wording-and-end-to-end-suite-use-the-new-vocabulary)
 
 **Acceptance criteria**:
-- [ ] The plan workflow's finished message describes the documents as final.
-- [ ] No agent-facing template uses `completed` or `in-progress` as a document lifecycle value.
+- [x] The plan workflow's finished message describes the documents as final.
+- [x] No agent-facing template uses `completed` or `in-progress` as a document lifecycle value.
 - [ ] The implement-workflow end-to-end suite passes against the renamed field (manual run).
 
-#### - [ ] Phase 2.2: Website describes document status
+#### - [x] Phase 2.2: Website describes document status
 
 **Repo:** docs
 
@@ -235,9 +235,9 @@ plan: 000046_relocatable-repo-footprint
 ```
 
 **Acceptance criteria**:
-- [ ] The website's frontmatter example and lifecycle description use `document_status` and the new values.
-- [ ] No website page mentions `in-progress`, `in_progress` or `completed` as a lifecycle value.
-- [ ] The site builds and type-checks cleanly, with no layout markup introduced.
+- [x] The website's frontmatter example and lifecycle description use `document_status` and the new values.
+- [x] No website page mentions `in-progress`, `in_progress` or `completed` as a lifecycle value.
+- [x] The site builds and type-checks cleanly, with no layout markup introduced.
 
 ## Open Questions
 
@@ -252,3 +252,102 @@ No open questions. Every design choice was resolved during the spec discussion o
 - Changes to the created-date or closed-date fields, or to the lifecycle rules beyond the rename.
 - Hand-editing installed agent copies (`.claude/skills`, `.bob`). They pick up the template change on the next init.
 - Unrelated uses of "status" and "completed": version-check status, workflow step status, `completed_steps`, and the "in-progress workflow" resume wording.
+
+## Changelog
+
+### 2026-09-16 — Phase 1.1: Document status vocabulary and lenient reading in the metadata package
+
+**What was done**: `internal/metadata` now stores the lifecycle as `document_status` with the values `draft`, `final`, `superseded` and `archived`. `ParseDocumentStatus` and `DocumentStatuses` are the single source of allowed values. Reads are lenient: a missing, retired, unrecognised or non-string value reads as blank, and a legacy `status` key is ignored and dropped on the next write. Workflow close sites now close as `final`.
+
+**Deviations**:
+- The two CLI enum switches (`cmd/storefile.go`, `cmd/artifactfilter.go`) already call `metadata.ParseDocumentStatus` in this phase, instead of only getting identifier renames. The flag names and the `invalid_status` code are unchanged until Phase 1.2.
+- The `"marked completed"` template assertion was left for Phase 2.1.
+
+**Files changed**:
+- `spektacular: internal/metadata/metadata.go`
+- `spektacular: internal/metadata/merge.go`
+- `spektacular: internal/metadata/close.go`
+- `spektacular: internal/metadata/metadata_test.go`
+- `spektacular: internal/metadata/close_test.go`
+- `spektacular: internal/store/frontmatter.go`
+- `spektacular: internal/steps/spec/steps.go`
+- `spektacular: internal/steps/spec/steps_test.go`
+- `spektacular: internal/steps/plan/steps.go`
+- `spektacular: internal/steps/plan/steps_test.go`
+- `spektacular: internal/steps/plan/planstill_test.go`
+- `spektacular: internal/steps/implement/steps.go`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: cmd/storefile.go`
+- `spektacular: cmd/artifactfilter.go`
+- `spektacular: cmd/artifacts.go`
+- `spektacular: cmd/artifactfilter_test.go`
+- `spektacular: cmd/artifacts_test.go`
+- `spektacular: cmd/changelog_file_test.go`
+- `spektacular: cmd/file_test.go`
+- `spektacular: cmd/plan_file_test.go`
+- `spektacular: cmd/storefile_list_filter_test.go`
+- `spektacular: cmd/storefile_metadata_test.go`
+
+**Discoveries**:
+- Lenient decoding needs a separate decode shape (`yamlInShape`) that holds `document_status` as a `yaml.Node`. A typed string field fails the whole parse on a non-scalar value.
+- `validateDocumentStatus` rejects blank, so no caller can set a blank status explicitly. Blank only ever comes from reading.
+- Any CLI write to an existing legacy artifact, including this plan's own `plan.md`, drops the old `status` key and leaves the document status blank.
+
+### 2026-09-16 — Phase 1.2: CLI speaks document status
+
+**What was done**:
+- `<kind> file write`, `<kind> file list` and `artifacts list` now take `--document-status`.
+- `set-status` became `set-document-status`.
+- List and update output report `document_status`.
+- All flag input goes through one `parseDocumentStatusFlag` helper. It returns `invalid_document_status` with a next_action listing the four values; a missing flag returns `missing_document_status`.
+- Flag help text is built from `metadata.DocumentStatuses()`.
+
+**Deviations**:
+- The `<kind> file` command group was missing the project's `runUnknownSubcommand` guard, so a bare `file set-status <path>` printed help and exited 0 instead of being reported as unknown. The guard was added to the `file` group so the "old command is unknown" criterion holds.
+- The shared flag parser and values helper live in `cmd/artifactfilter.go`, not in `cmd/storefile.go`.
+
+**Files changed**:
+- `spektacular: cmd/artifactfilter.go`
+- `spektacular: cmd/storefile.go`
+- `spektacular: cmd/artifacts.go`
+- `spektacular: cmd/artifactfilter_test.go`
+- `spektacular: cmd/artifacts_test.go`
+- `spektacular: cmd/changelog_file_test.go`
+- `spektacular: cmd/storefile_list_filter_test.go`
+- `spektacular: cmd/storefile_metadata_test.go`
+
+**Discoveries**:
+- Before this change, every mistyped `<kind> file <sub>` printed cobra help with exit 0. Only the top-level groups had the `runUnknownSubcommand` guard. Any new command group needs `RunE: runUnknownSubcommand` to keep the JSON error contract.
+- `go test -shuffle=on ./cmd` fails intermittently in the order-dependent implement/goto tests (for example `TestImplementSteps_ListsAllSteps`). This was already the case before this change and is not caused by it.
+
+### 2026-09-16 — Phase 2.1: Agent wording and end-to-end suite use the new vocabulary
+
+**What was done**: The plan workflow's finished template now says the documents are "marked final", and its contract assertion was updated to match. The harbor implement-workflow suite's oracle now expects `document_status: final` on the changelog. Its seeded spec, plan and test-plan fixtures now carry `document_status: draft`.
+
+**Deviations**:
+- The seeded `environment/plan.md` also carried `status: in-progress` and was updated, along with the explanatory comment in `environment/Dockerfile`.
+- The manual harbor run (`make harbor-test-implement`) has not been run yet. That acceptance criterion stays unchecked and is listed in the test plan.
+
+**Files changed**:
+- `spektacular: templates/steps/plan/19-finished.md`
+- `spektacular: internal/steps/plan/steps_test.go`
+- `spektacular: tests/harbor/implement-workflow/tests/test_implement_workflow.py`
+- `spektacular: tests/harbor/implement-workflow/environment/spec.md`
+- `spektacular: tests/harbor/implement-workflow/environment/plan.md`
+- `spektacular: tests/harbor/implement-workflow/environment/test-plan.md`
+- `spektacular: tests/harbor/implement-workflow/environment/Dockerfile`
+
+**Discoveries**: None. After this change, `templates/` contains no lifecycle use of `status`, `in-progress` or `completed`; the remaining hits are ordinary English or workflow-resume wording.
+
+### 2026-09-16 — Phase 2.2: Website describes document status
+
+**What was done**: On the website, the projects page frontmatter example now shows `document_status: draft`. The how-it-works lifecycle list describes "Document status" with the four new values. The configuration page's spec, plan and changelog prose now says "a document status".
+
+**Deviations**: The how-it-works summary paragraph ("status and dates are how you and your agent tell...") was also reworded to "document status and dates".
+
+**Files changed**:
+- `docs: src/pages/projects.mdx`
+- `docs: src/pages/how-it-works.mdx`
+- `docs: src/pages/configuration.mdx`
+
+**Discoveries**: None.

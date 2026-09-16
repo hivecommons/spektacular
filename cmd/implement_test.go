@@ -51,6 +51,7 @@ func writeInProgressState(t *testing.T, dataDir string, st workflow.State) {
 // setupImplementCmd resets rootCmd state for a clean test invocation.
 func setupImplementCmd(t *testing.T) (*bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
+	resetRootCmd(t)
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	rootCmd.SetOut(stdout)
@@ -306,7 +307,7 @@ func TestImplementSteps_SchemaOutput(t *testing.T) {
 // command resolves a source, and neither clones or runs any git at all —
 // including for a member repo whose git source has never been cloned.
 func TestImplementNewAndGoto_PersistNoRosterAndRunNoGit(t *testing.T) {
-	resetImplementCommandFlags(t) // the schema/data flags persist on rootCmd across tests
+	resetRootCmd(t) // the schema/data flags persist on rootCmd across tests
 	dir := t.TempDir()
 	t.Chdir(dir)
 	dataDir := filepath.Join(dir, ".spektacular")

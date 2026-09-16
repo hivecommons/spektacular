@@ -12,8 +12,8 @@ import (
 // and consolidating the two would break one of them.
 //
 // internal/metadata owns the *workflow artifact* schema — specs, plans,
-// changelogs — where a parseable created_date and a status from a fixed enum are
-// mandatory and an artifact lacking them genuinely is malformed. Its renderer
+// changelogs — where a parseable created_date is mandatory and an artifact
+// lacking it genuinely is malformed; its document status is read leniently. Its renderer
 // also round-trips through a fixed shape that silently drops unknown keys. Route
 // a knowledge entry through it and a tags-only block is rejected as malformed,
 // while any write-back deletes the tags.

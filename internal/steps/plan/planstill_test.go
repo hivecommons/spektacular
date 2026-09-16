@@ -31,8 +31,8 @@ func TestPlanDocStillScaffold(t *testing.T) {
 		scaffoldBytes := []byte(scaffold)
 
 		fm := metadata.Metadata{
-			CreatedDate: time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC),
-			Status:      metadata.StatusInProgress,
+			CreatedDate:    time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC),
+			DocumentStatus: metadata.StatusDraft,
 		}
 
 		// bare scaffold on disk — must be reported as still scaffold.

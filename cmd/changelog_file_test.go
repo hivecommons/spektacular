@@ -36,7 +36,7 @@ func TestChangelogFileWriteRead_RoundTrips(t *testing.T) {
 	meta, body, err := metadata.Split(stdout.Bytes())
 	require.NoError(t, err)
 	require.NotNil(t, meta, "write must produce a frontmatter block")
-	require.Equal(t, metadata.StatusInProgress, meta.Status)
+	require.Equal(t, metadata.StatusDraft, meta.DocumentStatus)
 	require.Equal(t, "changelog body", string(body))
 }
 
@@ -136,26 +136,6 @@ func TestChangelogFileList_ShowsAllWrittenRecords(t *testing.T) {
 
 // --- Phase 3.2: repo-routed changelog writes (`--repo`) ---
 
-// resetChangelogRepoFlags clears the --repo flag on the changelog `file`
-// write/read/list subcommands between runs. Cobra flag state is
-// package-global — the closure writeRepoName/readRepoName/listRepoName
-// variables in newStoreFileCmd persist across Execute() calls — so a --repo
-// set by one test would silently route a later test's central write into a
-// member repo. Mirrors resetWriteStatusFlag / resetRepoFlags.
-func resetChangelogRepoFlags(t *testing.T) {
-	t.Helper()
-	reset := func() {
-		for _, sub := range []string{"write", "read", "list"} {
-			c, _, err := rootCmd.Find([]string{"changelog", "file", sub})
-			require.NoError(t, err)
-			require.NotNil(t, c)
-			require.NoError(t, c.Flags().Set("repo", ""))
-		}
-	}
-	reset()
-	t.Cleanup(reset)
-}
-
 // footprintMemberRepo lays out a member repo in its own temp dir with a valid
 // footprint rendered via the production install path (repo.EnsureFootprint),
 // so its repo.yaml carries the default changelog directory.
@@ -205,7 +185,7 @@ func TestChangelogFileWriteRepo_RoutesToMemberStoreWithProvenance(t *testing.T) 
 	srcPath := filepath.Join(t.TempDir(), "staged.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte(body), 0o644))
 
-	resetChangelogRepoFlags(t)
+	resetRootCmd(t)
 	setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--repo", "member", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())
@@ -238,7 +218,7 @@ func TestChangelogFileReadRepo_ReturnsMemberEntry(t *testing.T) {
 	srcPath := filepath.Join(t.TempDir(), "staged.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("derived entry body"), 0o644))
 
-	resetChangelogRepoFlags(t)
+	resetRootCmd(t)
 	setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--repo", "member", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())
@@ -263,7 +243,7 @@ func TestChangelogFileWriteRepo_MissingFootprintErrorsWithRepairOffer(t *testing
 	srcPath := filepath.Join(t.TempDir(), "staged.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("body"), 0o644))
 
-	resetChangelogRepoFlags(t)
+	resetRootCmd(t)
 	stdout, _, code := runRootCmd(t, "changelog", "file", "write", "000001_feat.md", "--repo", "member", "--from", srcPath)
 	require.Equal(t, 1, code)
 
@@ -301,7 +281,7 @@ func TestChangelogFileWriteRepo_TwoProjectsUseSeparateNamespaceFolders(t *testin
 		srcPath := filepath.Join(t.TempDir(), "staged.md")
 		require.NoError(t, os.WriteFile(srcPath, []byte(p.body), 0o644))
 
-		resetChangelogRepoFlags(t)
+		resetRootCmd(t)
 		setupImplementCmd(t)
 		rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--repo", "member", "--from", srcPath})
 		require.NoError(t, rootCmd.Execute())
@@ -340,7 +320,7 @@ func TestChangelogFileWrite_CentralWriteCarriesNoProvenance(t *testing.T) {
 	srcPath := filepath.Join(t.TempDir(), "staged.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("central record"), 0o644))
 
-	resetChangelogRepoFlags(t)
+	resetRootCmd(t)
 	setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())
@@ -386,8 +366,8 @@ func TestChangelogFileWriteRepo_RewriteStampsProvenanceAndPreservesCreatedDate(t
 
 	earlier := time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC)
 	seeded, err := metadata.Render(metadata.Metadata{
-		CreatedDate: earlier,
-		Status:      metadata.StatusInProgress,
+		CreatedDate:    earlier,
+		DocumentStatus: metadata.StatusDraft,
 	}, []byte("original derived body"))
 	require.NoError(t, err)
 	entryPath := filepath.Join(memberDir, "changelog", "testproj", "000001_feat.md")
@@ -397,7 +377,7 @@ func TestChangelogFileWriteRepo_RewriteStampsProvenanceAndPreservesCreatedDate(t
 	srcPath := filepath.Join(t.TempDir(), "staged.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("updated derived body"), 0o644))
 
-	resetChangelogRepoFlags(t)
+	resetRootCmd(t)
 	setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--repo", "member", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())
@@ -424,13 +404,13 @@ func TestChangelogFileListRepo_ListsMemberEntries(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, []byte("entry body"), 0o644))
 
 	for _, name := range []string{"000001_feat.md", "000002_more.md"} {
-		resetChangelogRepoFlags(t)
+		resetRootCmd(t)
 		setupImplementCmd(t)
 		rootCmd.SetArgs([]string{"changelog", "file", "write", name, "--repo", "member", "--from", srcPath})
 		require.NoError(t, rootCmd.Execute())
 	}
 
-	resetChangelogRepoFlags(t)
+	resetRootCmd(t)
 	stdout, _ := setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"changelog", "file", "list", "--repo", "member"})
 	require.NoError(t, rootCmd.Execute())
@@ -472,7 +452,7 @@ func TestChangelogFileWriteRepo_MemberWithFileSourceWritesAtLocationNotSource(t 
 	srcPath := filepath.Join(t.TempDir(), "staged.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("api-scoped changes"), 0o644))
 
-	resetChangelogRepoFlags(t)
+	resetRootCmd(t)
 	setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--repo", "api", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())

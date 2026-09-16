@@ -1,6 +1,6 @@
 ---
 created_date: "2026-01-01"
-status: in-progress
+document_status: draft
 ---
 
 # Feature: jwt-auth

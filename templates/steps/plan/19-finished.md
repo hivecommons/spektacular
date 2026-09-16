@@ -23,5 +23,5 @@ The plan workflow is complete. Three documents are now in the plan store under `
 
 Read any of them back with `{{config.command}} plan file read {{plan_name}}/<doc>.md`.
 
-The user signed off on the plan during the walkthrough, and the documents are now marked completed. Inform the user that the plan workflow is finished and the plan is approved and ready for implementation.
+The user signed off on the plan during the walkthrough, and the documents are now marked final. Inform the user that the plan workflow is finished and the plan is approved and ready for implementation.
 {{/plan_incomplete}}

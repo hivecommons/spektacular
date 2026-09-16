@@ -156,7 +156,7 @@ func finished() workflow.StepCallback {
 
 			// Test plan: tolerate absence, close if present.
 			testPlanPath := filepath.Join(cfg.PlanDir, planName, "test-plan.md")
-			if err := metadata.Close(st, testPlanPath, metadata.StatusCompleted); err != nil && !errors.Is(err, store.ErrNotFound) {
+			if err := metadata.Close(st, testPlanPath, metadata.StatusFinal); err != nil && !errors.Is(err, store.ErrNotFound) {
 				return "", err
 			}
 
@@ -165,7 +165,7 @@ func finished() workflow.StepCallback {
 			// (a real failure mode we've observed), the FSM must surface it here
 			// rather than mark the workflow finished with no record on disk.
 			changelogPath := ChangelogFilePath(cfg.ChangelogDir, planName)
-			if err := metadata.Close(st, changelogPath, metadata.StatusCompleted); err != nil {
+			if err := metadata.Close(st, changelogPath, metadata.StatusFinal); err != nil {
 				if errors.Is(err, store.ErrNotFound) {
 					return "", output.NewError(
 						"changelog_missing",
