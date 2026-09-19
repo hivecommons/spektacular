@@ -186,7 +186,7 @@ func TestInit_ScaffoldsCategoriesAtConfiguredLocation(t *testing.T) {
 	repoCfg := config.NewDefaultRepoConfig()
 	repoCfg.Knowledge = config.RepoKnowledgeConfig{
 		Provider: config.ProviderFile,
-		Config:   config.FileKnowledgeConfig{Location: ".spektacular/kb"},
+		Config:   config.FileKnowledgeConfig{Location: "kb"},
 	}
 	require.NoError(t, repoCfg.ToYAMLFile(filepath.Join(spektacularDir, config.RepoConfigFileName)))
 
@@ -216,6 +216,11 @@ func TestInit_DefaultConfig_CreatesProjectKnowledgeDir(t *testing.T) {
 	info, err := os.Stat(filepath.Join(dir, ".spektacular", "knowledge"))
 	require.NoError(t, err, "default project knowledge directory should exist")
 	require.True(t, info.IsDir())
+
+	// repo.yaml's relative location resolves from its own folder, so nothing
+	// is scaffolded at the project root.
+	_, err = os.Stat(filepath.Join(dir, "knowledge"))
+	require.True(t, os.IsNotExist(err), "init must not create a knowledge base at the project root")
 }
 
 // Criterion 1: after init, the project directory holds both config files,
@@ -410,7 +415,7 @@ func TestInit_ExistingRepoConfigLeftUntouched(t *testing.T) {
 	require.NoError(t, os.MkdirAll(spektacularDir, 0755))
 
 	repoCfg := config.NewDefaultRepoConfig()
-	repoCfg.Knowledge.Config.Location = ".spektacular/custom-kb"
+	repoCfg.Knowledge.Config.Location = "custom-kb"
 	repoPath := filepath.Join(spektacularDir, config.RepoConfigFileName)
 	require.NoError(t, repoCfg.ToYAMLFile(repoPath))
 	before, err := os.ReadFile(repoPath)

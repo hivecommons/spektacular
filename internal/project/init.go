@@ -86,13 +86,15 @@ func Init(projectPath, name string, force bool) ([]string, error) {
 	// the knowledge base is scaffolded wherever that configuration points it,
 	// not at a hardcoded path. Only the repo's own store is created by init;
 	// the project's shared stores are declared separately and expected to exist
-	// independently. Relative locations resolve against the project root as
-	// knowledge.NewSet resolves them. By default this is .spektacular/knowledge.
+	// independently. A relative location resolves against the folder holding
+	// repo.yaml — the repo's root, as EnsureFootprint and the knowledge
+	// aggregation resolve it — not the project root. By default this is
+	// .spektacular/knowledge.
 	var knowledgeRoots []string
 	if kc := repoCfg.WithDefaults(spektacularDir).Knowledge; kc.Provider == config.ProviderFile {
 		location := kc.Config.Location
 		if !filepath.IsAbs(location) {
-			location = filepath.Join(projectPath, location)
+			location = filepath.Join(spektacularDir, location)
 		}
 		knowledgeRoots = append(knowledgeRoots, location)
 	}
@@ -100,7 +102,7 @@ func Init(projectPath, name string, force bool) ([]string, error) {
 	dirs := []string{
 		spektacularDir,
 		// Spec and plan directories are configured as project-root-relative
-		// paths (e.g. ".spektacular/plans"), like the knowledge location.
+		// paths (e.g. ".spektacular/plans").
 		filepath.Join(projectPath, cfg.Plan.Config.Directory),
 		filepath.Join(projectPath, cfg.Spec.Config.Directory),
 	}
