@@ -3,10 +3,7 @@ name: spek-implement
 description: Execute an approved Plan to implement the feature.
 ---
 
-> **Version check first.** Before running any other command, run `{{command}} version check`.
-> - On `status: "match"`, continue with the skill and produce no version-related output.
-> - On `"mismatch"` or `"missing"`, the installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to re-run `{{command}} init <agent>`, and wait for their decision before continuing.
-> - Never modify or re-install any installed files yourself — refreshing the installation is always an explicit, user-initiated re-run of init.
+{{> partials/version-check}}
 
 > **STOP. Read this before running any command below.**
 > A single successful CLI call — including the very first `implement new` — is **NOT** task completion. It is not a milestone to report back to the user. It is one step out of many in a workflow that you must keep driving, turn after turn, without stopping, until the CLI itself tells you the workflow is *finished*. If you find yourself about to say "successfully completed" or summarize results after calling `implement new` or `implement goto` even once, you are wrong — go back and read the `instruction` field you just received, do what it says, and call `goto` again.

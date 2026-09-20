@@ -1122,3 +1122,24 @@ func TestRepoList_ProviderIsTheRepoSourceProvider(t *testing.T) {
 
 	require.Zero(t, git.calls, "listing must never invoke git")
 }
+
+// `repo add` rewrites config.yaml; the store folders it carries stay in their
+// settings-relative form and are never expanded to project-root paths.
+func TestRepoAdd_KeepsSettingsRelativeStoreDirectories(t *testing.T) {
+	project := t.TempDir()
+	t.Chdir(project)
+	writeSpecCommandConfig(t, project, "spec:\n  config:\n    directory: specs\n")
+	target := t.TempDir()
+
+	_, _, err := runRepo(t, "add", "--data", repoAddJSON(t, map[string]any{
+		"name":     "docs",
+		"location": target,
+	}))
+	require.NoError(t, err)
+
+	raw, err := os.ReadFile(filepath.Join(project, ".spektacular", "config.yaml"))
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "directory: specs\n")
+	require.NotContains(t, string(raw), ".spektacular/specs")
+	require.Contains(t, string(raw), "name: docs\n", "the added repo must be registered")
+}

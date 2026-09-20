@@ -101,8 +101,9 @@ func Init(projectPath, name string, force bool) ([]string, error) {
 
 	dirs := []string{
 		spektacularDir,
-		// Spec and plan directories are configured as project-root-relative
-		// paths (e.g. ".spektacular/plans").
+		// A loaded config holds its spec and plan directories as
+		// project-root-relative paths (e.g. ".spektacular/plans"); the file
+		// writes them relative to the folder holding config.yaml.
 		filepath.Join(projectPath, cfg.Plan.Config.Directory),
 		filepath.Join(projectPath, cfg.Spec.Config.Directory),
 	}

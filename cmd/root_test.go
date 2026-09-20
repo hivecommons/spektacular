@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/jumppad-labs/spektacular/internal/config"
 	"github.com/jumppad-labs/spektacular/internal/output"
 	"github.com/jumppad-labs/spektacular/internal/sessionlog"
 	"github.com/spf13/cobra"
@@ -73,6 +75,37 @@ func runRootCmd(t *testing.T, args ...string) (stdout, stderr string, code int) 
 	return out.String(), errBuf.String(), code
 }
 
+// currentConfigHeader is the preamble every hand-written project config.yaml
+// fixture carries so the loaders accept it: the current settings format and
+// the skills version this (dev) build installs.
+func currentConfigHeader() string {
+	return fmt.Sprintf("schema: %d\nskills_version: %s\n", config.CurrentProjectSchema, version)
+}
+
+// currentRepoHeader is the preamble every hand-written repo.yaml fixture
+// carries so the loader accepts it: the current repo settings format.
+func currentRepoHeader() string {
+	return fmt.Sprintf("schema: %d\n", config.CurrentRepoSchema)
+}
+
+// writeCurrentConfig writes body, prefixed with currentConfigHeader, as
+// dir/.spektacular/config.yaml, creating the folder as needed.
+func writeCurrentConfig(t *testing.T, dir, body string) {
+	t.Helper()
+	dataDir := filepath.Join(dir, ".spektacular")
+	require.NoError(t, os.MkdirAll(dataDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, config.ProjectConfigFileName), []byte(currentConfigHeader()+body), 0o644))
+}
+
+// writeCurrentRepoConfig writes body, prefixed with currentRepoHeader, as
+// dir/.spektacular/repo.yaml, creating the folder as needed.
+func writeCurrentRepoConfig(t *testing.T, dir, body string) {
+	t.Helper()
+	dataDir := filepath.Join(dir, ".spektacular")
+	require.NoError(t, os.MkdirAll(dataDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, config.RepoConfigFileName), []byte(currentRepoHeader()+body), 0o644))
+}
+
 // writeSpecFileFixture lays out a temp project rooted at a t.TempDir() (and
 // chdirs into it) with the spec directory configured to docs/specs and one
 // existing file seeded at feature.md, for exercising `spec file`.
@@ -80,7 +113,7 @@ func writeSpecFileFixture(t *testing.T) (dir string) {
 	t.Helper()
 	dir = t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: docs/specs\n")
+	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: ../docs/specs\n")
 	specPath := filepath.Join(dir, "docs", "specs", "feature.md")
 	require.NoError(t, os.MkdirAll(filepath.Dir(specPath), 0o755))
 	require.NoError(t, os.WriteFile(specPath, []byte("stored body"), 0o644))
@@ -216,7 +249,7 @@ func TestWrapper_SuccessAndFailureBothStreamOnStdoutOnly(t *testing.T) {
 	t.Run("version", func(t *testing.T) {
 		// Success representative: a fresh dir with no .spektacular at all —
 		// missing state is a successful report, not a failure. Failure
-		// representative: the version file exists but is a directory, so
+		// representative: config.yaml exists but is a directory, so
 		// reading it fails with a genuine (non-IsNotExist) error.
 		t.Run("success", func(t *testing.T) {
 			t.Chdir(t.TempDir())
@@ -229,7 +262,7 @@ func TestWrapper_SuccessAndFailureBothStreamOnStdoutOnly(t *testing.T) {
 		t.Run("failure", func(t *testing.T) {
 			dir := t.TempDir()
 			t.Chdir(dir)
-			require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spektacular", "version"), 0o755))
+			require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spektacular", "config.yaml"), 0o755))
 			resetRootCmd(t)
 			stdout, stderr, code := runRootCmd(t, "version", "check")
 			require.Equal(t, 1, code)
@@ -369,7 +402,7 @@ func TestWrapper_ErrorDiscriminantAndExitCode(t *testing.T) {
 		t.Run("failure", func(t *testing.T) {
 			dir := t.TempDir()
 			t.Chdir(dir)
-			require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spektacular", "version"), 0o755))
+			require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spektacular", "config.yaml"), 0o755))
 			resetRootCmd(t)
 			stdout, _, code := runRootCmd(t, "version", "check")
 			assertFailureEnvelope(t, stdout, code)
@@ -446,7 +479,7 @@ func TestWrapper_FailureIsPrintedExactlyOnceWithNoCobraBoilerplate(t *testing.T)
 	t.Run("version", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
-		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spektacular", "version"), 0o755))
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spektacular", "config.yaml"), 0o755))
 		resetRootCmd(t)
 		stdout, stderr, code := runRootCmd(t, "version", "check")
 		assertNoCobraBoilerplate(t, stdout, stderr, code)

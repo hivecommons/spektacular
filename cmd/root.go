@@ -254,6 +254,9 @@ func toErrorResponse(err error) *output.ErrorResponse {
 	if errors.As(err, &er) {
 		return er
 	}
+	if refusal := formatRefusal(err); refusal != nil {
+		return refusal
+	}
 	return output.NewError("internal_error", err.Error())
 }
 
@@ -278,14 +281,20 @@ func loadConfig() (config.Config, error) {
 		return config.Config{}, err
 	}
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		cwd := filepath.Dir(filepath.Dir(cfgPath))
-		return config.Config{}, output.NewError(
-			"no_project",
-			fmt.Sprintf("no Spektacular project is configured in %s (missing .spektacular/config.yaml)", cwd),
-		).WithResource(cfgPath).
-			WithNextAction("run `spektacular init <agent>` in the project directory to initialise a project, or change to a directory that contains one")
+		return config.Config{}, noProjectError(cfgPath)
 	}
 	return config.FromYAMLFile(cfgPath)
+}
+
+// noProjectError reports that no project is configured where cfgPath (the
+// expected .spektacular/config.yaml) would be.
+func noProjectError(cfgPath string) *output.ErrorResponse {
+	cwd := filepath.Dir(filepath.Dir(cfgPath))
+	return output.NewError(
+		"no_project",
+		fmt.Sprintf("no Spektacular project is configured in %s (missing .spektacular/config.yaml)", cwd),
+	).WithResource(cfgPath).
+		WithNextAction("run `spektacular init <agent>` in the project directory to initialise a project, or change to a directory that contains one")
 }
 
 // loadConfigLenient loads the project config like loadConfig but preserves
@@ -314,10 +323,11 @@ func dataDir() (string, error) {
 	return filepath.Join(root, ".spektacular"), nil
 }
 
-// projectRoot returns the project root — the current working directory. Spec,
-// plan, and knowledge directories from the config are all resolved relative to
-// this, so the configured paths (e.g. ".spektacular/specs") are project-root
-// relative rather than relative to the .spektacular data directory.
+// projectRoot returns the project root — the current working directory.
+// Every relative path in config.yaml is written relative to the folder
+// holding it (config.ProjectConfigDir); the spec, plan and changelog store
+// directories are resolved to project-root-relative paths at load (e.g.
+// ".spektacular/specs"), so store consumers join them onto this root.
 func projectRoot() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -327,9 +337,14 @@ func projectRoot() (string, error) {
 }
 
 func init() {
+	// Every settings file this build writes records the version that wrote it.
+	config.WriterVersion = version
 	// The response envelope wrapper in runRoot is the only place a command's
 	// outcome is ever printed, so the CLI framework's own default error/usage
 	// printing is turned off to avoid printing a failure a second time.
+	// Every command except the upgrade path is refused on an out-of-date
+	// project (see gate).
+	rootCmd.PersistentPreRunE = gate
 	rootCmd.SilenceErrors = true
 	rootCmd.SilenceUsage = true
 	rootCmd.PersistentFlags().StringVar(&globalFields, "fields", "", `JSON array of output fields to include (e.g. '["step","instruction"]')`)
@@ -343,4 +358,5 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(artifactsCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(migrateCmd)
 }

@@ -7,12 +7,14 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jumppad-labs/spektacular/internal/agent"
 	"github.com/jumppad-labs/spektacular/internal/config"
 	"github.com/jumppad-labs/spektacular/internal/repo"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 // snapshotDir maps every file under root (as a slash-separated relative path)
@@ -40,6 +42,16 @@ func snapshotDir(t *testing.T, root string) map[string]string {
 		return nil
 	}))
 	return snap
+}
+
+// readSettingsMap parses the YAML settings file at path into a generic map.
+func readSettingsMap(t *testing.T, path string) map[string]any {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	m := map[string]any{}
+	require.NoError(t, yaml.Unmarshal(raw, &m))
+	return m
 }
 
 func TestInit_Claude(t *testing.T) {
@@ -75,15 +87,15 @@ func TestInit_Claude(t *testing.T) {
 	// command wrappers are installed — the commands tree must not exist.
 	require.NoDirExists(t, filepath.Join(dir, ".claude", "commands"))
 
-	// The installing version is recorded in .spektacular/version. A fresh
-	// temp dir has no pre-existing version file, so this also covers repos
-	// initialised before the version file existed.
-	versionData, err := os.ReadFile(filepath.Join(dir, ".spektacular", "version"))
-	require.NoError(t, err)
-	require.Equal(t, "0.1.0\n", string(versionData))
+	// The installing version is recorded in config.yaml as skills_version;
+	// no standalone version file is written.
+	require.Equal(t, "0.1.0", readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["skills_version"])
+	require.NoFileExists(t, filepath.Join(dir, ".spektacular", "version"))
 }
 
-func TestInit_RewritesStaleVersionFile(t *testing.T) {
+// Re-running init over a project that still carries the legacy standalone
+// version file stamps skills_version in config.yaml and removes the file.
+func TestInit_StampsSkillsVersionAndRemovesLegacyVersionFile(t *testing.T) {
 	resetRootCmd(t)
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -91,17 +103,86 @@ func TestInit_RewritesStaleVersionFile(t *testing.T) {
 	rootCmd.SetArgs([]string{"init", "claude"})
 	require.NoError(t, rootCmd.Execute())
 
-	// Simulate an installation recorded by a different binary version.
+	// Simulate an installation recorded by a different binary version in the
+	// legacy file, and a stale recorded skills version.
+	cfgPath := filepath.Join(dir, ".spektacular", "config.yaml")
+	raw, err := os.ReadFile(cfgPath)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "skills_version: 0.1.0\n")
+	require.NoError(t, os.WriteFile(cfgPath, []byte(strings.Replace(string(raw), "skills_version: 0.1.0\n", "skills_version: 9.9.9\n", 1)), 0o644))
 	versionPath := filepath.Join(dir, ".spektacular", "version")
-	require.NoError(t, os.WriteFile(versionPath, []byte("9.9.9\n"), 0644))
+	require.NoError(t, os.WriteFile(versionPath, []byte("9.9.9\n"), 0o644))
 
-	// Re-running init replaces the stale record with the current version.
 	rootCmd.SetArgs([]string{"init", "claude"})
 	require.NoError(t, rootCmd.Execute())
 
-	versionData, err := os.ReadFile(versionPath)
-	require.NoError(t, err)
-	require.Equal(t, "0.1.0\n", string(versionData))
+	require.Equal(t, "0.1.0", readSettingsMap(t, cfgPath)["skills_version"])
+	require.NoFileExists(t, versionPath, "init must remove the legacy version file")
+}
+
+// Criterion 4 / success metric 3: re-running `init claude` on a project whose
+// settings predate format versioning upgrades config.yaml to schema 3 and
+// repo.yaml to schema 2 with no separate migrate run, and version check then reports
+// match.
+func TestInit_UpgradesUnversionedProject(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	cfgPath := writeSettingsFile(t, dir, "config.yaml", `name: proj
+command: spektacular
+agent: claude
+repos:
+    - name: proj
+      location: .
+`)
+	repoPath := writeSettingsFile(t, dir, "repo.yaml", `description: A test project
+knowledge:
+    provider: file
+    config:
+        location: knowledge
+`)
+	versionPath := writeSettingsFile(t, dir, "version", "9.9.9\n")
+
+	resetRootCmd(t)
+	rootCmd.SetArgs([]string{"init", "claude"})
+	require.NoError(t, rootCmd.Execute())
+
+	cfg := readSettingsMap(t, cfgPath)
+	require.Equal(t, 3, cfg["schema"])
+	require.Equal(t, "0.1.0", cfg["skills_version"])
+	require.Equal(t, "proj", cfg["name"])
+	require.Equal(t, 2, readSettingsMap(t, repoPath)["schema"])
+	require.Equal(t, "A test project", readSettingsMap(t, repoPath)["description"])
+	require.NoFileExists(t, versionPath)
+
+	m, code := runVersionCheckJSON(t)
+	require.Equal(t, 0, code)
+	require.Equal(t, "match", m["status"])
+}
+
+// Criterion 7: the installed skills open with the version-check preamble,
+// which tells the user to run migrate on any non-match and forbids the agent
+// from running migrate or init itself.
+func TestInit_InstalledSkillsCarryUpgradePreamble(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	resetRootCmd(t)
+
+	rootCmd.SetArgs([]string{"init", "claude"})
+	require.NoError(t, rootCmd.Execute())
+
+	for _, skill := range []string{"spek-new", "spek-plan", "spek-implement", "spek-knowledge", "spek-manage-repos"} {
+		data, err := os.ReadFile(filepath.Join(dir, ".claude", "skills", skill, "SKILL.md"))
+		require.NoError(t, err)
+		body := string(data)
+		require.Contains(t, body, "`spektacular version check`", skill)
+		require.Contains(t, body, "`spektacular migrate`", skill)
+		require.Contains(t, body, "`spektacular migrate --dry-run`", skill)
+		require.Contains(t, body, `"upgrade_needed"`, skill)
+		require.Contains(t, body, `"unsupported_format"`, skill)
+		require.Contains(t, body, "Never run `migrate` or `init`", skill)
+		require.Contains(t, body, "Upgrading is always an explicit, user-initiated action.", skill)
+		require.NotContains(t, body, "{{> partials/version-check}}", skill)
+	}
 }
 
 func TestInit_Bob(t *testing.T) {
@@ -249,10 +330,8 @@ func TestInit_Idempotent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "keep-skill", string(skillData))
 
-	// Version file still exists with the expected content after the second init.
-	versionData, err := os.ReadFile(filepath.Join(dir, ".spektacular", "version"))
-	require.NoError(t, err)
-	require.Equal(t, "0.1.0\n", string(versionData))
+	// The recorded skills version is still current after the second init.
+	require.Equal(t, "0.1.0", readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["skills_version"])
 }
 
 // Criterion 3: a second init run produces no changes — the full recursive
@@ -436,4 +515,26 @@ func TestInit_RerunLeavesColocatedFileSourceUntouched(t *testing.T) {
 	raw, err := os.ReadFile(rcPath)
 	require.NoError(t, err)
 	require.Contains(t, string(raw), "source:\n    provider: file\n    config:\n        location: "+elsewhere+"\n", "re-init must keep the declared source")
+}
+
+// A fresh init writes the store folders relative to the folder holding
+// config.yaml, and creates the spec and plan folders inside .spektacular.
+func TestInit_FreshProjectWritesSettingsRelativeStoreDirectories(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	resetRootCmd(t)
+	stdout, stderr, code := runRootCmd(t, "init", "claude")
+	require.Equal(t, 0, code, stdout+stderr)
+
+	raw, err := os.ReadFile(filepath.Join(dir, ".spektacular", "config.yaml"))
+	require.NoError(t, err)
+	for _, want := range []string{"directory: specs\n", "directory: plans\n", "directory: changelog\n"} {
+		require.Contains(t, string(raw), want)
+	}
+	require.NotContains(t, string(raw), ".spektacular/")
+	require.Equal(t, 3, readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["schema"])
+	require.DirExists(t, filepath.Join(dir, ".spektacular", "specs"))
+	require.DirExists(t, filepath.Join(dir, ".spektacular", "plans"))
+	require.NoDirExists(t, filepath.Join(dir, ".spektacular", ".spektacular"))
 }

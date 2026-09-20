@@ -362,6 +362,9 @@ func runRepoList(cmd *cobra.Command, _ []string) error {
 		// repo with an empty root and no metadata as if that were fine.
 		meta, err := set.Footprint(e.Name)
 		if err != nil {
+			if refusal := formatRefusal(err); refusal != nil {
+				return refusal
+			}
 			var fpErr *repo.FootprintError
 			if errors.As(err, &fpErr) {
 				return output.NewError("repo_footprint_missing", fpErr.Error()).

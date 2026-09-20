@@ -112,6 +112,9 @@ func repoRoutedStore(repoName string) (store.Store, string, error) {
 	}
 	resolved, err := set.Resolve(repoName)
 	if err != nil {
+		if refusal := formatRefusal(err); refusal != nil {
+			return nil, "", refusal
+		}
 		var fpErr *repo.FootprintError
 		if errors.As(err, &fpErr) {
 			return nil, "", output.NewError(

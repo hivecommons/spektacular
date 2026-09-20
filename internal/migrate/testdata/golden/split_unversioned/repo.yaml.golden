@@ -1,0 +1,11 @@
+schema: 2
+written_by: 0.1.0
+description: Split project
+# What this repo is for.
+role: application
+tags:
+    - go
+knowledge:
+    provider: file
+    config:
+        location: knowledge

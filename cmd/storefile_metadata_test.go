@@ -39,19 +39,19 @@ func kindFixtures() []kindFixture {
 	return []kindFixture{
 		{
 			kind:         "spec",
-			configYAML:   "spec:\n  config:\n    directory: docs/specs\n",
+			configYAML:   "spec:\n  config:\n    directory: ../docs/specs\n",
 			artifactName: "20260709000000-feature.md",
 			storeRelPath: filepath.Join("docs", "specs", "20260709000000-feature.md"),
 		},
 		{
 			kind:         "plan",
-			configYAML:   "plan:\n  config:\n    directory: docs/plans\n",
+			configYAML:   "plan:\n  config:\n    directory: ../docs/plans\n",
 			artifactName: "20260709000000-feature/plan.md",
 			storeRelPath: filepath.Join("docs", "plans", "20260709000000-feature", "plan.md"),
 		},
 		{
 			kind:       "changelog",
-			configYAML: "changelog:\n  config:\n    directory: docs/changelog\n",
+			configYAML: "changelog:\n  config:\n    directory: ../docs/changelog\n",
 			// Central (no --repo) writes land flat under the configured
 			// changelog directory; no project subfolder — that is a
 			// repo-routed concern (see repoRoutedStore in cmd/storefile.go).

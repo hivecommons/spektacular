@@ -139,3 +139,72 @@ func TestEnsureFootprint_SourceDeclaredScaffoldsUnderRoot(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, config.FileSource(code), loaded.Source, "the declared source must survive the repair")
 }
+
+// Phase 2.1: a repo.yaml written by a newer Spektacular is not broken and is
+// never overwritten — EnsureFootprint refuses it with a FormatError reporting
+// a newer format, leaves the file byte-identical, and scaffolds nothing.
+func TestEnsureFootprint_NewerFormatRepoYAMLIsRefusedAndUntouched(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, config.RepoConfigFileName)
+	const body = "schema: 99\n" +
+		"description: from the future\n" +
+		"knowledge:\n" +
+		"  provider: file\n" +
+		"  config:\n" +
+		"    location: knowledge\n"
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o644))
+
+	status, err := EnsureFootprint(root, config.NewDefaultRepoConfig())
+	require.Error(t, err)
+	require.Empty(t, status)
+	fe, ok := config.IsFormatError(err)
+	require.True(t, ok, "expected a *config.FormatError, got %T: %v", err, err)
+	require.True(t, fe.Newer())
+	require.Equal(t, 99, fe.Found)
+	require.Equal(t, 2, fe.Want)
+
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, body, string(after), "a newer-format repo.yaml must never be rewritten")
+	require.NoDirExists(t, filepath.Join(root, "knowledge"))
+	require.NoFileExists(t, path+".v99.old")
+}
+
+// Phase 2.1: an unversioned but otherwise valid repo.yaml is upgraded in
+// place, not replaced from defaults — its own settings survive, a byte-
+// identical backup is kept beside it, and its knowledge location (not the
+// defaults') drives the scaffolding.
+func TestEnsureFootprint_OutdatedRepoYAMLIsUpgradedNotOverwritten(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, config.RepoConfigFileName)
+	const body = "description: keep me\n" +
+		"knowledge:\n" +
+		"  provider: file\n" +
+		"  config:\n" +
+		"    location: kb\n"
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o644))
+
+	status, err := EnsureFootprint(root, config.NewDefaultRepoConfig())
+	require.NoError(t, err)
+	require.Equal(t, FootprintRepaired, status)
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "schema: 2\n")
+	require.Contains(t, string(raw), "description: keep me\n")
+
+	backup, err := os.ReadFile(path + ".v1.old")
+	require.NoError(t, err)
+	require.Equal(t, body, string(backup), "the backup must hold the original bytes")
+
+	loaded, err := config.RepoConfigFromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "keep me", loaded.Description)
+	require.Equal(t, "kb", loaded.Knowledge.Config.Location)
+
+	for _, cat := range footprintCategories {
+		require.FileExists(t, filepath.Join(root, "kb", cat, "README.md"))
+	}
+	require.NoDirExists(t, filepath.Join(root, "knowledge"),
+		"the upgraded file, not the defaults, drives the scaffolding")
+}

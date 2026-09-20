@@ -132,7 +132,7 @@ func twoScopeProject(t *testing.T) (root, projectLoc, teamLoc string) {
 		"      provider: file\n" +
 		"      config:\n" +
 		"        location: " + teamLoc + "\n"
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "config.yaml"), []byte(cfg), 0o644))
+	writeCurrentConfig(t, root, cfg)
 	require.NoError(t, config.NewDefaultRepoConfig().ToYAMLFile(filepath.Join(dataDir, config.RepoConfigFileName)))
 
 	return root, projectLoc, teamLoc
@@ -632,7 +632,7 @@ func alwaysAppliedProject(t *testing.T) string {
 	seed("glossary/compass.md", "compass: a tool that points north\n")
 
 	cfg := "name: testproj\nrepos:\n  - name: testproj\n    location: .\n"
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "config.yaml"), []byte(cfg), 0o644))
+	writeCurrentConfig(t, root, cfg)
 	require.NoError(t, config.NewDefaultRepoConfig().ToYAMLFile(filepath.Join(dataDir, config.RepoConfigFileName)))
 
 	return root
@@ -1998,8 +1998,8 @@ func knowledgeProjectWithConfigs(t *testing.T, projectCfg, repoCfg string) strin
 
 	dataDir := filepath.Join(root, ".spektacular")
 	require.NoError(t, os.MkdirAll(dataDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "config.yaml"), []byte(projectCfg), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, config.RepoConfigFileName), []byte(repoCfg), 0o644))
+	writeCurrentConfig(t, root, projectCfg)
+	writeCurrentRepoConfig(t, root, repoCfg)
 
 	return root
 }

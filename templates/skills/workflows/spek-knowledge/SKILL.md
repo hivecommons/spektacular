@@ -3,10 +3,7 @@ name: spek-knowledge
 description: Search, contribute to, or update the project's knowledge base.
 ---
 
-> **Version check first.** Before running any other command, run `{{command}} version check`.
-> - On `status: "match"`, continue with the skill and produce no version-related output.
-> - On `"mismatch"` or `"missing"`, the installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to re-run `{{command}} init <agent>`, and wait for their decision before continuing.
-> - Never modify or re-install any installed files yourself — refreshing the installation is always an explicit, user-initiated re-run of init.
+{{> partials/version-check}}
 
 # What this skill does
 

@@ -160,6 +160,9 @@ Configuration is split across two files, and a colocated single-repo project sim
 ### Project configuration (`config.yaml`)
 
 ```yaml
+schema: 3                           # settings format version, written by Spektacular; `migrate` raises it
+written_by: 0.16.0                  # the Spektacular version that last wrote this file (informational)
+skills_version: 0.16.0              # the Spektacular version that last installed the agent skills
 name: my-project                    # required, slug-safe; namespaces changelog entries
 source: git@example.com:org/my-project.git  # optional; the project's git address, recorded in derived changelog entries only
 command: spektacular
@@ -170,15 +173,15 @@ spec:
   provider: file
   id_method: timestamp              # how new spec identifiers are generated
   config:
-    directory: .spektacular/specs   # project-root-relative directory for spec files
+    directory: specs                # relative to the folder holding config.yaml
 plan:
   provider: file
   config:
-    directory: .spektacular/plans   # project-root-relative directory for plan files
+    directory: plans                # relative to the folder holding config.yaml
 changelog:
   provider: file
   config:
-    directory: .spektacular/changelog  # central changelog; entries land under <directory>/<name>/
+    directory: changelog            # central changelog; entries land under <directory>/<name>/
 repos:
   - name: my-project                # the colocated repo, registered by init: this .spektacular/ folder
     location: .
@@ -196,11 +199,13 @@ knowledge:
 
 Each repo entry needs a slug-safe unique `name` and a `location`: the folder holding that repo's `repo.yaml` (`local` is still accepted and means the same thing). A relative location is resolved from the folder holding `config.yaml`, and nothing is appended to it, so the project's own footprint is `.` and a repo folder in the project is `../repos/<name>`. A repo is normally added through a guided flow: you are asked which repo to add, and its name, description, role and tags are each proposed for you from what the repo says about itself, one question at a time, with a plain-language confirmation before anything is written. Spektacular's files go inside the repo being added unless it cannot take them or you say otherwise, in which case they live in a folder under the project and the repo is left with only its code. An add can be started and finished while a spec or plan is already in progress. A caller that already knows every detail can still register a repo in a single command with `repo add`. Where the code lives is declared in the repo's own `repo.yaml` as `source`; the old `address` key is no longer read, and a config that still carries it fails to load with an error saying where the value now goes. `description`, `role`, and `tags` are optional metadata, also in `repo.yaml`, that cross-repo planning uses to attribute requirements to the right repo. Add to the registry with `spektacular repo new`, or `spektacular repo add` when every detail is already known, and inspect it with `spektacular repo list`; removal is a manual config edit. Cloned repos are never fetched or pulled automatically; a stale clone produces a warning only.
 
-**Relative locations everywhere in `config.yaml` share one base: the folder holding `config.yaml`.** That covers both a repos entry's `location` and a `knowledge.sources` entry's `config.location`, so `..` is the project's own root and `../team-kb` a folder beside it. An absolute location is used as written. A knowledge source that does not resolve to a directory fails fast, naming the store, the path it resolved to, and the base it resolved from; when the store is found where the pre-1.0 rule would have put it, the error also names the exact corrected value to write.
+**Relative locations everywhere in `config.yaml` share one base: the folder holding `config.yaml`.** That covers a repos entry's `location`, a `knowledge.sources` entry's `config.location`, and the `spec`, `plan` and `changelog` store directories, so `..` is the project's own root and `../team-kb` a folder beside it. The store directories default to `specs`, `plans` and `changelog`, which land in `.spektacular/specs`, `.spektacular/plans` and `.spektacular/changelog`; a store directory outside the project is refused with the corrected value to write. An absolute location is used as written. A knowledge source that does not resolve to a directory fails fast, naming the store, the path it resolved to, and the base it resolved from; when the store is found where the pre-1.0 rule would have put it, the error also names the exact corrected value to write.
 
 ### Repo configuration (`repo.yaml`)
 
 ```yaml
+schema: 2                         # settings format version, written by Spektacular
+written_by: 0.16.0                # the Spektacular version that last wrote this file
 description: the documentation repo
 role: documentation
 tags: [docs]
@@ -221,6 +226,17 @@ changelog:
 A repo's Spektacular files can sit inside its code, in a `.spektacular/` folder holding `repo.yaml` with a file source pointing at `..`, or in a folder of their own, for example one folder per repo under a project, with `source` pointing at a checkout on disk (absolute, relative to the folder holding `repo.yaml`, or using `${VAR}`) or at a git repository that Spektacular clones into `.spektacular/repos/<name>/` on first use. In the separate layout the code repository receives only code changes; knowledge and changelog entries land under the folder holding `repo.yaml`. `spektacular repo list` reports the resolved source as each repo's `root`. See [Multi-Repo Projects](https://spektacular.dev/projects/) for the layouts.
 
 Knowledge aggregates across every registered repo's declared sources (in registry order) followed by the project-owned sources, so a repo's knowledge travels with it into every project that registers it. Changelog entries, central and derived per-repo, are namespaced under a folder named after the project (`<directory>/<project-name>/<id>_<slug>.md`), so multiple projects writing into one repo can never collide.
+
+### Upgrading (`migrate`)
+
+Every settings file records the format version it was written in. When a release changes that format, or when you install a new Spektacular, commands stop with an error naming `migrate` until the project is brought up to date; `migrate`, `init`, `version check` and `help` always run, so the way out is always reachable.
+
+```bash
+spektacular migrate --dry-run   # list every change without touching disk
+spektacular migrate             # apply them
+```
+
+An upgrade brings `config.yaml` and every registered repo's `repo.yaml` present on disk to the current format, keeps a `<file>.v<N>.old` copy of each file it rewrites, names any repo it skipped because it is not checked out, and reinstalls the agent skills when they are older than the running Spektacular. Re-running `spektacular init <agent>` applies the same upgrades. Settings written by a *newer* Spektacular are refused rather than converted, with a message to update Spektacular; such a file is never rewritten.
 
 ### Excluding paths (`.spektacular_ignore`)
 

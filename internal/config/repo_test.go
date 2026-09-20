@@ -11,6 +11,30 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// pinWriterVersion sets WriterVersion for the duration of a test so the
+// `written_by` stamp in a written settings file is a known literal.
+func pinWriterVersion(t *testing.T, v string) {
+	t.Helper()
+	prev := WriterVersion
+	WriterVersion = v
+	t.Cleanup(func() { WriterVersion = prev })
+}
+
+// withSchema prefixes a hand-written repo.yaml fixture with the current repo
+// format version, so it loads past the format check and exercises what
+// follows it. The literal is hand-maintained, not read from
+// CurrentRepoSchema.
+func withSchema(body string) string {
+	return "schema: 2\n" + body
+}
+
+// withProjectSchema is withSchema for a config.yaml fixture: it prefixes the
+// current project format version (hand-maintained, not read from
+// CurrentProjectSchema).
+func withProjectSchema(body string) string {
+	return "schema: 3\n" + body
+}
+
 // Criterion 2: the default repo config seeds exactly the repo's own knowledge
 // store and a file-backed changelog.
 func TestNewDefaultRepoConfig_SeedsRepoStoreAndChangelog(t *testing.T) {
@@ -31,7 +55,7 @@ func TestRepoConfigFromYAMLFile_LoadsWithoutProjectConfig(t *testing.T) {
 	// Deliberately no config.yaml anywhere in dir: only repo.yaml exists.
 	path := filepath.Join(dir, RepoConfigFileName)
 	minimal := "changelog:\n  provider: file\n  config:\n    directory: docs/changelog\n"
-	require.NoError(t, os.WriteFile(path, []byte(minimal), 0644))
+	require.NoError(t, os.WriteFile(path, []byte(withSchema(minimal)), 0644))
 
 	cfg, err := RepoConfigFromYAMLFile(path)
 	require.NoError(t, err)
@@ -46,8 +70,9 @@ func TestRepoConfigFromYAMLFile_LoadsWithoutProjectConfig(t *testing.T) {
 // Criterion 2: a minimal repo config with no descriptive fields set (they are
 // all omitempty and zero-valued) contains only knowledge and changelog
 // settings — the serialized repo.yaml carries exactly those two top-level
-// sections.
+// sections, plus the format and writer stamps every settings file carries.
 func TestRepoConfig_ToYAMLFileWritesOnlyKnowledgeAndChangelog(t *testing.T) {
+	pinWriterVersion(t, "test-x")
 	dir := t.TempDir()
 	path := filepath.Join(dir, RepoConfigFileName)
 	require.NoError(t, NewDefaultRepoConfig().ToYAMLFile(path))
@@ -57,13 +82,16 @@ func TestRepoConfig_ToYAMLFileWritesOnlyKnowledgeAndChangelog(t *testing.T) {
 
 	var top map[string]any
 	require.NoError(t, yaml.Unmarshal(raw, &top))
-	require.Len(t, top, 2)
+	require.Len(t, top, 4)
+	require.Equal(t, 2, top["schema"])
+	require.Equal(t, "test-x", top["written_by"])
 	require.Contains(t, top, "knowledge")
 	require.Contains(t, top, "changelog")
 }
 
 // Criterion 2: a repo config round-trips through repo.yaml unchanged.
 func TestRepoConfig_ToYAMLFileRoundTrip(t *testing.T) {
+	pinWriterVersion(t, "test-x")
 	cfg := RepoConfig{
 		Knowledge: RepoKnowledgeConfig{
 			Provider: ProviderFile,
@@ -81,13 +109,18 @@ func TestRepoConfig_ToYAMLFileRoundTrip(t *testing.T) {
 
 	loaded, err := RepoConfigFromYAMLFile(path)
 	require.NoError(t, err)
-	require.Equal(t, cfg, loaded)
+	// The written file is stamped with the current format and writer.
+	want := cfg
+	want.Schema = 2
+	want.WrittenBy = "test-x"
+	require.Equal(t, want, loaded)
 }
 
 // Criterion 2: a repo config with descriptive metadata (description, role,
 // tags) round-trips through repo.yaml unchanged, alongside the
 // existing knowledge and changelog sections.
 func TestRepoConfig_ToYAMLFileRoundTripWithDescriptiveFields(t *testing.T) {
+	pinWriterVersion(t, "test-x")
 	cfg := RepoConfig{
 		Description: "Handles order processing and fulfillment.",
 		Role:        "backend-service",
@@ -108,7 +141,11 @@ func TestRepoConfig_ToYAMLFileRoundTripWithDescriptiveFields(t *testing.T) {
 
 	loaded, err := RepoConfigFromYAMLFile(path)
 	require.NoError(t, err)
-	require.Equal(t, cfg, loaded)
+	// The written file is stamped with the current format and writer.
+	want := cfg
+	want.Schema = 2
+	want.WrittenBy = "test-x"
+	require.Equal(t, want, loaded)
 }
 
 // Criterion 3: a repo knowledge store missing its required location fails
@@ -120,7 +157,7 @@ func TestRepoConfigFromYAMLFile_MissingKnowledgeLocationReturnsError(t *testing.
 		"    location: \"\"\n"
 	dir := t.TempDir()
 	path := filepath.Join(dir, RepoConfigFileName)
-	require.NoError(t, os.WriteFile(path, []byte(body), 0644))
+	require.NoError(t, os.WriteFile(path, []byte(withSchema(body)), 0644))
 
 	_, err := RepoConfigFromYAMLFile(path)
 	require.Error(t, err)
@@ -133,7 +170,7 @@ func TestRepoConfigFromYAMLFile_UnknownChangelogProviderReturnsError(t *testing.
 	body := "changelog:\n  provider: bogus\n  config:\n    directory: changelog\n"
 	dir := t.TempDir()
 	path := filepath.Join(dir, RepoConfigFileName)
-	require.NoError(t, os.WriteFile(path, []byte(body), 0644))
+	require.NoError(t, os.WriteFile(path, []byte(withSchema(body)), 0644))
 
 	_, err := RepoConfigFromYAMLFile(path)
 	require.Error(t, err)
@@ -221,7 +258,7 @@ func TestRepoConfigFromYAMLFile_ExpandsEnvVars(t *testing.T) {
 		"    location: \"${TEST_REPO_KB}\"\n"
 	dir := t.TempDir()
 	path := filepath.Join(dir, RepoConfigFileName)
-	require.NoError(t, os.WriteFile(path, []byte(body), 0644))
+	require.NoError(t, os.WriteFile(path, []byte(withSchema(body)), 0644))
 
 	cfg, err := RepoConfigFromYAMLFile(path)
 	require.NoError(t, err)
@@ -234,7 +271,7 @@ func TestRepoConfigFromYAMLFile_NoSourceIsNone(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, RepoConfigFileName)
 	minimal := "changelog:\n  provider: file\n  config:\n    directory: docs/changelog\n"
-	require.NoError(t, os.WriteFile(path, []byte(minimal), 0644))
+	require.NoError(t, os.WriteFile(path, []byte(withSchema(minimal)), 0644))
 
 	cfg, err := RepoConfigFromYAMLFile(path)
 	require.NoError(t, err)
@@ -247,8 +284,10 @@ func TestRepoConfigFromYAMLFile_NoSourceIsNone(t *testing.T) {
 }
 
 // Phase 1.1 criterion 1: a config whose Source is set serialises exactly
-// three top-level keys — source, knowledge, and changelog.
+// three content keys — source, knowledge, and changelog — beside the schema
+// and written_by stamps.
 func TestRepoConfig_ToYAMLFileWritesSourceWhenSet(t *testing.T) {
+	pinWriterVersion(t, "test-x")
 	cfg := NewDefaultRepoConfig()
 	cfg.Source = FileSource("/srv/code/api")
 
@@ -261,7 +300,9 @@ func TestRepoConfig_ToYAMLFileWritesSourceWhenSet(t *testing.T) {
 
 	var top map[string]any
 	require.NoError(t, yaml.Unmarshal(raw, &top))
-	require.Len(t, top, 3)
+	require.Len(t, top, 5)
+	require.Equal(t, 2, top["schema"])
+	require.Equal(t, "test-x", top["written_by"])
 	require.Contains(t, top, "source")
 	require.Contains(t, top, "knowledge")
 	require.Contains(t, top, "changelog")
@@ -354,7 +395,7 @@ func TestRepoConfigFromYAMLFile_SourceEnvVar(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, RepoConfigFileName)
 		body := "source:\n  provider: file\n  config:\n    location: \"" + form + "\"\n"
-		require.NoError(t, os.WriteFile(path, []byte(body), 0644))
+		require.NoError(t, os.WriteFile(path, []byte(withSchema(body)), 0644))
 
 		cfg, err := RepoConfigFromYAMLFile(path)
 		require.NoError(t, err)
@@ -415,6 +456,7 @@ func TestRepoConfig_ParseSource_UnsupportedProvider(t *testing.T) {
 // Phase 1.1 criterion 4: a repo config that sets source round-trips through
 // repo.yaml without losing it, alongside the other sections.
 func TestRepoConfig_ToYAMLFileRoundTripWithSource(t *testing.T) {
+	pinWriterVersion(t, "test-x")
 	cfg := RepoConfig{
 		Description: "Handles order processing and fulfillment.",
 		Source:      GitSource("git@github.com:org/api.git"),
@@ -434,7 +476,11 @@ func TestRepoConfig_ToYAMLFileRoundTripWithSource(t *testing.T) {
 
 	loaded, err := RepoConfigFromYAMLFile(path)
 	require.NoError(t, err)
-	require.Equal(t, cfg, loaded)
+	// The written file is stamped with the current format and writer.
+	want := cfg
+	want.Schema = 2
+	want.WrittenBy = "test-x"
+	require.Equal(t, want, loaded)
 	require.Equal(t, GitSource("git@github.com:org/api.git"), loaded.Source)
 }
 
@@ -443,6 +489,7 @@ func TestRepoConfig_ToYAMLFileRoundTripWithSource(t *testing.T) {
 // changelog block beside it. The expected file is written out by hand so a
 // stray `sources:` list, a scope key, or a change of indentation fails here.
 func TestRepoConfig_KnowledgeIsASingleProviderBlock(t *testing.T) {
+	pinWriterVersion(t, "test-x")
 	cfg := NewDefaultRepoConfig()
 	cfg.Source = DefaultRepoSource
 
@@ -452,7 +499,9 @@ func TestRepoConfig_KnowledgeIsASingleProviderBlock(t *testing.T) {
 
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
-	require.Equal(t, "source:\n"+
+	require.Equal(t, "schema: 2\n"+
+		"written_by: test-x\n"+
+		"source:\n"+
 		"    provider: file\n"+
 		"    config:\n"+
 		"        location: ..\n"+
@@ -467,7 +516,10 @@ func TestRepoConfig_KnowledgeIsASingleProviderBlock(t *testing.T) {
 
 	loaded, err := RepoConfigFromYAMLFile(path)
 	require.NoError(t, err)
-	require.Equal(t, cfg, loaded)
+	want := cfg
+	want.Schema = 2
+	want.WrittenBy = "test-x"
+	require.Equal(t, want, loaded)
 }
 
 // Phase 2.3 criteria 1, 2, 3, 4 & 5: a repo.yaml that still declares its
@@ -524,7 +576,7 @@ func TestRepoConfigFromYAMLFile_LegacyKnowledgeBlockIsRejected(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, RepoConfigFileName)
-			require.NoError(t, os.WriteFile(path, []byte(tc.yaml), 0644))
+			require.NoError(t, os.WriteFile(path, []byte(withSchema(tc.yaml)), 0644))
 
 			// Criterion 3: the file's bytes as they stand before any load.
 			before, err := os.ReadFile(path)
@@ -562,7 +614,7 @@ func TestRepoConfigFromYAMLFile_LegacyKnowledgeBlockIsRejected(t *testing.T) {
 				"  provider: file\n" +
 				"  config:\n" +
 				"    location: other-knowledge\n"
-			require.NoError(t, os.WriteFile(path, []byte(corrected), 0644))
+			require.NoError(t, os.WriteFile(path, []byte(withSchema(corrected)), 0644))
 
 			cfg, err := RepoConfigFromYAMLFile(path)
 			require.NoError(t, err)
@@ -570,4 +622,19 @@ func TestRepoConfigFromYAMLFile_LegacyKnowledgeBlockIsRejected(t *testing.T) {
 			require.Equal(t, "other-knowledge", cfg.Knowledge.Config.Location)
 		})
 	}
+}
+
+// Phase 1.1 (schema versioning) criterion 1: a freshly written repo.yaml
+// records the current format version and the running Spektacular version.
+func TestRepoConfig_ToYAMLFileStampsSchemaAndWriter(t *testing.T) {
+	pinWriterVersion(t, "test-x")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, RepoConfigFileName)
+	require.NoError(t, NewDefaultRepoConfig().ToYAMLFile(path))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "schema: 2\n")
+	require.Contains(t, string(raw), "written_by: test-x\n")
 }

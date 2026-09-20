@@ -303,6 +303,9 @@ func aggregateKnowledgeSources(cfg config.Config, projectRoot string) ([]config.
 			if errors.As(err, &refusal) {
 				return nil, refusal
 			}
+			if refusal := formatRefusal(err); refusal != nil {
+				return nil, refusal
+			}
 			var fpErr *repo.FootprintError
 			if errors.As(err, &fpErr) {
 				return nil, output.NewError(

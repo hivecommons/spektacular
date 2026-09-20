@@ -7,6 +7,7 @@ import (
 
 	"github.com/jumppad-labs/spektacular/internal/config"
 	"github.com/jumppad-labs/spektacular/internal/knowledge"
+	"github.com/jumppad-labs/spektacular/internal/migrate"
 )
 
 // Footprint statuses reported by EnsureFootprint.
@@ -38,11 +39,31 @@ func EnsureFootprint(root string, repoCfg config.RepoConfig) (string, error) {
 			return "", err
 		}
 	} else if loaded, err := config.RepoConfigFromYAMLFile(repoConfigPath); err != nil {
-		// A broken repo config is repaired by rewriting it from the given
-		// defaults — the footprint must end the call valid.
-		status = FootprintRepaired
-		if err := repoCfg.ToYAMLFile(repoConfigPath); err != nil {
+		fe, isFormat := config.IsFormatError(err)
+		switch {
+		case isFormat && fe.Newer():
+			// A file from a newer Spektacular is not broken, and must never
+			// be overwritten.
 			return "", err
+		case isFormat:
+			// An older-format repo.yaml is upgraded in place, not replaced,
+			// so a repo is brought current whenever it is next set up.
+			if _, err := migrate.UpgradeRepoFile(repoConfigPath, config.WriterVersion); err != nil {
+				return "", err
+			}
+			upgraded, err := config.RepoConfigFromYAMLFile(repoConfigPath)
+			if err != nil {
+				return "", err
+			}
+			status = FootprintRepaired
+			repoCfg = upgraded
+		default:
+			// A broken repo config is repaired by rewriting it from the given
+			// defaults — the footprint must end the call valid.
+			status = FootprintRepaired
+			if err := repoCfg.ToYAMLFile(repoConfigPath); err != nil {
+				return "", err
+			}
 		}
 	} else {
 		// A healthy existing config is the authority for its own footprint.

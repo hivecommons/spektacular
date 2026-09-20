@@ -6,26 +6,37 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
 	"github.com/jumppad-labs/spektacular/internal/output"
 	"github.com/stretchr/testify/require"
 )
 
-// This file covers Phase 2.1 (the `version check` command): the pure
-// classification helper, and the command's observable behavior through
-// runRootCmd — the same wrapper Execute() uses in production.
+// This file covers the `version check` command through runRootCmd — the same
+// wrapper Execute() uses in production. The check reports whether the
+// project's settings files and installed skills are current, and every
+// out-of-date status names `migrate` as the remedy.
 //
 // Every expected version string below is a hand-maintained oracle: the dev
 // default the binary compiles with is the literal "0.1.0" (cmd/root.go's
 // `version` var), asserted as that literal and never derived from the
 // `version` var or versionString() at runtime.
 
-// writeVersionCheckFile seeds dir/.spektacular/version with content.
-func writeVersionCheckFile(t *testing.T, dir, content string) string {
+// currentConfigYAML is a config.yaml already at the current settings format
+// with the running build's skills recorded and no registered repos.
+const currentConfigYAML = `schema: 3
+written_by: 0.1.0
+skills_version: 0.1.0
+name: proj
+command: spektacular
+agent: claude
+`
+
+// writeSettingsFile writes dir/.spektacular/<name> with content and returns
+// its path.
+func writeSettingsFile(t *testing.T, dir, name, content string) string {
 	t.Helper()
 	dataDir := filepath.Join(dir, ".spektacular")
 	require.NoError(t, os.MkdirAll(dataDir, 0o755))
-	path := filepath.Join(dataDir, "version")
+	path := filepath.Join(dataDir, name)
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 	return path
 }
@@ -41,40 +52,22 @@ func runVersionCheckJSON(t *testing.T) (m map[string]any, code int) {
 	return m, code
 }
 
-// TestClassifyVersion pins the pure classification decision with hand-written
-// expected values for every recorded-content shape the file can hold.
-func TestClassifyVersion(t *testing.T) {
-	tests := []struct {
-		name          string
-		recorded      string
-		current       string
-		wantStatus    string
-		wantInstalled string
-	}{
-		{name: "exact match", recorded: "0.1.0", current: "0.1.0", wantStatus: "match", wantInstalled: "0.1.0"},
-		{name: "match with trailing newline", recorded: "0.1.0\n", current: "0.1.0", wantStatus: "match", wantInstalled: "0.1.0"},
-		{name: "match with surrounding spaces", recorded: "  0.1.0  ", current: "0.1.0", wantStatus: "match", wantInstalled: "0.1.0"},
-		{name: "differing versions", recorded: "9.9.9", current: "0.1.0", wantStatus: "mismatch", wantInstalled: "9.9.9"},
-		{name: "empty string", recorded: "", current: "0.1.0", wantStatus: "missing", wantInstalled: ""},
-		{name: "whitespace-only string", recorded: " \n\t ", current: "0.1.0", wantStatus: "missing", wantInstalled: ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			status, installed := classifyVersion(tt.recorded, tt.current)
-			require.Equal(t, tt.wantStatus, status)
-			require.Equal(t, tt.wantInstalled, installed)
-		})
+// requireAction asserts m carries a string action containing every want.
+func requireAction(t *testing.T, m map[string]any, want ...string) {
+	t.Helper()
+	action, ok := m["action"].(string)
+	require.True(t, ok, "a non-match status must carry an action string, got %v", m)
+	for _, w := range want {
+		require.Contains(t, action, w)
 	}
 }
 
-// TestVersionCheck_Match: a version file recording the running binary's own
-// version reports "match", both version fields, and — per the spec — no
-// action text at all (the key must be absent from the JSON, not just empty).
+// A current project whose recorded skills version is the running build's
+// reports "match" with no action key at all.
 func TestVersionCheck_Match(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeVersionCheckFile(t, dir, "0.1.0\n")
+	writeSettingsFile(t, dir, "config.yaml", currentConfigYAML)
 
 	m, code := runVersionCheckJSON(t)
 	require.Equal(t, 0, code)
@@ -85,20 +78,19 @@ func TestVersionCheck_Match(t *testing.T) {
 	require.NotContains(t, m, "action", "matching versions must carry no action text")
 }
 
-// TestVersionCheck_Mismatch: a recorded version differing from the binary's
-// reports "mismatch" with a non-empty re-run instruction, still exit 0 —
-// staleness is a report, not a failure. The command must also be strictly
-// read-only: the version file's bytes and the .spektacular listing are
-// identical before and after the invocation.
-func TestVersionCheck_Mismatch(t *testing.T) {
+// A stale skills_version reports "mismatch" with an action naming migrate,
+// exit 0, and the check changes nothing on disk.
+func TestVersionCheck_MismatchIsReadOnlyAndNamesMigrate(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	path := writeVersionCheckFile(t, dir, "9.9.9\n")
-
-	before, err := os.ReadFile(path)
-	require.NoError(t, err)
-	entriesBefore, err := os.ReadDir(filepath.Join(dir, ".spektacular"))
-	require.NoError(t, err)
+	writeSettingsFile(t, dir, "config.yaml", `schema: 3
+written_by: 9.9.9
+skills_version: 9.9.9
+name: proj
+command: spektacular
+agent: claude
+`)
+	before := snapshotDir(t, dir)
 
 	m, code := runVersionCheckJSON(t)
 	require.Equal(t, 0, code)
@@ -106,52 +98,49 @@ func TestVersionCheck_Mismatch(t *testing.T) {
 	require.Equal(t, "mismatch", m["status"])
 	require.Equal(t, "9.9.9", m["installed_version"])
 	require.Equal(t, "0.1.0", m["current_version"])
-	action, ok := m["action"].(string)
-	require.True(t, ok, "mismatch must carry an action string")
-	require.NotEmpty(t, action)
-	require.Contains(t, action, "re-run")
+	requireAction(t, m, "`spektacular migrate`", "`spektacular migrate --dry-run`")
 
-	// Read-only guarantee.
-	after, err := os.ReadFile(path)
-	require.NoError(t, err)
-	require.Equal(t, before, after, "version check must never rewrite the version file")
-	entriesAfter, err := os.ReadDir(filepath.Join(dir, ".spektacular"))
-	require.NoError(t, err)
-	namesOf := func(entries []os.DirEntry) []string {
-		names := make([]string, len(entries))
-		for i, e := range entries {
-			names[i] = e.Name()
-		}
-		return names
-	}
-	require.Equal(t, namesOf(entriesBefore), namesOf(entriesAfter), "version check must not create or remove files in .spektacular")
+	require.Equal(t, before, snapshotDir(t, dir), "version check must never change any file")
 }
 
-// Criterion 4: the stale-version remediation composes the correct init
-// command from the recorded config — the configured command plus the recorded
-// agent — after a real init has established both.
-func TestVersionCheck_MismatchComposesInitCommandFromConfig(t *testing.T) {
+// The action composes the configured command, not the default one.
+func TestVersionCheck_ActionUsesConfiguredCommand(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	resetRootCmd(t)
-
-	rootCmd.SetArgs([]string{"init", "claude"})
-	require.NoError(t, rootCmd.Execute())
-	writeVersionCheckFile(t, dir, "9.9.9\n")
+	writeSettingsFile(t, dir, "config.yaml", `schema: 3
+skills_version: 9.9.9
+name: proj
+command: go run .
+agent: claude
+`)
 
 	m, code := runVersionCheckJSON(t)
 	require.Equal(t, 0, code)
 	require.Equal(t, "mismatch", m["status"])
-	action, ok := m["action"].(string)
-	require.True(t, ok, "mismatch must carry an action string")
-	require.Contains(t, action, "`spektacular init claude`",
-		"the remediation must compose the configured command with the recorded agent")
+	requireAction(t, m, "`go run . migrate`")
 }
 
-// TestVersionCheck_Missing: no .spektacular directory (and hence no version
-// file) is the pre-versioning install state — "missing", no
-// installed_version key, and a re-run instruction, exit 0.
-func TestVersionCheck_Missing(t *testing.T) {
+// A current project with no recorded skills version (and no legacy version
+// file) reports "missing" and names migrate.
+func TestVersionCheck_NoRecordedSkillsVersionIsMissing(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSettingsFile(t, dir, "config.yaml", `schema: 3
+name: proj
+command: spektacular
+agent: claude
+`)
+
+	m, code := runVersionCheckJSON(t)
+	require.Equal(t, 0, code)
+	require.Equal(t, "missing", m["status"])
+	require.NotContains(t, m, "installed_version")
+	requireAction(t, m, "`spektacular migrate`")
+}
+
+// No config.yaml at all: "missing", no installed_version, and an action
+// naming init rather than migrate.
+func TestVersionCheck_NoProjectNamesInit(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	m, code := runVersionCheckJSON(t)
@@ -160,34 +149,145 @@ func TestVersionCheck_Missing(t *testing.T) {
 	require.Equal(t, "missing", m["status"])
 	require.NotContains(t, m, "installed_version", "missing state has nothing installed to report")
 	require.Equal(t, "0.1.0", m["current_version"])
-	action, ok := m["action"].(string)
-	require.True(t, ok, "missing must carry an action string")
-	require.NotEmpty(t, action)
-	require.Contains(t, action, "re-run")
+	requireAction(t, m, "`spektacular init <agent>`")
+	require.NotContains(t, m["action"], "migrate")
 }
 
-// TestVersionCheck_WhitespaceOnlyFile: a version file that exists but holds
-// only whitespace classifies as "missing", not a mismatch, exit 0.
-func TestVersionCheck_WhitespaceOnlyFile(t *testing.T) {
+// A current config.yaml with skills matching, but a registered repo whose
+// repo.yaml is at an older format, reports "upgrade_needed" and names migrate.
+func TestVersionCheck_RepoBehindIsUpgradeNeeded(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeVersionCheckFile(t, dir, " \n\t\n")
+	writeSettingsFile(t, dir, "config.yaml", currentConfigYAML+`repos:
+    - name: proj
+      location: .
+`)
+	writeSettingsFile(t, dir, "repo.yaml", "description: A test project\n")
+	before := snapshotDir(t, dir)
 
 	m, code := runVersionCheckJSON(t)
 	require.Equal(t, 0, code)
-	require.Equal(t, false, m["error"])
-	require.Equal(t, "missing", m["status"])
-	require.NotContains(t, m, "installed_version")
+	require.Equal(t, "upgrade_needed", m["status"])
+	require.Equal(t, "0.1.0", m["installed_version"])
+	requireAction(t, m, "older format", "`spektacular migrate`")
+	require.Equal(t, before, snapshotDir(t, dir), "version check must never change any file")
 }
 
-// TestVersionCheck_UnreadableFileIsGenuineFault: a version file that exists
-// but cannot be read (here: it is a directory, so os.ReadFile fails with a
-// non-IsNotExist error) is a genuine fault — exit 1 with the error envelope
-// and the dedicated version_file_unreadable code, never a silent "missing".
-func TestVersionCheck_UnreadableFileIsGenuineFault(t *testing.T) {
+// An unversioned config.yaml is behind even when its skills match.
+func TestVersionCheck_UnversionedConfigIsUpgradeNeeded(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spektacular", "version"), 0o755))
+	writeSettingsFile(t, dir, "config.yaml", `name: proj
+command: spektacular
+agent: claude
+skills_version: 0.1.0
+`)
+
+	m, code := runVersionCheckJSON(t)
+	require.Equal(t, 0, code)
+	require.Equal(t, "upgrade_needed", m["status"])
+	requireAction(t, m, "`spektacular migrate`")
+}
+
+// Criterion 5 (check half): a project whose only record of its skills is the
+// standalone .spektacular/version file is checked against that file.
+func TestVersionCheck_ReadsLegacyVersionFile(t *testing.T) {
+	t.Run("current config, legacy file matches", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		writeSettingsFile(t, dir, "config.yaml", `schema: 3
+name: proj
+command: spektacular
+agent: claude
+`)
+		writeSettingsFile(t, dir, "version", "0.1.0\n")
+
+		m, code := runVersionCheckJSON(t)
+		require.Equal(t, 0, code)
+		require.Equal(t, "match", m["status"])
+		require.Equal(t, "0.1.0", m["installed_version"])
+		require.NotContains(t, m, "action")
+	})
+	t.Run("current config, legacy file stale", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		writeSettingsFile(t, dir, "config.yaml", `schema: 3
+name: proj
+command: spektacular
+agent: claude
+`)
+		writeSettingsFile(t, dir, "version", "9.9.9\n")
+
+		m, code := runVersionCheckJSON(t)
+		require.Equal(t, 0, code)
+		require.Equal(t, "mismatch", m["status"])
+		require.Equal(t, "9.9.9", m["installed_version"])
+		requireAction(t, m, "`spektacular migrate`")
+	})
+	t.Run("unversioned config, legacy file stale", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		writeSettingsFile(t, dir, "config.yaml", "name: proj\ncommand: spektacular\nagent: claude\n")
+		writeSettingsFile(t, dir, "version", "9.9.9\n")
+
+		m, code := runVersionCheckJSON(t)
+		require.Equal(t, 0, code)
+		require.Equal(t, "upgrade_needed", m["status"])
+		require.Equal(t, "9.9.9", m["installed_version"])
+		requireAction(t, m, "`spektacular migrate`")
+	})
+}
+
+// Criterion 6 (check half): a written_by that differs from the running build
+// is informational only and never makes the check report a problem.
+func TestVersionCheck_DifferentWrittenByIsStillMatch(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSettingsFile(t, dir, "config.yaml", `schema: 3
+written_by: 7.7.7
+skills_version: 0.1.0
+name: proj
+command: spektacular
+agent: claude
+repos:
+    - name: proj
+      location: .
+`)
+	writeSettingsFile(t, dir, "repo.yaml", "schema: 2\nwritten_by: 8.8.8\ndescription: A test project\n")
+
+	m, code := runVersionCheckJSON(t)
+	require.Equal(t, 0, code)
+	require.Equal(t, "match", m["status"])
+	require.NotContains(t, m, "action")
+}
+
+// A config.yaml written in a newer settings format reports
+// "unsupported_format" with an action telling the user to update
+// Spektacular, and leaves the file untouched.
+func TestVersionCheck_NewerFormatIsUnsupported(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	path := writeSettingsFile(t, dir, "config.yaml", "schema: 99\nname: proj\nagent: claude\n")
+	before, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	m, code := runVersionCheckJSON(t)
+	require.Equal(t, 0, code)
+	require.Equal(t, "unsupported_format", m["status"])
+	requireAction(t, m, "newer Spektacular", "update Spektacular")
+	require.NotContains(t, m["action"], "`spektacular migrate`", "migrate cannot fix a newer format")
+
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+}
+
+// A config.yaml that cannot be read is a genuine fault: exit 1 with the
+// migration_check_failed error, never a silent status.
+func TestVersionCheck_UnreadableConfigIsGenuineFault(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spektacular", "config.yaml"), 0o755))
 
 	resetRootCmd(t)
 	stdout, stderr, code := runRootCmd(t, "version", "check")
@@ -197,11 +297,11 @@ func TestVersionCheck_UnreadableFileIsGenuineFault(t *testing.T) {
 	var er output.ErrorResponse
 	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
 	require.True(t, er.IsError)
-	require.Equal(t, "version_file_unreadable", er.Code)
+	require.Equal(t, "migration_check_failed", er.Code)
 }
 
-// TestVersionCheck_Schema: --schema short-circuits before any filesystem
-// access and prints the output contract, including the status enum.
+// --schema short-circuits before any filesystem access and prints the output
+// contract, including every status in the enum.
 func TestVersionCheck_Schema(t *testing.T) {
 	t.Chdir(t.TempDir())
 	resetRootCmd(t)
@@ -210,332 +310,8 @@ func TestVersionCheck_Schema(t *testing.T) {
 	require.Equal(t, 0, code)
 	require.Empty(t, stderr)
 	require.Contains(t, stdout, `"status"`)
-	require.Contains(t, stdout, "match")
-	require.Contains(t, stdout, "mismatch")
-	require.Contains(t, stdout, "missing")
-	require.Contains(t, stdout, "migration_needed")
-}
-
-// TestVersionCheck_MigrationNeeded covers Phase 3.2 acceptance criteria:
-// migration prompt appears when legacy config detected, prompt explains
-// changes, and normal version check proceeds when repo.yaml exists.
-func TestVersionCheck_MigrationNeeded(t *testing.T) {
-	tests := []struct {
-		name           string
-		setupFiles     func(t *testing.T, dir string)
-		wantStatus     string
-		wantAction     bool
-		actionContains []string
-	}{
-		{
-			name: "legacy config triggers migration prompt",
-			setupFiles: func(t *testing.T, dir string) {
-				dataDir := filepath.Join(dir, ".spektacular")
-				require.NoError(t, os.MkdirAll(dataDir, 0o755))
-				configPath := filepath.Join(dataDir, "config.yaml")
-				require.NoError(t, os.WriteFile(configPath, []byte("project: test\n"), 0o644))
-			},
-			wantStatus: "migration_needed",
-			wantAction: true,
-			actionContains: []string{
-				"legacy single-file format",
-				"config.yaml.old",
-				"repo.yaml",
-				"migration",
-			},
-		},
-		{
-			name: "already migrated proceeds with normal version check",
-			setupFiles: func(t *testing.T, dir string) {
-				dataDir := filepath.Join(dir, ".spektacular")
-				require.NoError(t, os.MkdirAll(dataDir, 0o755))
-				configPath := filepath.Join(dataDir, "config.yaml")
-				require.NoError(t, os.WriteFile(configPath, []byte("project: test\n"), 0o644))
-				repoPath := filepath.Join(dataDir, "repo.yaml")
-				require.NoError(t, os.WriteFile(repoPath, []byte("description: test\n"), 0o644))
-				versionPath := filepath.Join(dataDir, "version")
-				require.NoError(t, os.WriteFile(versionPath, []byte("0.1.0\n"), 0o644))
-			},
-			wantStatus: "match",
-			wantAction: false,
-		},
+	for _, s := range []string{`"match"`, `"mismatch"`, `"missing"`, `"upgrade_needed"`, `"unsupported_format"`} {
+		require.Contains(t, stdout, s)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			t.Chdir(dir)
-			tt.setupFiles(t, dir)
-
-			m, code := runVersionCheckJSON(t)
-			require.Equal(t, 0, code)
-			require.Equal(t, false, m["error"])
-			require.Equal(t, tt.wantStatus, m["status"])
-
-			if tt.wantAction {
-				action, ok := m["action"].(string)
-				require.True(t, ok, "action field must be present and be a string")
-				require.NotEmpty(t, action)
-				for _, substr := range tt.actionContains {
-					require.Contains(t, action, substr)
-				}
-			} else {
-				require.NotContains(t, m, "action", "no action should be present for normal version check")
-			}
-		})
-	}
-}
-
-// TestDetectMigrationNeeded covers Phase 1.1 acceptance criteria: detection
-// correctly identifies legacy configs, skips when already migrated, and
-// handles missing directories gracefully.
-func TestDetectMigrationNeeded(t *testing.T) {
-	tests := []struct {
-		name          string
-		setupFiles    func(t *testing.T, dir string)
-		wantMigration bool
-		wantErr       bool
-	}{
-		{
-			name: "legacy config without repo.yaml needs migration",
-			setupFiles: func(t *testing.T, dir string) {
-				dataDir := filepath.Join(dir, ".spektacular")
-				require.NoError(t, os.MkdirAll(dataDir, 0o755))
-				configPath := filepath.Join(dataDir, "config.yaml")
-				require.NoError(t, os.WriteFile(configPath, []byte("project: test\n"), 0o644))
-			},
-			wantMigration: true,
-			wantErr:       false,
-		},
-		{
-			name: "already migrated with both files skips migration",
-			setupFiles: func(t *testing.T, dir string) {
-				dataDir := filepath.Join(dir, ".spektacular")
-				require.NoError(t, os.MkdirAll(dataDir, 0o755))
-				configPath := filepath.Join(dataDir, "config.yaml")
-				require.NoError(t, os.WriteFile(configPath, []byte("project: test\n"), 0o644))
-				repoPath := filepath.Join(dataDir, "repo.yaml")
-				require.NoError(t, os.WriteFile(repoPath, []byte("description: test\n"), 0o644))
-			},
-			wantMigration: false,
-			wantErr:       false,
-		},
-		{
-			name: "missing .spektacular directory skips migration",
-			setupFiles: func(t *testing.T, dir string) {
-				// Don't create .spektacular directory
-			},
-			wantMigration: false,
-			wantErr:       false,
-		},
-		{
-			name: "missing config.yaml skips migration",
-			setupFiles: func(t *testing.T, dir string) {
-				dataDir := filepath.Join(dir, ".spektacular")
-				require.NoError(t, os.MkdirAll(dataDir, 0o755))
-				// Don't create config.yaml
-			},
-			wantMigration: false,
-			wantErr:       false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			tt.setupFiles(t, dir)
-
-			dataDir := filepath.Join(dir, ".spektacular")
-			gotMigration, err := detectMigrationNeeded(dataDir)
-
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, tt.wantMigration, gotMigration)
-		})
-	}
-}
-
-// TestExecuteMigration covers Phase 2.1 acceptance criteria: migration
-// creates backup, writes repo.yaml, verifies files, and rolls back on error.
-func TestExecuteMigration(t *testing.T) {
-	tests := []struct {
-		name        string
-		setupFiles  func(t *testing.T, dir string)
-		wantErr     bool
-		checkResult func(t *testing.T, dir string)
-	}{
-		{
-			name: "successful migration creates backup and repo.yaml",
-			setupFiles: func(t *testing.T, dir string) {
-				dataDir := filepath.Join(dir, ".spektacular")
-				require.NoError(t, os.MkdirAll(dataDir, 0o755))
-				configPath := filepath.Join(dataDir, "config.yaml")
-				require.NoError(t, os.WriteFile(configPath, []byte("project: test\n"), 0o644))
-			},
-			wantErr: false,
-			checkResult: func(t *testing.T, dir string) {
-				dataDir := filepath.Join(dir, ".spektacular")
-				// Verify backup exists
-				backupPath := filepath.Join(dataDir, "config.yaml.old")
-				backupData, err := os.ReadFile(backupPath)
-				require.NoError(t, err)
-				require.Equal(t, "project: test\n", string(backupData))
-
-				// Verify repo.yaml exists
-				repoPath := filepath.Join(dataDir, "repo.yaml")
-				_, err = os.Stat(repoPath)
-				require.NoError(t, err)
-
-				// Verify original config.yaml still exists
-				configPath := filepath.Join(dataDir, "config.yaml")
-				_, err = os.Stat(configPath)
-				require.NoError(t, err)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			tt.setupFiles(t, dir)
-
-			dataDir := filepath.Join(dir, ".spektacular")
-			cfg := config.NewDefaultRepoConfig()
-			cfg.Description = "Test project"
-			cfg.Role = "application"
-			cfg.Tags = []string{"test"}
-
-			err := executeMigration(dataDir, &cfg)
-
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-
-			if tt.checkResult != nil {
-				tt.checkResult(t, dir)
-			}
-		})
-	}
-}
-
-// TestScanProjectMetadata covers Phase 1.2 acceptance criteria: scanner
-// extracts metadata from project files and provides defaults when files
-// are missing or unparseable.
-func TestScanProjectMetadata(t *testing.T) {
-	tests := []struct {
-		name            string
-		setupFiles      func(t *testing.T, dir string)
-		wantDescription string
-		wantRole        string
-		wantTags        []string
-	}{
-		{
-			name: "extracts description from README H1 title",
-			setupFiles: func(t *testing.T, dir string) {
-				readme := "# My Awesome Project\n\nSome description here."
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte(readme), 0o644))
-			},
-			wantDescription: "My Awesome Project",
-			wantRole:        "application",
-			wantTags:        []string{"general"},
-		},
-		{
-			name: "extracts description from README first paragraph",
-			setupFiles: func(t *testing.T, dir string) {
-				readme := "This is the first paragraph.\n\nSecond paragraph."
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte(readme), 0o644))
-			},
-			wantDescription: "This is the first paragraph.",
-			wantRole:        "application",
-			wantTags:        []string{"general"},
-		},
-		{
-			name: "detects Go project via go.mod",
-			setupFiles: func(t *testing.T, dir string) {
-				goMod := "module github.com/example/project\n\ngo 1.21\n"
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goMod), 0o644))
-			},
-			wantDescription: "A Spektacular project",
-			wantRole:        "application",
-			wantTags:        []string{"go"},
-		},
-		{
-			name: "detects Node.js project via package.json",
-			setupFiles: func(t *testing.T, dir string) {
-				packageJSON := `{"name": "my-project", "version": "1.0.0"}`
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "package.json"), []byte(packageJSON), 0o644))
-			},
-			wantDescription: "A Spektacular project",
-			wantRole:        "application",
-			wantTags:        []string{"nodejs"},
-		},
-		{
-			name: "provides defaults when all heuristics fail",
-			setupFiles: func(t *testing.T, dir string) {
-				// Don't create any project files
-			},
-			wantDescription: "A Spektacular project",
-			wantRole:        "application",
-			wantTags:        []string{"general"},
-		},
-		{
-			name: "combines multiple heuristics",
-			setupFiles: func(t *testing.T, dir string) {
-				readme := "# Spektacular CLI Tool\n\nA command-line tool."
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte(readme), 0o644))
-				goMod := "module github.com/example/cli\n\ngo 1.21\n"
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goMod), 0o644))
-				dockerfile := "FROM golang:1.21\n"
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(dockerfile), 0o644))
-			},
-			wantDescription: "Spektacular CLI Tool",
-			wantRole:        "application",
-			wantTags:        []string{"go"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			tt.setupFiles(t, dir)
-
-			cfg, err := scanProjectMetadata(dir)
-			require.NoError(t, err)
-			require.NotNil(t, cfg)
-			require.Equal(t, tt.wantDescription, cfg.Description)
-			require.Equal(t, tt.wantRole, cfg.Role)
-			require.Equal(t, tt.wantTags, cfg.Tags)
-		})
-	}
-}
-
-// Phase 2.3 criterion 6: upgrading a project from the older single-file
-// configuration must produce a repo.yaml that is accepted without further
-// correction. Writing the file is not enough — the migrator seeds it from
-// config.NewDefaultRepoConfig(), so this asserts the result actually loads
-// back through config.RepoConfigFromYAMLFile, passing the guard that refuses a
-// knowledge block in the superseded form, and that the store it declares is
-// the repo's own.
-func TestExecuteMigration_WritesRepoConfigThatLoadsWithoutCorrection(t *testing.T) {
-	dir := t.TempDir()
-	dataDir := filepath.Join(dir, ".spektacular")
-	require.NoError(t, os.MkdirAll(dataDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "config.yaml"), []byte("project: test\n"), 0o644))
-
-	cfg := config.NewDefaultRepoConfig()
-	cfg.Description = "Test project"
-	cfg.Role = "application"
-	cfg.Tags = []string{"test"}
-	require.NoError(t, executeMigration(dataDir, &cfg))
-
-	loaded, err := config.RepoConfigFromYAMLFile(filepath.Join(dataDir, config.RepoConfigFileName))
-	require.NoError(t, err, "a migrated repo.yaml must load without further correction")
-	require.Equal(t, "file", loaded.Knowledge.Provider)
-	require.Equal(t, "knowledge", loaded.Knowledge.Config.Location)
-	require.Equal(t, "Test project", loaded.Description)
+	require.NotContains(t, stdout, "migration_needed")
 }

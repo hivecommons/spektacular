@@ -18,7 +18,7 @@ import (
 func TestSpecFileWrite_ResolvesConfiguredDirectory(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: docs/specs\n")
+	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: ../docs/specs\n")
 
 	srcPath := filepath.Join(t.TempDir(), "source.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("spec body"), 0o644))
@@ -46,7 +46,7 @@ func TestSpecFileWrite_ResolvesConfiguredDirectory(t *testing.T) {
 func TestSpecFileWrite_PreservesProblematicCharacters(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: docs/specs\n")
+	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: ../docs/specs\n")
 
 	body := []byte("line with `backticks` and $dollar and 'single' and \"double\" quotes\nsecond line\n")
 	srcPath := filepath.Join(t.TempDir(), "source.md")
@@ -73,7 +73,7 @@ func TestSpecFileWrite_PreservesProblematicCharacters(t *testing.T) {
 func TestSpecFileWrite_MissingSourceErrors(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: docs/specs\n")
+	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: ../docs/specs\n")
 
 	srcPath := filepath.Join(t.TempDir(), "missing.md")
 
@@ -91,7 +91,7 @@ func TestSpecFileWrite_MissingSourceErrors(t *testing.T) {
 func TestSpecFileWrite_PreservesSourceFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: docs/specs\n")
+	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: ../docs/specs\n")
 
 	body := []byte("original source bytes")
 	srcPath := filepath.Join(t.TempDir(), "source.md")
@@ -113,7 +113,7 @@ func TestSpecFileWrite_PreservesSourceFile(t *testing.T) {
 func TestSpecFileWrite_PipedStdinWithoutFromFails(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: docs/specs\n")
+	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: ../docs/specs\n")
 
 	setupImplementCmd(t)
 	rootCmd.SetIn(strings.NewReader("ignored"))
@@ -130,7 +130,7 @@ func TestSpecFileWrite_PipedStdinWithoutFromFails(t *testing.T) {
 func TestSpecFileRead_ResolvesConfiguredDirectory(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: docs/specs\n")
+	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: ../docs/specs\n")
 
 	specPath := filepath.Join(dir, "docs", "specs", "feature.md")
 	require.NoError(t, os.MkdirAll(filepath.Dir(specPath), 0o755))

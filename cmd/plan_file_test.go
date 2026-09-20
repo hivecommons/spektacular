@@ -15,7 +15,7 @@ import (
 func TestPlanFileWrite_ResolvesConfiguredDirectory(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: docs/plans\n")
+	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: ../docs/plans\n")
 
 	srcPath := filepath.Join(t.TempDir(), "source.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("plan body"), 0o644))
@@ -43,7 +43,7 @@ func TestPlanFileWrite_ResolvesConfiguredDirectory(t *testing.T) {
 func TestPlanFileWrite_PreservesProblematicCharacters(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: docs/plans\n")
+	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: ../docs/plans\n")
 
 	body := []byte("line with `backticks` and $dollar and 'single' and \"double\" quotes\nsecond line\n")
 	srcPath := filepath.Join(t.TempDir(), "source.md")
@@ -70,7 +70,7 @@ func TestPlanFileWrite_PreservesProblematicCharacters(t *testing.T) {
 func TestPlanFileWrite_MissingSourceErrors(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: docs/plans\n")
+	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: ../docs/plans\n")
 
 	srcPath := filepath.Join(t.TempDir(), "missing.md")
 
@@ -88,7 +88,7 @@ func TestPlanFileWrite_MissingSourceErrors(t *testing.T) {
 func TestPlanFileWrite_PreservesSourceFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: docs/plans\n")
+	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: ../docs/plans\n")
 
 	body := []byte("original source bytes")
 	srcPath := filepath.Join(t.TempDir(), "source.md")
@@ -110,7 +110,7 @@ func TestPlanFileWrite_PreservesSourceFile(t *testing.T) {
 func TestPlanFileWrite_PipedStdinWithoutFromFails(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: docs/plans\n")
+	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: ../docs/plans\n")
 
 	setupImplementCmd(t)
 	rootCmd.SetIn(strings.NewReader("ignored"))
@@ -127,7 +127,7 @@ func TestPlanFileWrite_PipedStdinWithoutFromFails(t *testing.T) {
 func TestPlanFileRead_ResolvesConfiguredDirectory(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: docs/plans\n")
+	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: ../docs/plans\n")
 
 	planPath := filepath.Join(dir, "docs", "plans", "feature", "context.md")
 	require.NoError(t, os.MkdirAll(filepath.Dir(planPath), 0o755))
@@ -148,7 +148,7 @@ func TestPlanFileRead_ResolvesConfiguredDirectory(t *testing.T) {
 func TestPlanFileWrite_RejectsNameWithoutIDPrefix(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: docs/plans\n")
+	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: ../docs/plans\n")
 
 	srcPath := filepath.Join(t.TempDir(), "source.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("plan body"), 0o644))
@@ -169,7 +169,7 @@ func TestPlanFileWrite_RejectsNameWithoutIDPrefix(t *testing.T) {
 func TestPlanFileWrite_AcceptsCounterIDPrefix(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "spec:\n  id_method: counter\nplan:\n  config:\n    directory: docs/plans\n")
+	writeSpecCommandConfig(t, dir, "spec:\n  id_method: counter\nplan:\n  config:\n    directory: ../docs/plans\n")
 
 	srcPath := filepath.Join(t.TempDir(), "source.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("plan body"), 0o644))
@@ -194,7 +194,7 @@ func TestPlanFileWrite_AcceptsCounterIDPrefix(t *testing.T) {
 func TestPlanFileWrite_RejectsTimestampIDWhenCounterConfigured(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "spec:\n  id_method: counter\nplan:\n  config:\n    directory: docs/plans\n")
+	writeSpecCommandConfig(t, dir, "spec:\n  id_method: counter\nplan:\n  config:\n    directory: ../docs/plans\n")
 
 	srcPath := filepath.Join(t.TempDir(), "source.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("plan body"), 0o644))
@@ -205,4 +205,23 @@ func TestPlanFileWrite_RejectsTimestampIDWhenCounterConfigured(t *testing.T) {
 	err := rootCmd.Execute()
 	require.Error(t, err)
 	require.NoFileExists(t, filepath.Join(dir, "docs", "plans", "20260709000000-feature", "plan.md"))
+}
+
+// Criterion 3 (plan): plan.config.directory is relative to the folder
+// holding config.yaml, so `directory: x` stores plans in .spektacular/x.
+func TestPlanFileWrite_CustomDirectoryResolvesFromSettingsFolder(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: x\n")
+
+	srcPath := filepath.Join(t.TempDir(), "source.md")
+	require.NoError(t, os.WriteFile(srcPath, []byte("plan body"), 0o644))
+
+	resetRootCmd(t)
+	stdout, stderr, code := runRootCmd(t, "plan", "file", "write", "20260709000000-feature/plan.md", "--from", srcPath)
+	require.Equal(t, 0, code, stdout)
+	require.Empty(t, stderr)
+
+	require.FileExists(t, filepath.Join(dir, ".spektacular", "x", "20260709000000-feature", "plan.md"))
+	require.NoDirExists(t, filepath.Join(dir, "x"))
 }
