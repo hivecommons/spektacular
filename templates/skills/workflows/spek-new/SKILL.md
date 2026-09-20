@@ -37,6 +37,25 @@ The CLI owns the spec file. **Never read or write it with the `Write`, `Edit`, o
 
 Path arguments are spec file names; `spec file` resolves them against the configured spec directory itself.
 
+# Design documents a spec may reference
+
+A spec does not have to absorb a worked design. Where the conversation settles an API's shape, a
+user-facing flow, a data format, or a worked example of one, that detail can live in a **design
+document** in one of the project's declared design sources, with the spec carrying a reference to
+it instead of its content. The technical-approach step makes that offer at the point the detail
+would otherwise be compressed to a one-line steer; it is always an offer, and nothing is written
+without the user's explicit agreement.
+
+Design documents are reached through the CLI, never by reading files directly:
+
+- `{{command}} design sources` — the design sources this project declares, with their locations.
+- `{{command}} design list` — the design documents in them.
+- `{{command}} design write --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
+  design document, byte for byte, with no frontmatter added and nothing reformatted.
+- `{{command}} design ref add --data '{"spec":"<spec>","source":"<name>","path":"<path>"}'` —
+  record the reference on the spec. A reference naming a source the project has not declared is
+  refused and nothing is recorded.
+
 # Working files vs. the store document
 
 While you gather each section, write that section's agreed content directly to its own git-tracked working file under `.spektacular/work/<spec_name>/<section>.md` using your own `Write` tool. These working files are **not** store documents — writing them directly with `Write` is correct and expected, and is the one deliberate exception to the "never use `Write`/`Edit`" rule above. That rule protects only the **final assembled** spec, which is written solely through `{{command}} spec file write`. The per-section working files are scratch-but-durable: the verification step reads them back to assemble the final spec, and then the working directory is removed once the store write succeeds.

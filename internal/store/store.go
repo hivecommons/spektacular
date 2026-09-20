@@ -61,18 +61,17 @@ type SearchOptions struct {
 	Tags []string
 }
 
-// Store provides read/write access to a project's data directory.
+// Reader provides read-only access to a project's data directory. It is the
+// half of Store a caller needs to read, list, test and search, named
+// separately so a source can hold a reader unconditionally and a writer only
+// when its provider can supply one. A backend that cannot be written to is
+// then a source that refuses writes by name, rather than a Store that
+// violates the documented contract of Write and Delete.
+//
 // All paths are relative to the store root.
-type Store interface {
-	// Root returns the absolute path to the store root directory.
-	Root() string
+type Reader interface {
 	// Read returns the contents of the file at path.
 	Read(path string) ([]byte, error)
-	// Write creates or overwrites the file at path with content.
-	// Parent directories are created automatically.
-	Write(path string, content []byte) error
-	// Delete removes the file at path. Returns nil if the file does not exist.
-	Delete(path string) error
 	// List returns the direct children of the directory at path. Each entry
 	// reports whether it is a directory, so a caller can recurse the tree.
 	List(path string) ([]DirEntry, error)
@@ -94,6 +93,25 @@ type Store interface {
 	// a document's text. A backend that can only return its own opaque
 	// relevance score cannot rank coherently alongside the others.
 	Search(terms []string, opts SearchOptions) ([]Hit, error)
+}
+
+// Writer provides the mutating half of Store. All paths are relative to the
+// store root.
+type Writer interface {
+	// Write creates or overwrites the file at path with content.
+	// Parent directories are created automatically.
+	Write(path string, content []byte) error
+	// Delete removes the file at path. Returns nil if the file does not exist.
+	Delete(path string) error
+}
+
+// Store provides read/write access to a project's data directory.
+// All paths are relative to the store root.
+type Store interface {
+	Reader
+	Writer
+	// Root returns the absolute path to the store root directory.
+	Root() string
 }
 
 // FileStore implements Store over the local filesystem.

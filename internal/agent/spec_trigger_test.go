@@ -154,16 +154,20 @@ func TestInstallSpecTriggerSection_CrossAgentIdempotency(t *testing.T) {
 	knowledgeTriggerCount := strings.Count(string(body), "## Knowledge-Worthy Discovery Recognition")
 	require.Equal(t, 1, knowledgeTriggerCount, "exactly one Knowledge-Worthy Discovery Recognition heading expected, got %d in:\n%s", knowledgeTriggerCount, body)
 
+	designTriggerCount := strings.Count(string(body), "## Design-Worthy Detail Recognition")
+	require.Equal(t, 1, designTriggerCount, "exactly one Design-Worthy Detail Recognition heading expected, got %d in:\n%s", designTriggerCount, body)
+
 	// Headings must appear in the order Memory & Context -> Knowledge-Worthy
 	// Discovery Recognition -> Spec-Worthy Discussion Recognition ->
-	// Presenting Drafts and Confirmations.
+	// Design-Worthy Detail Recognition -> Presenting Drafts and Confirmations.
 	memoryContextIdx := strings.Index(string(body), "## Memory & Context")
 	knowledgeTriggerIdx := strings.Index(string(body), "## Knowledge-Worthy Discovery Recognition")
 	specTriggerIdx := strings.Index(string(body), "## Spec-Worthy Discussion Recognition")
+	designTriggerIdx := strings.Index(string(body), "## Design-Worthy Detail Recognition")
 	draftPresentationIdx := strings.Index(string(body), "## Presenting Drafts and Confirmations")
-	require.True(t, memoryContextIdx < knowledgeTriggerIdx && knowledgeTriggerIdx < specTriggerIdx && specTriggerIdx < draftPresentationIdx,
-		"expected heading order Memory & Context (%d) < Knowledge-Worthy Discovery Recognition (%d) < Spec-Worthy Discussion Recognition (%d) < Presenting Drafts and Confirmations (%d) in:\n%s",
-		memoryContextIdx, knowledgeTriggerIdx, specTriggerIdx, draftPresentationIdx, body)
+	require.True(t, memoryContextIdx < knowledgeTriggerIdx && knowledgeTriggerIdx < specTriggerIdx && specTriggerIdx < designTriggerIdx && designTriggerIdx < draftPresentationIdx,
+		"expected heading order Memory & Context (%d) < Knowledge-Worthy Discovery Recognition (%d) < Spec-Worthy Discussion Recognition (%d) < Design-Worthy Detail Recognition (%d) < Presenting Drafts and Confirmations (%d) in:\n%s",
+		memoryContextIdx, knowledgeTriggerIdx, specTriggerIdx, designTriggerIdx, draftPresentationIdx, body)
 
 	// Each agent's skill directory should still be present, confirming the
 	// shared AGENTS.md write did not displace any earlier per-agent install.

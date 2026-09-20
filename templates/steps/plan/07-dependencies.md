@@ -9,6 +9,12 @@ Draft the **Dependencies** section of `plan.md`. List the internal packages, ext
 - Cover both runtime dependencies (imported packages, external services) and planning dependencies (prior specs or plans that must land first).
 - If a dependency must land or change before this plan starts, flag that explicitly.
 - If there are no meaningful dependencies, say so explicitly — an empty section is not acceptable.
+- **Name every design document this plan was built on**, one bullet each, giving the document's
+  path and the design source it was read from (e.g. "`payments/v2.md` from the `api` design
+  source — the settled request and response shape this plan implements"). These are the designs
+  the spec references and you read during discovery. If the spec carries no design references,
+  state that explicitly: "Design documents this plan was built on: none." An unstated absence
+  reads as an omission rather than a fact.
 
 ### What to produce
 

@@ -526,3 +526,79 @@ func TestInterviewStepDirectsCrossRepoQuestion(t *testing.T) {
 		"Shape the question by what that other repo actually is, not generically",
 		"interview must direct shaping the cross-repo question by the other repo's actual role/description")
 }
+
+// --- Phase 3.2: the technical-approach step offers to capture a settled
+// design as a design document ---
+
+// TestTechnicalApproachStepOffersDesignCapture asserts the rendered
+// technical-approach instruction carries the design-capture offer introduced
+// in Phase 3.2: the offer itself, the three-part bar that gates it, and all
+// three decision outcomes. The expected strings are hand-copied from
+// templates/steps/spec/05-technical_approach.md.
+func TestTechnicalApproachStepOffersDesignCapture(t *testing.T) {
+	out := renderStep(t, technicalApproach())
+
+	require.Contains(t, out, "**When the design is settled, offer to capture it rather than compress it away.**",
+		"technical_approach must offer to capture a settled design instead of compressing it away")
+	require.Contains(t, out, "Offer, never write unprompted.",
+		"technical_approach must state the agent offers and never writes unprompted")
+
+	// The three-part bar: settled, worked, and unreadable if inlined.
+	require.Contains(t, out, "The bar is high, and all three parts must hold",
+		"technical_approach must state the capture bar has three parts that all must hold")
+	require.Contains(t, out, "the detail is **settled**",
+		"technical_approach must require the detail be settled")
+	require.Contains(t, out, "it is **worked**",
+		"technical_approach must require the detail be a worked shape")
+	require.Contains(t, out, "**make the spec unreadable if written inline**",
+		"technical_approach must require the detail would make the spec unreadable inline")
+
+	// All three outcomes of the offer.
+	require.Contains(t, out, "- **Accept**", "technical_approach must name the accept outcome")
+	require.Contains(t, out, "- **Defer**", "technical_approach must name the defer outcome")
+	require.Contains(t, out, "- **Decline**", "technical_approach must name the decline outcome")
+}
+
+// TestTechnicalApproachStepNamesBothDesignCommands asserts that accepting the
+// offer runs BOTH halves of the capture: the document write and the reference
+// that makes it visible to the plan workflow. A rendered instruction naming
+// only one of them would leave either an unreferenced design or a broken
+// reference, which is the failure this pair exists to prevent.
+func TestTechnicalApproachStepNamesBothDesignCommands(t *testing.T) {
+	out := renderStep(t, technicalApproach())
+
+	require.Contains(t, out, "spektacular design write",
+		"technical_approach must name the design write command")
+	require.Contains(t, out, "spektacular design ref add",
+		"technical_approach must name the design ref add command")
+	require.Contains(t, out, "Both steps, every time",
+		"technical_approach must require both the write and the reference, every time")
+}
+
+// TestTechnicalApproachStepMakesDeclineFinal asserts the decline outcome is
+// terminal for the detail and does not silently fall back to inlining the
+// design in the spec body, and that the agent may not read acceptance into
+// silence.
+func TestTechnicalApproachStepMakesDeclineFinal(t *testing.T) {
+	out := renderStep(t, technicalApproach())
+
+	require.Contains(t, out, "A decline is final for that detail",
+		"technical_approach must make a decline final for that detail")
+	require.Contains(t, out, "Declining does not mean the detail moves into the spec body instead",
+		"technical_approach must state a decline does not move the design into the spec body")
+	require.Contains(t, out, "Silence or deflection is not acceptance.",
+		"technical_approach must state silence or deflection is not acceptance")
+}
+
+// TestTechnicalApproachStepDoesNotFetchANestedSkill guards the lesson recorded
+// in plan 000041: `spektacular skill <name>` does not resolve for skills
+// nested under templates/skills/workflows/, so an instruction must never send
+// the agent to fetch one that way.
+func TestTechnicalApproachStepDoesNotFetchANestedSkill(t *testing.T) {
+	out := renderStep(t, technicalApproach())
+
+	require.NotContains(t, out, "skill spek-",
+		"technical_approach must not tell the agent to fetch a workflow skill via `skill spek-…` — that path does not resolve")
+	require.NotContains(t, out, "{{",
+		"technical_approach must leave no unrendered mustache")
+}

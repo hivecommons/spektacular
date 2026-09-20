@@ -35,6 +35,26 @@ The CLI owns the plan documents — `plan.md`, the plan's `context.md`, and `res
 
 Path arguments are plan-directory-relative document paths (e.g. `my-feature/plan.md`); `plan file` resolves them against the configured plan directory itself.
 
+# Design documents a spec references
+
+A spec may reference one or more **design documents**: the worked design the feature is built to,
+held in one of the project's declared design sources rather than copied into the spec. Where a
+spec carries references, they are **binding input to this plan**, not background reading.
+
+The discovery step resolves and reads them, through the CLI rather than by reading files
+directly:
+
+- `{{command}} design ref list --data '{"spec":"<spec>"}'` — every reference the spec carries,
+  each with whether it resolves and the exact location searched, plus a count of those that do
+  not.
+- `{{command}} design read --data '{"source":"<name>","path":"<path>"}'` — the document itself.
+
+Two obligations follow from that, and the steps state them: architecture is **built on** a
+referenced design rather than re-deriving it, and the finished plan **names each design document
+read and the source it came from** in its Dependencies. If any reference does not resolve, the
+discovery step stops and reports rather than planning around the gap — a broken reference is
+meant to surface here, not during implementation.
+
 # Working files vs. the store documents
 
 The drafting steps run without stopping for section approval — draft each section, save it, and advance; only a genuinely blocking question (no reasonable default, or information only the user holds) interrupts the user before the walkthrough.

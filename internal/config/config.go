@@ -130,6 +130,25 @@ type KnowledgeConfig struct {
 	Sources []SourceConfig `yaml:"sources,omitempty"`
 }
 
+// DesignConfig holds the ordered list of the design sources the project
+// declares. A design source points at a folder of design documents the team
+// already keeps, wherever it keeps it, and Spektacular reads and writes
+// documents there without imposing any structure on them.
+//
+// It is a project-tier declaration only: a repo declares no design sources of
+// its own, so SourceConfig.Tier is left unset for every entry here and a
+// source's identity is its name alone.
+//
+// A source's config.location may be absolute or relative; a relative location
+// is relative to the folder holding config.yaml, the same base every other
+// relative path in that file uses. Unlike the spec, plan and changelog store
+// directories, it is never re-expressed on write: the declaration is written
+// back exactly as the author wrote it, and a location outside the project root
+// is allowed, because a design source points at a folder the team already has.
+type DesignConfig struct {
+	Sources []SourceConfig `yaml:"sources,omitempty"`
+}
+
 // RepoKnowledgeConfig is a repo's single knowledge store declaration. It
 // deliberately mirrors ChangelogConfig, which sits beside it in the same file:
 // one provider block, no list and no label, because a repo has exactly one
@@ -261,6 +280,7 @@ type Config struct {
 	Plan                 PlanConfig      `yaml:"plan"`
 	Changelog            ChangelogConfig `yaml:"changelog"`
 	Knowledge            KnowledgeConfig `yaml:"knowledge,omitempty"`
+	Design               DesignConfig    `yaml:"design,omitempty"`
 	Repos                []RepoEntry     `yaml:"repos,omitempty"`
 }
 
@@ -295,6 +315,10 @@ func NewDefault() Config {
 		// Knowledge is empty by default: the project level lists only sources
 		// owned by the project itself (team or global shares the user adds by
 		// hand). Each repo's own store is declared in its RepoConfig.
+		//
+		// Design is empty by default for the same reason: a design source
+		// points at a folder of design documents the team already has, so the
+		// project declares each one by hand and nothing is scaffolded for it.
 	}
 }
 
@@ -355,6 +379,20 @@ type storeDir struct {
 	fileForm  *string
 }
 
+// storeDirs enumerates the store directories that are bound to the project
+// root. Membership in this list is load-bearing twice over, and a caller
+// adding a new configured path here should want both effects:
+//
+//   - resolveStoreDirs and fileFormStoreDir re-express the value on read and
+//     write, so the path written back is not necessarily the one the author
+//     wrote; and
+//   - Validate runs validateStoreDir over every entry, which refuses any
+//     directory resolving outside the project root.
+//
+// A configured path that must survive verbatim, or that may point outside the
+// project root, therefore does not belong here: it resolves in its own domain
+// package instead. design.sources[].config.location is the worked example, and
+// knowledge.sources[].config.location predates it.
 func (c *Config) storeDirs() []storeDir {
 	return []storeDir{
 		{"spec", &c.Spec.Config.Directory, &c.Spec.Config.fileForm},
@@ -536,6 +574,9 @@ func (c Config) Validate() error {
 	if err := c.Knowledge.Validate(); err != nil {
 		return err
 	}
+	if err := c.Design.Validate(); err != nil {
+		return err
+	}
 	if err := validateRepos(c.Repos); err != nil {
 		return err
 	}
@@ -670,6 +711,47 @@ func (c KnowledgeConfig) Validate() error {
 		}
 		if src.Config.Location == "" {
 			return fmt.Errorf("knowledge store %q: config.location must not be empty", src.Name)
+		}
+	}
+	return nil
+}
+
+// Validate checks every declared design source for a name, a name unique
+// within the list, a supported provider, and a location to read and write
+// documents at. An empty list is valid and means the project declares no
+// design sources.
+//
+// Every refusal carries a next action, including the provider and location
+// cases: a design source is declared by hand, so an author who mistypes one
+// needs to be told which key to correct. That is why this reads like
+// KnowledgeConfig.Validate without sharing its two bare errors.
+func (c DesignConfig) Validate() error {
+	seen := make(map[string]bool, len(c.Sources))
+	for i, src := range c.Sources {
+		if src.Name == "" {
+			return output.NewError(
+				"config_invalid",
+				fmt.Sprintf("design.sources[%d] declares no name", i),
+			).WithNextAction("give every entry under design.sources a `name:`, which is the name that source is addressed by")
+		}
+		if seen[src.Name] {
+			return output.NewError(
+				"config_invalid",
+				fmt.Sprintf("design.sources declares the name %q more than once", src.Name),
+			).WithNextAction(fmt.Sprintf("rename one of the two %q entries under design.sources; a design source is addressed by its name alone, so names must be unique", src.Name))
+		}
+		seen[src.Name] = true
+		if src.Provider != ProviderFile {
+			return output.NewError(
+				"config_invalid",
+				fmt.Sprintf("design source %q: provider %q is not supported (only %q)", src.Name, src.Provider, ProviderFile),
+			).WithNextAction(fmt.Sprintf("set design.sources[%d].provider to %q, the only design storage backend this release ships", i, ProviderFile))
+		}
+		if src.Config.Location == "" {
+			return output.NewError(
+				"config_invalid",
+				fmt.Sprintf("design source %q: config.location must not be empty", src.Name),
+			).WithNextAction(fmt.Sprintf("set design.sources[%d].config.location to the folder holding %s's design documents; a relative path resolves from the folder holding config.yaml", i, src.Name))
 		}
 	}
 	return nil

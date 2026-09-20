@@ -682,6 +682,192 @@ func TestToYAMLFile_ProjectOwnedKnowledgeSourcesRoundTrip(t *testing.T) {
 	require.Equal(t, cfg.Knowledge, loaded.Knowledge)
 }
 
+// Phase 1.1 criteria 1 & 5: a project may declare several named design
+// sources, each naming a backend and a location, and the declaration
+// round-trips through config.yaml unchanged. A design block does not change
+// the settings format version.
+func TestToYAMLFile_ProjectDesignSourcesRoundTrip(t *testing.T) {
+	cfg := NewDefault()
+	cfg.Name = "testproj"
+	cfg.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	cfg.Design = DesignConfig{
+		Sources: []SourceConfig{
+			{
+				Name:     "architecture",
+				Provider: ProviderFile,
+				Config:   FileKnowledgeConfig{Location: "/shared/architecture"},
+			},
+			{
+				Name:     "product",
+				Provider: ProviderFile,
+				Config:   FileKnowledgeConfig{Location: "/shared/product/design"},
+			},
+		},
+	}
+
+	_, path := projectConfigPath(t)
+	require.NoError(t, cfg.ToYAMLFile(path))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "design:\n")
+	require.Contains(t, string(raw), "schema: 3\n", "a design block does not bump the settings format version")
+
+	loaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, cfg.Design, loaded.Design)
+	require.Equal(t, 3, loaded.Schema)
+}
+
+// Phase 1.1 criterion 2: a project that declares no design sources loads as
+// it did before the design section existed — the list is absent, not empty —
+// and writing the config back emits no design key at all.
+func TestFromYAMLFile_AbsentDesignSectionDeclaresNoSources(t *testing.T) {
+	yaml := `name: testproj
+command: "go run ."
+repos:
+  - name: testproj
+    location: ..`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Nil(t, cfg.Design.Sources)
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "design:", "an undeclared design section must not be written back")
+}
+
+// Phase 1.1 criterion 4: a design source's relative location is a path
+// relative to the folder holding config.yaml, and is read and written back
+// exactly as declared — unlike the spec/plan/changelog store directories, it
+// is never re-expressed on write.
+func TestToYAMLFile_DesignSourceRelativeLocationIsWrittenAsDeclared(t *testing.T) {
+	yaml := `name: testproj
+repos:
+  - name: testproj
+    location: ..
+design:
+  sources:
+    - name: architecture
+      provider: file
+      config:
+        location: ../docs/design`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "../docs/design", cfg.Design.Sources[0].Config.Location)
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "location: ../docs/design")
+}
+
+// Phase 1.1 criterion 3: an invalid design source is refused when the
+// settings load, not only when DesignConfig.Validate is called directly.
+func TestFromYAMLFile_InvalidDesignSourceIsRejectedOnLoad(t *testing.T) {
+	yaml := `name: testproj
+repos:
+  - name: testproj
+    location: ..
+design:
+  sources:
+    - name: architecture
+      provider: notion
+      config:
+        location: ../docs/design`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	_, err := FromYAMLFile(path)
+	require.Error(t, err)
+	var er *output.ErrorResponse
+	require.ErrorAs(t, err, &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Equal(t, `design source "architecture": provider "notion" is not supported (only "file")`, er.Message)
+	require.NotEmpty(t, er.NextAction)
+}
+
+// Phase 1.1 criterion 3: a design source declared without a name is refused,
+// naming the offending entry's position and the key to add.
+func TestDesignConfig_ValidateRejectsMissingName(t *testing.T) {
+	design := DesignConfig{
+		Sources: []SourceConfig{
+			{Name: "architecture", Provider: ProviderFile, Config: FileKnowledgeConfig{Location: "/a"}},
+			{Provider: ProviderFile, Config: FileKnowledgeConfig{Location: "/b"}},
+		},
+	}
+
+	err := design.Validate()
+	require.Error(t, err)
+	var er *output.ErrorResponse
+	require.ErrorAs(t, err, &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Equal(t, "design.sources[1] declares no name", er.Message)
+	require.Contains(t, er.NextAction, "name:")
+}
+
+// Phase 1.1 criterion 3: two design sources declared under the same name are
+// refused, naming the duplicate and telling the author to rename one.
+func TestDesignConfig_ValidateRejectsDuplicateName(t *testing.T) {
+	design := DesignConfig{
+		Sources: []SourceConfig{
+			{Name: "architecture", Provider: ProviderFile, Config: FileKnowledgeConfig{Location: "/a"}},
+			{Name: "architecture", Provider: ProviderFile, Config: FileKnowledgeConfig{Location: "/b"}},
+		},
+	}
+
+	err := design.Validate()
+	require.Error(t, err)
+	var er *output.ErrorResponse
+	require.ErrorAs(t, err, &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Equal(t, `design.sources declares the name "architecture" more than once`, er.Message)
+	require.Contains(t, er.NextAction, "rename")
+}
+
+// Phase 1.1 criterion 3: a design source naming a backend this release does
+// not ship is refused, with the key to correct.
+func TestDesignConfig_ValidateRejectsUnsupportedProvider(t *testing.T) {
+	design := DesignConfig{
+		Sources: []SourceConfig{
+			{Name: "architecture", Provider: "notion", Config: FileKnowledgeConfig{Location: "/a"}},
+		},
+	}
+
+	err := design.Validate()
+	require.Error(t, err)
+	var er *output.ErrorResponse
+	require.ErrorAs(t, err, &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Equal(t, `design source "architecture": provider "notion" is not supported (only "file")`, er.Message)
+	require.Contains(t, er.NextAction, "design.sources[0].provider")
+}
+
+// Phase 1.1 criterion 3: a design source with no location is refused, with
+// the key to set.
+func TestDesignConfig_ValidateRejectsMissingLocation(t *testing.T) {
+	design := DesignConfig{
+		Sources: []SourceConfig{
+			{Name: "architecture", Provider: ProviderFile, Config: FileKnowledgeConfig{Location: ""}},
+		},
+	}
+
+	err := design.Validate()
+	require.Error(t, err)
+	var er *output.ErrorResponse
+	require.ErrorAs(t, err, &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Equal(t, `design source "architecture": config.location must not be empty`, er.Message)
+	require.Contains(t, er.NextAction, "design.sources[0].config.location")
+}
+
 // A project must register at least one repo: an otherwise valid config with
 // no repos entry fails validation with a config_invalid error that says so.
 func TestFromYAMLFile_NoReposReturnsError(t *testing.T) {

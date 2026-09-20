@@ -29,6 +29,9 @@ func (bobAgent) Install(projectPath string, cfg config.Config, out io.Writer) er
 	if err := installSpecTriggerSection(projectPath, cfg, out); err != nil {
 		return err
 	}
+	if err := installDesignTriggerSection(projectPath, cfg, out); err != nil {
+		return err
+	}
 	if err := installDraftPresentationSection(projectPath, cfg, out); err != nil {
 		return err
 	}

@@ -114,6 +114,21 @@ MIN_SECTION_LENGTH = 100
 CONVENTIONS_READ_COMMAND = "knowledge always-applied"
 SEEDED_CONVENTION_TOKEN = "AUTH_AUDIT_V2"
 
+# Hand-maintained oracle for the design-reference obligation. The discovery
+# step tells the agent, unconditionally, to ask what design documents the spec
+# references before designing anything; DESIGN_REF_LIST_COMMAND is the CLI
+# substring that obligation must produce inside the discovery window.
+#
+# There is deliberately no content half to pair with this, unlike the
+# convention oracle above. This environment seeds no design source and the spec
+# carries no design references, so the command returns an empty list and there
+# is nothing for the plan to digest. That is the realistic shape for a project
+# that does not use design documents, and it is the case worth protecting: the
+# obligation must fire and degrade cleanly, not be skipped because it happens to
+# have nothing to report. Update this literal in the same commit as any change
+# to the discovery step's design instruction.
+DESIGN_REF_LIST_COMMAND = "design ref list"
+
 # Hand-maintained oracle for the assumption log folded into research.md's
 # ## Drafting assumptions section. Each recorded judgement call is a `### `
 # entry carrying all three bullets below; a run that genuinely made no
@@ -125,11 +140,19 @@ ASSUMPTION_ENTRY_MARKERS = ("**Decision**", "**Rationale**", "**Rejected**")
 NO_ASSUMPTIONS_FALLBACK = "No drafting assumptions were recorded."
 
 # Hand-maintained oracle for the artefact status lifecycle. Committed plan
-# documents carry `status: in-progress` YAML frontmatter until the finished
-# step stamps them `status: completed` after walkthrough sign-off. Update
+# documents carry `document_status: draft` YAML frontmatter until the finished
+# step stamps them `document_status: final` after walkthrough sign-off. Update
 # these literals in the same commit as any frontmatter schema change.
-STATUS_IN_PROGRESS = "in-progress"
-STATUS_COMPLETED = "completed"
+#
+# The key is `document_status` and the vocabulary is draft/final/superseded/
+# archived. The earlier `status: in-progress` / `status: completed` shape these
+# literals carried was renamed by the document-status-vocabulary work and this
+# oracle was not updated with it, which is exactly the drift this file's
+# hand-maintained expectations are prone to: nothing fails at rename time, the
+# next person to run the suite pays for it.
+STATUS_DRAFT = "draft"
+STATUS_FINAL = "final"
+STATUS_KEY = "document_status"
 
 # Built-in agent tools that mutate files directly, bypassing the spektacular
 # CLI. The plan documents must never be written or edited with these.
@@ -936,6 +959,34 @@ class TestConventionAwarePlanning:
             "workflow must load all conventions in full during discovery."
         )
 
+    def test_design_references_resolved_during_discovery(self):
+        """Discovery asks what designs the spec references, before designing.
+
+        A behavioural check only: with no design source seeded the command
+        returns an empty list, so there is no content half to assert. What
+        matters is that the obligation fired at all — an agent that skips it
+        would plan a spec carrying references without ever reading them, which
+        is the failure this instruction exists to prevent.
+        """
+        windows = _windows_cache()
+        calls = _calls_cache()
+        window = windows.get("discovery")
+        assert window is not None, (
+            "Discovery step was never entered — cannot verify design "
+            "references were resolved"
+        )
+        window_calls = calls[window.start : window.end]
+        ran = any(
+            DESIGN_REF_LIST_COMMAND in _bash_command(c) for c in window_calls
+        )
+        assert ran, (
+            "Discovery step did not run "
+            f"'spektacular {DESIGN_REF_LIST_COMMAND}' — checked "
+            f"{len(window_calls)} tool calls in the step's window. The plan "
+            "workflow must resolve every design reference a spec carries "
+            "before any design work begins."
+        )
+
     def test_conventions_section_reflects_seeded_convention(self):
         sections = _plan_sections()
         content = sections.get("conventions", "")
@@ -1018,44 +1069,45 @@ class TestContextAndResearch:
 # Artefact status-lifecycle tests
 # ---------------------------------------------------------------------------
 
-# Matches a `status:` frontmatter line inside a tool-result text. Tolerates
-# both raw markdown (`status: in-progress` / `status: "in-progress"`) and
-# JSON-escaped embedding (`status: \"in-progress\"`) since plan CLI output
-# may wrap the document in a JSON payload.
-RESULT_STATUS_RE = re.compile(r"status:\s*\\?[\"']?(in-progress|completed)")
+# Matches a `document_status:` frontmatter line inside a tool-result text.
+# Tolerates both raw markdown (`document_status: draft` /
+# `document_status: "draft"`) and JSON-escaped embedding
+# (`document_status: \"draft\"`) since plan CLI output may wrap the document
+# in a JSON payload.
+RESULT_STATUS_RE = re.compile(r"document_status:\s*\\?[\"']?(draft|final|superseded|archived)")
 
 
 class TestArtefactStatusLifecycle:
-    """Committed plan documents move in-progress → completed at the right time.
+    """Committed plan documents move draft → final at the right time.
 
-    Docs are committed with `status: in-progress` frontmatter and stamped
-    `status: completed` only by the finished step, after walkthrough
-    sign-off. Two checks: (a) the final on-disk artefacts are completed,
-    and (b) during the walkthrough window the docs still read as
-    in-progress — proving the completed stamp gated on sign-off rather
-    than being applied at commit time.
+    Docs are committed with `document_status: draft` frontmatter and stamped
+    `document_status: final` only by the finished step, after walkthrough
+    sign-off. Two checks: (a) the final on-disk artefacts are final, and
+    (b) during the walkthrough window the docs still read as draft —
+    proving the final stamp gated on sign-off rather than being applied at
+    commit time.
     """
 
-    def test_artefacts_completed_after_finished(self):
-        """Each committed artefact ends with frontmatter status: completed."""
+    def test_artefacts_final_after_finished(self):
+        """Each committed artefact ends with frontmatter document_status: final."""
         for path in plan_artefact_paths():
             assert path.exists(), f"Artefact file missing: {path}"
             fm = parse_frontmatter(path.read_text())
-            assert fm.get("status") == STATUS_COMPLETED, (
-                f"{path.name} frontmatter status is {fm.get('status')!r}, "
-                f"expected {STATUS_COMPLETED!r} — the finished step must "
-                "stamp every committed document completed."
+            assert fm.get(STATUS_KEY) == STATUS_FINAL, (
+                f"{path.name} frontmatter {STATUS_KEY} is {fm.get(STATUS_KEY)!r}, "
+                f"expected {STATUS_FINAL!r} — the finished step must "
+                "stamp every committed document final."
             )
 
-    def test_docs_in_progress_during_walkthrough(self):
-        """Docs read during the walkthrough still carry status: in-progress.
+    def test_docs_draft_during_walkthrough(self):
+        """Docs read during the walkthrough still carry document_status: draft.
 
         The walkthrough template instructs the agent to read the committed
         documents back with `plan file read`, so the walkthrough window
         reliably contains such reads and their results include the
-        frontmatter. Every status observed there must be in-progress: a
-        completed status during the walkthrough would mean the documents
-        were stamped before sign-off, i.e. the gating is broken.
+        frontmatter. Every status observed there must be draft: a final
+        status during the walkthrough would mean the documents were
+        stamped before sign-off, i.e. the gating is broken.
         """
         windows = _windows_cache()
         calls = _calls_cache()
@@ -1063,7 +1115,7 @@ class TestArtefactStatusLifecycle:
         window = windows.get("walkthrough")
         assert window is not None, (
             "Walkthrough step was never entered — cannot verify the "
-            "in-progress status of the documents under review."
+            "draft status of the documents under review."
         )
         observed = []  # (call index, status value)
         for c in calls[window.start : window.end]:
@@ -1079,11 +1131,11 @@ class TestArtefactStatusLifecycle:
             "contained a status: frontmatter line — the walkthrough must "
             "read the committed documents back for review."
         )
-        offenders = [o for o in observed if o[1] != STATUS_IN_PROGRESS]
+        offenders = [o for o in observed if o[1] != STATUS_DRAFT]
         assert not offenders, (
             "Documents read during the walkthrough already carried a "
-            f"non-in-progress status (call index, status): {offenders} — "
-            "the completed stamp must wait for walkthrough sign-off."
+            f"non-draft status (call index, status): {offenders} — "
+            "the final stamp must wait for walkthrough sign-off."
         )
 
 

@@ -32,3 +32,41 @@ func TestWorkflowSkillsDirectAgentToCLIList(t *testing.T) {
 			"%s must name %s as the store directory the agent must not poke directly", c.skill, c.storeDir)
 	}
 }
+
+// TestWorkflowSkillsDocumentDesignCommands verifies that each workflow skill
+// names the design-document commands its half of the flow needs: spek-new
+// introduces the capture side (discover the declared sources, write the
+// document, record the reference), and spek-plan the consumption side (list a
+// spec's references, read each document). A skill that introduces design
+// documents without naming the commands leaves the agent to guess at them, so
+// the command names are the property worth pinning.
+//
+// This is a separate table from TestWorkflowSkillsDirectAgentToCLIList rather
+// than extra rows in it: that table's third field is a store directory the
+// agent must not poke with ls/find/Read, and design documents have no such
+// directory — they live in whatever locations the project declares as design
+// sources.
+func TestWorkflowSkillsDocumentDesignCommands(t *testing.T) {
+	cases := []struct {
+		skill    string
+		commands []string
+	}{
+		{"skills/workflows/spek-new/SKILL.md", []string{
+			"design sources",
+			"design list",
+			"design write",
+			"design ref add",
+		}},
+		{"skills/workflows/spek-plan/SKILL.md", []string{
+			"design ref list",
+			"design read",
+		}},
+	}
+	for _, c := range cases {
+		body := mustReadTemplate(t, c.skill)
+		for _, cmd := range c.commands {
+			require.Containsf(t, body, cmd,
+				"%s must document the %q command so the agent reaches design documents through the CLI", c.skill, cmd)
+		}
+	}
+}

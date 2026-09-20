@@ -56,6 +56,24 @@ func TestNoProject_ProjectOperatingCommandFailsExplicitly(t *testing.T) {
 		stdout, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 		assertNoProjectEnvelope(t, dir, stdout, code)
 	})
+
+	t.Run("design sources", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		resetRootCmd(t)
+
+		stdout, _, code := runRootCmd(t, "design", "sources")
+		assertNoProjectEnvelope(t, dir, stdout, code)
+	})
+
+	t.Run("design read", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		resetRootCmd(t)
+
+		stdout, _, code := runRootCmd(t, "design", "read", "--data", `{"source":"api","path":"x.md"}`)
+		assertNoProjectEnvelope(t, dir, stdout, code)
+	})
 }
 
 // Criterion 2: `init` still works in an uninitialized directory — it is the
