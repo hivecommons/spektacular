@@ -67,16 +67,29 @@ document are genuinely different and the difference is visible from a listing.
 
 Four, none of them scope changes.
 
-**The phase 2.2 test seam turned out to be both routes, not one.** The plan's first open question
-asked whether a write failure could be provoked through file permissions, with a package-level
-`designSetFactory` as the pre-approved fallback. The answer is both, for different cases. The
-filesystem route works for the back-link-write failure and needs no seam. It cannot reach the
-rollback-failure case at all, and that is a property of the store rather than the platform:
-`FileStore.Write` is `os.MkdirAll` then `os.WriteFile`, and writing an existing file needs
-permission on the file rather than its directory, so any state that fails the rollback fails the
-identical first spec write too. The seam added is therefore `writeBackLinkFn` rather than a
-design-set factory: same shape and precedent, smaller surface, and the only one of the two that
-can make the spec unwritable between the two writes, which is what that case requires.
+**The phase 2.2 test seam needed a seam and a root-proof sabotage, not file permissions.** The
+plan's first open question asked whether a write failure could be provoked through file
+permissions, with a package-level `designSetFactory` as the pre-approved fallback. Neither
+answer was right on its own.
+
+A seam is required, but only for the rollback-failure case, and that is a property of the store
+rather than of any platform: `FileStore.Write` is `os.MkdirAll` then `os.WriteFile`, and writing
+an existing file needs permission on the file rather than its directory, so any state that fails
+the rollback fails the identical first spec write too and the run never reaches the compensation.
+The spec has to become unwritable between the two writes. The seam added is `writeBackLinkFn`
+rather than a design-set factory: same shape and precedent, smaller surface, and the only one of
+the two that can do that.
+
+File permissions turned out not to work at all. They work locally and are ignored in CI, which
+runs the suite as root inside a container, so a `chmod 0444` sabotage silently does nothing and
+the write it was meant to block succeeds. This shipped broken and was caught by CI on the first
+run after the merge. The sabotage is now to replace the target file with an empty directory:
+`os.ReadFile` and `os.WriteFile` both fail with EISDIR on one, which is a kind-of-file error
+rather than a permission check, so no uid is exempt. Verified as both uid 1000 and uid 0.
+
+Five other tests in this repo handle the same problem by skipping when root. That was rejected
+here, because it would make CI green by dropping coverage of the one failure mode the spec
+raises to a constraint, in the environment where it matters most.
 
 **Two refusal messages were worded more narrowly than the plan specified.** The
 `design_frontmatter_not_authored` refusal does not repeat `metadata.Merge`'s underlying cause,

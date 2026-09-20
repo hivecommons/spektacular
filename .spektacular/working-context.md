@@ -39,7 +39,11 @@ branch `main`: `src/pages/design-documents.mdx` is still **untracked** at 319 li
 every line reference in phases 4.1 and 4.2 is still good, and the "if the page is gone, STOP
 and ask" branch does not apply.
 
-## Open Question 1 RESOLVED — the answer is "both routes, for different cases"
+## Open Question 1 — RESOLVED, THEN CORRECTED AFTER CI FAILED
+
+**Read the correction at the bottom of this section first.** The reasoning below was right about
+the seam and wrong about file permissions.
+
 
 Exercised for real in phase 2.2. The session runs as uid 1000, not root, and the filesystem does
 enforce the permission, so the preferred no-seam route works **for the back-link-write-failure
@@ -64,6 +68,33 @@ seam. `writeBackLinkFn` is the same shape and the same precedent (`var sourceFS 
 templates.FS`, `internal/agent/skills.go:36`) but a strictly smaller surface, and it is the only
 one of the two that can also run the hook the plan itself said the rollback case requires: a
 substituted design set can fail its write but cannot make the spec unwritable partway through.
+This part still stands.
+
+### CORRECTION: the filesystem route does not work, because CI runs as root
+
+CI failed on all three subtests of `TestDesignRef_BackLinkFailureLeavesNoDisagreementBehind` at
+commit 70adf22. The `chmod 0444` sabotage is silently ignored by root, so the writes succeeded
+and the commands exited 0 where the tests required exit 1. Proved directly under `unshare -r`:
+chmod-then-write returns `permission denied` as uid 1000 and `nil` as uid 0.
+
+I resolved this open question against the local environment (uid 1000) when CI is the environment
+that decides it. The risk was written down at the time and judged acceptable because root would
+fail loudly rather than pass silently. It did fail loudly, but it still shipped broken.
+
+**Fix, now in `cmd/design_ref_test.go`**: sabotage by replacing the target file with an empty
+directory rather than by chmod. `os.ReadFile` and `os.WriteFile` both fail with EISDIR on a
+directory, which is a kind-of-file error rather than a permission check, so no uid is exempt.
+`replaceWithDirectory` replaces the old `chmodUnwritable` helper. The seam is still needed for the
+rollback case for the reason above. Verified green as uid 1000 and as uid 0.
+
+**Convention note**: five other tests in this repo use
+`if os.Geteuid() == 0 { t.Skip("root ignores directory permissions") }`
+(`internal/migrate/engine_test.go:291`, `internal/sessionlog/record_test.go:257`,
+`internal/steps/repo/steps_test.go:230`, `cmd/migrate_test.go:300`,
+`cmd/repo_workflow_test.go:344`). I deliberately did not follow it here: a skip makes CI green by
+dropping coverage of the one failure mode the spec raises to a constraint, in the environment
+where it matters most. Those five are candidates for the same directory technique, but changing
+them was out of scope.
 
 ## Standing traps to carry through every phase
 

@@ -797,12 +797,21 @@ func TestDesignRef_BackLinksAgreeWithTheSpecsThatReferenceThem(t *testing.T) {
 // the underlying cause is shown to be carried through rather than swallowed.
 var errForcedBackLink = errors.New("forced back-link failure")
 
-// chmodUnwritable makes path read-only for the rest of the test and restores
-// its mode afterwards, so the test's own temp tree can still be removed.
-func chmodUnwritable(t *testing.T, path string) {
+// replaceWithDirectory turns path into an empty directory, so the next read or
+// write of it as a file fails.
+//
+// The obvious way to break a file write is to chmod it read-only, and that is
+// what this originally did. It works locally and silently does nothing in CI,
+// which runs the suite as root inside a container: root bypasses the
+// permission bits, every sabotaged write succeeds, and all three subtests
+// below failed on their exit-code assertion. A directory in place of a file is
+// the root-proof equivalent. os.ReadFile and os.WriteFile both fail with
+// EISDIR on one, and that is a kind-of-file error rather than a permission
+// check, so no uid is exempt from it.
+func replaceWithDirectory(t *testing.T, path string) {
 	t.Helper()
-	require.NoError(t, os.Chmod(path, 0o444))
-	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+	require.NoError(t, os.Remove(path))
+	require.NoError(t, os.Mkdir(path, 0o755))
 }
 
 // Criterion: the two writes a reference operation makes cannot be made atomic,
@@ -823,7 +832,7 @@ func TestDesignRef_BackLinkFailureLeavesNoDisagreementBehind(t *testing.T) {
 		root, apiLoc := designRefProject(t)
 		docPath := seedAuthoredDesign(t, apiLoc, "authored/v2.md", "")
 		specPath := writeSpecFixture(t, root, "000054_billing", designRefSpecFixture)
-		chmodUnwritable(t, docPath)
+		replaceWithDirectory(t, docPath)
 
 		er := refuseDesignRef(t, "add", "--data", `{"spec":"000054_billing","source":"api","path":"authored/v2.md"}`)
 		backLinkFailed = er.Code
@@ -851,7 +860,7 @@ func TestDesignRef_BackLinkFailureLeavesNoDisagreementBehind(t *testing.T) {
 				"  - source: api\n" +
 				"    path: authored/v2.md\n")
 		specPath := writeSpecFixture(t, root, "000054_billing", carried)
-		chmodUnwritable(t, docPath)
+		replaceWithDirectory(t, docPath)
 
 		er := refuseDesignRef(t, "remove", "--data", `{"spec":"000054_billing","source":"api","path":"authored/v2.md"}`)
 		require.Equal(t, "design_ref_backlink_failed", er.Code)
@@ -879,7 +888,7 @@ func TestDesignRef_BackLinkFailureLeavesNoDisagreementBehind(t *testing.T) {
 		original := writeBackLinkFn
 		t.Cleanup(func() { writeBackLinkFn = original })
 		writeBackLinkFn = func(_ *design.Set, _ design.Document, _ string, _ bool) error {
-			chmodUnwritable(t, specPath)
+			replaceWithDirectory(t, specPath)
 			return errForcedBackLink
 		}
 

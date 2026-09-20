@@ -1437,3 +1437,49 @@ requires rather than an exception to it.
 The re-run sweep turned up one hit that looks relevant and is not: `knowledge-base.mdx` describes
 a malformed block being treated as no frontmatter, which is about knowledge entries rather than
 design documents. Left alone deliberately.
+
+### 2026-09-20 — Correction to Phase 2.2: the filesystem route is not CI-safe
+
+**What happened**: CI failed on `TestDesignRef_BackLinkFailureLeavesNoDisagreementBehind`, all
+three subtests, at commit 70adf22. The phase 2.2 entry above records that the filesystem route
+works for the back-link-write failure and needs no seam. That is true locally and false in CI,
+and the entry is corrected here rather than edited, since it was an accurate record of what was
+believed at the time.
+
+**Why it failed**: the subtests sabotaged a write with `chmod 0444`. CI runs the suite as root
+inside a Dagger container, and root bypasses the permission bits entirely, so every sabotaged
+write succeeded and the commands exited 0 where the tests required exit 1. The third subtest
+failed the same way one level down: its seam fired, but the `chmod` it applied to the spec did
+not stop the compensating write, so the run reported `design_ref_backlink_failed` instead of
+`design_ref_backlink_rollback_failed`. Verified directly rather than inferred: under
+`unshare -r`, `chmod 0444` followed by a write returns `permission denied` as uid 1000 and `nil`
+as uid 0.
+
+The risk was recorded at the time and judged acceptable on the grounds that running as root
+would produce a loud failure rather than a silent pass. That reasoning held exactly, and the
+failure was loud. The mistake was resolving the plan's first Open Question against the local
+environment alone when CI is the environment that decides it.
+
+**The fix**: sabotage by replacing the target file with an empty directory instead of by changing
+its mode. `os.ReadFile` and `os.WriteFile` both fail with EISDIR on a directory, and that is a
+kind-of-file error rather than a permission check, so no uid is exempt. The design document
+becomes a directory for the two back-link-failure subtests, and the seam turns the spec into one
+for the rollback-failure subtest. The `writeBackLinkFn` seam is still required for that third
+case, for the reason already recorded: the spec has to become unwritable between the two writes.
+
+Verified as uid 1000 and as uid 0 under `unshare -r`: the whole suite passes both ways.
+
+**Deviation from the repo's existing convention, deliberately**: five other tests guard this with
+`if os.Geteuid() == 0 { t.Skip("root ignores directory permissions") }`. A skip was rejected here
+because it would make CI green by dropping coverage of the one failure mode the spec raises to a
+constraint, in the environment where that coverage matters most. The directory technique keeps
+the assertion live everywhere and makes the skip unnecessary.
+
+**Files changed**:
+- `spektacular: cmd/design_ref_test.go`
+
+**Discoveries**: A chmod-based test sabotage is not a portable way to force an I/O failure in this
+project, because CI runs as root. It fails open: the sabotage silently does nothing and the test
+either passes vacuously or fails for a confusing reason far from its cause. Replacing the file
+with a directory is the root-proof equivalent and costs nothing. Worth reaching for before a root
+skip, which trades the coverage away.
