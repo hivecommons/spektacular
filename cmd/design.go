@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/jumppad-labs/spektacular/internal/design"
+	"github.com/jumppad-labs/spektacular/internal/metadata"
 	"github.com/jumppad-labs/spektacular/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -52,6 +53,18 @@ var designWriteCmd = &cobra.Command{
 	RunE:  runDesignWrite,
 }
 
+// designAuthorCmd is the sibling of designWriteCmd for a design Spektacular
+// wrote with the user rather than one the team handed over. The two verbs
+// exist separately, rather than as one verb with a flag, because whether a
+// document is stamped is the whole distinction between the two classes of
+// design document, and a flag that silently decides it is exactly the kind of
+// thing an agent adds or omits by accident.
+var designAuthorCmd = &cobra.Command{
+	Use:   "author",
+	Short: "Write one design document into a declared source, stamping Spektacular's lifecycle metadata",
+	RunE:  runDesignAuthor,
+}
+
 // designSource is the --source flag shared by the list command.
 var designSource string
 
@@ -93,9 +106,19 @@ var designSourcesOutputSchema = &schemaObj{
 	},
 }
 
+// designDocumentItemSchema covers both classes of design document. Every
+// document reports its source and path; only one Spektacular authored reports
+// the lifecycle keys, and a document the project already had carries none of
+// them, which is what makes the two classes distinguishable from a listing
+// alone.
 var designDocumentItemSchema = map[string]*schemaProp{
-	"source": {Type: "string"},
-	"path":   {Type: "string"},
+	"source":          {Type: "string"},
+	"path":            {Type: "string"},
+	"created_date":    {Type: "string"},
+	"document_status": {Type: "string"},
+	"closed_date":     {Type: "string"},
+	"spec":            {Type: "string"},
+	"specs":           {Type: "array", Items: &schemaProp{Type: "string"}},
 }
 
 var designListOutputSchema = &schemaObj{
@@ -121,6 +144,22 @@ var designWriteOutputSchema = &schemaObj{
 	},
 }
 
+// designAuthorOutputSchema adds the two facts a caller most needs to confirm
+// after stamping a block: which status was applied, and whether this was a
+// first write or an update to a document that already existed, which the
+// created date answers. Without them the caller would have to follow every
+// author with a read to learn what it just wrote.
+var designAuthorOutputSchema = &schemaObj{
+	Type: "object",
+	Properties: map[string]*schemaProp{
+		"source":          {Type: "string"},
+		"path":            {Type: "string"},
+		"location":        {Type: "string"},
+		"document_status": {Type: "string"},
+		"created_date":    {Type: "string"},
+	},
+}
+
 // designAddressData parses the --data flag shared by the read and write
 // subcommands.
 //
@@ -142,6 +181,32 @@ func designAddressData(cmd *cobra.Command) (designAddressInput, error) {
 		return designAddressInput{}, fmt.Errorf("parsing --data: %w", err)
 	}
 	return input, nil
+}
+
+// authoredMetadata reports whether a design document is one Spektacular
+// authored, returning its lifecycle block if so and nil if not.
+//
+// A design source holds two kinds of document and the document itself is the
+// discriminator: one carrying a block Spektacular wrote is ours, one without
+// is the team's. That keeps the fact in the only place that cannot drift from
+// the document it describes, which is why there is no registry or naming rule.
+//
+// The error case is deliberately swallowed rather than propagated, and that is
+// the whole reason this helper exists instead of three inline calls to Split.
+// Probed against the real parser: a Spektacular block yields (non-nil, nil), a
+// document with no leading --- yields (nil, nil), and a document carrying the
+// team's own frontmatter such as title:/author: yields (nil, error), because
+// UnmarshalYAML cannot parse the created_date that is not there. An
+// unterminated block does the same. Propagating that error would make `design
+// list` and `design ref add` fail outright on a perfectly ordinary design file
+// that happens to carry a YAML header of the team's own, which is precisely the
+// file this feature promises not to disturb. So an error means not authored.
+func authoredMetadata(raw []byte) *metadata.Metadata {
+	fm, _, err := metadata.Split(raw)
+	if err != nil {
+		return nil
+	}
+	return fm
 }
 
 // newDesignSet builds the design set from the project's settings. Every design
@@ -200,7 +265,28 @@ func runDesignList(cmd *cobra.Command, _ []string) error {
 	}
 	items := make([]map[string]any, 0, len(docs))
 	for _, d := range docs {
-		items = append(items, map[string]any{"source": d.Source, "path": d.Path})
+		item := map[string]any{"source": d.Source, "path": d.Path}
+		// A document that cannot be read is still listed, as its address is
+		// what the listing is for; it simply reports no lifecycle fields.
+		if raw, readErr := set.Read(d); readErr == nil {
+			if fm := authoredMetadata(raw); fm != nil {
+				item["created_date"] = fm.CreatedDate.Format("2006-01-02")
+				item["document_status"] = string(fm.DocumentStatus)
+				if !fm.ClosedDate.IsZero() {
+					item["closed_date"] = fm.ClosedDate.Format("2006-01-02")
+				}
+				// Provenance and back-links are omitted when absent rather
+				// than reported empty, so a listing never invites a caller to
+				// distinguish "no originating spec" from "the empty string".
+				if fm.Spec != "" {
+					item["spec"] = fm.Spec
+				}
+				if len(fm.Specs) > 0 {
+					item["specs"] = fm.Specs
+				}
+			}
+		}
+		items = append(items, item)
 	}
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	return out.WriteResult(map[string]any{"documents": items})
@@ -261,6 +347,34 @@ func runDesignWrite(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	// Refuse to clobber a document Spektacular authored. A verbatim overwrite
+	// would strip its lifecycle block and with it every back-link, leaving
+	// specs referencing a design that no longer lists them, and it would do so
+	// without raising anything. The check is here rather than in
+	// internal/design because that package has no notion of metadata and must
+	// not gain one, and because this is the layer holding both the resolved
+	// path and the name of the sibling command to point at.
+	if exists, existsErr := set.Exists(input.Document()); existsErr != nil {
+		return existsErr
+	} else if exists {
+		raw, readErr := set.Read(input.Document())
+		if readErr != nil {
+			return readErr
+		}
+		if authoredMetadata(raw) != nil {
+			location, resolveErr := set.Resolve(input.Document())
+			if resolveErr != nil {
+				location = input.Path
+			}
+			return output.NewError(
+				"design_authored_overwrite",
+				fmt.Sprintf("%s carries a lifecycle record Spektacular wrote, and a verbatim write would strip it along with every spec referencing this design", location),
+			).WithResource(location).WithNextAction(
+				// Quoted so the next action is copy-pasteable as-is; nesting
+				// single quotes inside single quotes would not be.
+				fmt.Sprintf(`rewrite it with 'design author --data {"source":%q,"path":%q} --from <path>', which preserves its capture date and the specs referencing it`, input.Source, input.Path))
+		}
+	}
 	if err := set.Write(input.Document(), content); err != nil {
 		return err
 	}
@@ -276,13 +390,123 @@ func runDesignWrite(cmd *cobra.Command, _ []string) error {
 	})
 }
 
+// runDesignAuthor stores the bytes of the file named by --from with
+// Spektacular's lifecycle block merged in. It is runDesignWrite with a merge
+// step in front of it, which is exactly the shape the feature intends: the
+// block is produced by the same code that produces a spec's or a plan's, and
+// the bytes land through the same byte-level store path as any other design
+// write.
+func runDesignAuthor(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		return output.Write(cmd.OutOrStdout(), commandSchema{
+			Input:  designAddressInputSchema,
+			Output: designAuthorOutputSchema,
+			Flags: map[string]*schemaProp{
+				"from":            {Type: "string"},
+				"document-status": {Type: "string"},
+				"spec":            {Type: "string"},
+			},
+		}, "")
+	}
+	input, err := designAddressData(cmd)
+	if err != nil {
+		return err
+	}
+	fromPath, _ := cmd.Flags().GetString("from")
+	if fromPath == "" {
+		return output.NewError(
+			"design_from_required",
+			"--from is required: a design document's content is read from a file, never from prose on the command line",
+		).WithNextAction("stage the document on disk and reissue with --from <path to that file>")
+	}
+	content, err := os.ReadFile(fromPath)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", fromPath, err)
+	}
+
+	documentStatus, _ := cmd.Flags().GetString("document-status")
+	opts, err := metadataOptsForDocumentStatus(documentStatus)
+	if err != nil {
+		return err
+	}
+	opts.Spec, _ = cmd.Flags().GetString("spec")
+	// opts.Specs is deliberately left nil. Back-links are owned by the
+	// reference verbs, and nil is what preserves them across a revision.
+
+	set, err := newDesignSet()
+	if err != nil {
+		return err
+	}
+	doc := input.Document()
+
+	// A document that is not there yet is the ordinary first-write case, not
+	// a failure, so Exists is asked rather than letting Read's refusal decide
+	// it: distinguishing them by matching on an error string would couple this
+	// to the wording of a refusal.
+	var existing []byte
+	exists, err := set.Exists(doc)
+	if err != nil {
+		return err
+	}
+	if exists {
+		existing, err = set.Read(doc)
+		if err != nil {
+			return err
+		}
+	}
+
+	body := stripLeadingFrontmatterBlocks(content)
+	merged, err := metadata.Merge(existing, body, opts)
+	if err != nil {
+		// Merge refuses frontmatter it cannot parse rather than replacing it,
+		// which is right: a block the team wrote is theirs. The raw error does
+		// not say that, so it is reworded into something the caller can act on.
+		location, resolveErr := set.Resolve(doc)
+		if resolveErr != nil {
+			location = input.Path
+		}
+		// The underlying cause is deliberately not repeated. It reads as a
+		// complaint about a missing created_date, which invites the caller to
+		// add one to the team's block rather than leave the block alone.
+		return output.NewError(
+			"design_frontmatter_not_authored",
+			fmt.Sprintf("%s already carries a frontmatter block Spektacular did not write, so a lifecycle record cannot be merged into it", location),
+		).WithResource(location).WithNextAction(
+			"remove that frontmatter block from the document if it is no longer wanted, or author to a different path and keep the original as one of your own")
+	}
+
+	if err := set.Write(doc, merged); err != nil {
+		return err
+	}
+	location, err := set.Resolve(doc)
+	if err != nil {
+		return err
+	}
+
+	payload := map[string]any{
+		"source":   input.Source,
+		"path":     input.Path,
+		"location": location,
+	}
+	if fm, _, splitErr := metadata.Split(merged); splitErr == nil && fm != nil {
+		payload["document_status"] = string(fm.DocumentStatus)
+		payload["created_date"] = fm.CreatedDate.Format("2006-01-02")
+	}
+	out := output.New(cmd.OutOrStdout(), globalFields)
+	return out.WriteResult(payload)
+}
+
 func init() {
 	designCmd.PersistentFlags().Bool("schema", false, "Print the input/output schema for this subcommand and exit")
 
 	designReadCmd.Flags().StringP("data", "d", "", `JSON input (e.g. '{"source":"api","path":"payments/v2.md"}')`)
 	designWriteCmd.Flags().StringP("data", "d", "", `JSON input (e.g. '{"source":"api","path":"payments/v2.md"}')`)
 	designWriteCmd.Flags().String("from", "", "Read the document's content from the file at <path> (relative to cwd)")
+	designAuthorCmd.Flags().StringP("data", "d", "", `JSON input (e.g. '{"source":"api","path":"payments/v2.md"}')`)
+	designAuthorCmd.Flags().String("from", "", "Read the document's content from the file at <path> (relative to cwd)")
+	designAuthorCmd.Flags().String("document-status", "", "Optional document status to apply: one of "+documentStatusValues())
+	designAuthorCmd.Flags().String("spec", "", "Optional name of the spec whose conversation produced this design")
 	designListCmd.Flags().StringVar(&designSource, "source", "", "Narrow the listing to one declared source; omit to list every source")
 
-	designCmd.AddCommand(designSourcesCmd, designListCmd, designReadCmd, designWriteCmd)
+	designCmd.AddCommand(designSourcesCmd, designListCmd, designReadCmd, designWriteCmd, designAuthorCmd)
 }

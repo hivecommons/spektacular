@@ -29,7 +29,7 @@ Before any section is drafted, the workflow opens with an `interview` step: a si
 
 # Reading and writing the spec file
 
-The CLI owns the spec file. **Never read or write it with the `Write`, `Edit`, or `Read` tools** — those bypass Spektacular and the configured spec directory. All spec file access goes through `{{command}} spec file`:
+The CLI owns the spec file. All spec file access goes through `{{command}} spec file`:
 
 - `{{command}} spec file read <name>.md` — read a spec file from the spec store.
 - `{{command}} spec file write <name>.md --from <source-path>` — write a spec file into the spec store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
@@ -46,12 +46,22 @@ it instead of its content. The technical-approach step makes that offer at the p
 would otherwise be compressed to a one-line steer; it is always an offer, and nothing is written
 without the user's explicit agreement.
 
+A design does not have to already exist to be captured. Where it has been settled in
+conversation but never written down, the `spek-design` skill runs a guided interview and writes
+the document from it; where the user already has the document, it is stored exactly as supplied.
+
 Design documents are reached through the CLI, never by reading files directly:
 
 - `{{command}} design sources` — the design sources this project declares, with their locations.
 - `{{command}} design list` — the design documents in them.
 - `{{command}} design write --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
-  design document, byte for byte, with no frontmatter added and nothing reformatted.
+  design document Spektacular did not author, byte for byte, adding no frontmatter to it and
+  reformatting nothing.
+- `{{command}} design author --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
+  design Spektacular wrote with the user, stamping the same lifecycle record every spec and plan
+  carries. Optionally `--spec <spec>` to record which spec's conversation produced it, and
+  `--document-status <draft|final|superseded|archived>`. Rewriting an authored design this way
+  keeps its original capture date and the specs already referencing it.
 - `{{command}} design ref add --data '{"spec":"<spec>","source":"<name>","path":"<path>"}'` —
   record the reference on the spec. A reference naming a source the project has not declared is
   refused and nothing is recorded.

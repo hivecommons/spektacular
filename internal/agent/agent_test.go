@@ -83,7 +83,7 @@ func TestSupported_StableOrder(t *testing.T) {
 	require.Equal(t, []string{"a-fake", "z-fake"}, got)
 }
 
-func TestInstallWorkflowSkills_WritesFourSkillFiles(t *testing.T) {
+func TestInstallWorkflowSkills_WritesEveryRegisteredSkill(t *testing.T) {
 	withSourceFS(t, fstest.MapFS{
 		"skills/workflows/spek-new/SKILL.md": &fstest.MapFile{
 			Data: []byte("new skill: run {{command}} spec new\n"),
@@ -100,6 +100,9 @@ func TestInstallWorkflowSkills_WritesFourSkillFiles(t *testing.T) {
 		"skills/workflows/spek-manage-repos/SKILL.md": &fstest.MapFile{
 			Data: []byte("repos skill: run {{command}} repo list\n"),
 		},
+		"skills/workflows/spek-design/SKILL.md": &fstest.MapFile{
+			Data: []byte("design skill: run {{command}} design sources\n"),
+		},
 	})
 
 	tmp := t.TempDir()
@@ -109,7 +112,7 @@ func TestInstallWorkflowSkills_WritesFourSkillFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	skillsRoot := filepath.Join(tmp, ".claude", "skills")
-	for _, name := range []string{"spek-new", "spek-plan", "spek-implement", "spek-knowledge", "spek-manage-repos"} {
+	for _, name := range []string{"spek-new", "spek-plan", "spek-implement", "spek-knowledge", "spek-manage-repos", "spek-design"} {
 		path := filepath.Join(skillsRoot, name, "SKILL.md")
 		data, err := os.ReadFile(path)
 		require.NoError(t, err, "expected file %s to exist", path)
@@ -118,7 +121,7 @@ func TestInstallWorkflowSkills_WritesFourSkillFiles(t *testing.T) {
 		require.NotContains(t, content, "{{command}}")
 	}
 
-	// Ensure exactly five SKILL.md files were written under skillsRoot.
+	// Ensure exactly six SKILL.md files were written under skillsRoot.
 	var skillFiles []string
 	err = filepath.WalkDir(skillsRoot, func(p string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -130,7 +133,7 @@ func TestInstallWorkflowSkills_WritesFourSkillFiles(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	require.Len(t, skillFiles, 5, "expected exactly five SKILL.md files, got %v", skillFiles)
+	require.Len(t, skillFiles, 6, "expected exactly six SKILL.md files, got %v", skillFiles)
 }
 
 // skillFixtureWithImplement returns a source FS holding every workflow skill
@@ -143,6 +146,7 @@ func skillFixtureWithImplement(implementBody string, extra fstest.MapFS) fstest.
 		"skills/workflows/spek-implement/SKILL.md":    &fstest.MapFile{Data: []byte(implementBody)},
 		"skills/workflows/spek-knowledge/SKILL.md":    &fstest.MapFile{Data: []byte("knowledge skill\n")},
 		"skills/workflows/spek-manage-repos/SKILL.md": &fstest.MapFile{Data: []byte("repos skill\n")},
+		"skills/workflows/spek-design/SKILL.md":       &fstest.MapFile{Data: []byte("design skill\n")},
 	}
 	for name, f := range extra {
 		fsys[name] = f
@@ -198,6 +202,7 @@ func TestInstallCommandWrappers_UsesFilenameFunc(t *testing.T) {
 		"implement.md":    "spek-implement",
 		"knowledge.md":    "spek-knowledge",
 		"manage-repos.md": "spek-manage-repos",
+		"design.md":       "spek-design",
 	}
 	for base, skillName := range expected {
 		path := filepath.Join(cmdRoot, base)
@@ -210,7 +215,7 @@ func TestInstallCommandWrappers_UsesFilenameFunc(t *testing.T) {
 		require.NotContains(t, content, "{{skill}}")
 	}
 
-	// Ensure exactly three files were written under cmdRoot.
+	// Ensure exactly six files were written under cmdRoot.
 	entries, err := os.ReadDir(cmdRoot)
 	require.NoError(t, err)
 	var files []string
@@ -219,7 +224,33 @@ func TestInstallCommandWrappers_UsesFilenameFunc(t *testing.T) {
 			files = append(files, e.Name())
 		}
 	}
-	require.Len(t, files, 5, "expected exactly five wrapper files, got %v", files)
+	require.Len(t, files, 6, "expected exactly six wrapper files, got %v", files)
+}
+
+// TestWorkflowSkillsAndDescriptionsAgree asserts the two install registries
+// stay in step: every skill in workflowSkills has a non-empty description in
+// workflowDescriptions, and workflowDescriptions carries no entry for a skill
+// that is not installed.
+//
+// This is asserted over the whole table rather than one row because the
+// failure it guards is silent: installCommandWrappers renders
+// workflowDescriptions[s.Name] straight into the wrapper, so a skill added to
+// one table and not the other ships an empty description into every
+// non-Claude agent's slash-command menu, with no error anywhere.
+func TestWorkflowSkillsAndDescriptionsAgree(t *testing.T) {
+	for _, s := range workflowSkills {
+		desc, ok := workflowDescriptions[s.Name]
+		require.Truef(t, ok, "workflowSkills lists %q but workflowDescriptions has no entry for it, so its command wrapper would render an empty description", s.Name)
+		require.NotEmptyf(t, desc, "workflowDescriptions entry for %q is empty, so its command wrapper would render an empty description", s.Name)
+	}
+
+	installed := make(map[string]bool, len(workflowSkills))
+	for _, s := range workflowSkills {
+		installed[s.Name] = true
+	}
+	for name := range workflowDescriptions {
+		require.Truef(t, installed[name], "workflowDescriptions describes %q, which workflowSkills does not install", name)
+	}
 }
 
 // validateSkillFrontmatter reads the SKILL.md at path, parses its YAML

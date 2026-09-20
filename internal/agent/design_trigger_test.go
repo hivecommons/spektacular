@@ -229,14 +229,17 @@ func TestRenderedDesignTriggerSectionNamesThreeOutcomes(t *testing.T) {
 	}
 }
 
-// TestRenderedDesignTriggerAcceptBranchNamesBothCommands asserts the accept
-// branch names both halves of the capture. Either alone is a broken outcome: a
-// document nothing references is invisible to the plan workflow, and a
-// reference to a document that was never written is a dangling pointer.
-func TestRenderedDesignTriggerAcceptBranchNamesBothCommands(t *testing.T) {
+// TestRenderedDesignTriggerAcceptBranchNamesTheWriteCommands asserts the accept
+// branch names every command the capture can end in. `design author` is for a
+// design Spektacular works out with the user, `design write` for one the user
+// handed over and that is stored byte for byte; `design ref add` records the
+// reference. Dropping any of them is a broken outcome: an interviewed design
+// with nowhere to land, a supplied document silently rewritten, or a document
+// nothing references and so invisible to the plan workflow.
+func TestRenderedDesignTriggerAcceptBranchNamesTheWriteCommands(t *testing.T) {
 	branch := designTriggerAcceptBranch(t, renderDesignTriggerSection(t))
 
-	for _, needle := range []string{"go run . design write", "go run . design ref add"} {
+	for _, needle := range []string{"go run . design author", "go run . design write", "go run . design ref add"} {
 		require.Contains(t, branch, needle,
 			"the accept branch of the Design-Worthy Detail Recognition section must name %q", needle)
 	}
@@ -264,4 +267,71 @@ func TestRenderedDesignTriggerSectionLeavesNoUnrenderedPlaceholder(t *testing.T)
 		"the {{command}} placeholder must render to the configured command")
 	require.NotContains(t, rendered, "{{command}}",
 		"the rendered section must not leak the {{command}} placeholder")
+}
+
+// TestRenderedDesignTriggerSectionSeparatesAlertnessFromOffering asserts the
+// section opens by telling the agent to stay alert throughout a design
+// conversation, and states that being alert is a different act from offering.
+// Both anchors are needed: an instruction that only mentions alertness, without
+// separating it from the offer, collapses back into the old behaviour where the
+// agent looked only once a detail had already settled and the moment had passed.
+// Expected substrings are hand-maintained literals, never derived from the
+// template.
+func TestRenderedDesignTriggerSectionSeparatesAlertnessFromOffering(t *testing.T) {
+	rendered := renderDesignTriggerSection(t)
+
+	anchors := []string{
+		"Stay alert whenever a conversation is working out",
+		"Being alert is not the same as offering.",
+	}
+	for _, needle := range anchors {
+		count := strings.Count(rendered, needle)
+		require.Equalf(t, 1, count,
+			"the rendered Design-Worthy Detail Recognition section must contain %q exactly once (found %d)", needle, count)
+	}
+}
+
+// TestRenderedDesignTriggerSectionNamesThreeEntryCases asserts the section still
+// covers all three ways a design enters a project that are easy to walk past: a
+// document the user already has, a design already held that the conversation is
+// changing, and design talk with no spec yet in existence. Losing any one of
+// them narrows the instruction back to a design emerging fresh in conversation.
+func TestRenderedDesignTriggerSectionNamesThreeEntryCases(t *testing.T) {
+	rendered := renderDesignTriggerSection(t)
+
+	anchors := []string{
+		"- **The user already has the document.**",
+		"- **A design that already exists is being changed.**",
+		"- **There is no spec in sight.**",
+	}
+	for _, needle := range anchors {
+		count := strings.Count(rendered, needle)
+		require.Equalf(t, 1, count,
+			"the rendered Design-Worthy Detail Recognition section must contain %q exactly once (found %d)", needle, count)
+	}
+}
+
+// TestRenderedDesignTriggerAcceptBranchConditionsTheReferenceOnASpec asserts the
+// accept branch records the reference only when a spec exists. The wording this
+// replaced made the reference unconditional, which stalls an agent that worked a
+// design out before any spec was written, so this is the phrase most likely to
+// be lost silently in a future reword.
+func TestRenderedDesignTriggerAcceptBranchConditionsTheReferenceOnASpec(t *testing.T) {
+	branch := designTriggerAcceptBranch(t, renderDesignTriggerSection(t))
+
+	require.Contains(t, branch, "if a spec exists**, record the reference",
+		"the accept branch must make recording the design reference conditional on a spec existing")
+}
+
+// TestRenderedDesignTriggerAcceptBranchHandsOffToTheSkillByName asserts the
+// accept branch hands the conversation to the design skill by name. Scoping this
+// to the accept branch is deliberate: naming the skill anywhere else in the
+// section would not tell an accepting agent which skill owns the capture.
+// TestRenderedDesignTriggerSectionNamesCommandsDirectly is the matching guard
+// that the hand-off stays prose and never becomes a command-line skill fetch.
+func TestRenderedDesignTriggerAcceptBranchHandsOffToTheSkillByName(t *testing.T) {
+	branch := designTriggerAcceptBranch(t, renderDesignTriggerSection(t))
+
+	require.Contains(t, branch, "invoke the `spek-design` skill",
+		"the accept branch must hand off to the design skill by name")
 }

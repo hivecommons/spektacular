@@ -28,16 +28,28 @@ in Constraints; a preference the planner may adapt belongs here as a one-line st
 worked design that would swamp the spec belongs in a document of its own. If a one-line steer
 captures it, it is not a design document.
 
+This covers two situations, not one. The design may be **settled in this conversation but not
+yet written down**, in which case there is authoring work to do before anything can be stored;
+or the user may **already have the document**, in which case it needs storing exactly as they
+supplied it and nothing else.
+
 Offer, never write unprompted. Say what you would capture, which declared source you would
 write it to (`{{config.command}} design sources` lists them), and why this spec is better off
 pointing at it than containing it. Then wait for the user's decision:
 
-- **Accept** — stage the document, write it with `{{config.command}} design write --data
-  '{"source":"<name>","path":"<path>"}' --from <staged file>`, then record the reference with
-  `{{config.command}} design ref add --data '{"spec":"{{spec_name}}","source":"<name>","path":"<path>"}'`.
-  Both steps, every time: a design nothing references is invisible to the plan workflow, and a
-  reference to a design that was never written is a broken reference. The design's content does
-  **not** also go into this section — a one-line pointer to it is what belongs here.
+- **Accept** — invoke the `spek-design` skill, which owns the writing from here: it runs the
+  authoring interview when the design still has to be worked out, and stores a document the user
+  already has without touching it. For a design Spektacular writes with the user it ends in
+  `{{config.command}} design author`, which stamps the document's lifecycle record:
+  `{{config.command}} design author --data '{"source":"<name>","path":"<path>"}' --from <staged file>`.
+  For one the user handed over it ends in `{{config.command}} design write`, which stores the
+  bytes exactly as supplied and adds no frontmatter:
+  `{{config.command}} design write --data '{"source":"<name>","path":"<path>"}' --from <staged file>`.
+  Then record the reference with
+  `{{config.command}} design ref add --data '{"spec":"{{spec_name}}","source":"<name>","path":"<path>"}'`. Both steps, every time: a design
+  nothing references is invisible to the plan workflow, and a reference to a design that was
+  never written is a broken reference. The design's content does **not** also go into this
+  section — a one-line pointer to it is what belongs here.
 - **Defer** ("not now", "once we've settled it") — write nothing, carry on, and you may raise
   the offer again later in this conversation if the detail keeps developing.
 - **Decline** ("no", "keep it in the spec") — write nothing, and do not raise the offer again

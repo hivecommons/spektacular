@@ -557,22 +557,46 @@ func TestTechnicalApproachStepOffersDesignCapture(t *testing.T) {
 	require.Contains(t, out, "- **Accept**", "technical_approach must name the accept outcome")
 	require.Contains(t, out, "- **Defer**", "technical_approach must name the defer outcome")
 	require.Contains(t, out, "- **Decline**", "technical_approach must name the decline outcome")
+
+	// Phase 3.3: the offer covers a design that has not been written down yet,
+	// not only one the user already holds. Without this framing the agent reads
+	// the offer as conditional on a document already existing and never makes
+	// it for a design settled in the conversation.
+	require.Contains(t, out, "This covers two situations, not one.",
+		"technical_approach must say the offer covers both an unwritten and an already-written design")
 }
 
-// TestTechnicalApproachStepNamesBothDesignCommands asserts that accepting the
-// offer runs BOTH halves of the capture: the document write and the reference
-// that makes it visible to the plan workflow. A rendered instruction naming
-// only one of them would leave either an unreferenced design or a broken
-// reference, which is the failure this pair exists to prevent.
-func TestTechnicalApproachStepNamesBothDesignCommands(t *testing.T) {
+// TestTechnicalApproachStepNamesAllDesignCommands asserts that accepting the
+// offer runs BOTH halves of the capture — a document write and the reference
+// that makes it visible to the plan workflow — and that the write half names
+// both of its commands: `design author` for a design Spektacular wrote with
+// the user, `design write` for one the user handed over. A rendered
+// instruction naming only one half would leave either an unreferenced design
+// or a broken reference; one naming only `design write` would push an
+// authored design through the verbatim command and lose its lifecycle record.
+//
+// Each command name must survive as a contiguous run of characters, which is
+// the point of asserting the rendered form: a template that wraps `design
+// author` across a newline reads as a broken command to the agent following
+// it, not merely to this test.
+func TestTechnicalApproachStepNamesAllDesignCommands(t *testing.T) {
 	out := renderStep(t, technicalApproach())
 
+	require.Contains(t, out, "spektacular design author",
+		"technical_approach must name the design author command")
 	require.Contains(t, out, "spektacular design write",
 		"technical_approach must name the design write command")
 	require.Contains(t, out, "spektacular design ref add",
 		"technical_approach must name the design ref add command")
 	require.Contains(t, out, "Both steps, every time",
 		"technical_approach must require both the write and the reference, every time")
+
+	// The accept path hands the writing to the skill that owns it, and that
+	// skill covers a design nobody has written down yet.
+	require.Contains(t, out, "invoke the `spek-design` skill",
+		"the accept path must hand the writing to the spek-design skill")
+	require.Contains(t, out, "authoring interview when the design still has to be worked out",
+		"the accept path must work for a design that does not yet exist in written form")
 }
 
 // TestTechnicalApproachStepMakesDeclineFinal asserts the decline outcome is

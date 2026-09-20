@@ -27,7 +27,7 @@ On each turn, the CLI returns JSON containing an `instruction` field. That instr
 
 # Reading and writing plan files
 
-The CLI owns the plan documents — `plan.md`, the plan's `context.md`, and `research.md`. **Never read or write them with the `Write`, `Edit`, or `Read` tools** — those bypass Spektacular and the configured plan directory. All plan document access goes through `{{command}} plan file`:
+The CLI owns the plan documents — `plan.md`, the plan's `context.md`, and `research.md`. All plan document access goes through `{{command}} plan file`:
 
 - `{{command}} plan file read <name>/<doc>.md` — read a plan document from the plan store.
 - `{{command}} plan file write <name>/<doc>.md --from <source-path>` — write a plan document into the plan store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
@@ -67,7 +67,7 @@ The working sidecar `.spektacular/working-context.md` (at the repo's `.spektacul
 
 > **Cross-repo planning.** A project may register multiple member repos (see `{{command}} repo list`). The workflow's discovery and architecture instructions send you to `{{command}} repo list` and direct you to attribute every requirement to the repo (and files) it belongs to — research across all registered repos, in the `root` reported for each, and record the attribution in the plan's context document.
 
-Ask the user which spec to plan against before proceeding. To enumerate the available specs, run `{{command}} spec file list` — the CLI's list is the source of truth for what counts as a spec. **Do not** use `ls`, `find`, or the `Read` tool against `.spektacular/specs/` to discover specs; those bypass Spektacular's configured spec directory and may show entries the CLI does not consider valid. You don't need to look for an in-progress workflow yourself — the CLI detects and reports one for you (see below).
+Ask the user which spec to plan against before proceeding. To enumerate the available specs, run `{{command}} spec file list` — the CLI's list is the source of truth for what counts as a spec. You don't need to look for an in-progress workflow yourself — the CLI detects and reports one for you (see below).
 
 Start the plan workflow by running:
 

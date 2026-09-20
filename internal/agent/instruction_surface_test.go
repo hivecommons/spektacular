@@ -18,8 +18,17 @@ import (
 // forbiddenInstructionSubstrings is the closed list of literal patterns that
 // must never appear in the agent-facing instruction surface (skill templates,
 // step templates, and the dogfooded rendered skills under .claude/skills/).
-// Each entry encodes a piece of the old stdin/heredoc interface that the
+// Most entries encode a piece of the old stdin/heredoc interface that the
 // `--from <path>` flag replaced.
+//
+// The last entry is different in kind: it is the exact sentence that used to
+// claim Spektacular adds no frontmatter to a design document, full stop. That
+// is now false — `design author` stamps a lifecycle record — and only `design
+// write`, for a document Spektacular did not author, leaves the bytes alone.
+// The guard is deliberately the old literal rather than a pattern over the
+// idea, because the corrected wording legitimately says "adding no frontmatter
+// to it" about the verbatim command. It therefore catches that one sentence
+// returning, not the general class of unqualified frontmatter claims.
 var forbiddenInstructionSubstrings = []string{
 	"cat .spektacular/tmp/",
 	"| {{config.command}} spec file write",
@@ -27,6 +36,7 @@ var forbiddenInstructionSubstrings = []string{
 	"| go run . spec file write",
 	"| go run . plan file write",
 	"reads stdin",
+	"with no frontmatter added and nothing reformatted",
 }
 
 // TestEmbeddedTemplatesAvoidStdinInstructionSurface walks the embedded

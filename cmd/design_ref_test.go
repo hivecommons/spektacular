@@ -2,11 +2,14 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/jumppad-labs/spektacular/internal/design"
 	"github.com/jumppad-labs/spektacular/internal/output"
 	"github.com/stretchr/testify/require"
 )
@@ -79,6 +82,86 @@ const (
 // a spec with references rather than build one up through `ref add`.
 func specFixtureCarrying(refs string) string {
 	return "---\ncreated_date: 2026-07-01\ndocument_status: draft\n" + refs + "---\n\n" + designRefSpecBody
+}
+
+// The lifecycle block and body of a design Spektacular authored. Only such a
+// document carries back-links, so the tests that exercise them seed a document
+// of this shape and assemble the expected bytes from the same hand-written
+// strings — never by running `design author`, which is the code under test's
+// neighbour.
+const (
+	designRefAuthoredKeys = "created_date: \"2026-01-05\"\ndocument_status: draft\n"
+	designRefAuthoredBody = "# Payments v2\n\nThe settled request shape.\n"
+)
+
+// seedAuthoredDesign writes an authored design at relPath within a design
+// source, whose lifecycle block is designRefAuthoredKeys followed by the
+// hand-written `specs:` fragment backLinks (empty for a document nothing
+// references yet). It returns the document's full path.
+func seedAuthoredDesign(t *testing.T, loc, relPath, backLinks string) string {
+	t.Helper()
+	return seedDesignDoc(t, loc, relPath,
+		designAuthoredDoc(designRefAuthoredKeys+backLinks, designRefAuthoredBody))
+}
+
+// requireAuthoredDesign asserts the stored bytes at path are the seeded
+// lifecycle block plus backLinks and nothing else: the back-link list is the
+// only thing a reference write may change about a design document.
+func requireAuthoredDesign(t *testing.T, path, backLinks string) {
+	t.Helper()
+	onDisk, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t,
+		designAuthoredDoc(designRefAuthoredKeys+backLinks, designRefAuthoredBody),
+		string(onDisk))
+}
+
+// specsListedBy scans the `specs:` list out of a stored design document, and
+// designsReferencedBy scans the `designs:` list out of a stored spec. Both
+// scan the bytes by hand rather than calling metadata.Split, so the
+// consistency check that compares the two sides has an oracle the code under
+// test cannot influence.
+func specsListedBy(t *testing.T, path string) []string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	out := []string{}
+	inList := false
+	for _, line := range strings.Split(string(raw), "\n") {
+		switch {
+		case line == "specs:":
+			inList = true
+		case inList && strings.HasPrefix(line, "    - "):
+			out = append(out, strings.TrimPrefix(line, "    - "))
+		case inList:
+			inList = false
+		}
+	}
+	return out
+}
+
+func designsReferencedBy(t *testing.T, path string) []designRefItem {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	out := []designRefItem{}
+	inList := false
+	for _, line := range strings.Split(string(raw), "\n") {
+		switch {
+		case line == "designs:":
+			inList = true
+		case inList && strings.HasPrefix(line, "    - source: "):
+			out = append(out, designRefItem{Source: strings.TrimPrefix(line, "    - source: ")})
+		case inList && strings.HasPrefix(line, "      path: "):
+			require.NotEmpty(t, out, "a path line must follow a source line")
+			out[len(out)-1].Path = strings.TrimPrefix(line, "      path: ")
+		case inList:
+			inList = false
+		}
+	}
+	return out
 }
 
 // designRefProject lays out a project rooted at a t.TempDir() and chdirs into
@@ -358,39 +441,58 @@ func TestDesignRead_RemovedDocumentIsNotFound(t *testing.T) {
 }
 
 // Criterion: two specs can carry the same reference, each reported
-// independently, and the design document itself is unchanged by either
-// operation.
+// independently. A design Spektacular did not author is unchanged by either
+// operation; one it did author records both specs and keeps the survivor when
+// the other drops its reference.
 func TestDesignRef_TwoSpecsShareOneDesignIndependently(t *testing.T) {
-	root, apiLoc := designRefProject(t)
-	writeSpecFixture(t, root, "000054_billing", designRefSpecFixture)
-	writeSpecFixture(t, root, "000055_invoicing", designRefSpecFixture)
+	t.Run("a design Spektacular did not author", func(t *testing.T) {
+		root, apiLoc := designRefProject(t)
+		writeSpecFixture(t, root, "000054_billing", designRefSpecFixture)
+		writeSpecFixture(t, root, "000055_invoicing", designRefSpecFixture)
 
-	// snapshotDir (init_test.go) walks the directory with filepath.WalkDir and
-	// os.ReadFile, hashing each file's bytes — an oracle that never consults
-	// the code under test.
-	before := snapshotDir(t, apiLoc)
+		// snapshotDir (init_test.go) walks the directory with filepath.WalkDir
+		// and os.ReadFile, hashing each file's bytes — an oracle that never
+		// consults the code under test.
+		before := snapshotDir(t, apiLoc)
 
-	designRefWrite(t, "add", "--data", `{"spec":"000054_billing","source":"api","path":"payments/v2.md"}`)
-	designRefWrite(t, "add", "--data", `{"spec":"000055_invoicing","source":"api","path":"payments/v2.md"}`)
+		designRefWrite(t, "add", "--data", `{"spec":"000054_billing","source":"api","path":"payments/v2.md"}`)
+		designRefWrite(t, "add", "--data", `{"spec":"000055_invoicing","source":"api","path":"payments/v2.md"}`)
 
-	shared := []designRefListItem{
-		{Source: "api", Path: "payments/v2.md", Resolved: true, Location: filepath.Join(apiLoc, "payments", "v2.md")},
-	}
-	billing := designRefList(t, "000054_billing")
-	require.Equal(t, "000054_billing", billing.Spec)
-	require.Equal(t, shared, billing.Refs)
+		shared := []designRefListItem{
+			{Source: "api", Path: "payments/v2.md", Resolved: true, Location: filepath.Join(apiLoc, "payments", "v2.md")},
+		}
+		billing := designRefList(t, "000054_billing")
+		require.Equal(t, "000054_billing", billing.Spec)
+		require.Equal(t, shared, billing.Refs)
 
-	invoicing := designRefList(t, "000055_invoicing")
-	require.Equal(t, "000055_invoicing", invoicing.Spec)
-	require.Equal(t, shared, invoicing.Refs)
+		invoicing := designRefList(t, "000055_invoicing")
+		require.Equal(t, "000055_invoicing", invoicing.Spec)
+		require.Equal(t, shared, invoicing.Refs)
 
-	// Dropping one spec's reference leaves the other's standing.
-	dropped := designRefWrite(t, "remove", "--data", `{"spec":"000054_billing","source":"api","path":"payments/v2.md"}`)
-	require.Empty(t, dropped.Designs)
-	require.Equal(t, shared, designRefList(t, "000055_invoicing").Refs)
+		// Dropping one spec's reference leaves the other's standing.
+		dropped := designRefWrite(t, "remove", "--data", `{"spec":"000054_billing","source":"api","path":"payments/v2.md"}`)
+		require.Empty(t, dropped.Designs)
+		require.Equal(t, shared, designRefList(t, "000055_invoicing").Refs)
 
-	require.Equal(t, before, snapshotDir(t, apiLoc),
-		"recording or dropping a reference must not touch the design source at all")
+		require.Equal(t, before, snapshotDir(t, apiLoc),
+			"recording or dropping a reference must not touch the design source at all")
+	})
+
+	t.Run("a design Spektacular authored", func(t *testing.T) {
+		root, apiLoc := designRefProject(t)
+		docPath := seedAuthoredDesign(t, apiLoc, "authored/v2.md", "")
+		writeSpecFixture(t, root, "000054_billing", designRefSpecFixture)
+		writeSpecFixture(t, root, "000055_invoicing", designRefSpecFixture)
+
+		designRefWrite(t, "add", "--data", `{"spec":"000054_billing","source":"api","path":"authored/v2.md"}`)
+		designRefWrite(t, "add", "--data", `{"spec":"000055_invoicing","source":"api","path":"authored/v2.md"}`)
+		requireAuthoredDesign(t, docPath, "specs:\n    - 000054_billing\n    - 000055_invoicing\n")
+
+		// Dropping one spec's reference leaves the other spec's back-link
+		// standing on the same document.
+		designRefWrite(t, "remove", "--data", `{"spec":"000054_billing","source":"api","path":"authored/v2.md"}`)
+		requireAuthoredDesign(t, docPath, "specs:\n    - 000055_invoicing\n")
+	})
 }
 
 // Criterion: a reference whose document does not exist yet records
@@ -411,6 +513,13 @@ func TestDesignRefAdd_RecordsAReferenceToADocumentThatDoesNotExistYet(t *testing
 	}, listed.Refs)
 	require.Equal(t, 1, listed.Unresolved)
 	require.NotEmpty(t, listed.NextAction)
+
+	// There is no document to carry a back-link either way, so dropping the
+	// reference again succeeds and still conjures nothing into the source.
+	dropped := designRefWrite(t, "remove", "--data", `{"spec":"000054_billing","source":"api","path":"payments/v3.md"}`)
+	require.Empty(t, dropped.Designs)
+	require.NoFileExists(t, filepath.Join(apiLoc, "payments", "v3.md"),
+		"dropping a reference must not create the document")
 }
 
 // Criterion: every refusal surfaces as the documented failure code, exit code
@@ -523,27 +632,273 @@ func TestDesignRefSchema_PublishesDocumentedShapes(t *testing.T) {
 }
 
 // Criterion: a bare spec name and the same name with a .md suffix address the
-// same stored spec.
+// same stored spec, and both spellings leave the referenced design carrying
+// one back-link, written in the bare form `spec file list` reports.
 func TestDesignRef_BareAndSuffixedSpecNamesAddressTheSameSpec(t *testing.T) {
 	root, apiLoc := designRefProject(t)
+	docPath := seedAuthoredDesign(t, apiLoc, "authored/v2.md", "")
 	specPath := writeSpecFixture(t, root, "000054_billing", designRefSpecFixture)
 
-	designRefWrite(t, "add", "--data", `{"spec":"000054_billing","source":"api","path":"payments/v2.md"}`)
+	designRefWrite(t, "add", "--data", `{"spec":"000054_billing","source":"api","path":"authored/v2.md"}`)
+	designRefWrite(t, "add", "--data", `{"spec":"000054_billing.md","source":"api","path":"authored/v2.md"}`)
+	requireAuthoredDesign(t, docPath, "specs:\n    - 000054_billing\n")
 
 	// Listing under the suffixed name reports the reference recorded under the
 	// bare one.
 	listed := designRefList(t, "000054_billing.md")
 	require.Equal(t, "000054_billing.md", listed.Spec, "the envelope echoes the name as given")
 	require.Equal(t, []designRefListItem{
-		{Source: "api", Path: "payments/v2.md", Resolved: true, Location: filepath.Join(apiLoc, "payments", "v2.md")},
+		{Source: "api", Path: "authored/v2.md", Resolved: true, Location: filepath.Join(apiLoc, "authored", "v2.md")},
 	}, listed.Refs)
 
 	// And removing under the suffixed name clears the reference from the one
-	// stored file.
-	dropped := designRefWrite(t, "remove", "--data", `{"spec":"000054_billing.md","source":"api","path":"payments/v2.md"}`)
+	// stored file, and the back-link stored under the bare one with it.
+	dropped := designRefWrite(t, "remove", "--data", `{"spec":"000054_billing.md","source":"api","path":"authored/v2.md"}`)
 	require.Empty(t, dropped.Designs)
 
 	stored, err := os.ReadFile(specPath)
 	require.NoError(t, err)
 	require.NotContains(t, string(stored), "designs")
+	requireAuthoredDesign(t, docPath, "")
+}
+
+// Criterion: recording a reference adds the spec to the authored design's list
+// of referencing specs, and recording the same reference a second time changes
+// nothing — the design's list carries the spec exactly once.
+func TestDesignRefAdd_RecordsTheSpecOnTheAuthoredDesignOnce(t *testing.T) {
+	root, apiLoc := designRefProject(t)
+	docPath := seedAuthoredDesign(t, apiLoc, "authored/v2.md", "")
+	writeSpecFixture(t, root, "000054_billing", designRefSpecFixture)
+
+	const data = `{"spec":"000054_billing","source":"api","path":"authored/v2.md"}`
+	designRefWrite(t, "add", "--data", data)
+	requireAuthoredDesign(t, docPath, "specs:\n    - 000054_billing\n")
+
+	// The second add is a no-op on both documents, not a second entry.
+	afterFirst := snapshotDir(t, apiLoc)
+	designRefWrite(t, "add", "--data", data)
+	require.Equal(t, afterFirst, snapshotDir(t, apiLoc),
+		"a duplicate add must not rewrite the design document")
+}
+
+// Criterion: removing a reference removes that spec from the design's list of
+// referencing specs and leaves every other spec on it intact.
+func TestDesignRefRemove_DropsOnlyThatSpecFromTheDesignsBackLinks(t *testing.T) {
+	root, apiLoc := designRefProject(t)
+	docPath := seedAuthoredDesign(t, apiLoc, "authored/v2.md",
+		"specs:\n    - 000012_alpha\n    - 000054_billing\n    - 000030_beta\n")
+	writeSpecFixture(t, root, "000054_billing", specFixtureCarrying(
+		"designs:\n"+
+			"  - source: api\n"+
+			"    path: authored/v2.md\n"))
+
+	designRefWrite(t, "remove", "--data", `{"spec":"000054_billing","source":"api","path":"authored/v2.md"}`)
+	requireAuthoredDesign(t, docPath, "specs:\n    - 000012_alpha\n    - 000030_beta\n")
+}
+
+// Criterion: recording or removing a reference to a design that carries no
+// lifecycle record succeeds and leaves that document byte for byte. The two
+// shapes are distinct: a document with no frontmatter at all parses as "not
+// ours", and one carrying the team's own YAML header fails to parse as a
+// lifecycle block and must be read the same way rather than rewritten.
+func TestDesignRef_ADesignWithNoLifecycleRecordIsLeftUntouched(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		relPath string
+		doc     string
+	}{
+		{
+			name:    "no frontmatter at all",
+			relPath: "plain.md",
+			doc:     "# Plain\n\nNo frontmatter anywhere.\n",
+		},
+		{
+			name:    "the team's own frontmatter",
+			relPath: "team.md",
+			doc:     "---\ntitle: Payments v2\nauthor: the payments team\n---\n\n# Team\n\nTheirs.\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, apiLoc := designRefProject(t)
+			seedDesignDoc(t, apiLoc, tc.relPath, tc.doc)
+			writeSpecFixture(t, root, "000054_billing", designRefSpecFixture)
+
+			before := snapshotDir(t, apiLoc)
+			data := `{"spec":"000054_billing","source":"api","path":"` + tc.relPath + `"}`
+
+			designRefWrite(t, "add", "--data", data)
+			require.Equal(t, before, snapshotDir(t, apiLoc),
+				"recording a reference must leave a design with no lifecycle record byte for byte")
+
+			designRefWrite(t, "remove", "--data", data)
+			require.Equal(t, before, snapshotDir(t, apiLoc),
+				"removing a reference must leave a design with no lifecycle record byte for byte")
+		})
+	}
+}
+
+// Criterion: an authored design never lists a spec that does not reference it,
+// and never omits one that does. This is the invariant the whole back-link
+// feature exists to hold, so it is asserted over a sequence of adds and
+// removes across two specs and two designs rather than over a single write.
+//
+// The exact lists are pinned first, by hand: the cross-check below compares
+// the two sides of each pair against each other, so it would hold vacuously if
+// every list came out empty.
+func TestDesignRef_BackLinksAgreeWithTheSpecsThatReferenceThem(t *testing.T) {
+	root, apiLoc := designRefProject(t)
+	designPaths := map[string]string{
+		"authored/alpha.md": seedAuthoredDesign(t, apiLoc, "authored/alpha.md", ""),
+		"authored/beta.md":  seedAuthoredDesign(t, apiLoc, "authored/beta.md", ""),
+	}
+	specPaths := map[string]string{
+		"000054_billing":   writeSpecFixture(t, root, "000054_billing", designRefSpecFixture),
+		"000055_invoicing": writeSpecFixture(t, root, "000055_invoicing", designRefSpecFixture),
+	}
+
+	for _, step := range []struct{ verb, spec, doc string }{
+		{"add", "000054_billing", "authored/alpha.md"},
+		{"add", "000055_invoicing", "authored/alpha.md"},
+		{"add", "000055_invoicing", "authored/beta.md"},
+		{"add", "000054_billing", "authored/beta.md"},
+		{"remove", "000054_billing", "authored/alpha.md"},
+		{"remove", "000055_invoicing", "authored/beta.md"},
+		{"add", "000054_billing", "authored/alpha.md"},
+	} {
+		designRefWrite(t, step.verb, "--data",
+			`{"spec":"`+step.spec+`","source":"api","path":"`+step.doc+`"}`)
+	}
+
+	require.Equal(t, []string{"000055_invoicing", "000054_billing"},
+		specsListedBy(t, designPaths["authored/alpha.md"]))
+	require.Equal(t, []string{"000054_billing"},
+		specsListedBy(t, designPaths["authored/beta.md"]))
+	require.Equal(t, []designRefItem{
+		{Source: "api", Path: "authored/beta.md"},
+		{Source: "api", Path: "authored/alpha.md"},
+	}, designsReferencedBy(t, specPaths["000054_billing"]))
+	require.Equal(t, []designRefItem{
+		{Source: "api", Path: "authored/alpha.md"},
+	}, designsReferencedBy(t, specPaths["000055_invoicing"]))
+
+	for doc, docPath := range designPaths {
+		listed := specsListedBy(t, docPath)
+		for spec, specPath := range specPaths {
+			references := slices.Contains(designsReferencedBy(t, specPath),
+				designRefItem{Source: "api", Path: doc})
+			require.Equal(t, references, slices.Contains(listed, spec),
+				"design %q and spec %q disagree about whether the spec references the design", doc, spec)
+		}
+	}
+}
+
+// errForcedBackLink is the failure the seam substituted below returns. Its
+// text is hand-written here and asserted in the reported message, which is how
+// the underlying cause is shown to be carried through rather than swallowed.
+var errForcedBackLink = errors.New("forced back-link failure")
+
+// chmodUnwritable makes path read-only for the rest of the test and restores
+// its mode afterwards, so the test's own temp tree can still be removed.
+func chmodUnwritable(t *testing.T, path string) {
+	t.Helper()
+	require.NoError(t, os.Chmod(path, 0o444))
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+}
+
+// Criterion: the two writes a reference operation makes cannot be made atomic,
+// so the behaviour when the second one fails is defined rather than left to
+// chance. The operation fails as a whole and the spec is put back exactly as
+// it was; when putting the spec back also fails, that is reported as its own
+// distinct outcome naming both documents to repair by hand. Recording and
+// removing a reference carry the same guarantees, so both are exercised.
+//
+// The two codes must be told apart by an automated caller and not only by
+// reading their wording, so each path's observed code is captured and the two
+// are compared at the end: one says reissue the command, the other says repair
+// two named files, and branching on the code must not conflate them.
+func TestDesignRef_BackLinkFailureLeavesNoDisagreementBehind(t *testing.T) {
+	var backLinkFailed, rollbackFailed string
+
+	t.Run("add: the design's record cannot be updated", func(t *testing.T) {
+		root, apiLoc := designRefProject(t)
+		docPath := seedAuthoredDesign(t, apiLoc, "authored/v2.md", "")
+		specPath := writeSpecFixture(t, root, "000054_billing", designRefSpecFixture)
+		chmodUnwritable(t, docPath)
+
+		er := refuseDesignRef(t, "add", "--data", `{"spec":"000054_billing","source":"api","path":"authored/v2.md"}`)
+		backLinkFailed = er.Code
+		require.Equal(t, "design_ref_backlink_failed", er.Code)
+		require.Equal(t, docPath, er.Resource)
+		require.Contains(t, er.Message, docPath,
+			"the failure must name the design document that could not be updated")
+		require.Contains(t, er.NextAction, "reissue",
+			"the runnable next step is to retry the same command, not to repair anything")
+
+		stored, err := os.ReadFile(specPath)
+		require.NoError(t, err)
+		require.Equal(t, designRefSpecFixture, string(stored),
+			"a failed back-link write must leave the spec exactly as it was before the command")
+	})
+
+	t.Run("remove: the design's record cannot be updated", func(t *testing.T) {
+		root, apiLoc := designRefProject(t)
+		docPath := seedAuthoredDesign(t, apiLoc, "authored/v2.md",
+			"specs:\n    - 000054_billing\n")
+		// The spec starts out carrying the reference, so the removal has both
+		// halves of the pair to undo rather than being a no-op.
+		carried := specFixtureCarrying(
+			"designs:\n" +
+				"  - source: api\n" +
+				"    path: authored/v2.md\n")
+		specPath := writeSpecFixture(t, root, "000054_billing", carried)
+		chmodUnwritable(t, docPath)
+
+		er := refuseDesignRef(t, "remove", "--data", `{"spec":"000054_billing","source":"api","path":"authored/v2.md"}`)
+		require.Equal(t, "design_ref_backlink_failed", er.Code)
+		require.Equal(t, docPath, er.Resource)
+		require.Contains(t, er.Message, docPath)
+		require.Contains(t, er.NextAction, "reissue")
+
+		stored, err := os.ReadFile(specPath)
+		require.NoError(t, err)
+		require.Equal(t, carried, string(stored),
+			"a failed back-link removal must leave the spec exactly as it was before the command")
+	})
+
+	t.Run("restoring the spec afterwards also fails", func(t *testing.T) {
+		root, apiLoc := designRefProject(t)
+		docPath := seedAuthoredDesign(t, apiLoc, "authored/v2.md", "")
+		specPath := writeSpecFixture(t, root, "000054_billing", designRefSpecFixture)
+
+		// The filesystem alone cannot reach this branch. A store write is
+		// os.MkdirAll followed by os.WriteFile, so any permission state that
+		// fails the compensating write fails the identical first spec write
+		// too, and the run never gets as far as the compensation. The spec has
+		// to become unwritable *between* the two writes, and the back-link
+		// write is the only thing that runs there — hence the seam.
+		original := writeBackLinkFn
+		t.Cleanup(func() { writeBackLinkFn = original })
+		writeBackLinkFn = func(_ *design.Set, _ design.Document, _ string, _ bool) error {
+			chmodUnwritable(t, specPath)
+			return errForcedBackLink
+		}
+
+		er := refuseDesignRef(t, "add", "--data", `{"spec":"000054_billing","source":"api","path":"authored/v2.md"}`)
+		rollbackFailed = er.Code
+		require.Equal(t, "design_ref_backlink_rollback_failed", er.Code)
+		require.Equal(t, specPath, er.Resource)
+		require.Contains(t, er.Message, docPath,
+			"the failure must name the design left out of agreement")
+		require.Contains(t, er.Message, specPath,
+			"the failure must name the spec that could not be restored")
+		require.Contains(t, er.Message, errForcedBackLink.Error(),
+			"the underlying cause must be carried through, not swallowed")
+		require.Contains(t, er.NextAction, "by hand",
+			"the runnable next step is a manual reconciliation, not a retry")
+		require.Contains(t, er.NextAction, docPath)
+		require.Contains(t, er.NextAction, specPath)
+	})
+
+	require.NotEqual(t, backLinkFailed, rollbackFailed,
+		"an agent branching on the code must not treat 'reissue the command' and 'reconcile two files by hand' as the same outcome")
 }

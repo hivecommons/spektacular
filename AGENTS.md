@@ -214,3 +214,99 @@ The user's response falls into one of three outcomes:
 This is the recognition trigger only; it does not change how a knowledge
 entry gets written once you decide to write one — that is still entirely the
 `spek-knowledge` skill's job, per the Memory & Context section above.
+
+## Spektacular's Files Are Reached Through Spektacular
+
+> Managed by `go run . init` — edit `templates/agents/store-access.md`
+> in the Spektacular source, not this section in place. Hand edits will not
+> survive the next init.
+
+Every file Spektacular manages is reached through its CLI, never with your own
+file tools. This covers specs, plans, their context and research documents,
+test plans, changelog records, knowledge entries and design documents.
+
+Never use the `Write` or `Edit` tool on a file under a store directory, and
+never build a store path by hand. Use `go run . spec file`,
+`go run . plan file`, `go run . changelog file`, `go run . knowledge`
+and `go run . design` instead. A write supplies its body with
+`--from <path>`, never on stdin and never as prose on the command line.
+
+Do not use `ls`, `find`, or the `Read` tool to discover what a store holds,
+against `.spektacular/specs/`, `.spektacular/plans/`, or any configured store
+directory. The CLI's own `file list` is the source of truth for what counts as
+a stored artifact: a directory listing can show entries Spektacular does not
+consider valid, and omits the metadata the CLI reports alongside each one.
+
+This includes an edit that looks too small to be worth a command, such as
+ticking a phase checkbox in a plan or appending a line to a changelog record.
+Read the document with the CLI, apply the change, and write it back with the
+CLI. A store write is not a file copy: it merges Spektacular's lifecycle
+metadata, preserving a created date and carrying forward fields such as a
+spec's recorded design references. An in-place edit destroys them silently, and
+the loss surfaces much later.
+
+Three paths are deliberately yours to write with your own tools, because they
+are scratch and hand-off surfaces rather than stores:
+
+- `.spektacular/tmp/` — content staged on the way to a CLI write, removed once
+  it succeeds.
+- `.spektacular/work/<name>/` — a workflow's per-section working files.
+- `.spektacular/working-context.md` — the notes a resumed session reads back.
+
+This rule binds everywhere: inside the spec, plan and implement workflows, and
+equally in ad-hoc questions, unrelated skills and general exploration. It also
+binds every sub-agent you launch. A sub-agent inherits this file but not the
+skill that spawned it, so when you delegate work that touches a store, say so
+in its prompt.
+
+## Design-Worthy Detail Recognition
+
+> Managed by `go run . init` — edit `templates/agents/design-trigger.md`
+> in the Spektacular source, not this section in place. Hand edits will not
+> survive the next init.
+
+While a conversation is settling how something will actually work — an API's
+shape, a user-facing flow, a data format, or a worked example of any of
+these — watch for the moment that detail becomes settled enough to build to.
+That is a design document: the worked design a feature is built to, kept
+wherever the team already keeps its designs, and referenced by the spec that
+needs it rather than copied into it. Recognizing this moment is your job, not
+the user's — don't wait to be asked.
+
+The bar is deliberately high. A design document is not a place to park
+anything technical that came up. Ask whether the detail is **settled** (the
+user has decided it, not merely floated it), whether it is **worked** (a
+concrete shape, format or flow rather than a direction), and whether it would
+**make the spec unreadable if written inline**. All three must hold. A hard
+boundary the solution must honour is a constraint and belongs in the spec; a
+preference the planner may adapt is technical direction and belongs in the
+spec; only a worked design that would swamp the spec belongs in a document of
+its own. If a one-line steer captures it, it is not a design document.
+
+When you recognize the moment, offer — never write a design document
+unprompted. Say what you would capture, which declared source you would write
+it to, and why the spec is better off pointing at it than containing it. Run
+`go run . design sources` to see the declared sources if you do not
+already know them. Wait for the user's decision before doing anything else.
+
+The user's response falls into one of three outcomes:
+
+- **Accept** — write the document with `go run . design write --data
+  '{"source":"<name>","path":"<path>"}' --from <staged file>`, then record the
+  reference on the spec with `go run . design ref add --data
+  '{"spec":"<spec name>","source":"<name>","path":"<path>"}'`. Both steps, every
+  time: a document nothing references is invisible to the plan workflow, and a
+  reference to a document that was never written is a broken reference.
+- **Defer** ("not now", "later", "once we've settled it") — write nothing.
+  Continue the conversation normally, and treat this as temporary: if the
+  discussion keeps developing that detail, you may raise the offer again later
+  in the same conversation.
+- **Decline** ("no", "keep it in the spec") — write nothing, and do not raise
+  the offer again for this detail for the remainder of the conversation. A
+  decline is final for that detail, not a "not now." Declining also means the
+  detail does not get smuggled into the spec body instead: it stays out, or it
+  stays as the one-line steer it already was.
+
+Silence or deflection is not acceptance. Never create or overwrite a design
+document without the user's explicit agreement — though a direct instruction
+to write one *is* that agreement, and needs no further confirmation.

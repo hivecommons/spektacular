@@ -1,8 +1,9 @@
 schema: 3
 written_by: 0.1.0
+skills_version: 0.1.0
 name: spektacular
 command: go run .
-agent: bob
+agent: claude
 spec_trigger_threshold: moderate
 debug:
     enabled: true
@@ -19,9 +20,14 @@ changelog:
     provider: file
     config:
         directory: changelog
+design:
+    sources:
+        - name: design
+          provider: file
+          config:
+            location: design
 repos:
     - name: spektacular
       location: .
     - name: docs
       location: ../../spektacular-website/.spektacular
-skills_version: 0.1.0

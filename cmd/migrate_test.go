@@ -262,6 +262,10 @@ repos:
 	require.True(t, rep.Skills.Reinstall)
 
 	require.FileExists(t, filepath.Join(dir, ".claude", "skills", "spek-new", "SKILL.md"))
+	// An upgrade installs skills this project never had, spek-design included,
+	// and the settings comparison below is what pins "without any settings
+	// change" alongside it.
+	require.FileExists(t, filepath.Join(dir, ".claude", "skills", "spek-design", "SKILL.md"))
 	after := readSettingsMap(t, cfgPath)
 	require.Equal(t, "0.1.0", after["skills_version"])
 	for _, k := range []string{"skills_version", "written_by"} {

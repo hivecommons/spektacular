@@ -25,13 +25,13 @@ On each turn, the CLI returns JSON containing an `instruction` field. That instr
 
 # Reading and writing plan files
 
-The CLI owns the plan documents — `plan.md`, the plan's `context.md`, and `research.md`. **Never read or write them with the `Write`, `Edit`, or `Read` tools** — those bypass Spektacular and the configured plan directory. All plan document access goes through `{{command}} plan file`:
+The CLI owns the plan documents — `plan.md`, the plan's `context.md`, and `research.md`. All plan document access goes through `{{command}} plan file`:
 
 - `{{command}} plan file read <name>/<doc>.md` — read a plan document from the plan store.
 - `{{command}} plan file write <name>/<doc>.md --from <source-path>` — write a plan document into the plan store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
 - `{{command}} plan file list` — list plans in the plan store.
 
-This includes the edits the implement workflow makes to `plan.md` — ticking phase checkboxes and appending changelog entries. Read the document with `plan file read`, apply the change, and commit it with `plan file write`. Never edit a plan document in place with the `Edit` tool. Path arguments are plan-directory-relative document paths (e.g. `my-feature/plan.md`).
+This includes the edits the implement workflow makes to `plan.md` — ticking phase checkboxes and appending changelog entries. Read the document with `plan file read`, apply the change, and commit it with `plan file write`. Path arguments are plan-directory-relative document paths (e.g. `my-feature/plan.md`).
 
 # How to start
 
@@ -41,7 +41,7 @@ This includes the edits the implement workflow makes to `plan.md` — ticking ph
 
 > **Cross-repo implementation.** When the plan attributes work to registered member repos, carry each part of the work out in its attributed repo's code (`{{command}} repo list` reports where it lives as `root`), and follow the workflow's changelog instructions to write the central record plus one derived entry per affected repo via `{{command}} changelog file write ... --repo <name>`.
 
-Ask the user which plan to implement before proceeding. To enumerate the available plans, run `{{command}} plan file list` — the CLI's list is the source of truth for what counts as a plan. **Do not** use `ls`, `find`, or the `Read` tool against `.spektacular/plans/` to discover plans; those bypass Spektacular's configured plan directory and may show entries the CLI does not consider valid. You don't need to look for an in-progress workflow yourself — the CLI detects and reports one for you (see below).
+Ask the user which plan to implement before proceeding. To enumerate the available plans, run `{{command}} plan file list` — the CLI's list is the source of truth for what counts as a plan. You don't need to look for an in-progress workflow yourself — the CLI detects and reports one for you (see below).
 
 The plan must already exist in the plan store — confirm with `{{command}} plan file list`. If it does not, stop and tell the user to run `{{command}} plan` first.
 

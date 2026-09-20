@@ -186,6 +186,138 @@ func writeRefs(st store.Store, specPath string, raw []byte, refs []metadata.Desi
 	return st.Write(specPath, merged)
 }
 
+// bareSpecName normalises a spec name to the form stored in a design's
+// back-link list. specStore accepts a bare name or one suffixed with .md and
+// appends the extension itself, so both spellings address the same spec; the
+// bare form is what `spec file list` reports, so storing that keeps a specs:
+// list stable however the caller happened to spell it.
+func bareSpecName(name string) string {
+	return strings.TrimSuffix(name, ".md")
+}
+
+// nextBackLinks computes a design's new back-link list, returning false when
+// nothing would change. Add is idempotent and remove of an absent entry is a
+// no-op, matching how the reference verbs already treat the spec side.
+func nextBackLinks(current []string, spec string, add bool) ([]string, bool) {
+	if add {
+		for _, s := range current {
+			if s == spec {
+				return nil, false
+			}
+		}
+		return append(append([]string{}, current...), spec), true
+	}
+	kept := make([]string, 0, len(current))
+	for _, s := range current {
+		if s != spec {
+			kept = append(kept, s)
+		}
+	}
+	if len(kept) == len(current) {
+		return nil, false
+	}
+	return kept, true
+}
+
+// writeBackLink brings a design document's own record into agreement with a
+// reference that has just been recorded on, or removed from, a spec.
+//
+// Two cases write nothing and are not failures. A reference may be recorded
+// before its document exists, which the reference verbs allow on purpose, and
+// a design the project already had carries no lifecycle record at all, which
+// is the guarantee that referencing a team's own file leaves it untouched.
+func writeBackLink(set *design.Set, doc design.Document, spec string, add bool) error {
+	exists, err := set.Exists(doc)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+	raw, err := set.Read(doc)
+	if err != nil {
+		return err
+	}
+	fm := authoredMetadata(raw)
+	if fm == nil {
+		return nil
+	}
+	next, changed := nextBackLinks(fm.Specs, spec, add)
+	if !changed {
+		return nil
+	}
+	_, body, err := metadata.Split(raw)
+	if err != nil {
+		return err
+	}
+	merged, err := metadata.Merge(raw, body, metadata.UpdateOptions{Specs: &next})
+	if err != nil {
+		return err
+	}
+	return set.Write(doc, merged)
+}
+
+// writeBackLinkFn indirects the back-link write so a test can force it to
+// fail, which is the only way to exercise the compensating rollback below.
+// The compensating-write-failed branch in particular cannot be provoked from
+// the filesystem alone: it needs the spec to become unwritable *between* the
+// two writes, and the only thing running between them is this call. The
+// precedent for a package-level seam of this shape is `var sourceFS fs.FS =
+// templates.FS` in internal/agent/skills.go, which exists for the same reason.
+// A test substituting it must restore it in t.Cleanup, since -shuffle=on makes
+// a leaked substitution a cross-test failure.
+var writeBackLinkFn = writeBackLink
+
+// applyRef performs the two-document write that keeps a spec and a design in
+// agreement. It is shared by add and remove because the two differ only in how
+// the new lists are computed; the ordering, and the failure behaviour layered
+// on top of it, are identical and must not be allowed to drift apart.
+//
+// The order is fixed: the spec first, the design's back-link second. Writing
+// the back-link first would make the spec trivially untouched if the second
+// write failed, but it would leave a design listing a spec that does not
+// reference it, which is the one thing a back-link must never do.
+//
+// There is no transaction available, so the two writes are made to fail as a
+// unit by compensation: the spec's original bytes are written back when the
+// back-link write fails. That compensation can itself fail, and that third
+// outcome is the one most easily left unhandled, so it is named and reported
+// rather than swallowed. The two failures carry different codes deliberately:
+// one says retry, the other says repair two named files by hand, and an agent
+// branching on the code must not treat them as the same thing.
+func applyRef(st store.Store, specPath string, raw []byte, next []metadata.DesignRef, set *design.Set, doc design.Document, spec string, add bool) error {
+	if err := writeRefs(st, specPath, raw, next); err != nil {
+		return err
+	}
+	backLinkErr := writeBackLinkFn(set, doc, spec, add)
+	if backLinkErr == nil {
+		return nil
+	}
+
+	designPath, resolveErr := set.Resolve(doc)
+	if resolveErr != nil {
+		designPath = doc.Path
+	}
+	specAbs := filepath.Join(st.Root(), specPath)
+
+	// refsOf already handed back the spec's original bytes, so the
+	// compensation payload cost nothing to obtain.
+	if rollbackErr := st.Write(specPath, raw); rollbackErr != nil {
+		return output.NewError(
+			"design_ref_backlink_rollback_failed",
+			fmt.Sprintf("could not update %s (%s), and restoring %s afterwards also failed (%s); the spec now records a reference the design does not",
+				designPath, backLinkErr.Error(), specAbs, rollbackErr.Error()),
+		).WithResource(specAbs).WithNextAction(fmt.Sprintf(
+			"reconcile the two by hand: %s and %s disagree, so either remove the reference from the spec or bring the design's specs list into agreement with it", specAbs, designPath))
+	}
+	return output.NewError(
+		"design_ref_backlink_failed",
+		fmt.Sprintf("could not update the back-link on %s (%s); the spec was left exactly as it was and nothing was recorded",
+			designPath, backLinkErr.Error()),
+	).WithResource(designPath).WithNextAction(
+		"make the design document writable and reissue the same command; no manual repair is needed")
+}
+
 func refItems(refs []metadata.DesignRef) []map[string]any {
 	out := make([]map[string]any, 0, len(refs))
 	for _, r := range refs {
@@ -218,7 +350,8 @@ func runDesignRefAdd(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := set.Resolve(design.Document{Source: input.Source, Path: input.Path}); err != nil {
+	doc := design.Document{Source: input.Source, Path: input.Path}
+	if _, err := set.Resolve(doc); err != nil {
 		return err
 	}
 
@@ -242,7 +375,7 @@ func runDesignRefAdd(cmd *cobra.Command, _ []string) error {
 	}
 
 	refs = append(refs, metadata.DesignRef{Source: input.Source, Path: input.Path})
-	if err := writeRefs(st, specPath, raw, refs); err != nil {
+	if err := applyRef(st, specPath, raw, refs, set, doc, bareSpecName(input.Spec), true); err != nil {
 		return err
 	}
 	out := output.New(cmd.OutOrStdout(), globalFields)
@@ -256,6 +389,10 @@ func runDesignRefRemove(cmd *cobra.Command, _ []string) error {
 		return output.Write(cmd.OutOrStdout(), commandSchema{Input: designRefInputSchema, Output: designRefWriteOutputSchema}, "")
 	}
 	input, err := designRefData(cmd, true)
+	if err != nil {
+		return err
+	}
+	set, err := newDesignSet()
 	if err != nil {
 		return err
 	}
@@ -277,8 +414,12 @@ func runDesignRefRemove(cmd *cobra.Command, _ []string) error {
 		}
 		kept = append(kept, r)
 	}
+	// Both documents are left alone when the spec did not carry the reference:
+	// the back-link removal follows the same condition as the spec write, so a
+	// no-op remove does not rewrite the design.
 	if removed {
-		if err := writeRefs(st, specPath, raw, kept); err != nil {
+		doc := design.Document{Source: input.Source, Path: input.Path}
+		if err := applyRef(st, specPath, raw, kept, set, doc, bareSpecName(input.Spec), false); err != nil {
 			return err
 		}
 	}
