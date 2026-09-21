@@ -86,21 +86,24 @@ func Init(projectPath, name string, force bool) ([]string, error) {
 	// the knowledge base is scaffolded wherever that configuration points it,
 	// not at a hardcoded path. Only the repo's own store is created by init;
 	// the project's shared stores are declared separately and expected to exist
-	// independently. Relative locations resolve against the project root as
-	// knowledge.NewSet resolves them. By default this is .spektacular/knowledge.
+	// independently. A relative location resolves against the folder holding
+	// repo.yaml — the repo's root, as EnsureFootprint and the knowledge
+	// aggregation resolve it — not the project root. By default this is
+	// .spektacular/knowledge.
 	var knowledgeRoots []string
 	if kc := repoCfg.WithDefaults(spektacularDir).Knowledge; kc.Provider == config.ProviderFile {
 		location := kc.Config.Location
 		if !filepath.IsAbs(location) {
-			location = filepath.Join(projectPath, location)
+			location = filepath.Join(spektacularDir, location)
 		}
 		knowledgeRoots = append(knowledgeRoots, location)
 	}
 
 	dirs := []string{
 		spektacularDir,
-		// Spec and plan directories are configured as project-root-relative
-		// paths (e.g. ".spektacular/plans"), like the knowledge location.
+		// A loaded config holds its spec and plan directories as
+		// project-root-relative paths (e.g. ".spektacular/plans"); the file
+		// writes them relative to the folder holding config.yaml.
 		filepath.Join(projectPath, cfg.Plan.Config.Directory),
 		filepath.Join(projectPath, cfg.Spec.Config.Directory),
 	}
@@ -157,7 +160,7 @@ func Init(projectPath, name string, force bool) ([]string, error) {
 	// carrying a circular placeholder.
 	for _, root := range knowledgeRoots {
 		for _, c := range knowledge.Categories {
-			readmePath := filepath.Join(root, c.Name, "README.md")
+			readmePath := filepath.Join(root, c.Name, knowledge.CategoryDescriptionFile)
 			if err := os.WriteFile(readmePath, []byte(c.README()), 0644); err != nil {
 				return nil, fmt.Errorf("writing %s README: %w", c.Name, err)
 			}

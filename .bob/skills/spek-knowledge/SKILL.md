@@ -5,8 +5,9 @@ description: Search, contribute to, or update the project's knowledge base.
 
 > **Version check first.** Before running any other command, run `go run . version check`.
 > - On `status: "match"`, continue with the skill and produce no version-related output.
-> - On `"mismatch"` or `"missing"`, the installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to re-run `go run . init <agent>`, and wait for their decision before continuing.
-> - Never modify or re-install any installed files yourself — refreshing the installation is always an explicit, user-initiated re-run of init.
+> - On `"mismatch"`, `"missing"` or `"upgrade_needed"`, the project's settings or installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to run `go run . migrate` (they can preview it with `go run . migrate --dry-run`), and wait for their decision before continuing.
+> - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
+> - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
 # What this skill does
 

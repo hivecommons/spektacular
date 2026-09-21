@@ -1,0 +1,6 @@
+name: split
+agent: claude
+skills_version: 0.1.0
+repos:
+    - name: split
+      location: .

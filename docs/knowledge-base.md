@@ -378,6 +378,33 @@ reduced strength. But it will report `apples` sitting beside `apple` as removabl
 because prefix matching already reaches it and a redundant tag is how a vocabulary
 silently doubles.
 
+### Reviewing whether entries are still true
+
+The audit above asks whether an entry is well *labelled*. Its sibling, the
+maintenance review, asks the question that matters more over time: whether the
+entry is still *true*. It is the same skill and the same shape — invoke
+`spek-knowledge` and ask whether the knowledge base is still accurate — and it is
+read-only until you approve something, one entry at a time.
+
+Each entry in scope is classified as **current**, **stale**, **incorrect** or
+**unverifiable**, and every stale or incorrect verdict has to name the specific
+file, command or behaviour that changed, so you can check a finding rather than
+take it on trust. "Looks old" is not a finding.
+
+One rule decides whether such a review helps or harms, and it is worth stating
+plainly: an entry describing a standard the code has not met yet is **current**,
+not stale. In this project an entry states the target and the code is what has yet
+to meet it, so a difference between the two is work to do, never evidence against
+the entry. Only an entry whose subject no longer exists is stale. Without that
+rule a review would propose deleting exactly the entries doing the most work.
+
+The review also reports any category description that no longer matches the
+project's current definition of that category, naming where it is and pointing at
+`spektacular init <agent>` as the remedy. It reports drift and never repairs it —
+bringing a store back into line stays something you run deliberately. An entry you
+agree to remove is removed with `spektacular knowledge delete`, and only after you
+agree to that entry specifically.
+
 ## Command reference
 
 Agents (and you) reach knowledge through the `spektacular knowledge` commands
@@ -390,6 +417,7 @@ Each command has a `--schema` mode that prints its input/output schema.
 | `spektacular knowledge read --data '{"tier":"repo","name":"docs","path":"architecture/x.md"}'` | Read one entry's full body from one addressed store |
 | `spektacular knowledge list [--tier T] [--filter N]` | List every entry across the stores the request covers |
 | `spektacular knowledge write --data '{"tier":"repo","name":"docs","path":"gotchas/x.md"}' --file <path>` | Write an entry into one addressed store (content from `--file`, or stdin) |
+| `spektacular knowledge delete --data '{"tier":"repo","name":"docs","path":"gotchas/x.md"}'` | Remove one entry from one addressed store. An address naming an undeclared store is refused with the names available in that tier; an address holding nothing reports success and changes nothing, so a maintenance pass that retries is safe. A category's own generated `README.md` is refused, since it is rendered from the project's definition of that category rather than written by anyone |
 | `spektacular knowledge sources` | List the configured stores by tier and name, with their locations |
 | `spektacular knowledge categories` | List the category definitions — purpose, boundary, tier, and entry shape |
 | `spektacular knowledge tags [--tier T] [--filter N]` | List the tag vocabulary already in use across the stores the request covers, each with the number of entries carrying it, most-used first |

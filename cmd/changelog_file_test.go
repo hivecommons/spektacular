@@ -17,7 +17,7 @@ import (
 func TestChangelogFileWriteRead_RoundTrips(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "changelog:\n  config:\n    directory: docs/changelog\n")
+	writeSpecCommandConfig(t, dir, "changelog:\n  config:\n    directory: ../docs/changelog\n")
 
 	srcPath := filepath.Join(t.TempDir(), "source.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("changelog body"), 0o644))
@@ -49,7 +49,7 @@ func TestChangelogFileWrite_LandsFlatInConfiguredChangelogDirectory(t *testing.T
 	dir := t.TempDir()
 	t.Chdir(dir)
 	// counter id_method so the `<id>_<slug>.md` name clears validateIDPrefix.
-	writeSpecCommandConfig(t, dir, "spec:\n  id_method: counter\nchangelog:\n  config:\n    directory: docs/changelog\n")
+	writeSpecCommandConfig(t, dir, "spec:\n  id_method: counter\nchangelog:\n  config:\n    directory: ../docs/changelog\n")
 
 	srcPath := filepath.Join(t.TempDir(), "staged.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("implement run record"), 0o644))
@@ -82,7 +82,7 @@ func TestChangelogFileWrite_LandsFlatInConfiguredChangelogDirectory(t *testing.T
 func TestChangelogFileWrite_StillRejectsNameWithoutIDPrefix(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "spec:\n  id_method: counter\nchangelog:\n  config:\n    directory: docs/changelog\n")
+	writeSpecCommandConfig(t, dir, "spec:\n  id_method: counter\nchangelog:\n  config:\n    directory: ../docs/changelog\n")
 
 	srcPath := filepath.Join(t.TempDir(), "staged.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("body"), 0o644))
@@ -103,7 +103,7 @@ func TestChangelogFileWrite_StillRejectsNameWithoutIDPrefix(t *testing.T) {
 func TestChangelogFileList_ShowsAllWrittenRecords(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "changelog:\n  config:\n    directory: docs/changelog\n")
+	writeSpecCommandConfig(t, dir, "changelog:\n  config:\n    directory: ../docs/changelog\n")
 
 	srcPath := filepath.Join(t.TempDir(), "source.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("entry body"), 0o644))
@@ -152,9 +152,7 @@ func footprintMemberRepo(t *testing.T) string {
 // for tests that need two differently named projects.
 func writeNamedProjectConfig(t *testing.T, dir, name, body string) {
 	t.Helper()
-	dataDir := filepath.Join(dir, ".spektacular")
-	require.NoError(t, os.MkdirAll(dataDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "config.yaml"), []byte("name: "+name+"\n"+body), 0o644))
+	writeCurrentConfig(t, dir, "name: "+name+"\n"+body)
 }
 
 // memberRepoProject lays out a project (chdir'd into) named `testproj` with a
@@ -168,7 +166,7 @@ func memberRepoProject(t *testing.T) (projectDir, memberDir string) {
 	writeSpecCommandConfig(t, projectDir,
 		"source: https://example.com/testproj\n"+
 			"spec:\n  id_method: counter\n"+
-			"changelog:\n  config:\n    directory: docs/changelog\n"+
+			"changelog:\n  config:\n    directory: ../docs/changelog\n"+
 			"repos:\n  - name: member\n    location: "+memberDir+"\n")
 	return projectDir, memberDir
 }
@@ -471,4 +469,24 @@ func TestChangelogFileWriteRepo_MemberWithFileSourceWritesAtLocationNotSource(t 
 	require.Equal(t, codeBefore, snapshotDir(t, code), "the code dir the source points at must stay byte-identical")
 	require.NoDirExists(t, filepath.Join(code, ".spektacular", "changelog"))
 	require.Zero(t, git.calls, "a file source never invokes git")
+}
+
+// Criterion 3 (changelog): changelog.config.directory is relative to the
+// folder holding config.yaml, so `directory: x` stores entries in
+// .spektacular/x.
+func TestChangelogFileWrite_CustomDirectoryResolvesFromSettingsFolder(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, "changelog:\n  config:\n    directory: x\n")
+
+	srcPath := filepath.Join(t.TempDir(), "source.md")
+	require.NoError(t, os.WriteFile(srcPath, []byte("changelog body"), 0o644))
+
+	resetRootCmd(t)
+	stdout, stderr, code := runRootCmd(t, "changelog", "file", "write", "20260709000000-release-notes.md", "--from", srcPath)
+	require.Equal(t, 0, code, stdout)
+	require.Empty(t, stderr)
+
+	require.FileExists(t, filepath.Join(dir, ".spektacular", "x", "20260709000000-release-notes.md"))
+	require.NoDirExists(t, filepath.Join(dir, "x"))
 }

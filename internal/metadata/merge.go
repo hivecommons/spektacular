@@ -18,6 +18,19 @@ type UpdateOptions struct {
 	ProjectSource string
 	Spec          string
 	Plan          string
+	// Designs replaces the artifact's design references wholesale. It is a
+	// pointer because the three states are genuinely distinct and the string
+	// fields above cannot express them: nil means "no change", which is what
+	// an ordinary artifact write passes so existing references survive a
+	// body-only rewrite; a non-nil slice replaces the list; and a non-nil
+	// empty slice clears it.
+	Designs *[]DesignRef
+	// Specs replaces the document's back-links wholesale, with the same three
+	// states as Designs: nil means "no change", which is what an ordinary
+	// authored-design rewrite passes so back-links survive a body-only
+	// rewrite; a non-nil slice replaces the list; and a non-nil empty slice
+	// clears it.
+	Specs *[]string
 }
 
 // Merge computes the on-disk bytes for a write by combining an existing store
@@ -33,6 +46,10 @@ type UpdateOptions struct {
 //   - A transition back to draft clears ClosedDate.
 //   - With no DocumentStatus update, the existing status is preserved, blank
 //     included, along with its ClosedDate.
+//   - Design references are preserved across a body-only rewrite, and replaced
+//     only when opts.Designs is non-nil.
+//   - Back-links are preserved across a body-only rewrite, and replaced only
+//     when opts.Specs is non-nil.
 //   - Malformed existing frontmatter propagates as an error rather than being
 //     silently replaced.
 func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) {
@@ -61,6 +78,12 @@ func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) 
 		result.ProjectSource = opts.ProjectSource
 		result.Spec = opts.Spec
 		result.Plan = opts.Plan
+		if opts.Designs != nil {
+			result.Designs = *opts.Designs
+		}
+		if opts.Specs != nil {
+			result.Specs = *opts.Specs
+		}
 		result.CreatedDate = today
 		result.DocumentStatus = StatusDraft
 		if opts.DocumentStatus != nil {
@@ -80,6 +103,21 @@ func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) 
 		result.ProjectSource = current.ProjectSource
 		result.Spec = current.Spec
 		result.Plan = current.Plan
+		// Carried forward unless the caller explicitly replaces the list.
+		// This is the single site that makes a design reference durable: the
+		// spec workflow commits by writing a freshly assembled body over the
+		// stored file, and a reference not preserved here would vanish on that
+		// write. The same holds for the back-links on an authored design: a
+		// revision rewrites the whole body and passes no Specs update, so a
+		// list not preserved here would vanish on every revision.
+		result.Designs = current.Designs
+		if opts.Designs != nil {
+			result.Designs = *opts.Designs
+		}
+		result.Specs = current.Specs
+		if opts.Specs != nil {
+			result.Specs = *opts.Specs
+		}
 		if opts.Project != "" {
 			result.Project = opts.Project
 		}

@@ -526,3 +526,175 @@ func TestInterviewStepDirectsCrossRepoQuestion(t *testing.T) {
 		"Shape the question by what that other repo actually is, not generically",
 		"interview must direct shaping the cross-repo question by the other repo's actual role/description")
 }
+
+// --- Phase 3.2: the technical-approach step offers to capture a settled
+// design as a design document ---
+
+// TestTechnicalApproachStepOffersDesignCapture asserts the rendered
+// technical-approach instruction carries the design-capture offer introduced
+// in Phase 3.2: the offer itself, the three-part bar that gates it, and all
+// three decision outcomes. The expected strings are hand-copied from
+// templates/steps/spec/05-technical_approach.md.
+func TestTechnicalApproachStepOffersDesignCapture(t *testing.T) {
+	out := renderStep(t, technicalApproach())
+
+	require.Contains(t, out, "**When the design is settled, offer to capture it rather than compress it away.**",
+		"technical_approach must offer to capture a settled design instead of compressing it away")
+	require.Contains(t, out, "Offer, never write unprompted.",
+		"technical_approach must state the agent offers and never writes unprompted")
+
+	// The three-part bar: settled, worked, and unreadable if inlined.
+	require.Contains(t, out, "The bar is high, and all three parts must hold",
+		"technical_approach must state the capture bar has three parts that all must hold")
+	require.Contains(t, out, "the detail is **settled**",
+		"technical_approach must require the detail be settled")
+	require.Contains(t, out, "it is **worked**",
+		"technical_approach must require the detail be a worked shape")
+	require.Contains(t, out, "**make the spec unreadable if written inline**",
+		"technical_approach must require the detail would make the spec unreadable inline")
+
+	// All three outcomes of the offer.
+	require.Contains(t, out, "- **Accept**", "technical_approach must name the accept outcome")
+	require.Contains(t, out, "- **Defer**", "technical_approach must name the defer outcome")
+	require.Contains(t, out, "- **Decline**", "technical_approach must name the decline outcome")
+
+	// Phase 3.3: the offer covers a design that has not been written down yet,
+	// not only one the user already holds. Without this framing the agent reads
+	// the offer as conditional on a document already existing and never makes
+	// it for a design settled in the conversation.
+	require.Contains(t, out, "This covers two situations, not one.",
+		"technical_approach must say the offer covers both an unwritten and an already-written design")
+}
+
+// TestTechnicalApproachStepNamesAllDesignCommands asserts that accepting the
+// offer runs BOTH halves of the capture — a document write and the reference
+// that makes it visible to the plan workflow — and that the write half names
+// both of its commands: `design author` for a design Spektacular wrote with
+// the user, `design write` for one the user handed over. A rendered
+// instruction naming only one half would leave either an unreferenced design
+// or a broken reference; one naming only `design write` would push an
+// authored design through the verbatim command and lose its lifecycle record.
+//
+// Each command name must survive as a contiguous run of characters, which is
+// the point of asserting the rendered form: a template that wraps `design
+// author` across a newline reads as a broken command to the agent following
+// it, not merely to this test.
+func TestTechnicalApproachStepNamesAllDesignCommands(t *testing.T) {
+	out := renderStep(t, technicalApproach())
+
+	require.Contains(t, out, "spektacular design author",
+		"technical_approach must name the design author command")
+	require.Contains(t, out, "spektacular design write",
+		"technical_approach must name the design write command")
+	require.Contains(t, out, "spektacular design ref add",
+		"technical_approach must name the design ref add command")
+	require.Contains(t, out, "Both steps, every time",
+		"technical_approach must require both the write and the reference, every time")
+
+	// The accept path hands the writing to the skill that owns it, and that
+	// skill covers a design nobody has written down yet.
+	require.Contains(t, out, "invoke the `spek-design` skill",
+		"the accept path must hand the writing to the spek-design skill")
+	require.Contains(t, out, "authoring interview when the design still has to be worked out",
+		"the accept path must work for a design that does not yet exist in written form")
+}
+
+// TestTechnicalApproachStepMakesDeclineFinal asserts the decline outcome is
+// terminal for the detail and does not silently fall back to inlining the
+// design in the spec body, and that the agent may not read acceptance into
+// silence.
+func TestTechnicalApproachStepMakesDeclineFinal(t *testing.T) {
+	out := renderStep(t, technicalApproach())
+
+	require.Contains(t, out, "A decline is final for that detail",
+		"technical_approach must make a decline final for that detail")
+	require.Contains(t, out, "Declining does not mean the detail moves into the spec body instead",
+		"technical_approach must state a decline does not move the design into the spec body")
+	require.Contains(t, out, "Silence or deflection is not acceptance.",
+		"technical_approach must state silence or deflection is not acceptance")
+}
+
+// TestTechnicalApproachStepDoesNotFetchANestedSkill guards the lesson recorded
+// in plan 000041: `spektacular skill <name>` does not resolve for skills
+// nested under templates/skills/workflows/, so an instruction must never send
+// the agent to fetch one that way.
+func TestTechnicalApproachStepDoesNotFetchANestedSkill(t *testing.T) {
+	out := renderStep(t, technicalApproach())
+
+	require.NotContains(t, out, "skill spek-",
+		"technical_approach must not tell the agent to fetch a workflow skill via `skill spek-…` — that path does not resolve")
+	require.NotContains(t, out, "{{",
+		"technical_approach must leave no unrendered mustache")
+}
+
+// --- A referenced design document is a constraint, not technical direction ---
+
+// TestTechnicalApproachStepRoutesTheDesignPointerToConstraints asserts the
+// technical-approach step sends a captured design's pointer to Constraints
+// rather than recording it in its own section.
+//
+// This is the one placement in the spec workflow where the two sections'
+// definitions decide the answer, and getting it wrong is silent. Constraints
+// is defined as the rules the planner does not get to renegotiate; Technical
+// Approach is defined as direction the planner may adapt or replace. The plan
+// workflow reads a referenced design as the settled shape it builds *on* —
+// weighing options within that shape and raising a disagreement with the user
+// rather than designing around it — which is the constraint definition
+// exactly. Recording the pointer under Technical Approach would file a binding
+// decision under the heading that says it is negotiable.
+//
+// The expected strings are hand-copied from
+// templates/steps/spec/05-technical_approach.md.
+func TestTechnicalApproachStepRoutesTheDesignPointerToConstraints(t *testing.T) {
+	out := renderStep(t, technicalApproach())
+
+	require.Contains(t, out, "**A referenced design is binding, so its pointer belongs in Constraints, not here.**",
+		"technical_approach must state the design pointer belongs in Constraints rather than in its own section")
+	require.Contains(t, out, "Then record the one-line pointer as a **constraint**, not here.",
+		"the accept path must direct the pointer to Constraints")
+	require.Contains(t, out, ".spektacular/work/test/constraints.md",
+		"the accept path must name the constraints working file the pointer is appended to")
+
+	// The reason, not just the instruction: a rule an agent cannot see the
+	// point of is one it reasons its way around.
+	require.Contains(t, out, "weighs its options *within* that\nshape",
+		"technical_approach must say the plan weighs options within the referenced design's shape")
+
+	// The superseded routing must be gone, not merely joined by the new one.
+	require.NotContains(t, out, "a one-line pointer to it is what belongs here",
+		"technical_approach must no longer claim the design pointer belongs in its own section")
+}
+
+// TestConstraintsStepClaimsTheDesignReference asserts the constraints step
+// knows a referenced design belongs to it. The routing above is only half the
+// change: a pointer sent to a section whose own instructions never mention
+// design documents is a pointer an agent drafting that section will not
+// recognise, and may move back out on the next pass.
+//
+// The expected strings are hand-copied from
+// templates/steps/spec/04-constraints.md.
+func TestConstraintsStepClaimsTheDesignReference(t *testing.T) {
+	out := renderStep(t, constraints())
+
+	require.Contains(t, out, "**A design document this spec references is a constraint, and its pointer lives here.**",
+		"constraints must claim the referenced-design pointer as its own")
+	require.Contains(t, out, "a **referenced design document**",
+		"constraints must carry a worked example of a design reference as a constraint")
+
+	// It must also say the pointer arrives late, from the next step, or an
+	// agent meets it as an unexplained amendment to a section it has already
+	// agreed with the user.
+	require.Contains(t, out, "arrives as an amendment to this section's working file",
+		"constraints must explain that a design settled later arrives as an amendment")
+
+	// The empty-section check must offer design documents as a source, so an
+	// empty Constraints section is a deliberate check rather than an oversight.
+	require.Contains(t, out, "A **design document the project already holds**",
+		"the common-sources checklist must include a design the project already holds")
+	require.Contains(t, out, "spektacular design list",
+		"the common-sources checklist must name the command that lists declared designs")
+
+	// The content stays in the document; only the pointer is recorded.
+	require.Contains(t, out, "duplicating its content here is what the document exists to avoid",
+		"constraints must forbid copying the design's content into the spec")
+}

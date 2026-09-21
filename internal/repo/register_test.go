@@ -232,3 +232,34 @@ func TestDescriptiveFieldsEmpty(t *testing.T) {
 		})
 	}
 }
+
+// Phase 2.1: registering a location whose repo.yaml was written by a newer
+// Spektacular fails with a FormatError, and the repo.yaml is left
+// byte-identical rather than being treated as broken and rewritten.
+func TestRegister_NewerFormatRepoYAMLIsRefusedAndUntouched(t *testing.T) {
+	projectRoot, cfg := newRegisterProject(t)
+	code := t.TempDir()
+	footprint := filepath.Join(code, ".spektacular")
+	require.NoError(t, os.MkdirAll(footprint, 0o755))
+	path := filepath.Join(footprint, config.RepoConfigFileName)
+	const body = "schema: 99\n" +
+		"description: from the future\n"
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o644))
+	_, err := Register(cfg, projectRoot, newFakeGit(t), Registration{
+		Name:        "lib",
+		Location:    code,
+		Description: "the library repo",
+	})
+	require.Error(t, err)
+	fe, ok := config.IsFormatError(err)
+	require.True(t, ok, "expected a *config.FormatError, got %T: %v", err, err)
+	require.True(t, fe.Newer())
+	require.Equal(t, path, fe.Path)
+
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, body, string(after), "a newer-format repo.yaml must never be rewritten")
+	require.NoDirExists(t, filepath.Join(footprint, "knowledge"))
+
+	require.NoFileExists(t, projectConfigPath(projectRoot), "a refused registration must not record the repo in config.yaml")
+}

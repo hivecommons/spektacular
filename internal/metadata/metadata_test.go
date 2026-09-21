@@ -722,3 +722,224 @@ func TestMerge_UsesInjectedClock(t *testing.T) {
 		"CreatedDate must come from opts.Today, got %s", meta.CreatedDate)
 	require.Equal(t, StatusDraft, meta.DocumentStatus)
 }
+
+// twoDesignRefs is the ordered two-reference list the design-reference tests
+// share. Order is significant: the list is rendered and read back as a
+// sequence, so a reordering is a regression.
+func twoDesignRefs() []DesignRef {
+	return []DesignRef{
+		{Source: "api", Path: "payments/v2.md"},
+		{Source: "platform", Path: "ingress.md"},
+	}
+}
+
+// twoDesignRefsYAML is the hand-written frontmatter fragment matching
+// twoDesignRefs, for fixtures that seed an artifact carrying references.
+const twoDesignRefsYAML = "designs:\n" +
+	"  - source: api\n" +
+	"    path: payments/v2.md\n" +
+	"  - source: platform\n" +
+	"    path: ingress.md\n"
+
+// TestRender_SplitRoundTripDesignRefs asserts a two-reference list survives
+// Render → Split with both halves of each address intact and in the same
+// order.
+func TestRender_SplitRoundTripDesignRefs(t *testing.T) {
+	meta := Metadata{
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
+		Designs:        twoDesignRefs(),
+	}
+	body := []byte("# Spec body\n")
+
+	rendered, err := Render(meta, body)
+	require.NoError(t, err)
+
+	gotMeta, gotBody, err := Split(rendered)
+	require.NoError(t, err)
+	require.NotNil(t, gotMeta)
+	require.Equal(t, twoDesignRefs(), gotMeta.Designs)
+	require.Equal(t, string(body), string(gotBody))
+}
+
+// TestRender_OmitsDesignsKeyEntirelyWithNoReferences pins the exact bytes an
+// artifact with no design references renders to. The expectation is written
+// out by hand rather than derived from the renderer, so it also stands as the
+// pre-change output: adding the designs field must not perturb a single byte
+// of an artifact that carries none.
+func TestRender_OmitsDesignsKeyEntirelyWithNoReferences(t *testing.T) {
+	rendered, err := Render(Metadata{
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
+	}, []byte("# body\n"))
+	require.NoError(t, err)
+
+	require.Equal(t,
+		"---\ncreated_date: \"2026-07-01\"\ndocument_status: draft\n---\n\n# body\n",
+		string(rendered))
+}
+
+// TestSplit_MalformedDesignsReadAsNoReferences asserts reads across the
+// designs key are lenient in the same way they are across document_status: a
+// missing, empty, scalar or mapping value reads as no references and never
+// fails the parse, so a hand-edited spec stays readable.
+func TestSplit_MalformedDesignsReadAsNoReferences(t *testing.T) {
+	tests := []struct {
+		name    string
+		designs string
+	}{
+		{name: "absent", designs: ""},
+		{name: "empty list", designs: "designs: []\n"},
+		{name: "scalar", designs: "designs: nonsense\n"},
+		{name: "mapping", designs: "designs:\n  a: b\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := "---\n" +
+				"created_date: 2026-07-01\n" +
+				"document_status: draft\n" +
+				tt.designs +
+				"---\n\n" +
+				"body\n"
+
+			meta, body, err := Split([]byte(raw))
+			require.NoError(t, err, "a malformed designs value must not fail the parse")
+			require.NotNil(t, meta)
+			require.Empty(t, meta.Designs)
+			require.Equal(t, StatusDraft, meta.DocumentStatus,
+				"the rest of the block must still parse")
+			require.Equal(t, "body\n", string(body))
+		})
+	}
+}
+
+// TestSplit_DesignEntryMissingHalfOfAddressIsDropped asserts an entry that
+// names only a source, or only a path, is dropped on read while a complete
+// sibling entry in the same list is kept — a reference that cannot name both
+// halves cannot be resolved, but it must not take the whole list with it.
+func TestSplit_DesignEntryMissingHalfOfAddressIsDropped(t *testing.T) {
+	tests := []struct {
+		name    string
+		designs string
+	}{
+		{
+			name: "entry missing source",
+			designs: "designs:\n" +
+				"  - path: orphan.md\n" +
+				"  - source: api\n" +
+				"    path: payments/v2.md\n",
+		},
+		{
+			name: "entry missing path",
+			designs: "designs:\n" +
+				"  - source: orphan\n" +
+				"  - source: api\n" +
+				"    path: payments/v2.md\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := "---\n" +
+				"created_date: 2026-07-01\n" +
+				"document_status: draft\n" +
+				tt.designs +
+				"---\n\n" +
+				"body\n"
+
+			meta, _, err := Split([]byte(raw))
+			require.NoError(t, err)
+			require.NotNil(t, meta)
+			require.Equal(t, []DesignRef{{Source: "api", Path: "payments/v2.md"}}, meta.Designs)
+		})
+	}
+}
+
+// twoSpecNames is the ordered two-name back-link list the referencing-spec
+// tests share. Order is significant: the list is rendered and read back as a
+// sequence, so a reordering is a regression.
+func twoSpecNames() []string {
+	return []string{"000041_payments-v2", "000055_design-authoring-skill"}
+}
+
+// twoSpecNamesYAML is the hand-written frontmatter fragment matching
+// twoSpecNames, for fixtures that seed a document carrying back-links.
+const twoSpecNamesYAML = "specs:\n" +
+	"  - 000041_payments-v2\n" +
+	"  - 000055_design-authoring-skill\n"
+
+// TestRender_SplitRoundTripSpecNames asserts a two-name back-link list
+// survives Render → Split intact and in the same order.
+func TestRender_SplitRoundTripSpecNames(t *testing.T) {
+	meta := Metadata{
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
+		Specs:          twoSpecNames(),
+	}
+	body := []byte("# Design body\n")
+
+	rendered, err := Render(meta, body)
+	require.NoError(t, err)
+
+	gotMeta, gotBody, err := Split(rendered)
+	require.NoError(t, err)
+	require.NotNil(t, gotMeta)
+	require.Equal(t, twoSpecNames(), gotMeta.Specs)
+	require.Equal(t, string(body), string(gotBody))
+}
+
+// TestRender_OmitsDesignsAndSpecsKeysEntirelyWithNoReferences is the sibling
+// of TestRender_OmitsDesignsKeyEntirelyWithNoReferences that names both
+// reference fields. The expectation is the same hand-written byte sequence,
+// so adding the specs field must not perturb a single byte of a document
+// that carries neither list.
+func TestRender_OmitsDesignsAndSpecsKeysEntirelyWithNoReferences(t *testing.T) {
+	rendered, err := Render(Metadata{
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
+		Designs:        nil,
+		Specs:          nil,
+	}, []byte("# body\n"))
+	require.NoError(t, err)
+
+	require.Equal(t,
+		"---\ncreated_date: \"2026-07-01\"\ndocument_status: draft\n---\n\n# body\n",
+		string(rendered))
+}
+
+// TestSplit_MalformedSpecsReadAsNoReferences asserts reads across the specs
+// key are lenient in the same way they are across designs: a missing, empty,
+// scalar, mapping or non-scalar-entry value reads as no back-links and never
+// fails the parse, so a hand-edited design stays readable.
+func TestSplit_MalformedSpecsReadAsNoReferences(t *testing.T) {
+	tests := []struct {
+		name  string
+		specs string
+	}{
+		{name: "absent", specs: ""},
+		{name: "empty list", specs: "specs: []\n"},
+		{name: "scalar", specs: "specs: nonsense\n"},
+		{name: "mapping", specs: "specs:\n  a: b\n"},
+		{name: "list of non-scalar", specs: "specs:\n  - a: b\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := "---\n" +
+				"created_date: 2026-07-01\n" +
+				"document_status: draft\n" +
+				tt.specs +
+				"---\n\n" +
+				"body\n"
+
+			meta, body, err := Split([]byte(raw))
+			require.NoError(t, err, "a malformed specs value must not fail the parse")
+			require.NotNil(t, meta)
+			require.Empty(t, meta.Specs)
+			require.Equal(t, StatusDraft, meta.DocumentStatus,
+				"the rest of the block must still parse")
+			require.Equal(t, "body\n", string(body))
+		})
+	}
+}

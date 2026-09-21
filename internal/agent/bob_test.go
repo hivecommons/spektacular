@@ -21,13 +21,14 @@ func TestBobAgent_Install(t *testing.T) {
 	err := bobAgent{}.Install(tmp, cfg, io.Discard)
 	require.NoError(t, err)
 
-	// Exactly five SKILL.md files under .bob/skills/spek-{new,plan,implement}/.
+	// Exactly six SKILL.md files under .bob/skills/spek-*/.
 	skillAssertions := map[string]string{
 		"spek-new":          "spektacular spec new",
 		"spek-plan":         "spektacular plan new",
 		"spek-implement":    "spektacular implement new",
 		"spek-knowledge":    "knowledge",
 		"spek-manage-repos": "repo add",
+		"spek-design":       "spektacular design author",
 	}
 	for skill, expected := range skillAssertions {
 		skillPath := filepath.Join(tmp, ".bob", "skills", skill, "SKILL.md")
@@ -40,7 +41,7 @@ func TestBobAgent_Install(t *testing.T) {
 		require.NotContains(t, string(data), "{{command}}")
 	}
 
-	// Exactly five command wrappers under .bob/commands/, basenames keep the
+	// Exactly six command wrappers under .bob/commands/, basenames keep the
 	// `spek-` prefix.
 	commandAssertions := map[string]string{
 		"spek-new.md":          "`spek-new` skill",
@@ -48,6 +49,7 @@ func TestBobAgent_Install(t *testing.T) {
 		"spek-implement.md":    "`spek-implement` skill",
 		"spek-knowledge.md":    "`spek-knowledge` skill",
 		"spek-manage-repos.md": "`spek-manage-repos` skill",
+		"spek-design.md":       "`spek-design` skill",
 	}
 	for base, expected := range commandAssertions {
 		cmdPath := filepath.Join(tmp, ".bob", "commands", base)
@@ -58,6 +60,14 @@ func TestBobAgent_Install(t *testing.T) {
 		require.NotContains(t, string(data), "{{command}}")
 		require.NotContains(t, string(data), "{{skill}}")
 	}
+
+	// A wrapper's frontmatter carries the skill's description, which is what an
+	// agent with no native skill mechanism shows in its slash-command menu. An
+	// empty description there is silent, so the text is pinned as a literal.
+	designWrapper, err := os.ReadFile(filepath.Join(tmp, ".bob", "commands", "spek-design.md"))
+	require.NoError(t, err)
+	require.Contains(t, string(designWrapper), "description: Author, bring in, revise or reference a design document.",
+		"the spek-design wrapper must carry a meaningful description in its frontmatter")
 
 	// Bob command filenames keep the `spek-` prefix — make sure the stripped
 	// variants do NOT exist on disk.

@@ -18,7 +18,7 @@ import (
 // file: all three stored-artifact classes (spec, plan, changelog) point at
 // docs/-rooted directories, so a single seed helper can lay out any mix of
 // artifacts without reconfiguring per subtest.
-const artifactsListConfigYAML = "spec:\n  config:\n    directory: docs/specs\nplan:\n  config:\n    directory: docs/plans\nchangelog:\n  config:\n    directory: docs/changelog\n"
+const artifactsListConfigYAML = "spec:\n  config:\n    directory: ../docs/specs\nplan:\n  config:\n    directory: ../docs/plans\nchangelog:\n  config:\n    directory: ../docs/changelog\n"
 
 // artifactsResponse is the shape `spektacular artifacts list` writes on
 // success: `{"error": false, "artifacts": [...]}`. Each entry carries at

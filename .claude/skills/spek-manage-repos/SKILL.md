@@ -5,8 +5,9 @@ description: Add a repo to the current Spektacular project through a guided conv
 
 > **Version check first.** Before running any other command, run `go run . version check`.
 > - On `status: "match"`, continue with the skill and produce no version-related output.
-> - On `"mismatch"` or `"missing"`, the installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to re-run `go run . init <agent>`, and wait for their decision before continuing.
-> - Never modify or re-install any installed files yourself. Refreshing the installation is always an explicit, user-initiated re-run of init.
+> - On `"mismatch"`, `"missing"` or `"upgrade_needed"`, the project's settings or installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to run `go run . migrate` (they can preview it with `go run . migrate --dry-run`), and wait for their decision before continuing.
+> - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
+> - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
 > **STOP. Read this before running any command below.**
 > A single successful CLI call, including the very first `repo new`, is **NOT** task completion. It is not a milestone to report back to the user. It is one step out of many in a workflow that you must keep driving, turn after turn, without stopping, until the CLI itself tells you the workflow is *finished*. If you find yourself about to say "successfully completed" or summarize results after calling `repo new` or `repo goto` even once, you are wrong. Go back and read the `instruction` field you just received, do what it says, and call `goto` again.

@@ -127,3 +127,23 @@ func TestPathTraversal_ErrorNamesAttemptedPath(t *testing.T) {
 	_, err = st.List(escapePath)
 	require.EqualError(t, err, wantMsg)
 }
+
+// Compile-time interface-satisfaction assertions. Store is split into a read
+// half (Reader) and a write half (Writer), and these fail to build if an
+// implementation stops satisfying any of the three, naming which one.
+//
+// What they deliberately do not catch: a method added to Store directly
+// rather than to Reader or Writer still compiles here, because both
+// implementations would carry it. Keeping the split complete is a review
+// obligation, not something the compiler can check — a new method belongs in
+// Reader if it only observes the store and in Writer if it mutates it.
+var (
+	_ Reader = (*FileStore)(nil)
+	_ Writer = (*FileStore)(nil)
+	_ Store  = (*FileStore)(nil)
+
+	// The decorator returned by NewIgnoreStore and NewSourceStore.
+	_ Reader = (*ignoreStore)(nil)
+	_ Writer = (*ignoreStore)(nil)
+	_ Store  = (*ignoreStore)(nil)
+)

@@ -63,13 +63,13 @@ func listFilterFixtures() []listFilterFixture {
 	return []listFilterFixture{
 		{
 			kind:         "spec",
-			configYAML:   "spec:\n  config:\n    directory: docs/specs\n",
+			configYAML:   "spec:\n  config:\n    directory: ../docs/specs\n",
 			artifactPath: func(name string) string { return filepath.Join("docs", "specs", name) },
 			listPath:     "",
 		},
 		{
 			kind:       "changelog",
-			configYAML: "changelog:\n  config:\n    directory: docs/changelog\n",
+			configYAML: "changelog:\n  config:\n    directory: ../docs/changelog\n",
 			// Central (no --repo) changelog records live flat under the
 			// configured directory; a project subfolder appears only under a
 			// member repo's changelog store when --repo is used.
@@ -78,7 +78,7 @@ func listFilterFixtures() []listFilterFixture {
 		},
 		{
 			kind:       "plan",
-			configYAML: "plan:\n  config:\n    directory: docs/plans\n",
+			configYAML: "plan:\n  config:\n    directory: ../docs/plans\n",
 			// Seed each artifact into the same plan subdirectory so a
 			// non-empty listPath returns them all as file entries with
 			// metadata rather than a single directory entry at the top level.
@@ -412,7 +412,7 @@ func TestStoreFileList_BareArtifactsExcludedFromAnyFilter(t *testing.T) {
 func TestStoreFileList_TopLevelPlanDirectoryEntriesCarryNameAndPathOnly(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: docs/plans\n")
+	writeSpecCommandConfig(t, dir, "plan:\n  config:\n    directory: ../docs/plans\n")
 
 	// Seed a plan.md inside a plan sub-directory carrying full metadata.
 	seedArtifactWithMetadata(t,

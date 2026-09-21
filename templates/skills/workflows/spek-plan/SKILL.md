@@ -3,10 +3,7 @@ name: spek-plan
 description: Create a new Plan from an approved Specification.
 ---
 
-> **Version check first.** Before running any other command, run `{{command}} version check`.
-> - On `status: "match"`, continue with the skill and produce no version-related output.
-> - On `"mismatch"` or `"missing"`, the installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to re-run `{{command}} init <agent>`, and wait for their decision before continuing.
-> - Never modify or re-install any installed files yourself — refreshing the installation is always an explicit, user-initiated re-run of init.
+{{> partials/version-check}}
 
 > **STOP. Read this before running any command below.**
 > A single successful CLI call — including the very first `plan new` — is **NOT** task completion. It is not a milestone to report back to the user. It is one step out of many in a workflow that you must keep driving, turn after turn, without stopping, until the CLI itself tells you the workflow is *finished*. If you find yourself about to say "successfully completed" or summarize results after calling `plan new` or `plan goto` even once, you are wrong — go back and read the `instruction` field you just received, do what it says, and call `goto` again.
@@ -30,13 +27,33 @@ On each turn, the CLI returns JSON containing an `instruction` field. That instr
 
 # Reading and writing plan files
 
-The CLI owns the plan documents — `plan.md`, the plan's `context.md`, and `research.md`. **Never read or write them with the `Write`, `Edit`, or `Read` tools** — those bypass Spektacular and the configured plan directory. All plan document access goes through `{{command}} plan file`:
+The CLI owns the plan documents — `plan.md`, the plan's `context.md`, and `research.md`. All plan document access goes through `{{command}} plan file`:
 
 - `{{command}} plan file read <name>/<doc>.md` — read a plan document from the plan store.
 - `{{command}} plan file write <name>/<doc>.md --from <source-path>` — write a plan document into the plan store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
 - `{{command}} plan file list` — list plans in the plan store.
 
 Path arguments are plan-directory-relative document paths (e.g. `my-feature/plan.md`); `plan file` resolves them against the configured plan directory itself.
+
+# Design documents a spec references
+
+A spec may reference one or more **design documents**: the worked design the feature is built to,
+held in one of the project's declared design sources rather than copied into the spec. Where a
+spec carries references, they are **binding input to this plan**, not background reading.
+
+The discovery step resolves and reads them, through the CLI rather than by reading files
+directly:
+
+- `{{command}} design ref list --data '{"spec":"<spec>"}'` — every reference the spec carries,
+  each with whether it resolves and the exact location searched, plus a count of those that do
+  not.
+- `{{command}} design read --data '{"source":"<name>","path":"<path>"}'` — the document itself.
+
+Two obligations follow from that, and the steps state them: architecture is **built on** a
+referenced design rather than re-deriving it, and the finished plan **names each design document
+read and the source it came from** in its Dependencies. If any reference does not resolve, the
+discovery step stops and reports rather than planning around the gap — a broken reference is
+meant to surface here, not during implementation.
 
 # Working files vs. the store documents
 
@@ -50,7 +67,7 @@ The working sidecar `.spektacular/working-context.md` (at the repo's `.spektacul
 
 > **Cross-repo planning.** A project may register multiple member repos (see `{{command}} repo list`). The workflow's discovery and architecture instructions send you to `{{command}} repo list` and direct you to attribute every requirement to the repo (and files) it belongs to — research across all registered repos, in the `root` reported for each, and record the attribution in the plan's context document.
 
-Ask the user which spec to plan against before proceeding. To enumerate the available specs, run `{{command}} spec file list` — the CLI's list is the source of truth for what counts as a spec. **Do not** use `ls`, `find`, or the `Read` tool against `.spektacular/specs/` to discover specs; those bypass Spektacular's configured spec directory and may show entries the CLI does not consider valid. You don't need to look for an in-progress workflow yourself — the CLI detects and reports one for you (see below).
+Ask the user which spec to plan against before proceeding. To enumerate the available specs, run `{{command}} spec file list` — the CLI's list is the source of truth for what counts as a spec. You don't need to look for an in-progress workflow yourself — the CLI detects and reports one for you (see below).
 
 Start the plan workflow by running:
 

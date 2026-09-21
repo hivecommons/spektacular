@@ -18,6 +18,15 @@ Enumerate 2-3 viable design options. For each:
 
 Ground each option in the research findings gathered during the discovery step.
 
+**Where the spec references a design document, that design is the settled shape and is built
+on, not re-derived.** You read every referenced design in the discovery step; it constrains this
+step rather than competing with it. Options are weighed *within* the design: how best to
+implement the shape it fixes, not whether to adopt a different one. Do not enumerate an option
+that quietly redesigns what a referenced design already settled, and do not treat the design as
+one candidate among your two or three. If you believe a referenced design is wrong, or cannot be
+implemented as written, that is a decision to **raise with the user**, not one to make silently
+inside a plan.
+
 ### Step 2: Choose and Record
 
 Pick the best-grounded direction yourself — do not put the choice to the user — and record it as the leading entry in the assumption log (see below), covering:

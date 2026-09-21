@@ -1,3 +1,7 @@
+---
+tags: [workflow, fsm, goto, step]
+---
+
 # Goto to the current step is a silent no-op
 
 Calling `goto` on a spec/plan/implement workflow with a step name equal to the

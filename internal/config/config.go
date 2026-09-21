@@ -37,16 +37,14 @@ const ProviderFile = "file"
 const ProviderGit = "git"
 
 const (
-	// DefaultSpecDir is the spec output directory used when none is configured.
-	// It is resolved relative to the project root, like the knowledge location.
-	DefaultSpecDir = ".spektacular/specs"
-	// DefaultPlanDir is the plan output directory used when none is configured.
-	// It is resolved relative to the project root, like the knowledge location.
-	DefaultPlanDir = ".spektacular/plans"
-	// DefaultChangelogDir is the changelog output directory used when none is
-	// configured. It is resolved relative to the project root, like the
-	// knowledge location.
-	DefaultChangelogDir = ".spektacular/changelog"
+	// DefaultSpecDir, DefaultPlanDir and DefaultChangelogDir are the store
+	// directories used when none is configured. Like every relative path in
+	// config.yaml they are relative to the folder holding config.yaml, so
+	// they land in .spektacular/specs, .spektacular/plans and
+	// .spektacular/changelog.
+	DefaultSpecDir      = "specs"
+	DefaultPlanDir      = "plans"
+	DefaultChangelogDir = "changelog"
 
 	// DefaultRepoKnowledgeLocation and DefaultRepoChangelogDir are the
 	// repo-scoped defaults written into a repo.yaml. Every relative path in
@@ -72,7 +70,15 @@ type SpecConfig struct {
 
 // FileSpecConfig is the file-provider configuration for the spec section.
 type FileSpecConfig struct {
+	// Directory is the store directory. In a loaded project Config it is
+	// project-root-relative (e.g. ".spektacular/specs"), which is what every
+	// store consumer expects; in config.yaml it is written relative to the
+	// folder holding the file (e.g. "specs"). The loader converts one to the
+	// other and ToYAMLFile converts back.
 	Directory string `yaml:"directory"`
+	// fileForm is the value as read from config.yaml, written back
+	// unchanged while Directory still resolves to it.
+	fileForm string
 }
 
 // PlanConfig holds configuration for plan creation. It names a storage
@@ -84,7 +90,15 @@ type PlanConfig struct {
 
 // FilePlanConfig is the file-provider configuration for the plan section.
 type FilePlanConfig struct {
+	// Directory is the store directory. In a loaded project Config it is
+	// project-root-relative (e.g. ".spektacular/plans"), which is what every
+	// store consumer expects; in config.yaml it is written relative to the
+	// folder holding the file (e.g. "plans"). The loader converts one to the
+	// other and ToYAMLFile converts back.
 	Directory string `yaml:"directory"`
+	// fileForm is the value as read from config.yaml, written back
+	// unchanged while Directory still resolves to it.
+	fileForm string
 }
 
 // ChangelogConfig holds configuration for changelog record storage. It names
@@ -96,13 +110,42 @@ type ChangelogConfig struct {
 
 // FileChangelogConfig is the file-provider configuration for the changelog section.
 type FileChangelogConfig struct {
+	// Directory is the store directory. In a loaded project Config it is
+	// project-root-relative (e.g. ".spektacular/changelog"), which is what every
+	// store consumer expects; in config.yaml it is written relative to the
+	// folder holding the file (e.g. "changelog"). The loader converts one to the
+	// other and ToYAMLFile converts back.
+	// In a repo.yaml the directory is always relative to the folder
+	// holding that file and is used as written.
 	Directory string `yaml:"directory"`
+	// fileForm is the value as read from config.yaml, written back
+	// unchanged while Directory still resolves to it.
+	fileForm string
 }
 
 // KnowledgeConfig holds the ordered list of the project's own shared knowledge
 // stores. It is the project-tier declaration; a repo declares its single store
 // with RepoKnowledgeConfig instead.
 type KnowledgeConfig struct {
+	Sources []SourceConfig `yaml:"sources,omitempty"`
+}
+
+// DesignConfig holds the ordered list of the design sources the project
+// declares. A design source points at a folder of design documents the team
+// already keeps, wherever it keeps it, and Spektacular reads and writes
+// documents there without imposing any structure on them.
+//
+// It is a project-tier declaration only: a repo declares no design sources of
+// its own, so SourceConfig.Tier is left unset for every entry here and a
+// source's identity is its name alone.
+//
+// A source's config.location may be absolute or relative; a relative location
+// is relative to the folder holding config.yaml, the same base every other
+// relative path in that file uses. Unlike the spec, plan and changelog store
+// directories, it is never re-expressed on write: the declaration is written
+// back exactly as the author wrote it, and a location outside the project root
+// is allowed, because a design source points at a folder the team already has.
+type DesignConfig struct {
 	Sources []SourceConfig `yaml:"sources,omitempty"`
 }
 
@@ -180,12 +223,20 @@ type RepoEntry struct {
 // empty in this release and reserved for provider-specific settings.
 type GitRepoConfig struct{}
 
+// ProjectConfigFileName is the name of the project settings file inside
+// ProjectConfigDir.
+const ProjectConfigFileName = "config.yaml"
+
+// ProjectConfigDirName is the folder, inside a project root, that holds
+// config.yaml.
+const ProjectConfigDirName = ".spektacular"
+
 // ProjectConfigDir returns the folder holding the project's config.yaml:
 // <projectRoot>/.spektacular. Relative paths written in config.yaml are
 // resolved from this folder — from the file that declares them — so
 // `..` is the project's own root and `../repos/<name>` a sibling folder.
 func ProjectConfigDir(projectRoot string) string {
-	return filepath.Join(projectRoot, ".spektacular")
+	return filepath.Join(projectRoot, ProjectConfigDirName)
 }
 
 // ResolvedLocation returns the entry's location as an absolute path. An
@@ -209,6 +260,16 @@ func (e RepoEntry) ResolvedLocation(projectRoot string) string {
 // only. It is not a code location: where a repo's code lives is declared by
 // RepoConfig.Source in that repo's repo.yaml.
 type Config struct {
+	// Schema is the settings format version (see CurrentProjectSchema).
+	// ToYAMLFile always stamps the current value.
+	Schema int `yaml:"schema"`
+	// WrittenBy is the Spektacular version that last saved this file. It is
+	// diagnostic only and never triggers an upgrade.
+	WrittenBy string `yaml:"written_by,omitempty"`
+	// SkillsVersion is the Spektacular version that last installed the
+	// project's agent skills. Only a skills install sets it; rewriting the
+	// file for any other reason leaves it unchanged.
+	SkillsVersion        string          `yaml:"skills_version,omitempty"`
 	Name                 string          `yaml:"name"`
 	Source               string          `yaml:"source,omitempty"`
 	Command              string          `yaml:"command"`
@@ -219,10 +280,12 @@ type Config struct {
 	Plan                 PlanConfig      `yaml:"plan"`
 	Changelog            ChangelogConfig `yaml:"changelog"`
 	Knowledge            KnowledgeConfig `yaml:"knowledge,omitempty"`
+	Design               DesignConfig    `yaml:"design,omitempty"`
 	Repos                []RepoEntry     `yaml:"repos,omitempty"`
 }
 
-// NewDefault returns a Config populated with default values.
+// NewDefault returns a Config populated with default values, with its store
+// directories in their in-memory, project-root-relative form.
 func NewDefault() Config {
 	return Config{
 		Command:              "spektacular",
@@ -234,24 +297,28 @@ func NewDefault() Config {
 			Provider: ProviderFile,
 			IDMethod: SpecIDMethodTimestamp,
 			Config: FileSpecConfig{
-				Directory: DefaultSpecDir,
+				Directory: filepath.Join(ProjectConfigDirName, DefaultSpecDir),
 			},
 		},
 		Plan: PlanConfig{
 			Provider: ProviderFile,
 			Config: FilePlanConfig{
-				Directory: DefaultPlanDir,
+				Directory: filepath.Join(ProjectConfigDirName, DefaultPlanDir),
 			},
 		},
 		Changelog: ChangelogConfig{
 			Provider: ProviderFile,
 			Config: FileChangelogConfig{
-				Directory: DefaultChangelogDir,
+				Directory: filepath.Join(ProjectConfigDirName, DefaultChangelogDir),
 			},
 		},
 		// Knowledge is empty by default: the project level lists only sources
 		// owned by the project itself (team or global shares the user adds by
 		// hand). Each repo's own store is declared in its RepoConfig.
+		//
+		// Design is empty by default for the same reason: a design source
+		// points at a folder of design documents the team already has, so the
+		// project declares each one by hand and nothing is scaffolded for it.
 	}
 }
 
@@ -279,7 +346,16 @@ func ParseYAMLFile(path string) (Config, error) {
 
 	expanded := expandEnvVars(string(raw))
 
+	// Loading only ever reads the current format; upgrading an older file is
+	// the migrate package's job, never the loader's.
+	if err := checkSchema(expanded, path, "project", CurrentProjectSchema); err != nil {
+		return Config{}, err
+	}
+
 	cfg := NewDefault()
+	cfg.Spec.Config.Directory = DefaultSpecDir
+	cfg.Plan.Config.Directory = DefaultPlanDir
+	cfg.Changelog.Config.Directory = DefaultChangelogDir
 	if err := yaml.Unmarshal([]byte(expanded), &cfg); err != nil {
 		return Config{}, fmt.Errorf("parsing config file %s: %w", path, err)
 	}
@@ -292,7 +368,89 @@ func ParseYAMLFile(path string) (Config, error) {
 	for i := range cfg.Repos {
 		cfg.Repos[i] = cfg.Repos[i].foldLocationAlias()
 	}
+	cfg.resolveStoreDirs(filepath.Dir(path))
 	return cfg, nil
+}
+
+// storeDir addresses one store directory of a Config.
+type storeDir struct {
+	key       string // the config.yaml section, for error messages
+	directory *string
+	fileForm  *string
+}
+
+// storeDirs enumerates the store directories that are bound to the project
+// root. Membership in this list is load-bearing twice over, and a caller
+// adding a new configured path here should want both effects:
+//
+//   - resolveStoreDirs and fileFormStoreDir re-express the value on read and
+//     write, so the path written back is not necessarily the one the author
+//     wrote; and
+//   - Validate runs validateStoreDir over every entry, which refuses any
+//     directory resolving outside the project root.
+//
+// A configured path that must survive verbatim, or that may point outside the
+// project root, therefore does not belong here: it resolves in its own domain
+// package instead. design.sources[].config.location is the worked example, and
+// knowledge.sources[].config.location predates it.
+func (c *Config) storeDirs() []storeDir {
+	return []storeDir{
+		{"spec", &c.Spec.Config.Directory, &c.Spec.Config.fileForm},
+		{"plan", &c.Plan.Config.Directory, &c.Plan.Config.fileForm},
+		{"changelog", &c.Changelog.Config.Directory, &c.Changelog.Config.fileForm},
+	}
+}
+
+// resolveStoreDirs turns the spec, plan and changelog directories, which
+// config.yaml states relative to the folder holding it (configDir), into the
+// project-root-relative paths the stores use, remembering each value as read.
+func (c *Config) resolveStoreDirs(configDir string) {
+	for _, d := range c.storeDirs() {
+		*d.fileForm = *d.directory
+		*d.directory = resolveStoreDir(*d.directory, configDir)
+	}
+}
+
+// resolveStoreDir resolves a store directory written relative to configDir
+// into a path relative to the project root (configDir's parent). A value
+// that resolves outside the project root is returned unchanged, for Validate
+// to refuse.
+func resolveStoreDir(value, configDir string) string {
+	if value == "" {
+		return value
+	}
+	abs := value
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(configDir, value)
+	}
+	rel, err := filepath.Rel(filepath.Dir(configDir), abs)
+	if err != nil || escapesRoot(rel) {
+		return value
+	}
+	return rel
+}
+
+// escapesRoot reports whether a project-root-relative store directory points
+// outside the project root.
+func escapesRoot(dir string) bool {
+	return filepath.IsAbs(dir) || dir == ".." || strings.HasPrefix(dir, ".."+string(filepath.Separator))
+}
+
+// fileFormStoreDir expresses an in-memory store directory relative to
+// configDir for writing, reusing the value read from the file while it
+// still resolves to the same place.
+func fileFormStoreDir(directory, fileForm, configDir string) string {
+	if fileForm != "" && resolveStoreDir(fileForm, configDir) == directory {
+		return fileForm
+	}
+	if escapesRoot(directory) {
+		return directory
+	}
+	rel, err := filepath.Rel(configDir, filepath.Join(filepath.Dir(configDir), directory))
+	if err != nil {
+		return directory
+	}
+	return filepath.ToSlash(rel)
 }
 
 // rejectLegacyRepoAddress fails a config whose registry still carries the
@@ -406,7 +564,17 @@ func (c Config) Validate() error {
 	if err := c.Changelog.Validate(); err != nil {
 		return err
 	}
+	// Only the project's store directories are bound to the project root; a
+	// repo.yaml's changelog is relative to that repo's own folder.
+	for _, d := range c.storeDirs() {
+		if err := validateStoreDir(d.key, *d.directory); err != nil {
+			return err
+		}
+	}
 	if err := c.Knowledge.Validate(); err != nil {
+		return err
+	}
+	if err := c.Design.Validate(); err != nil {
 		return err
 	}
 	if err := validateRepos(c.Repos); err != nil {
@@ -464,6 +632,17 @@ func (r RepoEntry) foldLocationAlias() RepoEntry {
 	}
 	r.Local = ""
 	return r
+}
+
+// validateStoreDir refuses a store directory outside the project root: the
+// project store only ever lived inside it.
+func validateStoreDir(key, dir string) error {
+	if !escapesRoot(dir) {
+		return nil
+	}
+	return output.NewError("config_invalid",
+		fmt.Sprintf("%s.config.directory %q is outside the project", key, dir)).
+		WithNextAction(fmt.Sprintf("set `%s.config.directory` to a folder inside the project, relative to the folder holding config.yaml (e.g. `%s`)", key, map[string]string{"spec": DefaultSpecDir, "plan": DefaultPlanDir, "changelog": DefaultChangelogDir}[key]))
 }
 
 // Validate checks whether the spec config names a supported provider and
@@ -537,8 +716,57 @@ func (c KnowledgeConfig) Validate() error {
 	return nil
 }
 
-// ToYAMLFile writes the Config to a YAML file.
+// Validate checks every declared design source for a name, a name unique
+// within the list, a supported provider, and a location to read and write
+// documents at. An empty list is valid and means the project declares no
+// design sources.
+//
+// Every refusal carries a next action, including the provider and location
+// cases: a design source is declared by hand, so an author who mistypes one
+// needs to be told which key to correct. That is why this reads like
+// KnowledgeConfig.Validate without sharing its two bare errors.
+func (c DesignConfig) Validate() error {
+	seen := make(map[string]bool, len(c.Sources))
+	for i, src := range c.Sources {
+		if src.Name == "" {
+			return output.NewError(
+				"config_invalid",
+				fmt.Sprintf("design.sources[%d] declares no name", i),
+			).WithNextAction("give every entry under design.sources a `name:`, which is the name that source is addressed by")
+		}
+		if seen[src.Name] {
+			return output.NewError(
+				"config_invalid",
+				fmt.Sprintf("design.sources declares the name %q more than once", src.Name),
+			).WithNextAction(fmt.Sprintf("rename one of the two %q entries under design.sources; a design source is addressed by its name alone, so names must be unique", src.Name))
+		}
+		seen[src.Name] = true
+		if src.Provider != ProviderFile {
+			return output.NewError(
+				"config_invalid",
+				fmt.Sprintf("design source %q: provider %q is not supported (only %q)", src.Name, src.Provider, ProviderFile),
+			).WithNextAction(fmt.Sprintf("set design.sources[%d].provider to %q, the only design storage backend this release ships", i, ProviderFile))
+		}
+		if src.Config.Location == "" {
+			return output.NewError(
+				"config_invalid",
+				fmt.Sprintf("design source %q: config.location must not be empty", src.Name),
+			).WithNextAction(fmt.Sprintf("set design.sources[%d].config.location to the folder holding %s's design documents; a relative path resolves from the folder holding config.yaml", i, src.Name))
+		}
+	}
+	return nil
+}
+
+// ToYAMLFile writes the Config to a YAML file, stamping the current settings
+// format and the running Spektacular version, and writing the store
+// directories back relative to the folder holding the file.
 func (c Config) ToYAMLFile(path string) error {
+	c.Schema = CurrentProjectSchema
+	c.WrittenBy = WriterVersion
+	configDir := filepath.Dir(path)
+	for _, d := range c.storeDirs() {
+		*d.directory = fileFormStoreDir(*d.directory, *d.fileForm, configDir)
+	}
 	data, err := yaml.Marshal(c)
 	if err != nil {
 		return fmt.Errorf("marshalling config: %w", err)

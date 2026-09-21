@@ -1,6 +1,9 @@
+schema: 3
+written_by: 0.1.0
+skills_version: 0.1.0
 name: spektacular
 command: go run .
-agent: bob
+agent: claude
 spec_trigger_threshold: moderate
 debug:
     enabled: true
@@ -8,15 +11,21 @@ spec:
     provider: file
     id_method: counter
     config:
-        directory: .spektacular/specs
+        directory: specs
 plan:
     provider: file
     config:
-        directory: .spektacular/plans
+        directory: plans
 changelog:
     provider: file
     config:
-        directory: .spektacular/changelog
+        directory: changelog
+design:
+    sources:
+        - name: design
+          provider: file
+          config:
+            location: design
 repos:
     - name: spektacular
       location: .

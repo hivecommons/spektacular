@@ -1,0 +1,4 @@
+name: legacy
+# The coding agent skills are installed for.
+agent: claude
+command: spektacular

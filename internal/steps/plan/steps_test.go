@@ -654,3 +654,66 @@ func TestPhasesStepCarriesRepoAttributionIntoPlanAndContext(t *testing.T) {
 	require.Contains(t, out, "<repo>:path:line",
 		"phases must direct context.md File-changes to carry the repo-name prefix")
 }
+
+// --- Phase 3.2: the plan workflow honours the designs a spec references ---
+
+// TestDiscoveryStepResolvesAndReadsReferencedDesigns asserts the rendered
+// discovery instruction resolves the spec's design references, reads each
+// resolved document, frames them as binding input, and stops rather than
+// planning around a reference that does not resolve. Each anchor is asserted
+// exactly once: these are single, load-bearing directives, and a duplicate
+// would mean the paragraph was pasted in twice. The expected strings are
+// hand-copied from templates/steps/plan/02-discovery.md.
+func TestDiscoveryStepResolvesAndReadsReferencedDesigns(t *testing.T) {
+	out := renderStep(t, discovery())
+
+	for _, tc := range []struct {
+		anchor string
+		why    string
+	}{
+		{"spektacular design ref list", "discovery must list the spec's design references"},
+		{"spektacular design read", "discovery must read every resolved design document"},
+		{"binding input to this plan", "discovery must frame a referenced design as binding input, not background reading"},
+		{"Architecture is built on it, not re-derived from scratch around it.", "discovery must state architecture is built on a referenced design"},
+		{"**If `unresolved` is greater than zero, STOP and report to the user.**", "discovery must stop and report when a reference does not resolve"},
+	} {
+		require.Equalf(t, 1, strings.Count(out, tc.anchor),
+			"%s (expected %q exactly once)", tc.why, tc.anchor)
+	}
+}
+
+// TestArchitectureStepBuildsOnReferencedDesigns asserts the rendered
+// architecture instruction treats a referenced design as the settled shape —
+// options are weighed within it rather than against it — and routes
+// disagreement to the user instead of resolving it silently inside the plan.
+func TestArchitectureStepBuildsOnReferencedDesigns(t *testing.T) {
+	out := renderStep(t, architecture())
+
+	require.Contains(t, out, "that design is the settled shape and is built",
+		"architecture must treat a referenced design as the settled shape it builds on")
+	require.Contains(t, out, "that quietly redesigns what a referenced design already settled",
+		"architecture must forbid an option that re-derives a settled design")
+	require.Contains(t, out, "that is a decision to **raise with the user**, not one to make silently",
+		"architecture must route disagreement with a referenced design to the user")
+}
+
+// TestDependenciesStepNamesEveryDesignDocument asserts the rendered
+// dependencies instruction names each design document the plan was built on
+// together with the source it came from, and requires the explicit "none"
+// form when the spec carries no references — an unstated absence being
+// indistinguishable from an omission.
+func TestDependenciesStepNamesEveryDesignDocument(t *testing.T) {
+	out := renderStep(t, dependencies())
+
+	for _, tc := range []struct {
+		anchor string
+		why    string
+	}{
+		{"**Name every design document this plan was built on**", "dependencies must require naming every design document"},
+		{"path and the design source it was read from", "dependencies must require the document's path and its design source"},
+		{"Design documents this plan was built on: none.", "dependencies must require the explicit none form"},
+	} {
+		require.Equalf(t, 1, strings.Count(out, tc.anchor),
+			"%s (expected %q exactly once)", tc.why, tc.anchor)
+	}
+}

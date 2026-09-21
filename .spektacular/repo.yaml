@@ -1,3 +1,5 @@
+schema: 2
+written_by: 0.1.0
 description: Agent-agnostic CLI tool for spec-driven development, providing skills and integrations for coding agents (Claude, Bob, Codex) to plan and implement work from a written spec.
 role: tool
 tags:

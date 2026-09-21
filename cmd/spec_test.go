@@ -37,7 +37,7 @@ func writeSpecCommandConfig(t *testing.T, dir, body string) {
 	if !strings.Contains(body, "repos:") {
 		body += "repos:\n  - name: testproj\n    location: .\n"
 	}
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "config.yaml"), []byte(body), 0o644))
+	writeCurrentConfig(t, dir, body)
 	repoConfigPath := filepath.Join(dataDir, config.RepoConfigFileName)
 	if _, err := os.Stat(repoConfigPath); os.IsNotExist(err) {
 		rc := config.NewDefaultRepoConfig()
@@ -257,9 +257,9 @@ func TestSpecNew_RejectsUnknownConfiguredIDMethod(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	dataDir := filepath.Join(dir, ".spektacular")
-	require.NoError(t, os.MkdirAll(dataDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "config.yaml"), []byte("name: testproj\nspec:\n  id_method: unsupported\n"), 0o644))
+	writeCurrentConfig(t, dir, "name: testproj\nspec:\n  id_method: unsupported\n")
 
+	resetRootCmd(t)
 	setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"spec", "new", "--data", `{"name":"fixture"}`})
 
@@ -422,4 +422,38 @@ func TestSpecNew_KindlessInProgressStateErrorsWithoutClobber(t *testing.T) {
 	after, err := os.ReadFile(filepath.Join(dataDir, "state.json"))
 	require.NoError(t, err)
 	require.Equal(t, before, after)
+}
+
+// Criterion 3 (spec): spec.config.directory is relative to the folder
+// holding config.yaml, so `directory: x` stores new specs in .spektacular/x.
+func TestSpecNew_CustomDirectoryResolvesFromSettingsFolder(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: x\n")
+
+	resetRootCmd(t)
+	stdout, stderr, code := runRootCmd(t, "spec", "new", "--data", `{"name":"n"}`)
+	require.Equal(t, 0, code, stdout)
+	require.Empty(t, stderr)
+
+	var result specCommandResult
+	require.NoError(t, json.Unmarshal([]byte(stdout), &result))
+	require.Equal(t, filepath.Join(dir, ".spektacular", "x", result.SpecName+".md"), result.SpecPath)
+	require.FileExists(t, result.SpecPath)
+	require.NoDirExists(t, filepath.Join(dir, "x"))
+}
+
+// A store folder that resolves outside the project is refused with
+// config_invalid, and the next action names the key and a valid example.
+func TestSpecNew_DirectoryOutsideProjectIsRefused(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, "spec:\n  config:\n    directory: ../../elsewhere\n")
+
+	er := runRootError(t, "spec", "new", "--data", `{"name":"n"}`)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Contains(t, er.Message, "spec.config.directory")
+	require.Contains(t, er.NextAction, "`spec.config.directory`")
+	require.Contains(t, er.NextAction, "`specs`")
+	require.NoDirExists(t, filepath.Join(filepath.Dir(dir), "elsewhere"))
 }

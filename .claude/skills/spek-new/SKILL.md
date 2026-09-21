@@ -5,8 +5,9 @@ description: Create a new Specification for a feature.
 
 > **Version check first.** Before running any other command, run `go run . version check`.
 > - On `status: "match"`, continue with the skill and produce no version-related output.
-> - On `"mismatch"` or `"missing"`, the installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to re-run `go run . init <agent>`, and wait for their decision before continuing.
-> - Never modify or re-install any installed files yourself — refreshing the installation is always an explicit, user-initiated re-run of init.
+> - On `"mismatch"`, `"missing"` or `"upgrade_needed"`, the project's settings or installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to run `go run . migrate` (they can preview it with `go run . migrate --dry-run`), and wait for their decision before continuing.
+> - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
+> - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
 > **STOP. Read this before running any command below.**
 > A single successful CLI call — including the very first `spec new` — is **NOT** task completion. It is not a milestone to report back to the user. It is one step out of many in a workflow that you must keep driving, turn after turn, without stopping, until the CLI itself tells you the workflow is *finished*. If you find yourself about to say "successfully completed" or summarize results after calling `spec new` or `spec goto` even once, you are wrong — go back and read the `instruction` field you just received, do what it says, and call `goto` again.
@@ -32,13 +33,42 @@ Before any section is drafted, the workflow opens with an `interview` step: a si
 
 # Reading and writing the spec file
 
-The CLI owns the spec file. **Never read or write it with the `Write`, `Edit`, or `Read` tools** — those bypass Spektacular and the configured spec directory. All spec file access goes through `go run . spec file`:
+The CLI owns the spec file. All spec file access goes through `go run . spec file`:
 
 - `go run . spec file read <name>.md` — read a spec file from the spec store.
 - `go run . spec file write <name>.md --from <source-path>` — write a spec file into the spec store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
 - `go run . spec file list` — list spec files in the spec store.
 
 Path arguments are spec file names; `spec file` resolves them against the configured spec directory itself.
+
+# Design documents a spec may reference
+
+A spec does not have to absorb a worked design. Where the conversation settles an API's shape, a
+user-facing flow, a data format, or a worked example of one, that detail can live in a **design
+document** in one of the project's declared design sources, with the spec carrying a reference to
+it instead of its content. The technical-approach step makes that offer at the point the detail
+would otherwise be compressed to a one-line steer; it is always an offer, and nothing is written
+without the user's explicit agreement.
+
+A design does not have to already exist to be captured. Where it has been settled in
+conversation but never written down, the `spek-design` skill runs a guided interview and writes
+the document from it; where the user already has the document, it is stored exactly as supplied.
+
+Design documents are reached through the CLI, never by reading files directly:
+
+- `go run . design sources` — the design sources this project declares, with their locations.
+- `go run . design list` — the design documents in them.
+- `go run . design write --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
+  design document Spektacular did not author, byte for byte, adding no frontmatter to it and
+  reformatting nothing.
+- `go run . design author --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
+  design Spektacular wrote with the user, stamping the same lifecycle record every spec and plan
+  carries. Optionally `--spec <spec>` to record which spec's conversation produced it, and
+  `--document-status <draft|final|superseded|archived>`. Rewriting an authored design this way
+  keeps its original capture date and the specs already referencing it.
+- `go run . design ref add --data '{"spec":"<spec>","source":"<name>","path":"<path>"}'` —
+  record the reference on the spec. A reference naming a source the project has not declared is
+  refused and nothing is recorded.
 
 # Working files vs. the store document
 
@@ -69,11 +99,13 @@ Ask the user for a spec name now. If the user needs to see what names already ex
 go run . spec new --data '{"name": "<spec_name>"}'
 ```
 
-External systems may also supply an identifier with:
+**Only when `spec.id_method` is `external`** (check `.spektacular/config.yaml`), an external system's identifier must be supplied with:
 
 ```
 go run . spec new --data '{"name": "<spec_name>", "id": "<external_id>"}'
 ```
+
+Under `timestamp` or `counter` (the default is `timestamp`), **never pass `id`** — not even when the spec comes from a GitHub issue or ticket with its own number. The CLI mints the ID itself and rejects an explicit one, because a name without the configured ID prefix would be refused by every later plan and changelog write.
 
 The CLI may normalize and prefix the requested name. Always use the returned `spec_name` and `spec_path` as the source of truth for follow-up workflows.
 

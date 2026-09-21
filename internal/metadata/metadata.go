@@ -67,6 +67,28 @@ type Metadata struct {
 	ProjectSource string
 	Spec          string
 	Plan          string
+	// Designs are the design documents this artifact references. Only a spec
+	// carries them today. They are modelled here rather than left as loose
+	// frontmatter because yamlShape is a closed schema: a key it does not name
+	// is dropped the next time the block is rendered, so an unmodelled
+	// reference would silently disappear on the next write.
+	Designs []DesignRef
+	// Specs are the specs that reference this document, the inbound reverse of
+	// Designs. Only a design document Spektacular authored carries them today.
+	// Note the neighbouring Spec field is a different fact one character away:
+	// Spec is provenance, the single spec whose conversation produced this
+	// document, while Specs is every spec that points at it. Modelled here for
+	// the same reason Designs is: yamlShape is a closed schema.
+	Specs []string
+}
+
+// DesignRef is one reference from an artifact to a design document. It names
+// both halves of the address: the declared source the document belongs to, and
+// its path within that source. A path alone could not say which source was
+// searched, so it could never report a useful failure.
+type DesignRef struct {
+	Source string `yaml:"source" json:"source"`
+	Path   string `yaml:"path" json:"path"`
 }
 
 // yamlShape is the on-disk representation used by MarshalYAML / UnmarshalYAML.
@@ -80,6 +102,8 @@ type yamlShape struct {
 	ProjectSource  string         `yaml:"project_source,omitempty"`
 	Spec           string         `yaml:"spec,omitempty"`
 	Plan           string         `yaml:"plan,omitempty"`
+	Designs        []DesignRef    `yaml:"designs,omitempty"`
+	Specs          []string       `yaml:"specs,omitempty"`
 }
 
 // yamlInShape is the decode-side twin of yamlShape. It holds document_status
@@ -92,6 +116,13 @@ type yamlInShape struct {
 	ProjectSource  string    `yaml:"project_source"`
 	Spec           string    `yaml:"spec"`
 	Plan           string    `yaml:"plan"`
+	// Designs is a raw node for the same reason DocumentStatus is: reads
+	// across this block are lenient, so a malformed or non-list value must
+	// read as no references rather than failing the whole parse and making the
+	// artifact unreadable.
+	Designs yaml.Node `yaml:"designs"`
+	// Specs is a raw node for the same reason Designs is.
+	Specs yaml.Node `yaml:"specs"`
 }
 
 // MarshalYAML implements yaml.Marshaler.
@@ -103,6 +134,8 @@ func (m Metadata) MarshalYAML() (interface{}, error) {
 		ProjectSource:  m.ProjectSource,
 		Spec:           m.Spec,
 		Plan:           m.Plan,
+		Designs:        m.Designs,
+		Specs:          m.Specs,
 	}
 	if !m.ClosedDate.IsZero() {
 		out.ClosedDate = m.ClosedDate.Format(dateFormat)
@@ -142,7 +175,55 @@ func (m *Metadata) UnmarshalYAML(node *yaml.Node) error {
 	m.ProjectSource = in.ProjectSource
 	m.Spec = in.Spec
 	m.Plan = in.Plan
+	m.Designs = decodeDesignRefs(in.Designs)
+	m.Specs = decodeSpecNames(in.Specs)
 	return nil
+}
+
+// decodeDesignRefs reads the designs list leniently. An absent, empty,
+// malformed or non-list value yields no references instead of an error: a spec
+// whose frontmatter someone hand-edited badly must still be readable, which is
+// the same bargain document_status strikes. Entries missing either half of the
+// address are dropped, since a reference that cannot name its source and path
+// cannot be resolved.
+func decodeDesignRefs(node yaml.Node) []DesignRef {
+	if node.Kind != yaml.SequenceNode {
+		return nil
+	}
+	var refs []DesignRef
+	for _, item := range node.Content {
+		var ref DesignRef
+		if err := item.Decode(&ref); err != nil {
+			continue
+		}
+		if ref.Source == "" || ref.Path == "" {
+			continue
+		}
+		refs = append(refs, ref)
+	}
+	return refs
+}
+
+// decodeSpecNames reads the specs list leniently, on the same bargain
+// decodeDesignRefs strikes: an absent, empty, malformed or non-list value
+// yields no back-links instead of an error, so a design whose frontmatter
+// someone hand-edited badly stays readable. Non-scalar and empty entries are
+// dropped, since a back-link that cannot name a spec cannot be resolved.
+func decodeSpecNames(node yaml.Node) []string {
+	if node.Kind != yaml.SequenceNode {
+		return nil
+	}
+	var names []string
+	for _, item := range node.Content {
+		if item.Kind != yaml.ScalarNode {
+			continue
+		}
+		if item.Value == "" {
+			continue
+		}
+		names = append(names, item.Value)
+	}
+	return names
 }
 
 // validateDocumentStatus returns an error if s is not one of the four named

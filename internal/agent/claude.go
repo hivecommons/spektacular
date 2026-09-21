@@ -25,6 +25,9 @@ func (claudeAgent) Install(projectPath string, cfg config.Config, out io.Writer)
 	if err := installRepoSourcesSection(projectPath, cfg, out); err != nil {
 		return err
 	}
+	if err := installStoreAccessSection(projectPath, cfg, out); err != nil {
+		return err
+	}
 	if err := installMemoryContextSection(projectPath, cfg, out); err != nil {
 		return err
 	}
@@ -32,6 +35,9 @@ func (claudeAgent) Install(projectPath string, cfg config.Config, out io.Writer)
 		return err
 	}
 	if err := installSpecTriggerSection(projectPath, cfg, out); err != nil {
+		return err
+	}
+	if err := installDesignTriggerSection(projectPath, cfg, out); err != nil {
 		return err
 	}
 	if err := installDraftPresentationSection(projectPath, cfg, out); err != nil {

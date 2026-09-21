@@ -14,6 +14,67 @@ Technical Approach is **non-binding direction** — preferences and suggestions 
 
 **Stay at direction altitude — do not write the design itself.** This is the section where mechanism is *welcome*, which makes it the easiest place to drift too low. Technical Approach is a *steer*, not a worked solution: name each decision or preference in a sentence or two, with its *why* if it helps, and stop. Designing the *how* is the downstream **plan workflow's** job — its steps own discovery, architecture, components, data structures, implementation detail, dependencies, testing approach, milestones, and phases. Apply this test before writing anything down: *would this content be re-derived by one of those plan steps?* If yes, it belongs to the plan, not here. Concrete tells that you have dropped too low: a numbered pipeline or algorithm, step-by-step processing, data shapes, field or function names, the ordering of operations, or anything that reads like "first do X, then Y, then Z". Compress each to a one-line steer (e.g. not the five steps of a de-duplication pipeline, but "prefer consolidating results behind a dedicated lookup step, because duplication can only be judged after the full content is read") and leave the worked design to the plan.
 
+**When the design is settled, offer to capture it rather than compress it away.** The paragraph
+above is where a worked design gets reduced to a one-line steer, which is exactly where it can
+be lost. If this conversation has settled an API's shape, a user-facing flow, a data format, or
+a worked example of any of these, that is a **design document**: the worked design the feature
+is built to, kept in one of the project's declared design sources and referenced by this spec
+rather than copied into it.
+
+The bar is high, and all three parts must hold: the detail is **settled** (the user decided it,
+not merely floated it), it is **worked** (a concrete shape, format or flow rather than a
+direction), and it would **make the spec unreadable if written inline**. A preference the
+planner may adapt belongs here as a one-line steer; only a worked design that would swamp the
+spec belongs in a document of its own. If a one-line steer captures it, it is not a design
+document.
+
+**A referenced design is binding, so its pointer belongs in Constraints, not here.** The bar
+above already required the design to be settled by the user rather than chosen freely while
+drafting, which is precisely what makes it a constraint rather than direction: the plan workflow
+reads a referenced design as the settled shape it builds *on*, weighs its options *within* that
+shape, and must raise a disagreement with the user rather than designing around it. Recording
+the pointer in this section would file it under the one heading defined as direction the planner
+may adapt, and say the opposite of what it means.
+
+This covers two situations, not one. The design may be **settled in this conversation but not
+yet written down**, in which case there is authoring work to do before anything can be stored;
+or the user may **already have the document**, in which case it needs storing exactly as they
+supplied it and nothing else.
+
+Offer, never write unprompted. Say what you would capture, which declared source you would
+write it to (`{{config.command}} design sources` lists them), and why this spec is better off
+pointing at it than containing it. Then wait for the user's decision:
+
+- **Accept** — invoke the `spek-design` skill, which owns the writing from here: it runs the
+  authoring interview when the design still has to be worked out, and stores a document the user
+  already has without touching it. For a design Spektacular writes with the user it ends in
+  `{{config.command}} design author`, which stamps the document's lifecycle record:
+  `{{config.command}} design author --data '{"source":"<name>","path":"<path>"}' --from <staged file>`.
+  For one the user handed over it ends in `{{config.command}} design write`, which stores the
+  bytes exactly as supplied and adds no frontmatter:
+  `{{config.command}} design write --data '{"source":"<name>","path":"<path>"}' --from <staged file>`.
+  Then record the reference with
+  `{{config.command}} design ref add --data '{"spec":"{{spec_name}}","source":"<name>","path":"<path>"}'`. Both steps, every time: a design
+  nothing references is invisible to the plan workflow, and a reference to a design that was
+  never written is a broken reference.
+
+  Then record the one-line pointer as a **constraint**, not here. Append a bullet naming the
+  design's source and path, and what it settles, to
+  `.spektacular/work/{{spec_name}}/constraints.md` with your own `Write` tool — that section's
+  working file has already been written by the time this step runs, so this is an amendment to
+  it, the same cross-section amendment the workflow already allows. Tell the user you have done
+  so when you report the capture. The design's content does **not** go into the spec at all, in
+  this section or in Constraints: the document holds it and the spec points at it.
+- **Defer** ("not now", "once we've settled it") — write nothing, carry on, and you may raise
+  the offer again later in this conversation if the detail keeps developing.
+- **Decline** ("no", "keep it in the spec") — write nothing, and do not raise the offer again
+  for this detail for the rest of the conversation. A decline is final for that detail, not a
+  "not now". Declining does not mean the detail moves into the spec body instead: it stays out,
+  or it stays as the one-line steer it already was.
+
+Silence or deflection is not acceptance. A direct instruction from the user to write a design
+document *is* the required agreement and needs no further confirmation.
+
 **Do not restate content already captured in another section.** Anything that belongs in Constraints (e.g. "must use an embedded datastore", "must replace the existing file storage", "the database file location must be configurable") lives there, not here — do not copy it back into Technical Approach. Capture only *additional* technical direction that is not already a requirement or constraint. If there is none beyond what is already captured, say exactly that in one line — e.g. "No technical direction has been decided beyond the captured constraints; the detailed design is left for the plan workflow to propose." — without re-listing those constraints.
 
 If the interview surfaced no technical direction beyond what's already captured elsewhere, draft the section as saying so plainly rather than leaving it blank with no explanation.

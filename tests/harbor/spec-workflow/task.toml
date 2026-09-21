@@ -12,9 +12,29 @@ tags = ["spektacular", "spec-workflow", "multi-step", "cli"]
 # committed through `spektacular spec file write`. At 600s it was finishing with
 # no margin: one run was killed mid-verification, the next completed every step
 # and wrote the spec but was killed before emitting its result event. Raised to
-# give real headroom, not to mask a hang — a run that needs appreciably more than
+# give real headroom, not to mask a hang: a run that needs appreciably more than
 # this is stuck and should fail.
-timeout_sec = 900.0
+#
+# Raised again, 900s -> 1200s, for the same failure mode a second time. A run
+# came in at 903.5s against the 900s budget, 0.4% over, and was killed inside
+# verification having completed nine of eleven steps. The agent was behaving
+# correctly throughout: 17 tool calls, no retry loop.
+#
+# The reason is run-to-run variance, not a step that got slower. An immediate
+# re-run of the identical suite and identical templates finished in 446.5s,
+# barely more than half the budget that had just killed it. So this suite's
+# runtime spans at least 446s to 903s, and a 900s budget sits inside that spread:
+# it was always going to fail intermittently, and which run happened to cross
+# the line says little about what changed. Do not read a timeout here as
+# evidence that the last prose edit was too long; measure the elapsed time in
+# the transcript before concluding anything.
+#
+# 1200s matches implement-workflow and puts the budget above the observed
+# spread rather than inside it. If a third raise is ever needed, check the
+# distribution first: several runs clustering near the ceiling means the
+# interview itself has grown too long, and buying more time would only defer
+# that.
+timeout_sec = 1200.0
 
 [verifier]
 timeout_sec = 120.0

@@ -142,12 +142,21 @@ func TestInit_DefaultConfig_CreatesSpecsAndPlansDirs(t *testing.T) {
 		require.NoError(t, err, "expected default dir %s", d)
 		require.True(t, info.IsDir())
 	}
+
+	// The on-disk layout is unchanged, but config.yaml states each store
+	// folder relative to the folder holding it.
+	raw, err := os.ReadFile(filepath.Join(dir, ".spektacular", "config.yaml"))
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "directory: specs\n")
+	require.Contains(t, string(raw), "directory: plans\n")
+	require.Contains(t, string(raw), "directory: changelog\n")
+	require.NotContains(t, string(raw), "directory: .spektacular/")
 }
 
 // TestInit_NonDefaultConfig_CreatesConfiguredDirs writes a config.yaml with
 // non-default spec/plan directories into a temp project, runs Init, and asserts
 // the configured directories are created on disk (Phase 2.2, criterion 3).
-// Spec and plan directories are project-root-relative paths.
+// In memory spec and plan directories are project-root-relative paths.
 func TestInit_NonDefaultConfig_CreatesConfiguredDirs(t *testing.T) {
 	dir := t.TempDir()
 	spektacularDir := filepath.Join(dir, ".spektacular")
@@ -168,9 +177,9 @@ func TestInit_NonDefaultConfig_CreatesConfiguredDirs(t *testing.T) {
 		require.True(t, info.IsDir(), "%s should be a directory", d)
 	}
 	// The default directories must NOT be created.
-	_, err := os.Stat(filepath.Join(dir, config.DefaultSpecDir))
+	_, err := os.Stat(filepath.Join(dir, ".spektacular", "specs"))
 	require.True(t, os.IsNotExist(err), "default specs dir should not be created")
-	_, err = os.Stat(filepath.Join(dir, config.DefaultPlanDir))
+	_, err = os.Stat(filepath.Join(dir, ".spektacular", "plans"))
 	require.True(t, os.IsNotExist(err), "default plans dir should not be created")
 }
 
@@ -186,7 +195,7 @@ func TestInit_ScaffoldsCategoriesAtConfiguredLocation(t *testing.T) {
 	repoCfg := config.NewDefaultRepoConfig()
 	repoCfg.Knowledge = config.RepoKnowledgeConfig{
 		Provider: config.ProviderFile,
-		Config:   config.FileKnowledgeConfig{Location: ".spektacular/kb"},
+		Config:   config.FileKnowledgeConfig{Location: "kb"},
 	}
 	require.NoError(t, repoCfg.ToYAMLFile(filepath.Join(spektacularDir, config.RepoConfigFileName)))
 
@@ -216,6 +225,11 @@ func TestInit_DefaultConfig_CreatesProjectKnowledgeDir(t *testing.T) {
 	info, err := os.Stat(filepath.Join(dir, ".spektacular", "knowledge"))
 	require.NoError(t, err, "default project knowledge directory should exist")
 	require.True(t, info.IsDir())
+
+	// repo.yaml's relative location resolves from its own folder, so nothing
+	// is scaffolded at the project root.
+	_, err = os.Stat(filepath.Join(dir, "knowledge"))
+	require.True(t, os.IsNotExist(err), "init must not create a knowledge base at the project root")
 }
 
 // Criterion 1: after init, the project directory holds both config files,
@@ -290,8 +304,9 @@ func TestInit_BackfillsMissingNamePreservingOtherSettings(t *testing.T) {
 	spektacularDir := filepath.Join(dir, ".spektacular")
 	require.NoError(t, os.MkdirAll(spektacularDir, 0755))
 
-	// A hand-written config with no name and a non-default spec directory.
-	raw := "spec:\n  provider: file\n  config:\n    directory: docs/specs\n"
+	// A hand-written config with no name and a non-default spec directory,
+	// written relative to the folder holding config.yaml.
+	raw := "schema: 3\nspec:\n  provider: file\n  config:\n    directory: ../docs/specs\n"
 	require.NoError(t, os.WriteFile(filepath.Join(spektacularDir, "config.yaml"), []byte(raw), 0644))
 
 	// Force is required because .spektacular already exists.
@@ -301,6 +316,9 @@ func TestInit_BackfillsMissingNamePreservingOtherSettings(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "backfill-proj", cfg.Name, "name should be backfilled from the directory basename")
 	require.Equal(t, "docs/specs", cfg.Spec.Config.Directory, "existing settings must survive the backfill")
+	written, err := os.ReadFile(filepath.Join(spektacularDir, "config.yaml"))
+	require.NoError(t, err)
+	require.Contains(t, string(written), "directory: ../docs/specs\n", "the folder setting is written back as the author wrote it")
 }
 
 // TestInit_ExplicitNameOverridesStoredName asserts that an explicit name on a
@@ -388,7 +406,7 @@ func TestInit_SeedsReposIntoOlderConfigWithoutRegistry(t *testing.T) {
 	require.NoError(t, os.MkdirAll(spektacularDir, 0755))
 
 	// An older config: name present, repos absent.
-	raw := "name: legacy-proj\nspec:\n  provider: file\n  config:\n    directory: docs/specs\n"
+	raw := "schema: 3\nname: legacy-proj\nspec:\n  provider: file\n  config:\n    directory: ../docs/specs\n"
 	require.NoError(t, os.WriteFile(filepath.Join(spektacularDir, "config.yaml"), []byte(raw), 0644))
 
 	// Force is required because .spektacular already exists.
@@ -399,6 +417,9 @@ func TestInit_SeedsReposIntoOlderConfigWithoutRegistry(t *testing.T) {
 	require.Equal(t, []config.RepoEntry{{Name: "legacy-proj", Location: "."}}, cfg.Repos,
 		"the colocated repo should be seeded into an older config's empty registry")
 	require.Equal(t, "docs/specs", cfg.Spec.Config.Directory, "existing settings must survive the seeding")
+	written, err := os.ReadFile(filepath.Join(spektacularDir, "config.yaml"))
+	require.NoError(t, err)
+	require.Contains(t, string(written), "directory: ../docs/specs\n", "the folder setting is written back as the author wrote it")
 }
 
 // TestInit_ExistingRepoConfigLeftUntouched asserts that a pre-existing
@@ -410,7 +431,7 @@ func TestInit_ExistingRepoConfigLeftUntouched(t *testing.T) {
 	require.NoError(t, os.MkdirAll(spektacularDir, 0755))
 
 	repoCfg := config.NewDefaultRepoConfig()
-	repoCfg.Knowledge.Config.Location = ".spektacular/custom-kb"
+	repoCfg.Knowledge.Config.Location = "custom-kb"
 	repoPath := filepath.Join(spektacularDir, config.RepoConfigFileName)
 	require.NoError(t, repoCfg.ToYAMLFile(repoPath))
 	before, err := os.ReadFile(repoPath)
@@ -465,4 +486,55 @@ func TestInit_ColocatedRepoWithMetadata_ReturnsNoMetadataNotice(t *testing.T) {
 	for _, n := range notices {
 		require.NotContains(t, n, "no descriptive metadata set", "a repo with descriptive metadata already set must not receive the notice")
 	}
+}
+
+// Phase 2.1: Init reads a pre-existing config.yaml through the format-checked
+// loader, so an unversioned (format 1) file is refused with a FormatError —
+// the cmd layer migrates it before Init runs — and is left byte-identical.
+func TestInit_UnversionedExistingConfigIsRefusedAsFormatError(t *testing.T) {
+	dir := t.TempDir()
+	spektacularDir := filepath.Join(dir, ".spektacular")
+	require.NoError(t, os.MkdirAll(spektacularDir, 0755))
+
+	configPath := filepath.Join(spektacularDir, "config.yaml")
+	const raw = "name: legacy-proj\nrepos:\n  - name: legacy-proj\n    location: .\n"
+	require.NoError(t, os.WriteFile(configPath, []byte(raw), 0644))
+
+	_, err := Init(dir, "", true)
+	require.Error(t, err)
+	fe, ok := config.IsFormatError(err)
+	require.True(t, ok, "expected a *config.FormatError, got %T: %v", err, err)
+	require.Equal(t, "project", fe.Kind)
+	require.Equal(t, 1, fe.Found)
+	require.Equal(t, 3, fe.Want)
+	require.False(t, fe.Newer())
+
+	after, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	require.Equal(t, raw, string(after), "a refused config.yaml must not be rewritten")
+	require.NoFileExists(t, filepath.Join(spektacularDir, config.RepoConfigFileName))
+}
+
+// Phase 2.1: Init never overwrites a colocated repo.yaml written by a newer
+// Spektacular — it fails with a FormatError reporting a newer format and the
+// file is left byte-identical.
+func TestInit_NewerFormatRepoConfigIsRefusedAndUntouched(t *testing.T) {
+	dir := t.TempDir()
+	spektacularDir := filepath.Join(dir, ".spektacular")
+	require.NoError(t, os.MkdirAll(spektacularDir, 0755))
+
+	repoPath := filepath.Join(spektacularDir, config.RepoConfigFileName)
+	const raw = "schema: 99\ndescription: from the future\n"
+	require.NoError(t, os.WriteFile(repoPath, []byte(raw), 0644))
+
+	_, err := Init(dir, "my-project", true)
+	require.Error(t, err)
+	fe, ok := config.IsFormatError(err)
+	require.True(t, ok, "expected a *config.FormatError, got %T: %v", err, err)
+	require.Equal(t, "repo", fe.Kind)
+	require.True(t, fe.Newer())
+
+	after, err := os.ReadFile(repoPath)
+	require.NoError(t, err)
+	require.Equal(t, raw, string(after), "a newer-format repo.yaml must never be rewritten")
 }

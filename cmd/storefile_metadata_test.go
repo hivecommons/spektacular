@@ -39,19 +39,19 @@ func kindFixtures() []kindFixture {
 	return []kindFixture{
 		{
 			kind:         "spec",
-			configYAML:   "spec:\n  config:\n    directory: docs/specs\n",
+			configYAML:   "spec:\n  config:\n    directory: ../docs/specs\n",
 			artifactName: "20260709000000-feature.md",
 			storeRelPath: filepath.Join("docs", "specs", "20260709000000-feature.md"),
 		},
 		{
 			kind:         "plan",
-			configYAML:   "plan:\n  config:\n    directory: docs/plans\n",
+			configYAML:   "plan:\n  config:\n    directory: ../docs/plans\n",
 			artifactName: "20260709000000-feature/plan.md",
 			storeRelPath: filepath.Join("docs", "plans", "20260709000000-feature", "plan.md"),
 		},
 		{
 			kind:       "changelog",
-			configYAML: "changelog:\n  config:\n    directory: docs/changelog\n",
+			configYAML: "changelog:\n  config:\n    directory: ../docs/changelog\n",
 			// Central (no --repo) writes land flat under the configured
 			// changelog directory; no project subfolder — that is a
 			// repo-routed concern (see repoRoutedStore in cmd/storefile.go).
@@ -786,4 +786,61 @@ func TestStoreFile_RetiredStatusFlagAndSubcommandAreUnknown(t *testing.T) {
 			})
 		})
 	}
+}
+
+// specKindFixture returns the spec row of kindFixtures. Design references are
+// a spec-only field today, so the tests that exercise them pick that one row
+// out of the shared table rather than looping over every kind.
+func specKindFixture(t *testing.T) kindFixture {
+	t.Helper()
+	for _, fx := range kindFixtures() {
+		if fx.kind == "spec" {
+			return fx
+		}
+	}
+	t.Fatal("kindFixtures no longer contains a spec row")
+	return kindFixture{}
+}
+
+// TestStoreFileWrite_SpecDesignReferencesSurviveOrdinaryWrite asserts that
+// design references already recorded on a spec survive a later ordinary
+// `spec file write`. An ordinary write passes UpdateOptions with a nil
+// Designs — it says nothing about references at all — so the merge must carry
+// the stored list forward rather than drop it when the body is replaced. This
+// is the write path the spec workflow uses on every commit, so a regression
+// here silently loses every reference on the next edit.
+func TestStoreFileWrite_SpecDesignReferencesSurviveOrdinaryWrite(t *testing.T) {
+	fx := specKindFixture(t)
+	earlier := time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC)
+	designs := []metadata.DesignRef{
+		{Source: "api", Path: "payments/v2.md"},
+		{Source: "platform", Path: "ingress.md"},
+	}
+
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, fx.configYAML)
+
+	seedArtifactWithMetadata(t, dir, fx.storeRelPath, metadata.Metadata{
+		CreatedDate:    earlier,
+		DocumentStatus: metadata.StatusDraft,
+		Designs:        designs,
+	}, []byte("original body\n"))
+
+	srcPath := filepath.Join(t.TempDir(), "source.md")
+	require.NoError(t, os.WriteFile(srcPath, []byte("updated body\n"), 0o644))
+
+	resetRootCmd(t)
+	stdout, _, code := runRootCmd(t, fx.kind, "file", "write", fx.artifactName, "--from", srcPath)
+	require.Equalf(t, 0, code, "write failed: %s", stdout)
+
+	content, err := os.ReadFile(filepath.Join(dir, fx.storeRelPath))
+	require.NoError(t, err)
+
+	meta, body, err := metadata.Split(content)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Equal(t, designs, meta.Designs,
+		"an ordinary write must preserve the spec's design references")
+	require.Equal(t, "updated body\n", string(body))
 }

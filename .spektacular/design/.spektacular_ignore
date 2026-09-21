@@ -1,0 +1,3 @@
+# Spektacular control file and the folder README are not design documents.
+.spektacular_ignore
+README.md

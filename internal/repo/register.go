@@ -78,6 +78,14 @@ func Register(cfg *config.Config, projectRoot string, git GitRunner, in Registra
 		return RegistrationResult{}, err
 	}
 
+	// A target repo.yaml written by a newer Spektacular is refused before
+	// anything is written, so a refused registration leaves no registry
+	// entry pointing at a file this build cannot read.
+	targetConfig := filepath.Join(entry.ResolvedLocation(projectRoot), config.RepoConfigFileName)
+	if n, err := config.PeekSchema(targetConfig); err == nil && n > config.CurrentRepoSchema {
+		return RegistrationResult{}, &config.FormatError{Path: targetConfig, Kind: "repo", Found: n, Want: config.CurrentRepoSchema}
+	}
+
 	if changed {
 		cfgPath := filepath.Join(config.ProjectConfigDir(projectRoot), "config.yaml")
 		if err := cfg.ToYAMLFile(cfgPath); err != nil {

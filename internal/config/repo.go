@@ -31,6 +31,12 @@ const RepoConfigFileName = "repo.yaml"
 // Spektacular clones into the project's working folder on first use. When
 // Source is unset the code and the Spektacular files are colocated.
 type RepoConfig struct {
+	// Schema is the settings format version (see CurrentRepoSchema).
+	// ToYAMLFile always stamps the current value.
+	Schema int `yaml:"schema"`
+	// WrittenBy is the Spektacular version that last saved this file. It is
+	// diagnostic only and never triggers an upgrade.
+	WrittenBy   string              `yaml:"written_by,omitempty"`
 	Description string              `yaml:"description,omitempty"`
 	Role        string              `yaml:"role,omitempty"`
 	Tags        []string            `yaml:"tags,omitempty"`
@@ -67,6 +73,12 @@ func RepoConfigFromYAMLFile(path string) (RepoConfig, error) {
 	}
 
 	expanded := expandEnvVars(string(raw))
+
+	// Loading only ever reads the current format; upgrading an older file is
+	// the migrate package's job, never the loader's.
+	if err := checkSchema(expanded, path, "repo", CurrentRepoSchema); err != nil {
+		return RepoConfig{}, err
+	}
 
 	cfg := NewDefaultRepoConfig()
 	if err := yaml.Unmarshal([]byte(expanded), &cfg); err != nil {
@@ -312,8 +324,11 @@ func resolveFileSource(path, configDir string) string {
 	return filepath.Join(configDir, path)
 }
 
-// ToYAMLFile writes the RepoConfig to a YAML file.
+// ToYAMLFile writes the RepoConfig to a YAML file, stamping the current
+// settings format and the running Spektacular version.
 func (c RepoConfig) ToYAMLFile(path string) error {
+	c.Schema = CurrentRepoSchema
+	c.WrittenBy = WriterVersion
 	data, err := yaml.Marshal(c)
 	if err != nil {
 		return fmt.Errorf("marshalling repo config: %w", err)

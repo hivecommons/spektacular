@@ -1,3 +1,7 @@
+---
+tags: [workflow, agent, step, goto]
+---
+
 # Step-advancement loops are not a per-agent wrapper bug
 
 When an agent gets stuck looping instead of advancing a spec/plan/implement

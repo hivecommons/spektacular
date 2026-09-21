@@ -1,0 +1,18 @@
+schema: 2
+written_by: 0.1.0
+description: A Spektacular project
+role: application
+tags:
+    - general
+source:
+    provider: file
+    config:
+        location: ..
+knowledge:
+    provider: file
+    config:
+        location: knowledge
+changelog:
+    provider: file
+    config:
+        directory: changelog

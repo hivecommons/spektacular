@@ -1,0 +1,19 @@
+schema: 3
+written_by: 0.1.0
+name: legacy
+# The coding agent skills are installed for.
+agent: claude
+command: spektacular
+repos:
+    - name: legacy
+      location: .
+skills_version: 0.0.9
+spec:
+    config:
+        directory: specs
+plan:
+    config:
+        directory: plans
+changelog:
+    config:
+        directory: changelog

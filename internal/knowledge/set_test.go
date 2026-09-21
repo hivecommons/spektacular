@@ -344,6 +344,55 @@ func TestSet_WriteIsolatedToChosenScope(t *testing.T) {
 	require.Error(t, err)
 }
 
+// Phase 1.3 criterion 1: an entry removed from the store it was addressed in
+// is gone from every retrieval path — it is absent from the listing and it is
+// absent from the search results — while every other entry, in that store and
+// in the other one, is untouched.
+func TestSet_DeleteRemovesTheEntryFromListingAndSearch(t *testing.T) {
+	set, _, _ := twoScopeSet(t)
+
+	require.NoError(t, set.Delete(Address{Tier: TierProject, Name: "project"}, "readme.md"))
+
+	entries, err := set.List(Selector{Tier: TierAll})
+	require.NoError(t, err)
+	require.ElementsMatch(t, []Entry{
+		{Tier: TierProject, Name: "project", Path: "architecture/initial-idea.md"},
+		{Tier: TierProject, Name: "team", Path: "guidelines.md"},
+		{Tier: TierProject, Name: "team", Path: "architecture/overview.md"},
+	}, entries, "the removed entry must be gone and every other entry must remain")
+
+	// Both stores held a file mentioning "compass"; only the team one is left.
+	hits, err := set.Search("compass", Selector{Tier: TierAll})
+	require.NoError(t, err)
+	require.Equal(t, []string{"guidelines.md"}, tagPaths(hits),
+		"a removed entry must not be returned by a search that previously matched it")
+}
+
+// Phase 1.3 criterion 2: removing a path that holds nothing is a success, not a
+// refusal, and it changes nothing. Running it twice is safe, so a maintenance
+// pass that retries a removal it already made does not fail the second time.
+func TestSet_DeleteOfAnAbsentPathSucceedsAndChangesNothing(t *testing.T) {
+	set, _, _ := twoScopeSet(t)
+
+	addr := Address{Tier: TierProject, Name: "project"}
+	require.NoError(t, set.Delete(addr, "learnings/never-written.md"))
+	require.NoError(t, set.Delete(addr, "learnings/never-written.md"),
+		"a repeated removal of an absent entry must stay a success")
+
+	// A genuine removal followed by a repeat of itself is the same story: the
+	// first call removes, the second finds nothing and still succeeds.
+	require.NoError(t, set.Delete(addr, "readme.md"))
+	require.NoError(t, set.Delete(addr, "readme.md"))
+
+	entries, err := set.List(Selector{Tier: TierAll})
+	require.NoError(t, err)
+	require.ElementsMatch(t, []Entry{
+		{Tier: TierProject, Name: "project", Path: "architecture/initial-idea.md"},
+		{Tier: TierProject, Name: "team", Path: "guidelines.md"},
+		{Tier: TierProject, Name: "team", Path: "architecture/overview.md"},
+	}, entries, "removing an absent path must leave the knowledge base exactly as it was")
+}
+
 // Sources reports the configured stores by tier and name, with their providers
 // and locations, in configured order.
 func TestSet_SourcesReportsConfiguredStores(t *testing.T) {
@@ -492,6 +541,105 @@ func TestSet_SearchExcludesAlwaysAppliedCategories(t *testing.T) {
 	require.True(t, categories["gotchas"], "looked-up gotchas must appear in search")
 }
 
+// hitPaths returns the store-relative path of every hit, in result order.
+func hitPaths(hits []store.Hit) []string {
+	paths := make([]string, len(hits))
+	for i, h := range hits {
+		paths[i] = h.Path
+	}
+	return paths
+}
+
+// Phase 2.1 criterion 1: a category's own generated description is never a
+// search result, in any category — including the looked-up ones, which the
+// always-applied exclusion has no claim over. Every category in the registry
+// carries a description here and every one of them matches the query far more
+// strongly than the single real entry does, so this also pins that the
+// exclusion is applied before the relevance floor is computed: a description
+// setting the floor from a score it is then dropped for would take the weak
+// real entry down with it.
+func TestSet_SearchExcludesEveryCategorysOwnDescription(t *testing.T) {
+	set, projectDir, _ := twoScopeSet(t)
+
+	for _, c := range Categories {
+		writeFile(t, projectDir, c.Name+"/"+CategoryDescriptionFile,
+			"# "+c.Name+"\n\nbinnacle binnacle binnacle binnacle binnacle\n")
+	}
+	writeFile(t, projectDir, "gotchas/trap.md", "one passing mention of the binnacle\n")
+
+	hits, err := set.Search("binnacle", Selector{Tier: TierAll})
+	require.NoError(t, err)
+	require.Equal(t, []string{"gotchas/trap.md"}, hitPaths(hits),
+		"only the real entry may come back; no category description, however strongly it matches")
+}
+
+// Phase 2.1 criterion 4: a README a contributor placed deeper inside a category
+// is their own file, not the category's generated description, so it is still
+// returned by search and still carries that category — the exclusion has no
+// claim over content someone wrote themselves.
+func TestSet_SearchReturnsAContributorsNestedREADME(t *testing.T) {
+	set, projectDir, _ := twoScopeSet(t)
+
+	writeFile(t, projectDir, "gotchas/README.md", "# Gotchas\n\nthe binnacle category\n")
+	writeFile(t, projectDir, "gotchas/sub/README.md", "a hand-written binnacle write-up\n")
+
+	hits, err := set.Search("binnacle", Selector{Tier: TierAll})
+	require.NoError(t, err)
+	require.Equal(t, []string{"gotchas/sub/README.md"}, hitPaths(hits))
+	require.Equal(t, "gotchas", hits[0].Category,
+		"a nested README is an ordinary entry, tagged with the category it sits in")
+}
+
+// Phase 2.1 criterion 3: keeping descriptions out of retrieval does not hide
+// them. A plain listing still enumerates every one of them, and each is still
+// readable at its address — which is what a maintenance review of the
+// descriptions depends on.
+func TestSet_ListAndReadStillReachEveryCategoryDescription(t *testing.T) {
+	set, projectDir, teamDir := twoScopeSet(t)
+
+	writeFile(t, projectDir, "conventions/README.md", "# Conventions\n\nproject conventions\n")
+	writeFile(t, projectDir, "gotchas/README.md", "# Gotchas\n\nproject gotchas\n")
+	writeFile(t, teamDir, "glossary/README.md", "# Glossary\n\nteam glossary\n")
+
+	entries, err := set.List(Selector{Tier: TierAll})
+	require.NoError(t, err)
+	require.ElementsMatch(t, []Entry{
+		{Tier: TierProject, Name: "project", Path: "readme.md"},
+		{Tier: TierProject, Name: "project", Path: "architecture/initial-idea.md"},
+		{Tier: TierProject, Name: "project", Path: "conventions/README.md"},
+		{Tier: TierProject, Name: "project", Path: "gotchas/README.md"},
+		{Tier: TierProject, Name: "team", Path: "guidelines.md"},
+		{Tier: TierProject, Name: "team", Path: "architecture/overview.md"},
+		{Tier: TierProject, Name: "team", Path: "glossary/README.md"},
+	}, entries)
+
+	content, err := set.Read(Address{Tier: TierProject, Name: "team"}, "glossary/README.md")
+	require.NoError(t, err)
+	require.Equal(t, "# Glossary\n\nteam glossary\n", string(content))
+}
+
+// Phase 2.1 criterion 5: the label vocabulary is untouched by the retrieval
+// exclusion. It still excludes the always-applied categories and nothing else,
+// so a description in a looked-up category still contributes its labels —
+// descriptions are deliberately kept out of search alone, not out of the
+// listing paths a maintenance review uses. Real scaffolded descriptions carry
+// no frontmatter; these do, because labels are the only thing this path
+// reports.
+func TestSet_TagsAreUnchangedByTheDescriptionExclusion(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "conventions/README.md", "---\ntags: [conventions-doc]\n---\n# Conventions\n")
+	writeFile(t, dir, "glossary/README.md", "---\ntags: [glossary-doc]\n---\n# Glossary\n")
+	writeFile(t, dir, "gotchas/README.md", "---\ntags: [gotchas-doc]\n---\n# Gotchas\n")
+	writeFile(t, dir, "gotchas/trap.md", "---\ntags: [gotchas-doc]\n---\n# Trap\n\nprose\n")
+
+	set := singleSourceSet(t, dir)
+
+	uses, err := set.Tags(Selector{Tier: TierAll})
+	require.NoError(t, err)
+	require.Equal(t, []TagUse{{Tag: "gotchas-doc", Count: 2}}, uses,
+		"always-applied descriptions contribute nothing, as before; a looked-up one still counts")
+}
+
 // Phase 2.2 load-bearing criterion: re-tiering a category in the registry is a
 // single self-consistent action. Flipping gotchas to always-applied
 // simultaneously makes Search exclude it AND makes AlwaysAppliedEntries load it,
@@ -548,12 +696,21 @@ func TestRetier_FlipsLoadAndSearchExclusionTogether(t *testing.T) {
 // Phase 2.2 criterion: AlwaysAppliedEntries returns entries from every
 // always-applied category — conventions AND glossary — across all scopes, each
 // tagged with its category and full content. Expected values are hand-written.
+//
+// Phase 2.1 criterion 2: each always-applied category here also carries its own
+// generated description, exactly as a scaffolded store does. The expected list
+// below is unchanged by their presence — the payload every task receives is the
+// same entry for entry, and spends no context restating what a category is for.
 func TestSet_AlwaysAppliedEntriesReturnsAllAlwaysAppliedCategories(t *testing.T) {
 	set, projectDir, teamDir := twoScopeSet(t)
 
 	writeFile(t, projectDir, "conventions/c.md", "project: use tabs\n")
 	writeFile(t, projectDir, "glossary/g.md", "compass: a navigation term\n")
 	writeFile(t, teamDir, "glossary/term.md", "sextant: another term\n")
+
+	writeFile(t, projectDir, "conventions/README.md", "# Conventions\n\n**Tier:** always-applied\n")
+	writeFile(t, projectDir, "glossary/README.md", "# Glossary\n\n**Tier:** always-applied\n")
+	writeFile(t, teamDir, "glossary/README.md", "# Glossary\n\n**Tier:** always-applied\n")
 
 	entries, err := set.AlwaysAppliedEntries(Selector{Tier: TierAll})
 	require.NoError(t, err)
@@ -930,6 +1087,41 @@ func TestSet_WriteWithoutAFullAddressRefusedWithASingleStore(t *testing.T) {
 	requireRefusal(t, set.Write(Address{}, "learnings/x.md", []byte("no")), ErrCodeTierRequired)
 
 	require.NoFileExists(t, filepath.Join(onlyDir, "learnings", "x.md"))
+}
+
+// Phase 1.3 criterion 3: a removal whose address does not name exactly one
+// store is refused with the same codes Write gives for the same omission, and
+// it removes nothing anywhere — the listing afterwards is the untouched one.
+// The refusal names the stores the tier does hold, so a caller can reissue.
+func TestSet_DeleteWithoutAFullAddressRemovesNothing(t *testing.T) {
+	cases := map[string]struct {
+		addr       Address
+		code       string
+		nextAction string
+	}{
+		"tier omitted":  {Address{Name: "project"}, ErrCodeTierRequired, "stores available: project, team"},
+		"name omitted":  {Address{Tier: TierProject}, ErrCodeNameRequired, `stores available in the "project" tier: project, team`},
+		"both omitted":  {Address{}, ErrCodeTierRequired, "stores available: project, team"},
+		"unknown store": {Address{Tier: TierProject, Name: "ghost"}, ErrCodeStoreUnknown, `stores available in the "project" tier: project, team`},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			set, _, _ := twoScopeSet(t)
+
+			envelope := requireRefusal(t, set.Delete(tc.addr, "readme.md"), tc.code)
+			require.Contains(t, envelope.NextAction, tc.nextAction,
+				"a refused removal must name the stores the request could have meant")
+
+			entries, err := set.List(Selector{Tier: TierAll})
+			require.NoError(t, err)
+			require.ElementsMatch(t, []Entry{
+				{Tier: TierProject, Name: "project", Path: "readme.md"},
+				{Tier: TierProject, Name: "project", Path: "architecture/initial-idea.md"},
+				{Tier: TierProject, Name: "team", Path: "guidelines.md"},
+				{Tier: TierProject, Name: "team", Path: "architecture/overview.md"},
+			}, entries, "an under-stated address must not be resolved to whichever store looks closest")
+		})
+	}
 }
 
 // Criterion 3: a refusal names the stores available in the tier concerned, and
@@ -2108,4 +2300,59 @@ func TestSet_SearchWithNoTagNarrowingStillReturnsEmptyOnNoMatch(t *testing.T) {
 	hits, err := set.Search("sextant", Selector{Tier: TierAll})
 	require.NoError(t, err)
 	require.Empty(t, hits)
+}
+
+// deleteRecordingStore is a store that holds no files at all and simply records
+// every path it was asked to remove. It stands in for a provider that is not a
+// directory on disk — a remote or database-backed store — which is the case the
+// knowledge layer's routing through store.Store exists to cover.
+type deleteRecordingStore struct {
+	deleted []string
+}
+
+func (s *deleteRecordingStore) Root() string                          { return "" }
+func (s *deleteRecordingStore) Read(string) ([]byte, error)           { return nil, store.ErrNotFound }
+func (s *deleteRecordingStore) Write(string, []byte) error            { return nil }
+func (s *deleteRecordingStore) List(string) ([]store.DirEntry, error) { return nil, nil }
+func (s *deleteRecordingStore) Exists(string) bool                    { return false }
+
+func (s *deleteRecordingStore) Search([]string, store.SearchOptions) ([]store.Hit, error) {
+	return nil, nil
+}
+
+func (s *deleteRecordingStore) Delete(path string) error {
+	s.deleted = append(s.deleted, path)
+	return nil
+}
+
+// Phase 1.3 criterion 7: a removal reaches the store through the same storage
+// abstraction reading and writing use, so it works against any provider and not
+// only a directory of files. The subject is the routing, so the stores here are
+// deliberately not FileStores: nothing on disk is touched, and the proof is that
+// the addressed provider — and only the addressed provider — saw the call.
+//
+// The Set is built in-package rather than through NewSet for the same reason
+// TestSet_SearchEnforcesTagsEvenWhenTheStoreIgnoresThem does: NewSet resolves a
+// config into file-backed stores and has no injection point for a provider, by
+// design. Building the scopedStore directly exercises the real Set.Delete over
+// the real source list, with only the provider swapped.
+func TestSet_DeleteTravelsThroughTheStoreInterface(t *testing.T) {
+	addressed := &deleteRecordingStore{}
+	other := &deleteRecordingStore{}
+	set := &Set{sources: []scopedStore{
+		{tier: TierProject, name: "remote", provider: "test", location: "in-memory", store: addressed},
+		{tier: TierRepo, name: "elsewhere", provider: "test", location: "in-memory", store: other},
+	}}
+
+	require.NoError(t, set.Delete(Address{Tier: TierProject, Name: "remote"}, "learnings/x.md"))
+
+	require.Equal(t, []string{"learnings/x.md"}, addressed.deleted,
+		"the removal must be handed to the addressed store through the Store interface")
+	require.Empty(t, other.deleted, "no other store may be asked to remove anything")
+
+	// A refused address never reaches a provider at all.
+	requireRefusal(t, set.Delete(Address{Tier: TierProject, Name: "ghost"}, "learnings/x.md"), ErrCodeStoreUnknown)
+	require.Equal(t, []string{"learnings/x.md"}, addressed.deleted,
+		"a refused address must not reach any provider")
+	require.Empty(t, other.deleted)
 }

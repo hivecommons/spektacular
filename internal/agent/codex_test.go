@@ -21,13 +21,14 @@ func TestCodexAgent_Install(t *testing.T) {
 	err := codexAgent{}.Install(tmp, cfg, io.Discard)
 	require.NoError(t, err)
 
-	// Exactly five SKILL.md files under .agents/skills/spek-{new,plan,implement}/.
+	// Exactly six SKILL.md files under .agents/skills/spek-*/.
 	skillAssertions := map[string]string{
 		"spek-new":          "spektacular spec new",
 		"spek-plan":         "spektacular plan new",
 		"spek-implement":    "spektacular implement new",
 		"spek-knowledge":    "knowledge",
 		"spek-manage-repos": "repo add",
+		"spek-design":       "spektacular design author",
 	}
 	for skill, expected := range skillAssertions {
 		skillPath := filepath.Join(tmp, ".agents", "skills", skill, "SKILL.md")

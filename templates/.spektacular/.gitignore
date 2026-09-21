@@ -1,5 +1,8 @@
 *.tmp
 *.log
+
+# Backups an upgrade (`migrate`) keeps of the settings it rewrites.
+*.old
 .env
 
 # Materialized member-repo clones must never enter the project's history.

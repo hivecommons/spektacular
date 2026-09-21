@@ -1,0 +1,17 @@
+schema: 3
+written_by: 0.1.0
+name: split
+agent: claude
+skills_version: 0.1.0
+repos:
+    - name: split
+      location: .
+spec:
+    config:
+        directory: specs
+plan:
+    config:
+        directory: plans
+changelog:
+    config:
+        directory: changelog

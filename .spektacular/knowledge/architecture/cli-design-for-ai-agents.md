@@ -1,3 +1,7 @@
+---
+tags: [cli, agent, json, schema, validation]
+---
+
 # CLI Design for AI Agents
 
 Source: https://justin.poehnelt.com/posts/rewrite-your-cli-for-ai-agents/
