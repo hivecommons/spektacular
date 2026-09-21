@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -49,6 +50,12 @@ var knowledgeWriteCmd = &cobra.Command{
 	Use:   "write",
 	Short: "Write a knowledge entry into one addressed store",
 	RunE:  runKnowledgeWrite,
+}
+
+var knowledgeDeleteCmd = &cobra.Command{
+	Use:   "delete",
+	Short: "Delete a knowledge entry from one addressed store",
+	RunE:  runKnowledgeDelete,
 }
 
 var knowledgeSourcesCmd = &cobra.Command{
@@ -192,12 +199,33 @@ var knowledgeListOutputSchema = &schemaObj{
 	},
 }
 
+// knowledgeWriteOutputSchema carries two optional fields beyond the address.
+// They appear only when the entry declares labels no search can reach, which
+// is a report rather than a failure: the entry is written either way. Their
+// absence is the normal case and means nothing is wrong.
 var knowledgeWriteOutputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
-		"tier": {Type: "string"},
-		"name": {Type: "string"},
-		"path": {Type: "string"},
+		"tier":             {Type: "string"},
+		"name":             {Type: "string"},
+		"path":             {Type: "string"},
+		"unreachable_tags": {Type: "array", Items: &schemaProp{Type: "string"}},
+		"next_action":      {Type: "string"},
+	},
+}
+
+// knowledgeDeleteOutputSchema mirrors the write result and adds "deleted",
+// which distinguishes the two successful outcomes: a document was there and
+// was removed, or the address was valid and held nothing. Both are successes,
+// so an agent running a maintenance pass can report what it actually changed
+// without parsing prose.
+var knowledgeDeleteOutputSchema = &schemaObj{
+	Type: "object",
+	Properties: map[string]*schemaProp{
+		"tier":    {Type: "string"},
+		"name":    {Type: "string"},
+		"path":    {Type: "string"},
+		"deleted": {Type: "boolean"},
 	},
 }
 
@@ -466,8 +494,78 @@ func runKnowledgeWrite(cmd *cobra.Command, _ []string) error {
 	if err := set.Write(input.Address(), input.Path, content); err != nil {
 		return err
 	}
+	result := map[string]any{"tier": input.Tier, "name": input.Name, "path": input.Path}
+	// Reported after the write, not before, and as fields on a success rather
+	// than a refusal: the requirement is to tell the caller, not to refuse, and
+	// reporting afterwards makes it structurally impossible for this to become
+	// a gate. Absent in the normal case, so no existing consumer changes.
+	if report := knowledge.UnreachableTags(input.Path, content); report != nil {
+		result["unreachable_tags"] = report.Unreachable
+		result["next_action"] = report.NextAction
+	}
 	out := output.New(cmd.OutOrStdout(), globalFields)
-	return out.WriteResult(map[string]any{"tier": input.Tier, "name": input.Name, "path": input.Path})
+	return out.WriteResult(result)
+}
+
+// runKnowledgeDelete removes one addressed entry. It refuses an attempt to
+// remove a category's generated description here, in the command layer, rather
+// than in internal/knowledge: this is the only layer holding both the category
+// registry and the name of the command that regenerates a descriptor, and a
+// refusal belongs with the facts its next action is built from.
+func runKnowledgeDelete(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		return output.Write(cmd.OutOrStdout(), commandSchema{Input: knowledgeAddressInputSchema, Output: knowledgeDeleteOutputSchema}, "")
+	}
+	input, err := knowledgeAddressData(cmd)
+	if err != nil {
+		return err
+	}
+	if knowledge.IsCategoryDescription(input.Path) {
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
+		// init takes the agent as an argument, so the next action names the
+		// one this project already records rather than a <agent> placeholder:
+		// a next action that cannot be run verbatim is the thing the error
+		// convention exists to prevent.
+		agent := cfg.Agent
+		if agent == "" {
+			agent = "<agent>"
+		}
+		return output.NewError(
+			"knowledge_category_description_delete",
+			fmt.Sprintf("%q is the generated description of the %q category, not a knowledge entry; it is rendered from the project's definition of that category and nothing would restore it",
+				input.Path, path.Dir(input.Path)),
+		).WithResource(input.Path).WithNextAction(fmt.Sprintf(
+			"a category description is not deleted but regenerated: run `%s init %s` to bring every category description back into line with the project's current definitions, or delete a knowledge entry inside the category instead",
+			cfg.Command, agent,
+		))
+	}
+	set, err := newKnowledgeSet()
+	if err != nil {
+		return err
+	}
+	// Whether anything was there is settled before the removal, because
+	// store.Writer.Delete is contractually nil either way and cannot report
+	// it. A read on a removal path costs nothing and is the only way to say
+	// honestly what happened.
+	deleted := true
+	if _, err := set.Read(input.Address(), input.Path); err != nil {
+		var refusal *output.ErrorResponse
+		if errors.As(err, &refusal) && refusal.Code == knowledge.ErrCodeEntryNotFound {
+			deleted = false
+		} else {
+			return err
+		}
+	}
+	if err := set.Delete(input.Address(), input.Path); err != nil {
+		return err
+	}
+	out := output.New(cmd.OutOrStdout(), globalFields)
+	return out.WriteResult(map[string]any{
+		"tier": input.Tier, "name": input.Name, "path": input.Path, "deleted": deleted,
+	})
 }
 
 func runKnowledgeSources(cmd *cobra.Command, _ []string) error {
@@ -566,7 +664,10 @@ func (i knowledgeAddressInput) Address() knowledge.Address {
 func knowledgeAddressData(cmd *cobra.Command) (knowledgeAddressInput, error) {
 	dataStr, _ := cmd.Flags().GetString("data")
 	if dataStr == "" {
-		return knowledgeAddressInput{}, fmt.Errorf(`--data is required (e.g. --data '{"tier":"repo","name":"docs","path":"learnings/x.md"}')`)
+		return knowledgeAddressInput{}, output.NewError(
+			"knowledge_data_required",
+			"--data is required",
+		).WithNextAction(`reissue with the entry's address, e.g. --data '{"tier":"repo","name":"docs","path":"learnings/x.md"}'; run 'knowledge sources' to see the configured store names`)
 	}
 	var input knowledgeAddressInput
 	if err := json.Unmarshal([]byte(dataStr), &input); err != nil {
@@ -604,6 +705,7 @@ func init() {
 
 	knowledgeReadCmd.Flags().StringP("data", "d", "", `JSON input (e.g. '{"tier":"repo","name":"docs","path":"learnings/x.md"}')`)
 	knowledgeWriteCmd.Flags().StringP("data", "d", "", `JSON input (e.g. '{"tier":"repo","name":"docs","path":"learnings/x.md"}')`)
+	knowledgeDeleteCmd.Flags().StringP("data", "d", "", `JSON input (e.g. '{"tier":"repo","name":"docs","path":"learnings/x.md"}')`)
 	knowledgeWriteCmd.Flags().String("file", "", "Read entry content from the file at <path> (relative to cwd); stdin is used when omitted")
 	for _, c := range []*cobra.Command{knowledgeSearchCmd, knowledgeListCmd, knowledgeConventionsCmd, knowledgeAlwaysAppliedCmd, knowledgeTagsCmd} {
 		c.Flags().StringVar(&knowledgeTier, "tier", string(knowledge.TierAll), `Which knowledge to cover: "project", "repo", or "all"`)
@@ -612,5 +714,5 @@ func init() {
 
 	knowledgeSearchCmd.Flags().StringArrayVar(&knowledgeTags, "tag", nil, "Narrow to entries carrying the tag (repeatable); an entry must carry every tag listed, and one lacking any of them is never returned")
 
-	knowledgeCmd.AddCommand(knowledgeSearchCmd, knowledgeReadCmd, knowledgeListCmd, knowledgeWriteCmd, knowledgeSourcesCmd, knowledgeConventionsCmd, knowledgeCategoriesCmd, knowledgeAlwaysAppliedCmd, knowledgeTagsCmd)
+	knowledgeCmd.AddCommand(knowledgeSearchCmd, knowledgeReadCmd, knowledgeListCmd, knowledgeWriteCmd, knowledgeDeleteCmd, knowledgeSourcesCmd, knowledgeConventionsCmd, knowledgeCategoriesCmd, knowledgeAlwaysAppliedCmd, knowledgeTagsCmd)
 }

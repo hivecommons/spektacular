@@ -335,3 +335,27 @@ func TestRenderedDesignTriggerAcceptBranchHandsOffToTheSkillByName(t *testing.T)
 	require.Contains(t, branch, "invoke the `spek-design` skill",
 		"the accept branch must hand off to the design skill by name")
 }
+
+// TestRenderedDesignTriggerRoutesTheDesignPointerToConstraints asserts the
+// standing guidance says a spec records a referenced design among its
+// constraints rather than as technical direction.
+//
+// The section already lists three homes for design detail — a constraint, a
+// one-line steer, or a document of its own — and that list reads as three
+// degrees of how binding something is, which it is not: it sorts by how much
+// room the detail needs, not by whether the planner may renegotiate it. A
+// design document is settled by definition, so the pointer to one is binding
+// wherever it is recorded. Without this clarification the neighbouring
+// sentence actively suggests the wrong section.
+//
+// The expected strings are hand-copied from templates/agents/design-trigger.md.
+func TestRenderedDesignTriggerRoutesTheDesignPointerToConstraints(t *testing.T) {
+	rendered := renderDesignTriggerSection(t)
+
+	require.Contains(t, rendered, "three homes for the *content*, not three degrees of how binding",
+		"the guidance must say the three homes sort content by size, not by how binding it is")
+	require.Contains(t, rendered, "records that pointer among its **constraints**, never as technical",
+		"the guidance must route a referenced design's pointer to constraints")
+	require.Contains(t, rendered, "raises a disagreement with the user rather than",
+		"the guidance must say the plan escalates a disagreement rather than designing around a referenced design")
+}

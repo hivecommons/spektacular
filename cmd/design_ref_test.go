@@ -911,3 +911,131 @@ func TestDesignRef_BackLinkFailureLeavesNoDisagreementBehind(t *testing.T) {
 	require.NotEqual(t, backLinkFailed, rollbackFailed,
 		"an agent branching on the code must not treat 'reissue the command' and 'reconcile two files by hand' as the same outcome")
 }
+
+// designDeleteRefused runs a `design delete` expected to be refused, and
+// returns the failure envelope. `design delete` is not a `design ref`
+// subcommand, so it cannot go through refuseDesignRef.
+func designDeleteRefused(t *testing.T, data string) output.ErrorResponse {
+	t.Helper()
+	resetRootCmd(t)
+	stdout, stderr, code := runRootCmd(t, "design", "delete", "--data", data)
+	require.Equal(t, 1, code)
+	require.Empty(t, stderr)
+
+	var er output.ErrorResponse
+	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
+	require.True(t, er.IsError)
+	return er
+}
+
+// Criterion: removing a design two specs still reference is refused; the
+// document survives byte for byte and neither spec's recorded references are
+// altered; the refusal names every referencing spec and gives a runnable step
+// to clear each one followed by the removal to retry; and once both specs have
+// dropped their references the same removal succeeds, leaving nothing
+// unresolved behind it.
+//
+// The whole sequence is one test because the acceptance criterion is the
+// sequence: a refusal that could not be cleared and retried would be a
+// dead end rather than a guard, and the retry only means anything if it is
+// the same command that was refused a moment earlier.
+func TestDesignDelete_RefusedWhileSpecsStillReferenceTheDesign(t *testing.T) {
+	root, apiLoc := designRefProject(t)
+	docPath := seedAuthoredDesign(t, apiLoc, "authored/v2.md", "")
+	billingPath := writeSpecFixture(t, root, "000054_billing", designRefSpecFixture)
+	invoicingPath := writeSpecFixture(t, root, "000055_invoicing", designRefSpecFixture)
+
+	const deleteData = `{"source":"api","path":"authored/v2.md"}`
+	designRefWrite(t, "add", "--data", `{"spec":"000054_billing","source":"api","path":"authored/v2.md"}`)
+	designRefWrite(t, "add", "--data", `{"spec":"000055_invoicing","source":"api","path":"authored/v2.md"}`)
+
+	// Both specs reference the one design, on both sides of the record.
+	const bothBackLinks = "specs:\n    - 000054_billing\n    - 000055_invoicing\n"
+	requireAuthoredDesign(t, docPath, bothBackLinks)
+	reference := []designRefItem{{Source: "api", Path: "authored/v2.md"}}
+	require.Equal(t, reference, designsReferencedBy(t, billingPath))
+	require.Equal(t, reference, designsReferencedBy(t, invoicingPath))
+
+	er := designDeleteRefused(t, deleteData)
+	require.Equal(t, "design_referenced_delete", er.Code)
+	require.Equal(t, docPath, er.Resource)
+	require.Contains(t, er.Message, docPath, "the refusal must name the document it would not remove")
+	require.Contains(t, er.Message, `"000054_billing"`)
+	require.Contains(t, er.Message, `"000055_invoicing"`,
+		"the refusal must name every referencing spec, not only the first")
+
+	// The next action is a runnable sequence: one reference to clear per spec,
+	// then the removal to retry.
+	require.Contains(t, er.NextAction,
+		`design ref remove --data '{"spec":"000054_billing","source":"api","path":"authored/v2.md"}'`)
+	require.Contains(t, er.NextAction,
+		`design ref remove --data '{"spec":"000055_invoicing","source":"api","path":"authored/v2.md"}'`)
+	require.Contains(t, er.NextAction,
+		`design delete --data '{"source":"api","path":"authored/v2.md"}'`,
+		"the next action must end in the removal to retry once the references are clear")
+
+	// Nothing moved: the document is the bytes it was seeded with plus the two
+	// back-links, and both specs still record the reference.
+	requireAuthoredDesign(t, docPath, bothBackLinks)
+	require.Equal(t, reference, designsReferencedBy(t, billingPath))
+	require.Equal(t, reference, designsReferencedBy(t, invoicingPath))
+
+	// Following the next action clears both references, and the same removal
+	// then succeeds.
+	designRefWrite(t, "remove", "--data", `{"spec":"000054_billing","source":"api","path":"authored/v2.md"}`)
+	designRefWrite(t, "remove", "--data", `{"spec":"000055_invoicing","source":"api","path":"authored/v2.md"}`)
+
+	require.Equal(t, designDeleteResult{
+		Source:   "api",
+		Path:     "authored/v2.md",
+		Location: docPath,
+		Deleted:  true,
+	}, runDesignDeleteCmd(t, deleteData))
+	require.NoFileExists(t, docPath)
+
+	// No spec is left pointing at a document that is not there.
+	for _, spec := range []string{"000054_billing", "000055_invoicing"} {
+		listed := designRefList(t, spec)
+		require.Empty(t, listed.Refs, "%s must hold no reference to the removed design", spec)
+		require.Equal(t, 0, listed.Unresolved, "%s must report nothing unresolved", spec)
+	}
+}
+
+// Criterion: a document carrying no record of referencing specs is removed
+// without the reference condition applying at all. Both shapes that carry no
+// such record are exercised: a document with no lifecycle block, and one whose
+// lifecycle block records an empty specs list. Each sits in a project where a
+// spec does reference a *different* design, so the guard is live and is simply
+// not triggered by these.
+func TestDesignDelete_DesignWithNoRecordedReferencesIsRemoved(t *testing.T) {
+	t.Run("no lifecycle block", func(t *testing.T) {
+		root, apiLoc := designRefProject(t)
+		seedAuthoredDesign(t, apiLoc, "authored/other.md", "specs:\n    - 000054_billing\n")
+		writeSpecFixture(t, root, "000054_billing", specFixtureCarrying(
+			"designs:\n  - source: api\n    path: authored/other.md\n"))
+
+		require.Equal(t, designDeleteResult{
+			Source:   "api",
+			Path:     "overview.md",
+			Location: filepath.Join(apiLoc, "overview.md"),
+			Deleted:  true,
+		}, runDesignDeleteCmd(t, `{"source":"api","path":"overview.md"}`))
+		require.NoFileExists(t, filepath.Join(apiLoc, "overview.md"))
+	})
+
+	t.Run("a lifecycle block with an empty specs list", func(t *testing.T) {
+		root, apiLoc := designRefProject(t)
+		docPath := seedAuthoredDesign(t, apiLoc, "authored/v2.md", "specs: []\n")
+		seedAuthoredDesign(t, apiLoc, "authored/other.md", "specs:\n    - 000054_billing\n")
+		writeSpecFixture(t, root, "000054_billing", specFixtureCarrying(
+			"designs:\n  - source: api\n    path: authored/other.md\n"))
+
+		require.Equal(t, designDeleteResult{
+			Source:   "api",
+			Path:     "authored/v2.md",
+			Location: docPath,
+			Deleted:  true,
+		}, runDesignDeleteCmd(t, `{"source":"api","path":"authored/v2.md"}`))
+		require.NoFileExists(t, docPath)
+	})
+}

@@ -1,5 +1,5 @@
 ---
-tags: [testing, test-isolation, shuffle, cobra, flake]
+tags: [testing, isolation, shuffle, cobra, flake]
 ---
 
 # Tests must not depend on execution order

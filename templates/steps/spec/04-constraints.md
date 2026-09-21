@@ -37,17 +37,21 @@ Examples:
 • Constraint: *"must integrate with the existing user store"* — a required integration boundary; the existing system is a fact, not a choice.
 • Constraint: *"must not break the shape of the public JSON response"* — removing it lets the feature break downstream consumers.
 • Constraint: *"must run embedded, with no separate database server"* — a deployment boundary.
+• Constraint: *"must implement the payload shape settled in the `api` design source at `payments/v2.md`"* — a **referenced design document**. The design is the settled shape the plan builds on, so the pointer to it is binding; see the note below.
 • Not a constraint: *"prefer a table-per-entity schema"* — a non-binding design preference; that's Technical Approach.
 • Not a constraint: *"must be served at /reports/"* — a route is a design decision unless the user fixed it; that's Technical Approach.
 • Not a constraint: *"no changes to the existing admin pages"* — a scope exclusion; that's Non-Goals.
 
 (Hard rules about what the feature must *do* — its behaviour — are Requirements, captured in the previous step. Constraints are the hard rules about *how / within what bounds* it is built.)
 
+**A design document this spec references is a constraint, and its pointer lives here.** A design is only captured once the user has settled it, so it is never the team's free choice, and the plan workflow treats a referenced design as the settled shape it builds *on* — weighing options *within* that shape and raising a disagreement with the user rather than designing around it. That is exactly a decision taken away from the planner, which is what this section is for. Record it as a bullet naming the design's source and path and what it settles, and nothing more: the document holds the design, and duplicating its content here is what the document exists to avoid. The offer to capture a design is made in the next step, Technical Approach, so a design settled later in the conversation arrives as an amendment to this section's working file rather than through this step — that is expected, not a mistake.
+
 Before drafting an empty section, check the most common sources of real boundaries against the interview findings so an empty section is a deliberate choice and not an oversight — if the interview doesn't already rule these out, ask the user about each that the work might touch:
 
 • An **existing system** the work must integrate with or replace (e.g. an existing datastore, file format, or API whose data or shape must be preserved).
 • A **deployment or runtime** boundary (e.g. must run as a single self-contained binary, no separate server process, a fixed runtime or platform).
 • A **compatibility** guarantee (e.g. must not break a public response shape or an existing deployment contract).
+• A **design document the project already holds** that this feature must be built to. Run `{{config.command}} design list` to see what the declared sources hold; if one of them settles the shape of this work, reference it here and record it with `{{config.command}} design ref add --data '{"spec":"{{spec_name}}","source":"<name>","path":"<path>"}'` so the plan workflow can find it.
 
 If, after checking these, there are genuinely none, draft the section as empty and say so plainly when presenting it — a blank section is a valid outcome, but the user should still confirm it was a deliberate check, not a skip.
 

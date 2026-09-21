@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/jumppad-labs/spektacular/internal/design"
 	"github.com/jumppad-labs/spektacular/internal/metadata"
@@ -63,6 +64,17 @@ var designAuthorCmd = &cobra.Command{
 	Use:   "author",
 	Short: "Write one design document into a declared source, stamping Spektacular's lifecycle metadata",
 	RunE:  runDesignAuthor,
+}
+
+// designDeleteCmd removes one design document. It is a hand-written sibling of
+// the other design verbs for the same reason they all are (see the comment at
+// the top of this file): removal is another verb this family needs, not a
+// reason to reconsider the shared store-file factory, whose lifecycle-stamping
+// write path a design document must not acquire.
+var designDeleteCmd = &cobra.Command{
+	Use:   "delete",
+	Short: "Delete one design document from a declared source",
+	RunE:  runDesignDelete,
 }
 
 // designSource is the --source flag shared by the list command.
@@ -141,6 +153,21 @@ var designWriteOutputSchema = &schemaObj{
 		"source":   {Type: "string"},
 		"path":     {Type: "string"},
 		"location": {Type: "string"},
+	},
+}
+
+// designDeleteOutputSchema adds "deleted" to the write result's shape, which
+// distinguishes the two successful outcomes: a document was there and was
+// removed, or the address was valid and held nothing. Both are successes, so
+// a caller tidying up can report what it actually changed without parsing
+// prose.
+var designDeleteOutputSchema = &schemaObj{
+	Type: "object",
+	Properties: map[string]*schemaProp{
+		"source":   {Type: "string"},
+		"path":     {Type: "string"},
+		"location": {Type: "string"},
+		"deleted":  {Type: "boolean"},
 	},
 }
 
@@ -390,6 +417,125 @@ func runDesignWrite(cmd *cobra.Command, _ []string) error {
 	})
 }
 
+// refuseIfReferenced refuses to remove a design that one or more specs still
+// reference, and returns nil when nothing references it.
+//
+// The set of referencing specs is read from the document's own lifecycle
+// record rather than found by scanning the spec store. That list is maintained
+// transactionally with the spec side by writeBackLink (cmd/design_ref.go), so
+// it is the same record `design list` and `design ref list` already report
+// from, and reading it costs one read rather than a walk.
+//
+// authoredMetadata is used rather than metadata.Split precisely because it
+// swallows a parse error: a design carrying the team's own YAML header must
+// read as unauthored rather than blowing up. A document with no lifecycle
+// block, or one whose specs list is empty, therefore falls straight through to
+// the removal — which is the correct answer, not an oversight, because a
+// design the project did not author carries no record of referencing specs.
+//
+// Nothing is written on this path in either direction. The document is left
+// byte for byte as it was, and no spec is touched: clearing a reference stays
+// an explicit, separate act by the caller, which is also why there is no
+// compensating-rollback problem here.
+func refuseIfReferenced(set *design.Set, input designAddressInput) error {
+	raw, err := set.Read(input.Document())
+	if err != nil {
+		return err
+	}
+	fm := authoredMetadata(raw)
+	if fm == nil || len(fm.Specs) == 0 {
+		return nil
+	}
+	location, resolveErr := set.Resolve(input.Document())
+	if resolveErr != nil {
+		location = input.Path
+	}
+	steps := make([]string, 0, len(fm.Specs))
+	for _, spec := range fm.Specs {
+		// Quoted so each step is copy-pasteable as-is; nesting single quotes
+		// inside single quotes would not be.
+		steps = append(steps, fmt.Sprintf(`design ref remove --data '{"spec":%q,"source":%q,"path":%q}'`,
+			spec, input.Source, input.Path))
+	}
+	return output.NewError(
+		"design_referenced_delete",
+		fmt.Sprintf("%s is still referenced by %s, and removing it would leave %s pointing at a document that is not there; nothing has been changed",
+			location, specList(fm.Specs), pluralSpecSubject(len(fm.Specs))),
+	).WithResource(location).WithNextAction(fmt.Sprintf(
+		"clear each reference first, then retry the delete: %s, then design delete --data '{\"source\":%q,\"path\":%q}'",
+		strings.Join(steps, "; "), input.Source, input.Path))
+}
+
+// specList renders spec names for a refusal message, naming every one of them
+// rather than the first and a count: a caller has to clear each reference
+// individually, so each name is a step it needs.
+func specList(specs []string) string {
+	quoted := make([]string, len(specs))
+	for i, s := range specs {
+		quoted[i] = fmt.Sprintf("%q", s)
+	}
+	switch len(quoted) {
+	case 1:
+		return "the spec " + quoted[0]
+	case 2:
+		return "the specs " + quoted[0] + " and " + quoted[1]
+	default:
+		return "the specs " + strings.Join(quoted[:len(quoted)-1], ", ") + " and " + quoted[len(quoted)-1]
+	}
+}
+
+// pluralSpecSubject keeps the refusal's second clause grammatical whether one
+// spec references the document or several.
+func pluralSpecSubject(n int) string {
+	if n == 1 {
+		return "that spec"
+	}
+	return "those specs"
+}
+
+// runDesignDelete removes one addressed design document.
+//
+// Whether anything was there is settled before the removal with Exists,
+// because the storage contract's Delete returns nil either way and cannot
+// report it. The write path already calls Exists for the same reason, so this
+// is the family's existing shape rather than a new one.
+func runDesignDelete(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		return output.Write(cmd.OutOrStdout(), commandSchema{Input: designAddressInputSchema, Output: designDeleteOutputSchema}, "")
+	}
+	input, err := designAddressData(cmd)
+	if err != nil {
+		return err
+	}
+	set, err := newDesignSet()
+	if err != nil {
+		return err
+	}
+	deleted, err := set.Exists(input.Document())
+	if err != nil {
+		return err
+	}
+	if deleted {
+		if err := refuseIfReferenced(set, input); err != nil {
+			return err
+		}
+	}
+	if err := set.Delete(input.Document()); err != nil {
+		return err
+	}
+	location, err := set.Resolve(input.Document())
+	if err != nil {
+		return err
+	}
+	out := output.New(cmd.OutOrStdout(), globalFields)
+	return out.WriteResult(map[string]any{
+		"source":   input.Source,
+		"path":     input.Path,
+		"location": location,
+		"deleted":  deleted,
+	})
+}
+
 // runDesignAuthor stores the bytes of the file named by --from with
 // Spektacular's lifecycle block merged in. It is runDesignWrite with a merge
 // step in front of it, which is exactly the shape the feature intends: the
@@ -506,7 +652,8 @@ func init() {
 	designAuthorCmd.Flags().String("from", "", "Read the document's content from the file at <path> (relative to cwd)")
 	designAuthorCmd.Flags().String("document-status", "", "Optional document status to apply: one of "+documentStatusValues())
 	designAuthorCmd.Flags().String("spec", "", "Optional name of the spec whose conversation produced this design")
+	designDeleteCmd.Flags().StringP("data", "d", "", `JSON input (e.g. '{"source":"api","path":"payments/v2.md"}')`)
 	designListCmd.Flags().StringVar(&designSource, "source", "", "Narrow the listing to one declared source; omit to list every source")
 
-	designCmd.AddCommand(designSourcesCmd, designListCmd, designReadCmd, designWriteCmd, designAuthorCmd)
+	designCmd.AddCommand(designSourcesCmd, designListCmd, designReadCmd, designWriteCmd, designAuthorCmd, designDeleteCmd)
 }

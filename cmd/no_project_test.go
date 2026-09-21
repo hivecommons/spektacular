@@ -48,6 +48,16 @@ func TestNoProject_ProjectOperatingCommandFailsExplicitly(t *testing.T) {
 		assertNoProjectEnvelope(t, dir, stdout, code)
 	})
 
+	t.Run("knowledge delete", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		resetRootCmd(t)
+
+		stdout, _, code := runRootCmd(t, "knowledge", "delete", "--data",
+			`{"tier":"repo","name":"docs","path":"learnings/x.md"}`)
+		assertNoProjectEnvelope(t, dir, stdout, code)
+	})
+
 	t.Run("spec new", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
@@ -72,6 +82,15 @@ func TestNoProject_ProjectOperatingCommandFailsExplicitly(t *testing.T) {
 		resetRootCmd(t)
 
 		stdout, _, code := runRootCmd(t, "design", "read", "--data", `{"source":"api","path":"x.md"}`)
+		assertNoProjectEnvelope(t, dir, stdout, code)
+	})
+
+	t.Run("design delete", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		resetRootCmd(t)
+
+		stdout, _, code := runRootCmd(t, "design", "delete", "--data", `{"source":"api","path":"x.md"}`)
 		assertNoProjectEnvelope(t, dir, stdout, code)
 	})
 }

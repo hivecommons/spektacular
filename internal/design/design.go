@@ -263,6 +263,32 @@ func (s *Set) Write(d Document, content []byte) error {
 	return src.writer.Write(d.Path, content)
 }
 
+// Delete removes one design document from the source that addresses it.
+//
+// It follows Write's sequence exactly — unknown source, incomplete address,
+// then a source whose provider cannot write, each refused by name before
+// anything is touched. Removing a path that holds nothing is a success: the
+// storage contract states Delete returns nil when the file is absent, so a
+// maintenance pass that retries is safe.
+//
+// This knows nothing about lifecycle records or about specs, and must not
+// learn: whether a spec still references the document is a question the
+// command layer answers, because that is where the lifecycle block is
+// understood.
+func (s *Set) Delete(d Document) error {
+	src, err := s.lookup(d.Source)
+	if err != nil {
+		return err
+	}
+	if d.Path == "" {
+		return incompleteAddress("path", s.names())
+	}
+	if src.writer == nil {
+		return readOnlySource(src, d.Path)
+	}
+	return src.writer.Delete(d.Path)
+}
+
 // Resolve returns the absolute path a document addresses, whether or not
 // anything is there. It exists so a caller can report the exact location it
 // searched without reading the file, which is what makes an unresolved

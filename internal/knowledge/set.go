@@ -225,6 +225,17 @@ func (s *Set) Search(query string, sel Selector) ([]store.Hit, error) {
 			// place the exclusion lives — the store no longer special-cases it.
 			continue
 		}
+		if IsCategoryDescription(hit.Path) {
+			// A category's own description documents the category rather than
+			// contributing to it, and every one of them shares the same
+			// vocabulary, so any query resembling those words returned them
+			// ahead of real entries. Excluded here, beside the always-applied
+			// rule and driven by the same registry, so the search surface
+			// applies both of its exclusions in one place. Deliberately not
+			// excluded from List or Tags: the maintenance review has to be
+			// able to enumerate descriptions in order to check them.
+			continue
+		}
 		// The tag filter is enforced here, not taken on trust from the store.
 		// A store may pre-apply it while walking to avoid reporting documents
 		// that would be discarded, but this is the authority: a provider that
@@ -358,6 +369,22 @@ func (s *Set) Write(addr Address, path string, content []byte) error {
 		return err
 	}
 	return src.store.Write(path, content)
+}
+
+// Delete removes a knowledge entry from the one store the address names,
+// leaving every other store untouched. An address that does not name exactly
+// one store is refused and nothing is removed anywhere.
+//
+// Removing a path that holds nothing is a success, not a refusal: the storage
+// contract states Delete returns nil when the file is absent, so a maintenance
+// pass that retries is safe. The caller is the one that reports which of the
+// two happened, because the storage layer cannot tell them apart.
+func (s *Set) Delete(addr Address, path string) error {
+	src, err := s.resolve(addr)
+	if err != nil {
+		return err
+	}
+	return src.store.Delete(path)
 }
 
 // List recursively enumerates every file entry across every store the selector
@@ -508,6 +535,15 @@ func (s *Set) readCategories(categories []string, sel Selector) ([]AlwaysApplied
 				return nil, fmt.Errorf("listing %s in knowledge store %q: %w", category, src.name, err)
 			}
 			for _, f := range files {
+				if IsCategoryDescription(f) {
+					// The same rule the search surface applies, at the other
+					// place this set consults the registry. A category's own
+					// description was being injected into the payload every
+					// task receives, spending context on every request to say
+					// what the category is for. Skipped before the read, so
+					// the payload gets both smaller and cheaper.
+					continue
+				}
 				content, err := src.store.Read(f)
 				if err != nil {
 					return nil, fmt.Errorf("reading %s entry %q in knowledge store %q: %w", category, f, src.name, err)

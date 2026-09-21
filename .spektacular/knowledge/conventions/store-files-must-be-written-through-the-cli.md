@@ -34,6 +34,13 @@ Four reasons, each of which has already caused a real failure or is designed to 
   validity rules, so `ls` can show entries Spektacular does not consider valid, and miss context
   it would have supplied.
 
+Design documents have two write verbs, and which one you use is part of the rule. `design write`
+stores the staged bytes exactly as given and adds no frontmatter — use it for a document the team
+owns. `design author` stamps Spektacular's lifecycle metadata: capture date, document status,
+originating spec, and the specs referencing it. Rewrite an authored document with `design author`,
+which preserves its capture date and back-links; `design write` over an authored document is
+refused rather than allowed to strip them.
+
 This applies to reads as well as writes: use `spec file read`, `plan file read`,
 `knowledge read` and `design read` rather than opening the file. Writing content on stdin or in a
 heredoc is also out. `--from <path>` is the only supported way to supply a body, and

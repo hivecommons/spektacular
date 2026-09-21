@@ -1,3 +1,7 @@
+---
+tags: [error, remediation, validation, cli]
+---
+
 # Validation that must suggest remediation belongs in the layer that holds the facts
 
 `conventions/error-messages-must-suggest-remediation.md` requires every error to

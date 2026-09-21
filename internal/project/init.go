@@ -160,7 +160,7 @@ func Init(projectPath, name string, force bool) ([]string, error) {
 	// carrying a circular placeholder.
 	for _, root := range knowledgeRoots {
 		for _, c := range knowledge.Categories {
-			readmePath := filepath.Join(root, c.Name, "README.md")
+			readmePath := filepath.Join(root, c.Name, knowledge.CategoryDescriptionFile)
 			if err := os.WriteFile(readmePath, []byte(c.README()), 0644); err != nil {
 				return nil, fmt.Errorf("writing %s README: %w", c.Name, err)
 			}

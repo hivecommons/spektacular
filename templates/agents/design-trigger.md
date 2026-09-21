@@ -27,6 +27,13 @@ preference the planner may adapt is technical direction and belongs in the
 spec; only a worked design that would swamp the spec belongs in a document of
 its own. If a one-line steer captures it, it is not a design document.
 
+Note these are three homes for the *content*, not three degrees of how binding
+it is. A design document is settled by definition, so a spec that references
+one records that pointer among its **constraints**, never as technical
+direction: the plan workflow builds on a referenced design, weighs its options
+within the shape it fixes, and raises a disagreement with the user rather than
+designing around it.
+
 A design enters a project in more ways than one, and three of them are easy to
 walk past:
 

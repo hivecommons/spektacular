@@ -231,6 +231,17 @@ never build a store path by hand. Use `go run . spec file`,
 and `go run . design` instead. A write supplies its body with
 `--from <path>`, never on stdin and never as prose on the command line.
 
+Removal is a CLI verb too. Deleting a managed file with `rm`, or with any
+equivalent of your own, is never correct — not for a knowledge entry, not for
+a design document, and not for anything else a store holds. Use
+`go run . knowledge delete` and `go run . design delete`, alongside the
+`delete` each of `go run . spec file`, `go run . plan file` and
+`go run . changelog file` already offers. Going around the tool is how a
+spec is left pointing at a design that is not there, and it stops working
+entirely the moment a store is backed by something other than a local
+directory. If a removal is refused, the refusal names what to do instead:
+act on it rather than reaching past it.
+
 Do not use `ls`, `find`, or the `Read` tool to discover what a store holds,
 against `.spektacular/specs/`, `.spektacular/plans/`, or any configured store
 directory. The CLI's own `file list` is the source of truth for what counts as
@@ -265,23 +276,48 @@ in its prompt.
 > in the Spektacular source, not this section in place. Hand edits will not
 > survive the next init.
 
-While a conversation is settling how something will actually work — an API's
-shape, a user-facing flow, a data format, or a worked example of any of
-these — watch for the moment that detail becomes settled enough to build to.
-That is a design document: the worked design a feature is built to, kept
-wherever the team already keeps its designs, and referenced by the spec that
-needs it rather than copied into it. Recognizing this moment is your job, not
-the user's — don't wait to be asked.
+**Stay alert whenever a conversation is working out how something will
+actually behave** — an API's shape, a user-facing flow, a data format, or a
+worked example of any of these. Being alert is not the same as offering.
+Noticing costs nothing and happens continuously; offering happens only once
+the detail clears the bar below. Watching only for detail that has already
+settled is how the moment gets missed, because by then the conversation has
+usually moved on. Recognizing it is your job, not the user's — don't wait to
+be asked.
 
-The bar is deliberately high. A design document is not a place to park
-anything technical that came up. Ask whether the detail is **settled** (the
-user has decided it, not merely floated it), whether it is **worked** (a
+What you are watching for is a design document: the worked design a feature is
+built to, kept wherever the team already keeps its designs, and referenced by
+the spec that needs it rather than copied into it.
+
+The bar to offer is deliberately high. A design document is not a place to
+park anything technical that came up. Ask whether the detail is **settled**
+(the user has decided it, not merely floated it), whether it is **worked** (a
 concrete shape, format or flow rather than a direction), and whether it would
 **make the spec unreadable if written inline**. All three must hold. A hard
 boundary the solution must honour is a constraint and belongs in the spec; a
 preference the planner may adapt is technical direction and belongs in the
 spec; only a worked design that would swamp the spec belongs in a document of
 its own. If a one-line steer captures it, it is not a design document.
+
+Note these are three homes for the *content*, not three degrees of how binding
+it is. A design document is settled by definition, so a spec that references
+one records that pointer among its **constraints**, never as technical
+direction: the plan workflow builds on a referenced design, weighs its options
+within the shape it fixes, and raises a disagreement with the user rather than
+designing around it.
+
+A design enters a project in more ways than one, and three of them are easy to
+walk past:
+
+- **The user already has the document.** They mention a design doc they wrote,
+  or paste one in. Nothing needs working out; it needs storing, exactly as
+  they supplied it, and referencing.
+- **A design that already exists is being changed.** The conversation
+  contradicts or extends a design the project already holds. The document is
+  now wrong, and saying so is part of your job.
+- **There is no spec in sight.** Design talk does not wait for a spec to
+  exist. A design can be worked out and written down on its own, and a
+  reference recorded later if a spec ever needs one.
 
 When you recognize the moment, offer — never write a design document
 unprompted. Say what you would capture, which declared source you would write
@@ -291,12 +327,18 @@ already know them. Wait for the user's decision before doing anything else.
 
 The user's response falls into one of three outcomes:
 
-- **Accept** — write the document with `go run . design write --data
-  '{"source":"<name>","path":"<path>"}' --from <staged file>`, then record the
-  reference on the spec with `go run . design ref add --data
-  '{"spec":"<spec name>","source":"<name>","path":"<path>"}'`. Both steps, every
-  time: a document nothing references is invisible to the plan workflow, and a
-  reference to a document that was never written is a broken reference.
+- **Accept** — invoke the `spek-design` skill, which owns the conversation
+  from here: it runs the interview when the design still has to be worked out,
+  stores a document the user already has exactly as supplied, and revises one
+  that already exists. It ends in `go run . design author --data
+  '{"source":"<name>","path":"<path>"}' --from <staged file>` for a design
+  Spektacular writes with the user, or `go run . design write --data
+  '{"source":"<name>","path":"<path>"}' --from <staged file>` for one the user
+  handed over, which is stored byte for byte with nothing added. Then, **only
+  if a spec exists**, record the reference with `go run . design ref add
+  --data '{"spec":"<spec name>","source":"<name>","path":"<path>"}'`, because a
+  document nothing references is invisible to the plan workflow. When there is
+  no spec yet, writing the document is the whole of the work.
 - **Defer** ("not now", "later", "once we've settled it") — write nothing.
   Continue the conversation normally, and treat this as temporary: if the
   discussion keeps developing that detail, you may raise the offer again later

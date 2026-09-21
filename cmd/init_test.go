@@ -393,6 +393,50 @@ func TestInit_RepairsBrokenMemberFootprint(t *testing.T) {
 	require.Equal(t, beforeMember, snapshotDir(t, member), "a healthy re-init must not change the member repo")
 }
 
+// Criterion 3, end to end: a member repo whose knowledge store holds a
+// category description that has drifted from the project's definition of that
+// category is brought back into line by re-running init, while a hand-written
+// entry beside it is left alone.
+func TestInit_RepairsDriftedCategoryDescriptionInMemberRepo(t *testing.T) {
+	project := t.TempDir()
+	member := t.TempDir()
+	t.Chdir(project)
+	resetRootCmd(t)
+
+	_, _, code := runRootCmd(t, "init", "claude")
+	require.Equal(t, 0, code)
+
+	// Register the sibling member repo; repo add creates its footprint,
+	// including a description for every knowledge category.
+	_, _, err := runRepo(t, "add", "--data", repoAddJSON(t, map[string]any{
+		"name":     "member",
+		"location": member,
+	}))
+	require.NoError(t, err)
+
+	knowledgeDir := filepath.Join(member, ".spektacular", "knowledge", "conventions")
+	description := filepath.Join(knowledgeDir, "README.md")
+	require.FileExists(t, description)
+	entry := filepath.Join(knowledgeDir, "hand-written-entry.md")
+	require.NoError(t, os.WriteFile(entry, []byte("written by hand\n"), 0o644))
+
+	require.NoError(t, os.WriteFile(description, []byte("# Conventions\n\nout of step with the registry\n"), 0o644))
+
+	resetRootCmd(t)
+	_, _, code = runRootCmd(t, "init", "claude")
+	require.Equal(t, 0, code)
+
+	repaired, err := os.ReadFile(description)
+	require.NoError(t, err)
+	require.NotContains(t, string(repaired), "out of step with the registry")
+	require.Contains(t, string(repaired), "**Tier:**")
+	require.Contains(t, string(repaired), "**Purpose:**")
+
+	kept, err := os.ReadFile(entry)
+	require.NoError(t, err)
+	require.Equal(t, "written by hand\n", string(kept), "a hand-written knowledge entry must survive the repair")
+}
+
 // initProjectWithAbsentRepo initialises a claude project in a temp dir,
 // hand-registers a repo named "ghost" whose location ./ghost is not on disk,
 // and returns the project root, leaving the working directory inside it.

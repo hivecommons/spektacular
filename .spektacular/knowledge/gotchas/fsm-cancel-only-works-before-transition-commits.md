@@ -1,3 +1,7 @@
+---
+tags: [fsm, workflow, state, callback]
+---
+
 # looplab/fsm: Cancel() only stops a transition from before_/leave_ callbacks
 
 `Event.Cancel()` sets the event's returned error, but it only actually

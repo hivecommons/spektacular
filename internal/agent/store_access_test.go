@@ -101,9 +101,36 @@ func TestRenderedStoreAccessSectionNamesEveryStoreCommand(t *testing.T) {
 		"go run . knowledge",
 		"go run . design",
 		"--from <path>",
+		// Removal is a CLI verb too. Without these two, the section names
+		// read and write for every store and is silent on removal, which is
+		// the silence that made reaching for `rm` look permissible.
+		"go run . knowledge delete",
+		"go run . design delete",
 	} {
 		require.Containsf(t, rendered, needle,
 			"the rendered store-access section must name %q", needle)
+	}
+}
+
+// TestRenderedStoreAccessSectionForbidsRawRemoval asserts the positive half of
+// the corpus-wide removal sweep: the section does not merely offer `delete`
+// verbs, it says in so many words that reaching for `rm` on a managed file is
+// never correct, and that a refused removal is to be acted on rather than
+// worked around. Naming the commands without banning the alternative is the
+// silence that made `rm` look permissible in the first place.
+//
+// The literals are kept short on purpose — the template hard-wraps its prose,
+// so a needle long enough to span a line break would fail on a harmless reflow.
+func TestRenderedStoreAccessSectionForbidsRawRemoval(t *testing.T) {
+	rendered := renderStoreAccessSection(t)
+
+	for _, needle := range []string{
+		"Removal is a CLI verb too",
+		"is never correct — not for a knowledge entry",
+		"act on it rather than reaching past it",
+	} {
+		require.Containsf(t, rendered, needle,
+			"the rendered store-access section must contain %q", needle)
 	}
 }
 

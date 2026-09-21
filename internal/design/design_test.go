@@ -1,6 +1,7 @@
 package design
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -509,3 +510,173 @@ func TestNewSet_NoDeclaredSourcesYieldsEmptySet(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, docs)
 }
+
+// Criterion: a document removed by its source and path disappears from that
+// source's listing, and no sibling document goes with it.
+func TestSet_DeleteRemovesDocumentAndItLeavesTheListing(t *testing.T) {
+	root := t.TempDir()
+	dir := t.TempDir()
+	writeFile(t, dir, "shape.md", "# API shape\n")
+	writeFile(t, dir, "notes/extra.md", "# Extra\n")
+
+	set, err := NewSet(designConfig(fileSource("api", dir)), root)
+	require.NoError(t, err)
+
+	before, err := set.List("api")
+	require.NoError(t, err)
+	require.Equal(t, []Document{
+		{Source: "api", Path: "notes/extra.md"},
+		{Source: "api", Path: "shape.md"},
+	}, before)
+
+	require.NoError(t, set.Delete(Document{Source: "api", Path: "notes/extra.md"}))
+
+	after, err := set.List("api")
+	require.NoError(t, err)
+	require.Equal(t, []Document{{Source: "api", Path: "shape.md"}}, after)
+
+	// Independently of the package, the survivor is still on disk byte for
+	// byte and the removed document is gone.
+	require.Equal(t, map[string]string{"shape.md": "# API shape\n"}, snapshot(t, dir))
+}
+
+// Criterion: removing a document that is not there reports success and changes
+// nothing, and can be repeated safely — so a maintenance pass that retries is
+// not punished for it.
+func TestSet_DeleteOfAbsentPathSucceedsAndIsRepeatable(t *testing.T) {
+	root := t.TempDir()
+	dir := t.TempDir()
+	writeFile(t, dir, "shape.md", "# API shape\n")
+
+	set, err := NewSet(designConfig(fileSource("api", dir)), root)
+	require.NoError(t, err)
+
+	require.NoError(t, set.Delete(Document{Source: "api", Path: "never-existed.md"}))
+
+	// The same document twice: removed once, then removed again.
+	require.NoError(t, set.Delete(Document{Source: "api", Path: "shape.md"}))
+	require.NoError(t, set.Delete(Document{Source: "api", Path: "shape.md"}))
+
+	require.Equal(t, map[string]string{}, snapshot(t, dir))
+}
+
+// Criterion: a source whose provider cannot write refuses the removal by name
+// with design_source_read_only, and the document is still there. No shipping
+// provider is read-only, so the source is constructed directly with a nil
+// writer, exactly as the read-only write case is.
+func TestSet_DeleteFromSourceWithNilWriterRefusesAsReadOnly(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "shape.md", "# Shape\n")
+	set := &Set{sources: []resolvedSource{{
+		name:     "remote",
+		provider: "file",
+		location: dir,
+		reader:   store.NewSourceStore(dir, "design:remote"),
+		writer:   nil,
+	}}}
+
+	err := set.Delete(Document{Source: "remote", Path: "shape.md"})
+	envelope := requireRefusal(t, err, "design_source_read_only")
+
+	require.Equal(t, "remote", envelope.Resource)
+	require.Contains(t, envelope.Message, `"remote"`)
+	require.Contains(t, envelope.Message, `"shape.md"`)
+	require.Equal(t, map[string]string{"shape.md": "# Shape\n"}, snapshot(t, dir),
+		"a refused removal must leave the source untouched")
+}
+
+// Criterion: removing from a source the project has not declared is refused by
+// name, nothing is removed, and the refusal lists the declared source names.
+func TestSet_DeleteFromUnknownSourceRefusesAndListsDeclaredNames(t *testing.T) {
+	root := t.TempDir()
+	apiDir := t.TempDir()
+	uxDir := t.TempDir()
+	writeFile(t, apiDir, "shape.md", "# API shape\n")
+	writeFile(t, uxDir, "flow.md", "# UX flow\n")
+
+	set, err := NewSet(designConfig(fileSource("api", apiDir), fileSource("ux", uxDir)), root)
+	require.NoError(t, err)
+
+	envelope := requireRefusal(t, set.Delete(Document{Source: "apis", Path: "shape.md"}), "design_source_unknown")
+	require.Equal(t, "apis", envelope.Resource)
+	require.Contains(t, envelope.Message, `"apis"`)
+	require.Contains(t, envelope.NextAction, `"api"`)
+	require.Contains(t, envelope.NextAction, `"ux"`)
+
+	require.Equal(t, map[string]string{"shape.md": "# API shape\n"}, snapshot(t, apiDir))
+	require.Equal(t, map[string]string{"flow.md": "# UX flow\n"}, snapshot(t, uxDir))
+}
+
+// Criterion: an address missing its path is refused rather than guessed at —
+// a source name alone can never say which document to remove, and taking it as
+// "all of them" is the one reading a removal must never make.
+func TestSet_DeleteWithEmptyPathRefusesAsIncompleteAddress(t *testing.T) {
+	root := t.TempDir()
+	dir := t.TempDir()
+	writeFile(t, dir, "shape.md", "# API shape\n")
+
+	set, err := NewSet(designConfig(fileSource("api", dir)), root)
+	require.NoError(t, err)
+
+	envelope := requireRefusal(t, set.Delete(Document{Source: "api", Path: ""}), "design_address_incomplete")
+	require.Contains(t, envelope.Message, `"path"`)
+	require.Contains(t, envelope.NextAction, `"api"`)
+
+	require.Equal(t, map[string]string{"shape.md": "# API shape\n"}, snapshot(t, dir))
+}
+
+// recordingWriter is a store.Writer that is not a FileStore and holds no
+// directory at all: it records the paths it is asked to delete and returns the
+// error it is primed with. Substituted for a source's writer, it is what makes
+// "the removal goes through the storage abstraction" observable rather than
+// inferred, since a filesystem-only assertion could not tell a store call from
+// a direct os.Remove.
+type recordingWriter struct {
+	written []string
+	deleted []string
+	err     error
+}
+
+func (w *recordingWriter) Write(path string, _ []byte) error {
+	w.written = append(w.written, path)
+	return w.err
+}
+
+func (w *recordingWriter) Delete(path string) error {
+	w.deleted = append(w.deleted, path)
+	return w.err
+}
+
+// Criterion: removal reaches the source through the same store.Writer seam
+// reading and writing use, proven against a source whose backend is not a
+// local directory — the writer receives the store-relative path, the document
+// on disk is not touched behind its back, and the backend's own failure is
+// returned rather than swallowed.
+func TestSet_DeleteRoutesThroughTheStoreWriter(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "payments/v2.md", "# Payments v2\n")
+
+	writer := &recordingWriter{}
+	set := &Set{sources: []resolvedSource{{
+		name:     "remote",
+		provider: "file",
+		location: dir,
+		reader:   store.NewSourceStore(dir, "design:remote"),
+		writer:   writer,
+	}}}
+
+	require.NoError(t, set.Delete(Document{Source: "remote", Path: "payments/v2.md"}))
+	require.Equal(t, []string{"payments/v2.md"}, writer.deleted,
+		"the removal must be handed to the source's writer as a store-relative path")
+	require.Empty(t, writer.written, "a removal must not write anything")
+	require.Equal(t, map[string]string{"payments/v2.md": "# Payments v2\n"}, snapshot(t, dir),
+		"nothing may be removed from the filesystem behind the writer's back")
+
+	writer.err = errBackendRefused
+	require.ErrorIs(t, set.Delete(Document{Source: "remote", Path: "payments/v2.md"}), errBackendRefused,
+		"a backend's own failure must be returned, not swallowed into a success")
+}
+
+// errBackendRefused is the failure recordingWriter is primed with above. Its
+// identity is the assertion, so it is declared here rather than built inline.
+var errBackendRefused = errors.New("backend refused the removal")

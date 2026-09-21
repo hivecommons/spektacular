@@ -23,10 +23,18 @@ rather than copied into it.
 
 The bar is high, and all three parts must hold: the detail is **settled** (the user decided it,
 not merely floated it), it is **worked** (a concrete shape, format or flow rather than a
-direction), and it would **make the spec unreadable if written inline**. A hard boundary belongs
-in Constraints; a preference the planner may adapt belongs here as a one-line steer; only a
-worked design that would swamp the spec belongs in a document of its own. If a one-line steer
-captures it, it is not a design document.
+direction), and it would **make the spec unreadable if written inline**. A preference the
+planner may adapt belongs here as a one-line steer; only a worked design that would swamp the
+spec belongs in a document of its own. If a one-line steer captures it, it is not a design
+document.
+
+**A referenced design is binding, so its pointer belongs in Constraints, not here.** The bar
+above already required the design to be settled by the user rather than chosen freely while
+drafting, which is precisely what makes it a constraint rather than direction: the plan workflow
+reads a referenced design as the settled shape it builds *on*, weighs its options *within* that
+shape, and must raise a disagreement with the user rather than designing around it. Recording
+the pointer in this section would file it under the one heading defined as direction the planner
+may adapt, and say the opposite of what it means.
 
 This covers two situations, not one. The design may be **settled in this conversation but not
 yet written down**, in which case there is authoring work to do before anything can be stored;
@@ -48,8 +56,15 @@ pointing at it than containing it. Then wait for the user's decision:
   Then record the reference with
   `{{config.command}} design ref add --data '{"spec":"{{spec_name}}","source":"<name>","path":"<path>"}'`. Both steps, every time: a design
   nothing references is invisible to the plan workflow, and a reference to a design that was
-  never written is a broken reference. The design's content does **not** also go into this
-  section — a one-line pointer to it is what belongs here.
+  never written is a broken reference.
+
+  Then record the one-line pointer as a **constraint**, not here. Append a bullet naming the
+  design's source and path, and what it settles, to
+  `.spektacular/work/{{spec_name}}/constraints.md` with your own `Write` tool — that section's
+  working file has already been written by the time this step runs, so this is an amendment to
+  it, the same cross-section amendment the workflow already allows. Tell the user you have done
+  so when you report the capture. The design's content does **not** go into the spec at all, in
+  this section or in Constraints: the document holds it and the spec points at it.
 - **Defer** ("not now", "once we've settled it") — write nothing, carry on, and you may raise
   the offer again later in this conversation if the detail keeps developing.
 - **Decline** ("no", "keep it in the spec") — write nothing, and do not raise the offer again

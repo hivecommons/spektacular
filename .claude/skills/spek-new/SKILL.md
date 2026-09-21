@@ -50,12 +50,22 @@ it instead of its content. The technical-approach step makes that offer at the p
 would otherwise be compressed to a one-line steer; it is always an offer, and nothing is written
 without the user's explicit agreement.
 
+A design does not have to already exist to be captured. Where it has been settled in
+conversation but never written down, the `spek-design` skill runs a guided interview and writes
+the document from it; where the user already has the document, it is stored exactly as supplied.
+
 Design documents are reached through the CLI, never by reading files directly:
 
 - `go run . design sources` — the design sources this project declares, with their locations.
 - `go run . design list` — the design documents in them.
 - `go run . design write --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
-  design document, byte for byte, with no frontmatter added and nothing reformatted.
+  design document Spektacular did not author, byte for byte, adding no frontmatter to it and
+  reformatting nothing.
+- `go run . design author --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
+  design Spektacular wrote with the user, stamping the same lifecycle record every spec and plan
+  carries. Optionally `--spec <spec>` to record which spec's conversation produced it, and
+  `--document-status <draft|final|superseded|archived>`. Rewriting an authored design this way
+  keeps its original capture date and the specs already referencing it.
 - `go run . design ref add --data '{"spec":"<spec>","source":"<name>","path":"<path>"}'` —
   record the reference on the spec. A reference naming a source the project has not declared is
   refused and nothing is recorded.

@@ -1,3 +1,7 @@
+---
+tags: [search, ranking, retrieval, knowledge]
+---
+
 # Knowledge search ranks rather than excludes
 
 **Decision:** `knowledge search` matches a document that carries evidence for

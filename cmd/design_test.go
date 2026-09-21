@@ -855,6 +855,29 @@ func TestDesignSchema_PublishesDocumentedShapes(t *testing.T) {
 			require.Equal(t, "string", schema.Output.Properties[field].Type)
 		}
 	})
+
+	// Criterion: the delete command reports its own input and output shape on
+	// request, as every other design command does. Its input is the same
+	// two-part address the read and write verbs take, and its output is the
+	// write envelope plus the boolean that distinguishes "a document was there
+	// and is gone" from "the address was valid and held nothing".
+	t.Run("delete", func(t *testing.T) {
+		schema := readSchema(t, "delete")
+		require.NotNil(t, schema.Input)
+		require.Equal(t, "object", schema.Input.Type)
+		require.Equal(t, []string{"source", "path"}, schema.Input.Required)
+		require.Equal(t, "string", schema.Input.Properties["source"].Type)
+		require.Equal(t, "string", schema.Input.Properties["path"].Type)
+		require.Empty(t, schema.Flags, "delete takes no command-line options beyond --data")
+		require.NotNil(t, schema.Output)
+		require.Equal(t, "object", schema.Output.Type)
+		for _, field := range []string{"source", "path", "location"} {
+			require.Contains(t, schema.Output.Properties, field)
+			require.Equal(t, "string", schema.Output.Properties[field].Type)
+		}
+		require.Contains(t, schema.Output.Properties, "deleted")
+		require.Equal(t, "boolean", schema.Output.Properties["deleted"].Type)
+	})
 }
 
 // Criterion: every refusal surfaces as the documented failure code with a
@@ -1058,4 +1081,200 @@ func TestDesignRefusals_CarryCodeAndNextAction(t *testing.T) {
 			snapshotDir(t, apiLoc),
 			"a refused verbatim write must leave the source directory untouched")
 	})
+
+	// Criterion: a removal with no address at all is refused, and the refusal
+	// shows the shape of the address it wanted.
+	t.Run("delete without --data", func(t *testing.T) {
+		root := t.TempDir()
+		apiLoc := filepath.Join(root, "docs", "design")
+		seedDesignDoc(t, apiLoc, "overview.md", "# Overview\n")
+		t.Chdir(root)
+		writeDesignConfig(t, root, designSourceDecl{name: "api", location: "../docs/design"})
+
+		er := refuse(t, "design", "delete")
+		require.Equal(t, "design_data_required", er.Code)
+		require.Contains(t, er.NextAction, "--data")
+		require.FileExists(t, filepath.Join(apiLoc, "overview.md"),
+			"a refused removal must leave the source's documents where they are")
+	})
+
+	// Criterion: removing from a source the project has not declared is refused
+	// by name, nothing is removed, and the refusal lists the declared names.
+	t.Run("delete from an undeclared source", func(t *testing.T) {
+		root := t.TempDir()
+		apiLoc := filepath.Join(root, "docs", "design")
+		seedDesignDoc(t, apiLoc, "overview.md", "# Overview\n")
+		t.Chdir(root)
+		writeDesignConfig(t, root,
+			designSourceDecl{name: "api", location: "../docs/design"},
+			designSourceDecl{name: "ux", location: "../docs/design"},
+		)
+
+		er := refuse(t, "design", "delete", "--data", `{"source":"marketing","path":"overview.md"}`)
+		require.Equal(t, "design_source_unknown", er.Code)
+		require.Equal(t, "marketing", er.Resource)
+		require.Contains(t, er.NextAction, `"api"`, "next action must name the declared sources")
+		require.Contains(t, er.NextAction, `"ux"`, "next action must name the declared sources")
+		require.FileExists(t, filepath.Join(apiLoc, "overview.md"))
+	})
+
+	// Criterion: an address missing its path is refused rather than guessed at.
+	// A source name on its own could only be read as "everything in it", which
+	// is the one reading a removal must never make.
+	t.Run("delete with no path in the address", func(t *testing.T) {
+		root := t.TempDir()
+		apiLoc := filepath.Join(root, "docs", "design")
+		seedDesignDoc(t, apiLoc, "overview.md", "# Overview\n")
+		t.Chdir(root)
+		writeDesignConfig(t, root, designSourceDecl{name: "api", location: "../docs/design"})
+
+		er := refuse(t, "design", "delete", "--data", `{"source":"api"}`)
+		require.Equal(t, "design_address_incomplete", er.Code)
+		require.Contains(t, er.Message, `"path"`)
+		require.Contains(t, er.NextAction, `"api"`, "next action must name the declared sources")
+		require.Equal(t,
+			map[string]string{"overview.md": fmt.Sprintf("%x", sha256.Sum256([]byte("# Overview\n")))},
+			snapshotDir(t, apiLoc),
+			"an incomplete address must remove nothing at all")
+	})
+}
+
+// designDeleteResult mirrors the `design delete` JSON envelope: the address
+// and location `design write` reports, plus whether a document was actually
+// there to remove.
+type designDeleteResult struct {
+	Source   string `json:"source"`
+	Path     string `json:"path"`
+	Location string `json:"location"`
+	Deleted  bool   `json:"deleted"`
+}
+
+// runDesignDeleteCmd drives one `design delete` expected to succeed and
+// decodes its envelope. It is named around the command rather than the handler
+// because runDesignDelete is the handler, in cmd/design.go.
+func runDesignDeleteCmd(t *testing.T, data string) designDeleteResult {
+	t.Helper()
+	resetRootCmd(t)
+	stdout, stderr, code := runRootCmd(t, "design", "delete", "--data", data)
+	require.Equal(t, 0, code)
+	require.Empty(t, stderr)
+
+	var got designDeleteResult
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	return got
+}
+
+// Criterion: a document removed by its source and its path within that source
+// no longer appears in that source's listing, while the sibling documents the
+// fixture seeded are still listed.
+func TestDesignDelete_RemovedDocumentNoLongerAppearsInTheListing(t *testing.T) {
+	root, apiLoc, _ := twoSourceDesignProject(t)
+
+	got := runDesignDeleteCmd(t, `{"source":"api","path":"payments/v2.md"}`)
+	require.Equal(t, designDeleteResult{
+		Source:   "api",
+		Path:     "payments/v2.md",
+		Location: filepath.Join(apiLoc, "payments", "v2.md"),
+		Deleted:  true,
+	}, got)
+	require.Equal(t, filepath.Join(root, "docs", "design", "payments", "v2.md"), got.Location,
+		"the reported location must be the absolute path the address resolved to")
+
+	resetRootCmd(t)
+	stdout, stderr, code := runRootCmd(t, "design", "list")
+	require.Equal(t, 0, code)
+	require.Empty(t, stderr)
+
+	var listed designListResult
+	require.NoError(t, json.Unmarshal([]byte(stdout), &listed))
+	require.Equal(t, []designDocumentItem{
+		{Source: "api", Path: "overview.md"},
+		{Source: "ux", Path: "flows.md"},
+	}, listed.Documents)
+}
+
+// Criterion: removing a document that is not there reports success and changes
+// nothing, and can be repeated safely — the second removal of the same address
+// reports that nothing was removed rather than failing.
+func TestDesignDelete_RepeatedRemovalSucceedsAndReportsNothingRemoved(t *testing.T) {
+	_, apiLoc, _ := twoSourceDesignProject(t)
+	const data = `{"source":"api","path":"payments/v2.md"}`
+
+	first := runDesignDeleteCmd(t, data)
+	require.True(t, first.Deleted, "the first removal took a document that was there")
+
+	second := runDesignDeleteCmd(t, data)
+	require.Equal(t, designDeleteResult{
+		Source:   "api",
+		Path:     "payments/v2.md",
+		Location: filepath.Join(apiLoc, "payments", "v2.md"),
+		Deleted:  false,
+	}, second)
+
+	// An address that never held anything behaves the same way.
+	never := runDesignDeleteCmd(t, `{"source":"api","path":"never-existed.md"}`)
+	require.False(t, never.Deleted)
+}
+
+// Criterion: a document the project already had, carrying no record
+// Spektacular wrote, is removed without any special condition — both the shape
+// with no frontmatter at all and the shape carrying frontmatter the team
+// itself wrote.
+func TestDesignDelete_RemovesDocumentsSpektacularDidNotAuthor(t *testing.T) {
+	root := t.TempDir()
+	apiLoc := filepath.Join(root, "docs", "design")
+
+	t.Chdir(root)
+	writeDesignConfig(t, root, designSourceDecl{name: "api", location: "../docs/design"})
+
+	for _, doc := range designUnauthoredDocs {
+		t.Run(doc.name, func(t *testing.T) {
+			full := seedDesignDoc(t, apiLoc, doc.path, doc.seeded)
+
+			got := runDesignDeleteCmd(t, fmt.Sprintf(`{"source":"api","path":%q}`, doc.path))
+			require.Equal(t, designDeleteResult{
+				Source:   "api",
+				Path:     doc.path,
+				Location: full,
+				Deleted:  true,
+			}, got)
+			require.NoFileExists(t, full)
+		})
+	}
+}
+
+// Criterion: removing one document alters no other file in the source
+// directory. The directory is snapshotted before and after, and only the
+// addressed path may have gone.
+func TestDesignDelete_LeavesEveryOtherFileUntouched(t *testing.T) {
+	root := t.TempDir()
+	apiLoc := filepath.Join(root, "docs", "design")
+	seedDesignDoc(t, apiLoc, "overview.md", "# Overview\n\nUnchanged.\n")
+	seedDesignDoc(t, apiLoc, "payments/v1.md", "---\ntitle: Payments v1\n---\n\n# Payments v1\n")
+	seedDesignDoc(t, apiLoc, "payments/v2.md", "# Payments v2\n\nThe one to go.\n")
+	seedDesignDoc(t, apiLoc, "notes.txt", "loose note, no frontmatter, trailing space \n")
+
+	t.Chdir(root)
+	writeDesignConfig(t, root, designSourceDecl{name: "api", location: "../docs/design"})
+
+	// snapshotDir (init_test.go) walks the directory with filepath.WalkDir and
+	// os.ReadFile, hashing each file's bytes — an oracle that never consults
+	// the code under test.
+	before := snapshotDir(t, apiLoc)
+	require.Len(t, before, 4)
+
+	runDesignDeleteCmd(t, `{"source":"api","path":"payments/v2.md"}`)
+
+	// The expected snapshot is the one taken before the removal, less exactly
+	// one path.
+	expected := map[string]string{}
+	for path, digest := range before {
+		if path == "payments/v2.md" {
+			continue
+		}
+		expected[path] = digest
+	}
+	require.Len(t, expected, 3)
+	require.Equal(t, expected, snapshotDir(t, apiLoc),
+		"only the addressed document may go, and no other file may change")
 }

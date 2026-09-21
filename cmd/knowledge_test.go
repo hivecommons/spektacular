@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jumppad-labs/spektacular/internal/config"
+	"github.com/jumppad-labs/spektacular/internal/knowledge"
 	"github.com/jumppad-labs/spektacular/internal/output"
 	"github.com/jumppad-labs/spektacular/internal/repo"
 	"github.com/spf13/cobra"
@@ -59,6 +60,17 @@ type knowledgeAddressResult struct {
 	Name    string `json:"name"`
 	Path    string `json:"path"`
 	Content string `json:"content"`
+}
+
+// knowledgeDeleteResult mirrors the JSON envelope delete echoes back: the
+// address the request named, plus "deleted", which distinguishes the two
+// successful outcomes — an entry was there and was removed, or the address was
+// valid and held nothing.
+type knowledgeDeleteResult struct {
+	Tier    string `json:"tier"`
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Deleted bool   `json:"deleted"`
 }
 
 // alwaysAppliedEntry mirrors the knowledge.AlwaysAppliedEntry JSON envelope
@@ -122,7 +134,11 @@ func twoScopeProject(t *testing.T) (root, projectLoc, teamLoc string) {
 	seed(projectLoc, "architecture/initial-idea.md", "an architecture note about widgets\n")
 	seed(teamLoc, "guidelines.md", "team guidelines reference the compass too\n")
 
+	// The agent is recorded because a real project records it: a refusal whose
+	// next action is an `init` invocation builds that invocation from it, and
+	// a fixture that left it out would exercise the placeholder instead.
 	cfg := "name: testproj\n" +
+		"agent: claude\n" +
 		"repos:\n" +
 		"  - name: testproj\n" +
 		"    location: .\n" +
@@ -355,6 +371,324 @@ func TestKnowledgeWrite_PersistsEntry(t *testing.T) {
 	data, err := os.ReadFile(persisted)
 	require.NoError(t, err)
 	require.Equal(t, "freshly written knowledge\n", string(data))
+}
+
+// writeKnowledgeEntry writes content to the addressed path through the command
+// and returns the success envelope decoded as a raw object, so a test can
+// assert that an optional field is absent rather than merely zero-valued.
+func writeKnowledgeEntry(t *testing.T, address, content string) map[string]any {
+	t.Helper()
+	contentPath := filepath.Join(t.TempDir(), "payload.md")
+	require.NoError(t, os.WriteFile(contentPath, []byte(content), 0o644))
+
+	stdout, _, err := runKnowledge(t, "write", "--data", address, "--file", contentPath)
+	require.NoError(t, err)
+
+	var envelope map[string]any
+	require.NoError(t, json.Unmarshal([]byte(stdout), &envelope))
+	return envelope
+}
+
+// Phase 2.2 criteria 1 and 2: an entry carrying labels into an always-applied
+// category comes back with those labels reported as unreachable and a next
+// step the caller can actually act on — and the entry is written all the same,
+// byte for byte, and reads back at its address. The report travels on a
+// success, so it is not a refusal dressed up as advice.
+//
+// What landed on disk is checked by reading the file directly rather than by
+// trusting the command's own echo of the address it was given.
+func TestKnowledgeWrite_AlwaysAppliedDestinationReportsUnreachableLabelsAndStillWrites(t *testing.T) {
+	_, projectLoc, _ := twoScopeProject(t)
+
+	const body = "---\ntags: [http, routing]\n---\n# Style\n\nalways use tabs\n"
+	envelope := writeKnowledgeEntry(t,
+		`{"tier":"repo","name":"testproj","path":"conventions/style.md"}`, body)
+
+	require.Equal(t, "repo", envelope["tier"])
+	require.Equal(t, "testproj", envelope["name"])
+	require.Equal(t, "conventions/style.md", envelope["path"])
+	require.Equal(t, []any{"http", "routing"}, envelope["unreachable_tags"],
+		"every label the entry declares is reported, in the order it declared them")
+
+	nextAction, ok := envelope["next_action"].(string)
+	require.True(t, ok, "the report must carry a next action")
+	require.Contains(t, nextAction, `the "conventions" category is always-applied`)
+	require.Contains(t, nextAction,
+		"deliberately excluded from search and from the label vocabulary")
+	require.Contains(t, nextAction,
+		"move the entry to a looked-up category, where labels are searchable (architecture, gotchas, learnings, decisions)")
+	require.Contains(t, nextAction, "or drop the labels")
+	require.Contains(t, nextAction, "the entry itself is written either way")
+
+	persisted, err := os.ReadFile(filepath.Join(projectLoc, "conventions", "style.md"))
+	require.NoError(t, err)
+	require.Equal(t, body, string(persisted), "the entry is written exactly as supplied")
+
+	stdout, _, err := runKnowledge(t, "read", "--data",
+		`{"tier":"repo","name":"testproj","path":"conventions/style.md"}`)
+	require.NoError(t, err)
+	var read knowledgeAddressResult
+	require.NoError(t, json.Unmarshal([]byte(stdout), &read))
+	require.Equal(t, knowledgeAddressResult{
+		Tier:    "repo",
+		Name:    "testproj",
+		Path:    "conventions/style.md",
+		Content: body,
+	}, read)
+}
+
+// Phase 2.2 criterion 3: the identical labelled entry bound for a looked-up
+// category reports nothing at all — the envelope is the bare address it has
+// always been, with neither optional field present.
+func TestKnowledgeWrite_LookedUpDestinationReportsNoUnreachableLabels(t *testing.T) {
+	_, projectLoc, _ := twoScopeProject(t)
+
+	const body = "---\ntags: [http, routing]\n---\n# Trap\n\nmind the gap\n"
+	envelope := writeKnowledgeEntry(t,
+		`{"tier":"repo","name":"testproj","path":"gotchas/trap.md"}`, body)
+
+	require.Equal(t, map[string]any{
+		"error": false, "tier": "repo", "name": "testproj", "path": "gotchas/trap.md",
+	}, envelope, "a reachable-label write is unchanged from today, key for key")
+
+	persisted, err := os.ReadFile(filepath.Join(projectLoc, "gotchas", "trap.md"))
+	require.NoError(t, err)
+	require.Equal(t, body, string(persisted))
+}
+
+// Phase 2.2 criterion 4: an entry declaring no labels has nothing to report,
+// wherever it goes — including into an always-applied category, which is the
+// only destination the report ever fires for.
+func TestKnowledgeWrite_UnlabelledEntryReportsNothingWhereverItGoes(t *testing.T) {
+	_, projectLoc, _ := twoScopeProject(t)
+
+	for _, tc := range []struct{ name, path string }{
+		{"always-applied destination", "glossary/compass.md"},
+		{"looked-up destination", "learnings/compass.md"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const body = "# Compass\n\nno frontmatter block at all\n"
+			envelope := writeKnowledgeEntry(t,
+				`{"tier":"repo","name":"testproj","path":"`+tc.path+`"}`, body)
+
+			require.Equal(t, map[string]any{
+				"error": false, "tier": "repo", "name": "testproj", "path": tc.path,
+			}, envelope)
+
+			persisted, err := os.ReadFile(filepath.Join(projectLoc, filepath.FromSlash(tc.path)))
+			require.NoError(t, err)
+			require.Equal(t, body, string(persisted))
+		})
+	}
+}
+
+// Phase 1.3 criterion 1: an entry named by its store and its path within that
+// store is removed, and afterwards it is in neither that store's listing nor
+// its search results. The entry is written first, so the round trip is
+// write -> list -> search -> delete -> list -> search on one address.
+func TestKnowledgeDelete_RemovesTheEntryFromListingAndSearch(t *testing.T) {
+	_, _, teamLoc := twoScopeProject(t)
+
+	contentPath := filepath.Join(t.TempDir(), "payload.md")
+	require.NoError(t, os.WriteFile(contentPath, []byte("the sextant is read against the horizon\n"), 0o644))
+
+	_, _, err := runKnowledge(t, "write",
+		"--data", `{"tier":"project","name":"team","path":"learnings/new.md"}`,
+		"--file", contentPath)
+	require.NoError(t, err)
+
+	listEntries := func() []knowledgeEntry {
+		t.Helper()
+		stdout, _, err := runKnowledge(t, "list")
+		require.NoError(t, err)
+		var result struct {
+			Entries []knowledgeEntry `json:"entries"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(stdout), &result))
+		return result.Entries
+	}
+	searchPaths := func() []string {
+		t.Helper()
+		stdout, _, err := runKnowledge(t, "search", "sextant")
+		require.NoError(t, err)
+		var result struct {
+			Hits []knowledgeHit `json:"hits"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(stdout), &result))
+		paths := make([]string, 0, len(result.Hits))
+		for _, h := range result.Hits {
+			paths = append(paths, h.Path)
+		}
+		return paths
+	}
+
+	require.Contains(t, listEntries(), knowledgeEntry{Tier: "project", Name: "team", Path: "learnings/new.md"})
+	require.Equal(t, []string{"learnings/new.md"}, searchPaths())
+
+	stdout, _, err := runKnowledge(t, "delete",
+		"--data", `{"tier":"project","name":"team","path":"learnings/new.md"}`)
+	require.NoError(t, err)
+
+	var result knowledgeDeleteResult
+	require.NoError(t, json.Unmarshal([]byte(stdout), &result))
+	require.Equal(t, knowledgeDeleteResult{
+		Tier: "project", Name: "team", Path: "learnings/new.md", Deleted: true,
+	}, result)
+
+	require.ElementsMatch(t, []knowledgeEntry{
+		{Tier: "repo", Name: "testproj", Path: "readme.md"},
+		{Tier: "repo", Name: "testproj", Path: "architecture/initial-idea.md"},
+		{Tier: "project", Name: "team", Path: "guidelines.md"},
+	}, listEntries(), "the removed entry must be gone and every other entry must remain")
+	require.Empty(t, searchPaths(), "a removed entry must not be returned by a search that previously matched it")
+	require.NoFileExists(t, filepath.Join(teamLoc, "learnings", "new.md"))
+}
+
+// Phase 1.3 criterion 2: removing an entry that is not there reports success
+// and changes nothing, so the command is safe to repeat. "deleted" is what
+// distinguishes the two successes: true on the run that removed the document,
+// false on the repeat that found nothing.
+func TestKnowledgeDelete_RepeatIsASuccessReportingNothingWasDeleted(t *testing.T) {
+	twoScopeProject(t)
+
+	remove := func(path string) knowledgeDeleteResult {
+		t.Helper()
+		stdout, stderr, err := runKnowledge(t, "delete", "--data",
+			`{"tier":"project","name":"team","path":"`+path+`"}`)
+		require.NoError(t, err)
+		require.Empty(t, stderr)
+		var result knowledgeDeleteResult
+		require.NoError(t, json.Unmarshal([]byte(stdout), &result))
+		return result
+	}
+
+	require.Equal(t, knowledgeDeleteResult{Tier: "project", Name: "team", Path: "guidelines.md", Deleted: true},
+		remove("guidelines.md"))
+	require.Equal(t, knowledgeDeleteResult{Tier: "project", Name: "team", Path: "guidelines.md", Deleted: false},
+		remove("guidelines.md"), "repeating a removal must succeed and report that nothing was removed")
+
+	// An entry that was never written behaves the same way, and the store it
+	// was addressed at is otherwise untouched.
+	require.Equal(t, knowledgeDeleteResult{Tier: "project", Name: "team", Path: "learnings/never.md", Deleted: false},
+		remove("learnings/never.md"))
+
+	stdout, _, err := runKnowledge(t, "list")
+	require.NoError(t, err)
+	var listed struct {
+		Entries []knowledgeEntry `json:"entries"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &listed))
+	require.ElementsMatch(t, []knowledgeEntry{
+		{Tier: "repo", Name: "testproj", Path: "readme.md"},
+		{Tier: "repo", Name: "testproj", Path: "architecture/initial-idea.md"},
+	}, listed.Entries, "a repeated removal must not disturb anything else")
+}
+
+// Phase 1.3 criterion 3: removing from a store the project has not declared is
+// refused by name, nothing is removed, and the refusal lists the store names
+// that tier does hold so the request can be reissued without reading config.
+func TestKnowledgeDelete_UnknownStoreNameNamesTheTiersStores(t *testing.T) {
+	twoScopeProject(t)
+
+	stdout, stderr, err := runKnowledge(t, "delete", "--data",
+		`{"tier":"project","name":"ghost","path":"guidelines.md"}`)
+	require.Error(t, err)
+	require.Empty(t, stderr)
+
+	var envelope output.ErrorResponse
+	require.NoError(t, json.Unmarshal([]byte(stdout), &envelope))
+	require.True(t, envelope.IsError)
+	require.Equal(t, "knowledge_store_unknown", envelope.Code)
+	require.Contains(t, envelope.Message, "ghost")
+	require.Contains(t, envelope.NextAction, `stores available in the "project" tier: team`)
+
+	stdout, _, err = runKnowledge(t, "list")
+	require.NoError(t, err)
+	var listed struct {
+		Entries []knowledgeEntry `json:"entries"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &listed))
+	require.ElementsMatch(t, []knowledgeEntry{
+		{Tier: "repo", Name: "testproj", Path: "readme.md"},
+		{Tier: "repo", Name: "testproj", Path: "architecture/initial-idea.md"},
+		{Tier: "project", Name: "team", Path: "guidelines.md"},
+	}, listed.Entries, "a refused removal must leave every store exactly as it was")
+}
+
+// Phase 1.3 criterion 4: a category's generated description is not a knowledge
+// entry and removing it is refused; the file is still there afterwards, and the
+// refusal names the command that regenerates it.
+//
+// The next action must name the init invocation *including the agent*, because
+// init takes the agent as a required argument: `spektacular init` alone cannot
+// be run verbatim, which is exactly what the error convention exists to prevent.
+func TestKnowledgeDelete_CategoryDescriptionIsRefusedAndNamesTheRegeneratingCommand(t *testing.T) {
+	_, projectLoc, _ := twoScopeProject(t)
+
+	description := filepath.Join(projectLoc, "conventions", "README.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(description), 0o755))
+	require.NoError(t, os.WriteFile(description, []byte("# Conventions\n\ngenerated\n"), 0o644))
+
+	stdout, stderr, err := runKnowledge(t, "delete", "--data",
+		`{"tier":"repo","name":"testproj","path":"conventions/README.md"}`)
+	require.Error(t, err)
+	require.Empty(t, stderr)
+
+	var envelope output.ErrorResponse
+	require.NoError(t, json.Unmarshal([]byte(stdout), &envelope))
+	require.True(t, envelope.IsError)
+	require.Equal(t, "knowledge_category_description_delete", envelope.Code)
+	require.Equal(t, "conventions/README.md", envelope.Resource)
+	require.Contains(t, envelope.Message, `"conventions"`)
+	require.Contains(t, envelope.NextAction, "`spektacular init claude`",
+		"the next action must name a runnable init invocation, agent argument included")
+
+	content, readErr := os.ReadFile(description)
+	require.NoError(t, readErr, "the refused removal must leave the description on disk")
+	require.Equal(t, "# Conventions\n\ngenerated\n", string(content))
+}
+
+// Phase 1.3 criterion 5: `delete --schema` reports its own input and output
+// shape, as every other knowledge subcommand does. The input is the shared
+// address; the output adds "deleted" to the echoed address. It is addressed
+// rather than fanned out, so it advertises no narrowing flags.
+func TestKnowledgeDelete_SchemaDocumentsInputAndOutput(t *testing.T) {
+	twoScopeProject(t)
+
+	schema, raw := knowledgeSchema(t, "delete")
+	require.NotNil(t, schema.Input)
+	require.Equal(t, []string{"tier", "name", "path"}, schema.Input.Required)
+	require.Equal(t, []string{"project", "repo"}, schema.Input.Properties["tier"].Enum)
+	require.Equal(t, "string", schema.Input.Properties["name"].Type)
+	require.Equal(t, "string", schema.Input.Properties["path"].Type)
+
+	require.NotNil(t, schema.Output)
+	require.ElementsMatch(t, []string{"tier", "name", "path", "deleted"}, mapKeys(schema.Output.Properties))
+	require.Equal(t, "boolean", schema.Output.Properties["deleted"].Type)
+
+	require.NotContains(t, raw, "flags",
+		"delete is addressed, not fanned out, and must not advertise narrowing options")
+}
+
+// Phase 1.3 criterion 6: a request missing its payload is refused with a code
+// and a next step that can be run as written — an example address and where to
+// find the store names — rather than a bare "--data is required".
+func TestKnowledgeDelete_MissingDataIsRefusedWithARunnableNextStep(t *testing.T) {
+	twoScopeProject(t)
+
+	stdout, stderr, err := runKnowledge(t, "delete")
+	require.Error(t, err)
+	require.Empty(t, stderr)
+
+	var envelope output.ErrorResponse
+	require.NoError(t, json.Unmarshal([]byte(stdout), &envelope))
+	require.True(t, envelope.IsError)
+	require.Equal(t, "knowledge_data_required", envelope.Code)
+	require.Contains(t, envelope.Message, "--data is required")
+	require.Contains(t, envelope.NextAction, `--data '{"tier":"repo","name":"docs","path":"learnings/x.md"}'`,
+		"the next action must carry an example payload the caller can copy")
+	require.Contains(t, envelope.NextAction, "knowledge sources",
+		"the next action must say where the configured store names come from")
 }
 
 // Criterion 1 & 2: `knowledge categories` projects the category registry to the
@@ -630,6 +964,12 @@ func alwaysAppliedProject(t *testing.T) string {
 	}
 	seed("conventions/style.md", "always use tabs\n")
 	seed("glossary/compass.md", "compass: a tool that points north\n")
+	// Each category also carries its own generated description, exactly as a
+	// scaffolded store does. They are here so the always-applied output has
+	// something to leak: without them the fixture could not tell a payload that
+	// excludes descriptions from one that never met any.
+	seed("conventions/"+knowledge.CategoryDescriptionFile, "# Conventions\n\n**Tier:** always-applied\n")
+	seed("glossary/"+knowledge.CategoryDescriptionFile, "# Glossary\n\n**Tier:** always-applied\n")
 
 	cfg := "name: testproj\nrepos:\n  - name: testproj\n    location: .\n"
 	writeCurrentConfig(t, root, cfg)
@@ -1031,6 +1371,11 @@ func TestKnowledgeSources_AbsentRepoIsAnError(t *testing.T) {
 // both conventions and glossary — across all scopes in the {"entries":[...]}
 // envelope, each tagged with its scope, path, content, and the category it came
 // from so a consumer can tell a convention from a glossary term.
+//
+// Phase 2.1 criterion 2: both categories in the fixture also carry their own
+// generated description. The exact list below is unchanged by that — the
+// material an agent receives on every task is the same entry for entry, and
+// carries no category description.
 func TestKnowledgeAlwaysApplied_ReturnsConventionsAndGlossaryTagged(t *testing.T) {
 	alwaysAppliedProject(t)
 
@@ -1645,7 +1990,16 @@ func TestKnowledgeWrite_SchemaDocumentsTheAddressItRequires(t *testing.T) {
 	require.Equal(t, "string", schema.Input.Properties["name"].Type)
 	require.Equal(t, "string", schema.Input.Properties["path"].Type)
 	require.NotNil(t, schema.Output)
-	require.ElementsMatch(t, []string{"tier", "name", "path"}, mapKeys(schema.Output.Properties))
+	// The address a write echoes back, plus the two fields it carries only
+	// when the entry declares labels no search can reach. Those two are
+	// optional and absent in the normal case — they are published here so a
+	// caller knows they can appear, not because every write produces them.
+	require.ElementsMatch(t,
+		[]string{"tier", "name", "path", "unreachable_tags", "next_action"},
+		mapKeys(schema.Output.Properties))
+	require.Equal(t, "array", schema.Output.Properties["unreachable_tags"].Type)
+	require.Equal(t, "string", schema.Output.Properties["unreachable_tags"].Items.Type)
+	require.Equal(t, "string", schema.Output.Properties["next_action"].Type)
 }
 
 // Criterion 1: every output envelope that returns a list of knowledge items
@@ -1971,9 +2325,11 @@ func TestKnowledgeNarrowing_DoesNotLeakBetweenInvocations(t *testing.T) {
 // knowledgeConfigLoadingCmds are every knowledge subcommand that loads the
 // project's configuration before doing its work, each with the minimum
 // arguments needed to get past its own input validation and reach the load.
-// `read` and `write` both parse their address before loading, so they are given
-// a well-formed one; `write` never reaches --file, which is read only after the
-// store set is built. `categories` is deliberately absent: it answers from the
+// `read`, `write` and `delete` all parse their address before loading, so they
+// are given a well-formed one; `write` never reaches --file, which is read only
+// after the store set is built, and `delete` is given an ordinary entry path so
+// it does not stop at the category-description refusal.
+// `categories` is deliberately absent: it answers from the
 // built-in category definitions and never loads a config, so no configuration
 // can make it fail.
 var knowledgeConfigLoadingCmds = map[string][]string{
@@ -1981,6 +2337,7 @@ var knowledgeConfigLoadingCmds = map[string][]string{
 	"read":           {"read", "--data", `{"tier":"repo","name":"testproj","path":"readme.md"}`},
 	"list":           {"list"},
 	"write":          {"write", "--data", `{"tier":"repo","name":"testproj","path":"learnings/note.md"}`},
+	"delete":         {"delete", "--data", `{"tier":"repo","name":"testproj","path":"learnings/note.md"}`},
 	"sources":        {"sources"},
 	"conventions":    {"conventions"},
 	"always-applied": {"always-applied"},

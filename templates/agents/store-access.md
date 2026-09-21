@@ -14,6 +14,17 @@ never build a store path by hand. Use `{{command}} spec file`,
 and `{{command}} design` instead. A write supplies its body with
 `--from <path>`, never on stdin and never as prose on the command line.
 
+Removal is a CLI verb too. Deleting a managed file with `rm`, or with any
+equivalent of your own, is never correct — not for a knowledge entry, not for
+a design document, and not for anything else a store holds. Use
+`{{command}} knowledge delete` and `{{command}} design delete`, alongside the
+`delete` each of `{{command}} spec file`, `{{command}} plan file` and
+`{{command}} changelog file` already offers. Going around the tool is how a
+spec is left pointing at a design that is not there, and it stops working
+entirely the moment a store is backed by something other than a local
+directory. If a removal is refused, the refusal names what to do instead:
+act on it rather than reaching past it.
+
 Do not use `ls`, `find`, or the `Read` tool to discover what a store holds,
 against `.spektacular/specs/`, `.spektacular/plans/`, or any configured store
 directory. The CLI's own `file list` is the source of truth for what counts as

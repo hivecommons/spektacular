@@ -1,3 +1,7 @@
+---
+tags: [repo, config, validation, default]
+---
+
 ## RepoConfig must be constructed via NewDefaultRepoConfig(), never a bare struct literal
 
 Building a `config.RepoConfig` (`internal/config/repo.go`) directly as a struct

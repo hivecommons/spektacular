@@ -1,3 +1,7 @@
+---
+tags: [harbor, testing, e2e, workflow]
+---
+
 ## Harbor e2e scenarios can only assert against the final spec, never intermediate working files
 
 The spec workflow's per-section working files under

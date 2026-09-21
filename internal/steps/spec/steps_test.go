@@ -626,3 +626,75 @@ func TestTechnicalApproachStepDoesNotFetchANestedSkill(t *testing.T) {
 	require.NotContains(t, out, "{{",
 		"technical_approach must leave no unrendered mustache")
 }
+
+// --- A referenced design document is a constraint, not technical direction ---
+
+// TestTechnicalApproachStepRoutesTheDesignPointerToConstraints asserts the
+// technical-approach step sends a captured design's pointer to Constraints
+// rather than recording it in its own section.
+//
+// This is the one placement in the spec workflow where the two sections'
+// definitions decide the answer, and getting it wrong is silent. Constraints
+// is defined as the rules the planner does not get to renegotiate; Technical
+// Approach is defined as direction the planner may adapt or replace. The plan
+// workflow reads a referenced design as the settled shape it builds *on* —
+// weighing options within that shape and raising a disagreement with the user
+// rather than designing around it — which is the constraint definition
+// exactly. Recording the pointer under Technical Approach would file a binding
+// decision under the heading that says it is negotiable.
+//
+// The expected strings are hand-copied from
+// templates/steps/spec/05-technical_approach.md.
+func TestTechnicalApproachStepRoutesTheDesignPointerToConstraints(t *testing.T) {
+	out := renderStep(t, technicalApproach())
+
+	require.Contains(t, out, "**A referenced design is binding, so its pointer belongs in Constraints, not here.**",
+		"technical_approach must state the design pointer belongs in Constraints rather than in its own section")
+	require.Contains(t, out, "Then record the one-line pointer as a **constraint**, not here.",
+		"the accept path must direct the pointer to Constraints")
+	require.Contains(t, out, ".spektacular/work/test/constraints.md",
+		"the accept path must name the constraints working file the pointer is appended to")
+
+	// The reason, not just the instruction: a rule an agent cannot see the
+	// point of is one it reasons its way around.
+	require.Contains(t, out, "weighs its options *within* that\nshape",
+		"technical_approach must say the plan weighs options within the referenced design's shape")
+
+	// The superseded routing must be gone, not merely joined by the new one.
+	require.NotContains(t, out, "a one-line pointer to it is what belongs here",
+		"technical_approach must no longer claim the design pointer belongs in its own section")
+}
+
+// TestConstraintsStepClaimsTheDesignReference asserts the constraints step
+// knows a referenced design belongs to it. The routing above is only half the
+// change: a pointer sent to a section whose own instructions never mention
+// design documents is a pointer an agent drafting that section will not
+// recognise, and may move back out on the next pass.
+//
+// The expected strings are hand-copied from
+// templates/steps/spec/04-constraints.md.
+func TestConstraintsStepClaimsTheDesignReference(t *testing.T) {
+	out := renderStep(t, constraints())
+
+	require.Contains(t, out, "**A design document this spec references is a constraint, and its pointer lives here.**",
+		"constraints must claim the referenced-design pointer as its own")
+	require.Contains(t, out, "a **referenced design document**",
+		"constraints must carry a worked example of a design reference as a constraint")
+
+	// It must also say the pointer arrives late, from the next step, or an
+	// agent meets it as an unexplained amendment to a section it has already
+	// agreed with the user.
+	require.Contains(t, out, "arrives as an amendment to this section's working file",
+		"constraints must explain that a design settled later arrives as an amendment")
+
+	// The empty-section check must offer design documents as a source, so an
+	// empty Constraints section is a deliberate check rather than an oversight.
+	require.Contains(t, out, "A **design document the project already holds**",
+		"the common-sources checklist must include a design the project already holds")
+	require.Contains(t, out, "spektacular design list",
+		"the common-sources checklist must name the command that lists declared designs")
+
+	// The content stays in the document; only the pointer is recorded.
+	require.Contains(t, out, "duplicating its content here is what the document exists to avoid",
+		"constraints must forbid copying the design's content into the spec")
+}

@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,12 +21,23 @@ const (
 // EnsureFootprint creates or repairs a repo's minimal Spektacular footprint
 // at root — the folder that holds the repo's repo.yaml: that file plus the
 // knowledge storage its sources declare — and nothing else (no agent guidance, no skills, no version
-// file). It is idempotent and strictly additive: an existing repo.yaml is
-// kept (and drives the scaffolding) unless it is broken, existing knowledge
-// files are never overwritten, and a repo initialized by another project is
-// left undisturbed. The returned status reports what happened: created (no
-// repo.yaml existed), repaired (repo.yaml existed but was broken, or parts
-// of the knowledge storage were missing), or unchanged.
+// file). It is idempotent and almost entirely additive: an existing repo.yaml is
+// kept (and drives the scaffolding) unless it is broken, and a repo initialized
+// by another project is left undisturbed.
+//
+// A knowledge *entry* is never overwritten. The one deliberate exception is a
+// category's own generated description (knowledge.CategoryDescriptionFile),
+// which is rendered from the category registry rather than written by anyone:
+// one whose bytes have drifted from that rendering is brought back into line,
+// and one that already matches is left untouched. Without this, a description
+// that no longer matched the project's definition of its category could be
+// repaired by no command at all, which would leave the refusal to delete a
+// descriptor pointing at a remedy that does not work.
+//
+// The returned status reports what happened: created (no
+// repo.yaml existed), repaired (repo.yaml existed but was broken, parts
+// of the knowledge storage were missing, or a category description had
+// drifted), or unchanged.
 func EnsureFootprint(root string, repoCfg config.RepoConfig) (string, error) {
 	repoConfigPath := filepath.Join(root, config.RepoConfigFileName)
 
@@ -90,12 +102,23 @@ func EnsureFootprint(root string, repoCfg config.RepoConfig) (string, error) {
 					return "", fmt.Errorf("creating directory %s: %w", dir, err)
 				}
 			}
-			readmePath := filepath.Join(dir, "README.md")
-			if _, err := os.Stat(readmePath); os.IsNotExist(err) {
+			// The category description is generated output, not content, so
+			// it is the one file here that is brought back into line rather
+			// than merely created. Compare against the registry's own
+			// rendering: a description that already matches is left
+			// byte-identical and does not move the status, so a repeated run
+			// still reports unchanged.
+			readmePath := filepath.Join(dir, knowledge.CategoryDescriptionFile)
+			want := []byte(c.README())
+			existing, err := os.ReadFile(readmePath)
+			if err != nil && !os.IsNotExist(err) {
+				return "", fmt.Errorf("reading %s %s: %w", c.Name, knowledge.CategoryDescriptionFile, err)
+			}
+			if err != nil || !bytes.Equal(existing, want) {
 				if status == FootprintUnchanged {
 					status = FootprintRepaired
 				}
-				if err := os.WriteFile(readmePath, []byte(c.README()), 0644); err != nil {
+				if err := os.WriteFile(readmePath, want, 0644); err != nil {
 					return "", fmt.Errorf("writing %s README: %w", c.Name, err)
 				}
 			}

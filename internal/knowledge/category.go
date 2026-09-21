@@ -2,7 +2,11 @@ package knowledge
 
 import (
 	"fmt"
+	"path/filepath"
+	"slices"
 	"strings"
+
+	"github.com/jumppad-labs/spektacular/internal/store"
 )
 
 // CategoryTier declares how a category's entries are retrieved. A category's
@@ -97,6 +101,87 @@ var Categories = []Category{
 		Tier:       CategoryTierLookedUp,
 		EntryShape: "A record of the decision, the alternatives considered, and the rationale for the choice made.",
 	},
+}
+
+// CategoryDescriptionFile is the filename a category's own generated
+// description is written to, inside that category's directory. The name is
+// stated once, here, because three behaviours depend on it — the retrieval
+// exclusion, the refusal to delete a descriptor, and the drift comparison —
+// and restating it at each of them is the drift this registry exists to
+// prevent.
+const CategoryDescriptionFile = "README.md"
+
+// IsCategoryDescription reports whether a store-relative path addresses a
+// category's own generated description rather than a knowledge entry. A
+// description is rendered from the registry by README() and written by project
+// init and repo-footprint scaffolding; it documents the category rather than
+// contributing to it, which is why it is kept out of retrieval and cannot be
+// deleted.
+//
+// True only for "<registry category>/README.md" exactly, which is the only
+// shape either write site produces. A README deeper inside a category is a
+// contributor's own file and is treated as an ordinary entry — the exclusion
+// has no claim over content someone wrote themselves.
+func IsCategoryDescription(path string) bool {
+	segments := strings.Split(strings.TrimPrefix(filepath.ToSlash(path), "./"), "/")
+	if len(segments) != 2 || segments[1] != CategoryDescriptionFile {
+		return false
+	}
+	_, ok := CategoryByName(segments[0])
+	return ok
+}
+
+// TagReachability reports the labels an entry declares that no search will
+// ever reach, together with what to do about it. It travels on a successful
+// write's result rather than as a refusal: the entry is still written, exactly
+// as it would have been, and the caller is told so it finds out at the moment
+// of writing rather than never.
+type TagReachability struct {
+	Category    string   `json:"category"`
+	Unreachable []string `json:"unreachable_tags"`
+	NextAction  string   `json:"next_action"`
+}
+
+// UnreachableTags reports which of an entry's declared labels a search can
+// never reach, or nil when every one of them is reachable.
+//
+// Labels on an entry in an always-applied category are inert by construction:
+// those categories are deliberately excluded from search and from the label
+// vocabulary, because their entries are loaded in full on every task. That
+// exclusion is correct and is not weakened here — what changes is that such
+// labels stop being accepted in silence.
+//
+// It is a package function rather than a method on Set because it consults no
+// store: keeping it callable without one is what lets the command layer ask
+// before or after a write without an ordering constraint. It lives beside the
+// registry because its next action has to name the destination's retrieval tier
+// and the categories a search does reach, which only the registry knows.
+func UnreachableTags(path string, content []byte) *TagReachability {
+	category := categoryOf(path)
+	if category == "" {
+		return nil
+	}
+	if !slices.Contains(AlwaysApplied(), category) {
+		return nil
+	}
+	tags, _, _ := store.ParseEntry(content)
+	if len(tags) == 0 {
+		return nil
+	}
+	var lookedUp []string
+	for _, c := range Categories {
+		if c.Tier == CategoryTierLookedUp {
+			lookedUp = append(lookedUp, c.Name)
+		}
+	}
+	return &TagReachability{
+		Category:    category,
+		Unreachable: tags,
+		NextAction: fmt.Sprintf(
+			"the %q category is always-applied: its entries are loaded in full on every task and are deliberately excluded from search and from the label vocabulary, so these labels can never be matched. Either move the entry to a looked-up category, where labels are searchable (%s), or drop the labels — the entry itself is written either way",
+			category, strings.Join(lookedUp, ", "),
+		),
+	}
 }
 
 // README renders the category's self-documenting README content from its

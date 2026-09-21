@@ -140,6 +140,7 @@ Agents (and you) reach knowledge through the `spektacular knowledge` commands ra
 - `knowledge conventions` / `knowledge always-applied` — read the always-applied entries in full; both take `--tier` and `--filter`
 - `knowledge categories` — list the categories and their retrieval tiers
 - `knowledge read` / `knowledge write` — read and write one addressed entry, via `--data '{"tier":"…","name":"…","path":"…"}'`
+- `knowledge delete` — remove one addressed entry, via `--data '{"tier":"…","name":"…","path":"…"}'`; an address holding nothing succeeds and changes nothing, and a category's own generated description is refused
 - `knowledge list` — list entries across the stores the request covers; takes `--tier` and `--filter`
 - `knowledge sources` — list the configured stores by tier and name, with their locations
 
