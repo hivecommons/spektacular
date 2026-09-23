@@ -1,0 +1,126 @@
+package cmd
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/jumppad-labs/spektacular/internal/metadata"
+	"github.com/jumppad-labs/spektacular/internal/output"
+	"github.com/jumppad-labs/spektacular/internal/store"
+	"github.com/jumppad-labs/spektacular/internal/workflow"
+	"github.com/spf13/cobra"
+)
+
+type artifactStatusResult struct {
+	Kind           string   `json:"kind"`
+	Name           string   `json:"name"`
+	DocumentStatus string   `json:"document_status"`
+	CurrentStep    string   `json:"current_step"`
+	CompletedSteps []string `json:"completed_steps"`
+	CreatedAt      string   `json:"created_at"`
+	UpdatedAt      string   `json:"updated_at"`
+	ClosedAt       string   `json:"closed_at"`
+	Spec           string   `json:"spec"`
+	Plan           string   `json:"plan"`
+}
+
+var artifactStatusOutputSchema = &schemaObj{
+	Type: "object",
+	Properties: map[string]*schemaProp{
+		"kind":            {Type: "string"},
+		"name":            {Type: "string"},
+		"document_status": {Type: "string"},
+		"current_step":    {Type: "string"},
+		"completed_steps": {Type: "array", Items: &schemaProp{Type: "string"}},
+		"created_at":      {Type: "string"},
+		"updated_at":      {Type: "string"},
+		"closed_at":       {Type: "string"},
+		"spec":            {Type: "string"},
+		"plan":            {Type: "string"},
+	},
+}
+
+func runArtifactStatus(cmd *cobra.Command, kind, name, storePath, statePath, command string, steps []workflow.StepConfig, st store.Store) error {
+	raw, err := st.Read(storePath)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return output.NewError("artifact_not_found", fmt.Sprintf("%s artifact %q was not found", kind, name)).
+				WithResource(name).
+				WithNextAction(fmt.Sprintf("run `%s %s file list` to see available %ss", command, kind, kind))
+		}
+		return err
+	}
+
+	fm, _, err := metadata.Split(raw)
+	if err != nil {
+		return output.NewError("metadata_read_failed", fmt.Sprintf("could not read metadata for %s artifact %q: %v", kind, name, err)).
+			WithResource(name).
+			WithNextAction(fmt.Sprintf("repair the artifact frontmatter, then re-run `%s %s status %s`", command, kind, name))
+	}
+
+	result := artifactStatusResult{
+		Kind:           kind,
+		Name:           name,
+		CompletedSteps: []string{},
+	}
+	if fm != nil {
+		result.DocumentStatus = string(fm.DocumentStatus)
+		result.CreatedAt = dateAsRFC3339(fm.CreatedDate)
+		result.ClosedAt = dateAsRFC3339(fm.ClosedDate)
+		result.Spec = fm.Spec
+		result.Plan = fm.Plan
+	}
+
+	wf := workflow.New(steps, statePath, workflow.Config{}, nil, nil)
+	state := wf.State()
+	if state.InProgress() && state.Kind == kind && fmt.Sprintf("%v", state.Data["name"]) == name {
+		result.CurrentStep = state.CurrentStep
+		result.CompletedSteps = append([]string(nil), state.CompletedSteps...)
+		result.UpdatedAt = timestampAsRFC3339(state.UpdatedAt)
+	} else {
+		if fm != nil && isClosedDocumentStatus(fm.DocumentStatus) {
+			result.CurrentStep = "finished"
+		}
+		if modTime := artifactModTime(st, storePath); !modTime.IsZero() {
+			result.UpdatedAt = timestampAsRFC3339(modTime)
+		} else {
+			result.UpdatedAt = result.CreatedAt
+		}
+	}
+
+	out := output.New(cmd.OutOrStdout(), globalFields)
+	return out.WriteResult(result)
+}
+
+func dateAsRFC3339(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+}
+
+func timestampAsRFC3339(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
+func isClosedDocumentStatus(s metadata.DocumentStatus) bool {
+	return s == metadata.StatusFinal || s == metadata.StatusSuperseded || s == metadata.StatusArchived
+}
+
+func artifactModTime(st store.Store, storePath string) time.Time {
+	root := st.Root()
+	if root == "" {
+		return time.Time{}
+	}
+	info, err := os.Stat(filepath.Join(root, storePath))
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
+}

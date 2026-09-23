@@ -24,6 +24,15 @@ Spektacular follows a three-stage workflow — **spec → plan → implement** �
 2. **Plan.** `plan new` explores your codebase, asks clarifying questions, and writes a detailed implementation plan — `plan.md`, `research.md`, and `context.md`.
 3. **Implement.** `implement new` drives the coding agent through each phase of the plan and validates the result against your acceptance criteria.
 
+Workflow progress can be inspected without reading Spektacular's state files directly. `spektacular spec status` and `spektacular plan status` keep reporting the single in-progress workflow. Passing an artifact name switches the commands to per-artifact status:
+
+```bash
+spektacular spec status <spec-name>
+spektacular plan status <plan-name>
+```
+
+The named form returns JSON with the artifact kind, name, document status, workflow step when that artifact is currently in progress, completed steps, `created_at`, `updated_at`, `closed_at`, and any `spec` / `plan` frontmatter cross-references. Frontmatter dates are stored as `YYYY-MM-DD` and are emitted as RFC3339 midnight UTC timestamps in the status output.
+
 For the full pipeline, see the [how-it-works documentation](https://spektacular.dev/how-it-works/).
 
 ## Install & getting started

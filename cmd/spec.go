@@ -93,8 +93,9 @@ var specGotoCmd = &cobra.Command{
 }
 
 var specStatusCmd = &cobra.Command{
-	Use:   "status",
+	Use:   "status [name]",
 	Short: "Show current workflow progress",
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runSpecStatus,
 }
 
@@ -331,8 +332,12 @@ func runSpecGoto(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func runSpecStatus(cmd *cobra.Command, _ []string) error {
+func runSpecStatus(cmd *cobra.Command, args []string) error {
 	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		if len(args) == 1 {
+			s := commandSchema{Input: nil, Output: artifactStatusOutputSchema}
+			return output.Write(cmd.OutOrStdout(), s, "")
+		}
 		s := commandSchema{Input: nil, Output: statusOutputSchema}
 		return output.Write(cmd.OutOrStdout(), s, "")
 	}
@@ -349,6 +354,12 @@ func runSpecStatus(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	steps := spec.Steps()
+
+	if len(args) == 1 {
+		st := store.NewSourceStore(root, "project")
+		return runArtifactStatus(cmd, "spec", args[0], spec.SpecFilePath(cfg.Spec.Config.Directory, args[0]), stateFilePath(dataDir), cfg.Command, steps, st)
+	}
 
 	// Refuse to report on an in-progress workflow of a different kind — its
 	// steps and counts would be meaningless under the spec step list.
@@ -358,7 +369,6 @@ func runSpecStatus(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	steps := spec.Steps()
 	wf := workflow.New(steps, stateFilePath(dataDir), workflow.Config{}, nil, nil)
 	st := wf.State()
 
