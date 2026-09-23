@@ -317,8 +317,8 @@ alongside the path. A request that leaves either out is refused rather than
 resolved to whichever store looks closest, and the refusal lists the names
 available in that tier so it can be reissued immediately.
 
-Searching, listing, conventions, and the always-applied load take `--tier
-<project|repo|all>` and a repeatable `--filter <name>`. Omitting the narrowing
+Searching, listing, conventions, and the always-applied load take
+`--tier <project|repo|all>` and a repeatable `--filter <name>`. Omitting the narrowing
 covers every store the tier reaches; naming stores covers exactly those. No store
 is ever included or excluded implicitly, which is what lets planning work on one
 repo skip every other repo's standing rules.
