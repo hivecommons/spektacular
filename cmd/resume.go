@@ -142,8 +142,21 @@ func detectInProgress(statePath string) (*workflow.State, error) {
 // "implement"); command is the CLI invocation prefix rendered into the
 // instruction.
 func resumeOrClear(statePath, command, expectedKind string, force bool) (handled bool, err error) {
+	handled, err = probeResume(statePath, command, expectedKind, force)
+	if err != nil || handled {
+		return handled, err
+	}
+	clearState(statePath)
+	return false, nil
+}
+
+// probeResume is resumeOrClear's read-only half: it reports an in-progress
+// workflow without touching disk. It is split out because the `new` commands
+// grew a second prologue check — the uncommitted-changes gate — that must run
+// before anything is written, including before the stale state file is
+// deleted. A caller that has no such gate uses resumeOrClear above.
+func probeResume(statePath, command, expectedKind string, force bool) (handled bool, err error) {
 	if force {
-		_ = os.Remove(statePath)
 		return false, nil
 	}
 
@@ -152,7 +165,6 @@ func resumeOrClear(statePath, command, expectedKind string, force bool) (handled
 		return false, err
 	}
 	if state == nil {
-		_ = os.Remove(statePath)
 		return false, nil
 	}
 	if state.Kind == "" {
@@ -160,6 +172,14 @@ func resumeOrClear(statePath, command, expectedKind string, force bool) (handled
 	}
 
 	return true, emitResumeReport(command, expectedKind, state)
+}
+
+// clearState removes a state file that probeResume found nothing to resume
+// in — a finished workflow's leftovers, or any state at all under --force.
+// It is the first thing a `new` run writes, so every check that must see the
+// project untouched has to run before it.
+func clearState(statePath string) {
+	_ = os.Remove(statePath)
 }
 
 // guardKind is the shared prologue for the `goto` and `status` commands. Those

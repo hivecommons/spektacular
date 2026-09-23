@@ -92,3 +92,26 @@ Start the plan workflow by running:
    ```
 
 Otherwise the command returns the first `instruction` and a fresh workflow has started. From that point on, follow the loop above: do what the instruction says, then call `{{command}} plan goto --data '{"step":"<next_step>"}'` to get the next one. Do not invent step names — every instruction tells you the exact `goto` command to run next.
+
+## If the project has uncommitted changes
+
+When the project sets `auto_commit` to `workflow` or `full`, `plan new` may instead return an **uncommitted-changes report** (`code: uncommitted_changes`) and change nothing on disk. Its `message` names every registered repository holding uncommitted work, and `resource` lists their names.
+
+This is a question for the user, not a decision for you. Tell them which repositories have uncommitted changes and ask whether to git commit that work **before** the plan workflow starts. Then re-run the same command with their answer:
+
+To commit the existing changes first:
+
+```
+{{command}} plan new --data '{"name": "<spec_name>", "commit_existing": true}'
+```
+
+To start without committing them:
+
+```
+{{command}} plan new --data '{"name": "<spec_name>", "commit_existing": false}'
+```
+
+- `true` commits the existing changes first, in their own commit whose message says they are the user's work from before the workflow. The workflow then starts on a clean tree.
+- `false` starts the workflow without committing, so the workflow's own automatic commits will include that work alongside the agent's.
+
+Never choose for the user, and never guess from context which they would want — the whole point of the report is that their uncommitted work is about to be swept into a commit they did not make. If the commit fails (`code: auto_commit_failed`), tell them which repository failed and the reason git gave; the workflow has not started.

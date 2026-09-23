@@ -169,6 +169,7 @@ name: my-project                    # required, slug-safe; namespaces changelog 
 source: git@example.com:org/my-project.git  # optional; the project's git address, recorded in derived changelog entries only
 command: spektacular
 agent: claude
+auto_commit: "off"                  # off | workflow | full: automatic git commits (local only)
 debug:
   enabled: false
 spec:

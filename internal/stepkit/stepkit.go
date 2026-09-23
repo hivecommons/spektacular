@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/cbroglie/mustache"
+	"github.com/jumppad-labs/spektacular/internal/autocommit"
 	"github.com/jumppad-labs/spektacular/internal/store"
 	"github.com/jumppad-labs/spektacular/internal/workflow"
 	"github.com/jumppad-labs/spektacular/templates"
@@ -49,6 +50,15 @@ type ResultBuilder func(stepName, instanceName, primaryPath, instruction string)
 // workingContextFooterPath is the shared fragment WriteStepResult appends to
 // every step instruction that has a next step.
 const workingContextFooterPath = "partials/working-context-footer.md"
+
+// gitCommitPartialPath is the shared fragment WriteStepResult appends to the
+// steps that lead into an automatic git commit.
+const gitCommitPartialPath = "partials/git-commit-message.md"
+
+// commitMessageTmpPath is where a step tells the agent to stage the git
+// commit message. It is project-relative and lives under the scratch
+// directory agents may write with their own tools.
+const commitMessageTmpPath = ".spektacular/tmp/git-commit-message.md"
 
 // WriteStepResult renders the step's template, builds a workflow-specific
 // result via the supplied builder, and writes it to the output writer.
@@ -101,6 +111,23 @@ func WriteStepResult(
 	instruction, err := RenderTemplate(req.TemplatePath, vars)
 	if err != nil {
 		return err
+	}
+	// The git-commit instruction goes before the working-context footer, so
+	// the footer stays last on every continuing step exactly as before.
+	if point := autocommit.LeadsToCommit(cfg.AutoCommit, cfg.Kind, req.StepName); point != autocommit.PointNone {
+		commitVars := maps.Clone(vars)
+		commitVars["commit"] = map[string]any{
+			"point":     string(point),
+			"milestone": point == autocommit.PointMilestone,
+			"kind":      cfg.Kind,
+			"spec_name": instanceName,
+			"tmp_path":  commitMessageTmpPath,
+		}
+		partial, err := RenderTemplate(gitCommitPartialPath, commitVars)
+		if err != nil {
+			return err
+		}
+		instruction = strings.TrimRight(instruction, "\n") + "\n\n---\n\n" + partial
 	}
 	if req.NextStep != "" {
 		footer, err := RenderTemplate(workingContextFooterPath, vars)

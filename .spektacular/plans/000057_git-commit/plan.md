@@ -332,7 +332,7 @@ Testing has four layers. Each one extends a convention the repo already uses.
 
 **Validation point**: With `auto_commit: workflow`, a spec → plan → implement run leaves one new commit per changed repository at each completion and none in between, each with a message naming the spec. Unset or `off` leaves every git log untouched. A failing pre-commit hook leaves the workflow on its previous step, and a retry after fixing the hook succeeds. The full test suite passes.
 
-#### - [ ] Phase 1.1: Add the auto_commit setting
+#### - [x] Phase 1.1: Add the auto_commit setting
 
 **Repo:** spektacular
 
@@ -341,13 +341,13 @@ This phase adds the `auto_commit` project setting with its three values and its 
 *Technical detail:* [context.md#phase-11](./context.md#phase-11-add-the-auto_commit-setting)
 
 **Acceptance criteria**:
-- [ ] A project whose settings say `auto_commit: off`, `workflow` or `full` loads without error for each value.
-- [ ] A project that never mentions `auto_commit` loads as `off`, and `migrate` reports nothing to do for it.
-- [ ] Any other value is refused with a message that lists the three allowed values and says how to fix the file.
-- [ ] Saving the settings writes `off` back as the text `off`, not as a yes/no value.
-- [ ] Spec, plan and implement workflows receive the configured mode at run time.
+- [x] A project whose settings say `auto_commit: off`, `workflow` or `full` loads without error for each value.
+- [x] A project that never mentions `auto_commit` loads as `off`, and `migrate` reports nothing to do for it.
+- [x] Any other value is refused with a message that lists the three allowed values and says how to fix the file.
+- [x] Saving the settings writes `off` back as the text `off`, not as a yes/no value.
+- [x] Spec, plan and implement workflows receive the configured mode at run time.
 
-#### - [ ] Phase 1.2: Build the git commit engine
+#### - [x] Phase 1.2: Build the git commit engine
 
 **Repo:** spektacular
 
@@ -356,15 +356,15 @@ This phase builds the self-contained part that knows how to commit, without wiri
 *Technical detail:* [context.md#phase-12](./context.md#phase-12-build-the-git-commit-engine)
 
 **Acceptance criteria**:
-- [ ] Modified, deleted and never-added files all count as uncommitted, and all end up in the commit.
-- [ ] A registered repo that is not a git repository, or has not been cloned, is skipped without an error.
-- [ ] Two registered repos inside the same git repository produce one commit there, not two.
-- [ ] A repo with nothing to commit gets no commit and no error.
-- [ ] A commit rejected by a pre-commit hook comes back as a failure naming the repo and quoting the hook's output.
-- [ ] Commits run the repository's hooks and use the user's own git identity and signing settings. Nothing is pushed.
-- [ ] Cloning a registered git repo works exactly as before.
+- [x] Modified, deleted and never-added files all count as uncommitted, and all end up in the commit.
+- [x] A registered repo that is not a git repository, or has not been cloned, is skipped without an error.
+- [x] Two registered repos inside the same git repository produce one commit there, not two.
+- [x] A repo with nothing to commit gets no commit and no error.
+- [x] A commit rejected by a pre-commit hook comes back as a failure naming the repo and quoting the hook's output.
+- [x] Commits run the repository's hooks and use the user's own git identity and signing settings. Nothing is pushed.
+- [x] Cloning a registered git repo works exactly as before.
 
-#### - [ ] Phase 1.3: Commit when a spec, plan or implementation completes
+#### - [x] Phase 1.3: Commit when a spec, plan or implementation completes
 
 **Repo:** spektacular
 
@@ -373,13 +373,13 @@ This phase connects the engine to the three workflows. In `workflow` or `full` m
 *Technical detail:* [context.md#phase-13](./context.md#phase-13-commit-when-a-spec-plan-or-implementation-completes)
 
 **Acceptance criteria**:
-- [ ] In `workflow` mode, finishing a spec, a plan and an implementation each adds exactly one commit to each repo that changed, and no commits appear while those workflows are still running.
-- [ ] The committed state includes the workflow's own bookkeeping, so the tree is clean straight after completion.
-- [ ] Finishing without a commit message, or with one that doesn't name the spec, is refused with instructions on how to supply a proper one, and nothing is changed.
-- [ ] A commit rejected by a hook leaves the workflow on its previous step and shows only an error naming the repo and the reason. Re-running the same step after fixing the hook completes it.
-- [ ] The user is never asked to confirm a commit.
-- [ ] With `off` or no setting, the three workflows run to completion with every git log unchanged, and the agent's instructions are identical to today's.
-- [ ] Commit instructions say "git commit" explicitly, so they can't be confused with saving a document to Spektacular.
+- [x] In `workflow` mode, finishing a spec, a plan and an implementation each adds exactly one commit to each repo that changed, and no commits appear while those workflows are still running.
+- [x] The committed state includes the workflow's own bookkeeping, so the tree is clean straight after completion.
+- [x] Finishing without a commit message, or with one that doesn't name the spec, is refused with instructions on how to supply a proper one, and nothing is changed.
+- [x] A commit rejected by a hook leaves the workflow on its previous step and shows only an error naming the repo and the reason. Re-running the same step after fixing the hook completes it.
+- [x] The user is never asked to confirm a commit.
+- [x] With `off` or no setting, the three workflows run to completion with every git log unchanged, and the agent's instructions are identical to today's.
+- [x] Commit instructions say "git commit" explicitly, so they can't be confused with saving a document to Spektacular.
 
 ### Milestone 2: Users are asked about their own uncommitted work before a workflow starts
 
@@ -387,7 +387,7 @@ This phase connects the engine to the three workflows. In `workflow` or `full` m
 
 **Validation point**: A dirty tree with the mode on makes `new` return the uncommitted-changes report before any file is written. Re-running with "commit first" produces a separate earlier commit holding exactly the pre-existing change. Re-running with "continue" sweeps that change into the first automatic commit. A clean tree or `off` mode never asks. The full test suite passes.
 
-#### - [ ] Phase 2.1: Check for uncommitted changes before a workflow starts
+#### - [x] Phase 2.1: Check for uncommitted changes before a workflow starts
 
 **Repo:** spektacular
 
@@ -396,14 +396,14 @@ This phase adds the start-of-workflow check to `spec new`, `plan new` and `imple
 *Technical detail:* [context.md#phase-21](./context.md#phase-21-check-for-uncommitted-changes-before-a-workflow-starts)
 
 **Acceptance criteria**:
-- [ ] With the mode on and a modified or new file in a registered repo, starting any of the three workflows reports the affected repos and writes nothing: no spec scaffold, no state, no working-context reset.
-- [ ] Choosing "commit first" adds a commit holding exactly the pre-existing changes, before any of the workflow's own commits, with a message naming the spec and saying they are the user's changes from before the workflow.
-- [ ] Choosing "continue" starts the workflow, and the pre-existing change appears in its first automatic commit.
-- [ ] A clean tree, `off` mode, and non-git repos never trigger the question.
-- [ ] An interrupted workflow is still offered for resume before any uncommitted-changes question.
-- [ ] A failed "commit first" commit stops the workflow from starting and says which repo failed and why.
+- [x] With the mode on and a modified or new file in a registered repo, starting any of the three workflows reports the affected repos and writes nothing: no spec scaffold, no state, no working-context reset.
+- [x] Choosing "commit first" adds a commit holding exactly the pre-existing changes, before any of the workflow's own commits, with a message naming the spec and saying they are the user's changes from before the workflow.
+- [x] Choosing "continue" starts the workflow, and the pre-existing change appears in its first automatic commit.
+- [x] A clean tree, `off` mode, and non-git repos never trigger the question.
+- [x] An interrupted workflow is still offered for resume before any uncommitted-changes question.
+- [x] A failed "commit first" commit stops the workflow from starting and says which repo failed and why.
 
-#### - [ ] Phase 2.2: Teach the workflow skills to ask the user
+#### - [x] Phase 2.2: Teach the workflow skills to ask the user
 
 **Repo:** spektacular
 
@@ -412,10 +412,10 @@ This phase updates the spec, plan and implement skills installed for every agent
 *Technical detail:* [context.md#phase-22](./context.md#phase-22-teach-the-workflow-skills-to-ask-the-user)
 
 **Acceptance criteria**:
-- [ ] Each of the three skills explains the uncommitted-changes report and gives both restart commands.
-- [ ] The skills tell the agent to ask the user, never to decide on the user's behalf.
-- [ ] Claude, Bob and Codex receive identical skill text.
-- [ ] The new text passes the existing checks that keep piped-input and heredoc instructions out of installed skills.
+- [x] Each of the three skills explains the uncommitted-changes report and gives both restart commands.
+- [x] The skills tell the agent to ask the user, never to decide on the user's behalf.
+- [x] Claude, Bob and Codex receive identical skill text.
+- [x] The new text passes the existing checks that keep piped-input and heredoc instructions out of installed skills.
 
 ### Milestone 3: Full mode commits after every implementation milestone, and the setting is documented
 
@@ -423,7 +423,7 @@ This phase updates the spec, plan and implement skills installed for every agent
 
 **Validation point**: With `full` and a two-milestone plan, the implement workflow adds one commit per changed repository at each milestone, then a completion commit only where changes remain. Leaving a finished milestone without a message is refused. The docs site builds with the new configuration entry listing `off`, `workflow` and `full` and the default. The full test suite passes.
 
-#### - [ ] Phase 3.1: Commit after each implementation milestone in full mode
+#### - [x] Phase 3.1: Commit after each implementation milestone in full mode
 
 **Repo:** spektacular
 
@@ -432,14 +432,14 @@ This phase adds `full` mode's extra commits. After each phase of an implementati
 *Technical detail:* [context.md#phase-31](./context.md#phase-31-commit-after-each-implementation-milestone-in-full-mode)
 
 **Acceptance criteria**:
-- [ ] With `full` and a two-milestone plan, finishing each milestone adds one commit per changed repo, naming the spec and the milestone.
-- [ ] The completion commit then adds a commit only to repos that still have changes, and skips the rest without error.
-- [ ] Moving on after a finished milestone without a message, or with one that doesn't name the milestone, is refused with instructions.
-- [ ] Moving between phases inside a milestone asks for no message and makes no commit.
-- [ ] `workflow` mode never makes milestone commits.
-- [ ] A rejected milestone commit leaves the implementation on the phase-wrap-up step, and a retry commits it.
+- [x] With `full` and a two-milestone plan, finishing each milestone adds one commit per changed repo, naming the spec and the milestone.
+- [x] The completion commit then adds a commit only to repos that still have changes, and skips the rest without error.
+- [x] Moving on after a finished milestone without a message, or with one that doesn't name the milestone, is refused with instructions.
+- [x] Moving between phases inside a milestone asks for no message and makes no commit.
+- [x] `workflow` mode never makes milestone commits.
+- [x] A rejected milestone commit leaves the implementation on the phase-wrap-up step, and a retry commits it.
 
-#### - [ ] Phase 3.2: Document the auto_commit setting
+#### - [x] Phase 3.2: Document the auto_commit setting
 
 **Repo:** docs, spektacular
 
@@ -468,10 +468,10 @@ This phase documents the setting. The docs site's configuration reference gains 
 Example config line (after `spec_trigger_threshold: moderate`): `auto_commit: "off"`. The key list sub becomes "Fourteen top-level keys … `spec_trigger_threshold`, `auto_commit`, `debug`, …".
 
 **Acceptance criteria**:
-- [ ] The configuration reference has an `auto_commit` entry listing `off`, `workflow` and `full`, describing each, and stating that the default is `off`.
-- [ ] The example config and the top-level key list include `auto_commit`, and the key count matches.
-- [ ] The README's config example shows `auto_commit` with its values.
-- [ ] The docs site builds and type-checks cleanly, and the new text contains no em dashes or layout markup.
+- [x] The configuration reference has an `auto_commit` entry listing `off`, `workflow` and `full`, describing each, and stating that the default is `off`.
+- [x] The example config and the top-level key list include `auto_commit`, and the key count matches.
+- [x] The README's config example shows `auto_commit` with its values.
+- [x] The docs site builds and type-checks cleanly, and the new text contains no em dashes or layout markup.
 
 ## Open Questions
 
@@ -493,3 +493,160 @@ Nothing else is open. Every other decision is recorded in the assumption log.
 - **A per-repository or per-run override of the mode.** The mode is set once per project in its settings. There is no command-line flag and no per-repo setting.
 - **A new harbor end-to-end scenario for automatic commits.** The mechanics are covered by the Go end-to-end tests with real git, and the real-agent conversation is a manual item in the implementation test plan. The existing harbor suites run with the default `off` and need no changes.
 - **Changes to the upgrade (`migrate`) engine.** The new key needs no schema bump or upgrade step.
+
+## Changelog
+
+### 2026-09-23 — Phase 1.1: Add the auto_commit setting
+
+**What was done**: Added the `auto_commit` project setting with its three values (`off`, `workflow`, `full`), defaulting to `off`, including validation that refuses any other value with a remediating `config_invalid` error. Added an `AutoCommitMode()` helper that resolves an absent key to `off`, carried the resolved mode onto `workflow.Config` as a non-persisted field, and set it at all six spec/plan/implement workflow construction sites. Nothing commits yet; this phase only establishes the switch later phases read.
+
+**Deviations**: Acceptance criterion 5 ("spec, plan and implement workflows receive the configured mode at run time") is left unticked. The mode is passed at every construction site, but no production code reads `workflow.Config.AutoCommit` yet, so it is not observable from any cmd- or step-level test without a production seam this phase deliberately does not add. Phase 1.3 wires the mode into `stepkit` rendering and should tick this criterion then.
+
+**Files changed**:
+- `spektacular: internal/config/config.go`
+- `spektacular: internal/config/config_test.go`
+- `spektacular: internal/workflow/workflow.go`
+- `spektacular: cmd/spec.go`
+- `spektacular: cmd/plan.go`
+- `spektacular: cmd/implement.go`
+
+**Discoveries**:
+- `off` is a YAML 1.1 boolean token. yaml.v3 decodes a bare `off` into a `string` field as `"off"` and quotes it on marshal, so the round-trip is safe, but it is pinned by a test (`TestToYAMLFile_AutoCommitOffIsWrittenAsText`) because the failure mode would be silent.
+- `Config.AutoCommit` was added without `omitempty`, so `ToYAMLFile` now always emits the key. No golden fixture or migrate test needed updating, confirming the plan's "no schema bump" call: `ParseYAMLFile` unmarshals over `NewDefault()`, so an absent key keeps the default.
+- The existing `spec_trigger_threshold` validation returns a bare `fmt.Errorf`, not an `output.NewError` envelope. The new `auto_commit` validation uses the envelope per the repo's error-remediation convention, so the two enum checks now differ in shape. Bringing `spec_trigger_threshold` into line is out of scope for this plan.
+- `withProjectSchema()`, the `schema: 3` prefix helper for config.yaml fixtures, lives in `internal/config/repo_test.go`, not `config_test.go`.
+
+### 2026-09-23 — Phase 1.2: Build the git commit engine
+
+**What was done**: Extracted the git exec path out of the repo package into a new `internal/gitexec` package, so there is still exactly one place that locates and runs the user's `git`, and rewrote `execGitRunner.run` as a one-line delegate to it. Added the `internal/autocommit` package, which owns every commit decision: resolving registered repos to git work trees without cloning, reporting which are dirty, committing them whole with the user's own git, classifying workflow transitions as commit points, and validating an agent-written commit message. Nothing is wired into a workflow yet.
+
+**Deviations**: `milestonePoints` in `points.go` is deliberately left empty. The plan assigns the milestone transition rows to Phase 3.1, so `full` mode is accepted but behaves exactly like `workflow` until then. The `PointMilestone` constant and the `LeadsToCommit` full-mode branch are already in place, so 3.1 is a data change plus the milestone parser.
+
+Extracted the real-git test helpers into a new `internal/testutil/gittest` package rather than duplicating ~40 lines into `internal/autocommit`, and rewired `internal/repo/git_integration_test.go` onto it. The plan's context offered either option and preferred extraction.
+
+**Files changed**:
+- `spektacular: internal/gitexec/gitexec.go`
+- `spektacular: internal/repo/git.go`
+- `spektacular: internal/repo/git_integration_test.go`
+- `spektacular: internal/testutil/gittest/gittest.go`
+- `spektacular: internal/autocommit/git.go`
+- `spektacular: internal/autocommit/targets.go`
+- `spektacular: internal/autocommit/commit.go`
+- `spektacular: internal/autocommit/points.go`
+- `spektacular: internal/autocommit/message.go`
+- `spektacular: internal/autocommit/targets_test.go`
+- `spektacular: internal/autocommit/commit_test.go`
+- `spektacular: internal/autocommit/points_test.go`
+- `spektacular: internal/autocommit/message_test.go`
+- `spektacular: internal/autocommit/git_integration_test.go`
+
+**Discoveries**:
+- **Git redirects a hook's stdout to its own stderr.** A pre-commit hook that `echo`s without `>&2` still arrives in `ExitError.Stderr`, so the exec path needs no stdout fallback to quote a rejecting hook. A fallback was written on a sub-agent's recommendation, found to be dead code when the new test passed without it, verified directly against git, and reverted. `TestIntegration_PreCommitHookOnStdoutIsReported` pins the behaviour so nobody re-adds it.
+- `repo.Set.LocalSource` never invokes git — it resolves from the registry, `repo.yaml` and the filesystem. `Targets` therefore passes a nil `GitRunner` to `repo.New`, and never calls `Resolve`/`ResolveAll`, which is what keeps commit-target resolution from triggering a clone.
+- `CommitDirty` returns the targets it committed *before* a failure alongside the `*CommitError`. Those commits stand, so a retry finds them clean and commits only what is left. Phase 1.3's rollback restores `state.json`, not the commits.
+- `ValidateMessage` returns an `*output.ErrorResponse` carrying the code and message only. Phase 1.3 must add the `next_action`, since only the command layer knows the exact `goto` to re-run.
+- `points_test.go` pins every step name in `completionPoints` against the real `spec.Steps()`/`plan.Steps()`/`implement.Steps()` lists, so a future step rename cannot silently orphan a commit point. No import cycle results.
+
+### 2026-09-23 — Phase 1.3: Commit when a spec, plan or implementation completes
+
+**What was done**: Connected the commit engine to the three workflows. A new shared `gotoWithAutoCommit` helper in `cmd/autocommit.go` backs all three `goto` handlers: off a commit point it behaves exactly as before, and at one it validates the agent's staged message, snapshots `state.json`, transitions, then commits every dirty repo, restoring the snapshot and reporting `auto_commit_failed` if git refuses. The step renderer now appends a new git-commit instruction partial on the steps that lead into a commit, driven by the commit-point table rather than per-step template edits.
+
+This phase also closes Phase 1.1's deferred acceptance criterion 5. `stepkit` now reads `workflow.Config.AutoCommit`, so the configured mode is observable in a rendered step and is asserted for all three workflow kinds.
+
+**Deviations**: None to the plan's intent. One structural consequence had to be worked around: making `stepkit` import `autocommit` meant `autocommit`'s own in-package test could no longer import the step packages, because that closes a cycle through the renderer. Production code has no cycle. Resolved by exporting `autocommit.ReferencedSteps()` and moving the commit-point pin test into the external `autocommit_test` package, which may import both sides. The pin is unchanged in strength.
+
+**Files changed**:
+- `spektacular: cmd/autocommit.go`
+- `spektacular: cmd/autocommit_test.go`
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: cmd/spec.go`
+- `spektacular: cmd/plan.go`
+- `spektacular: cmd/implement.go`
+- `spektacular: internal/stepkit/stepkit.go`
+- `spektacular: internal/autocommit/points.go`
+- `spektacular: internal/autocommit/points_test.go`
+- `spektacular: internal/autocommit/points_pin_test.go`
+- `spektacular: templates/partials/git-commit-message.md`
+
+**Discoveries**:
+- **`stepkit` importing `autocommit` creates a test-only import cycle.** Anything in `internal/autocommit` that wants the real step lists must live in the external `autocommit_test` package, because `steps/* -> stepkit -> autocommit` closes the loop for an in-package test. `go build ./...` stays green while `go test` fails, so this surfaces only when the tests are compiled. Do not move `points_pin_test.go` back into `package autocommit`.
+- The helper buffers step output on **every** path, not just the commit path, flushing immediately when there is no commit. That keeps the default mode byte-identical to writing straight to stdout, and it is what makes discarding output on a failed commit possible at all.
+- Rollback restores `state.json` only. Commits already made to earlier repos at the same commit point stand, and the retry finds those repos clean, so it commits only what is left. This is deliberate: the alternative is rewriting other repositories' history.
+- The partial soft-wraps `**git commit**` across a line break, so the literal phrase `git commit` appears on one line only in the `## Automatic git commit` heading. Tests asserting on the wording flatten whitespace first rather than matching raw template text.
+- `requireStepTableComplete` in `cmd/instruction_contract_test.go` walks only `steps/<workflow>/`, so a new file under `templates/partials/` is outside its scope by construction and needs no table entry.
+
+### 2026-09-23 — Phase 2.1: Check for uncommitted changes before a workflow starts
+
+**What was done**: Added the start-of-workflow gate to `spec new`, `plan new` and `implement new`. With automatic commits on, a registered repo holding uncommitted changes now stops the command before anything is written and reports which repos are affected, so the agent can put the question to the user. Re-running with `commit_existing: true` saves the user's work in its own commit, naming the spec and saying the changes predate the workflow; `false` proceeds and lets the workflow's own commits sweep them in. To make "writes nothing" literally true, `resumeOrClear` was split into a read-only `probeResume` and a separate `clearState`, so the stale state file is only deleted once the gate has passed.
+
+**Deviations**: The plan expected spec, plan and implement to be `resumeOrClear`'s only callers, so the wrapper could be dropped. `cmd/repo.go` is a fourth caller. The wrapper was kept for it, which is the branch the plan anticipated; the repo workflow has no commit points and so needs no gate.
+
+**Files changed**:
+- `spektacular: cmd/resume.go`
+- `spektacular: cmd/autocommit.go`
+- `spektacular: cmd/spec.go`
+- `spektacular: cmd/plan.go`
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/startgate_test.go`
+- `spektacular: cmd/autocommit_test.go`
+
+**Discoveries**:
+- **`commit_existing` cannot leak into workflow data.** None of the three `new` handlers copy arbitrary `--data` keys the way the `goto` handlers do — each unmarshals into a typed struct reading only `name` (and `id` for spec). The plan's "strip it before the SetData loop" precaution applies to `goto`, not `new`, so `startGate` reads the answer straight from the raw `--data` string.
+- A Phase 1.3 test had to change, and it was the test that was wrong. It seeded plan and changelog fixtures *after* building the git fixture, leaving the tree dirty, so the new gate correctly refused to start the workflow. The fix folds those fixtures into the baseline commit with `commit --amend`, which keeps every hand-written commit-count oracle ("1" before, "2" after) true rather than loosening it.
+- `json.Marshal` sorts map keys, so rebuilding the caller's `--data` with the answer added produces a stable, testable command string. The rendered re-run command therefore reads `{"commit_existing":true,"name":"billing"}`, with the answer first.
+- The gate deliberately runs *after* implement's plan-exists check, so a missing plan is still reported as a missing plan rather than being masked by an uncommitted-changes question.
+
+### 2026-09-23 — Phase 2.2: Teach the workflow skills to ask the user
+
+**What was done**: Added an "If the project has uncommitted changes" section to the spec, plan and implement workflow skills. Each names the `uncommitted_changes` report, says to relay the affected repositories to the user and ask whether to commit that work first, gives both restart commands, explains what each answer does, forbids deciding on the user's behalf, and covers `auto_commit_failed`.
+
+**Deviations**: The plan sketched adding the report as a third outcome of spek-new's bare in-progress probe. That would have been wrong: the gate only fires on the *named* `new` invocation, because a bare `spec new` with no `--data` returns `name_required` or a resume report before the gate is reached. The section sits after the start and resume blocks in each skill instead.
+
+**Files changed**:
+- `spektacular: templates/skills/workflows/spek-new/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-plan/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: internal/agent/uncommitted_changes_test.go`
+
+**Discoveries**:
+- **Nothing in the repo compares the checked-in `.claude/skills/` copies against `templates/`.** Every rendered-skill test installs into `t.TempDir()` first, so the installed copies going stale between a template edit and the next `init`/`migrate` breaks no test. That is deliberate, but it does mean template drift is invisible until someone reinstalls.
+- Cross-agent identity of skill text was not previously asserted anywhere. The per-agent tests (`claude_test.go`, `bob_test.go`, `codex_test.go`) only check per-skill substrings within one agent, so nothing would have caught Claude and Codex receiving different text. `TestUncommittedChangesTextIsIdenticalAcrossAgents` is now the only guard against that drift.
+- `instruction_surface_test.go`'s banned-substring walk installs all workflow skills into a temp dir and sweeps every `*.md`, so new skill prose is covered by it automatically and needs no per-phase addition.
+- Acceptance criteria are worth reading literally. "Gives both restart commands" was first satisfied with one parameterised command plus prose bullets; the tests flagged the gap rather than accommodating it, and the templates now carry two explicit code blocks.
+
+### 2026-09-23 — Phase 3.1: Commit after each implementation milestone in full mode
+
+**What was done**: Added `full` mode's extra commits. A new milestone parser reads the plan's `## Milestones & Phases` section and reports which milestones have every phase ticked. The two moves out of `update_changelog` became milestone commit points, so when a milestone has just closed, advancing requires a message naming the spec and that milestone, and every changed repo is committed. Milestone numbers already committed are recorded in workflow data so none is committed twice, and the completion commit at the end picks up only what changed after the last one.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: internal/autocommit/milestones.go`
+- `spektacular: internal/autocommit/milestones_test.go`
+- `spektacular: internal/autocommit/points.go`
+- `spektacular: internal/autocommit/points_test.go`
+- `spektacular: cmd/autocommit.go`
+- `spektacular: cmd/milestones_test.go`
+
+**Discoveries**:
+- **A milestone commit point is a candidate, not a commit.** Most phase wrap-ups land mid-milestone, so when nothing is due the transition falls through to the ordinary `Goto` path: no message is asked for, and a message the agent staged anyway is left on disk untouched rather than consumed. Without that fall-through, every phase in a multi-phase milestone would demand a commit message.
+- `committed_milestones` is written to workflow data **before** `Goto`, so the state save carries it and the rollback forgets it along with the step. A retry after a rejected commit therefore asks for the same milestones again rather than silently skipping them — verified by asserting the key is absent from `state.json` after a hook rejection.
+- Workflow data round-trips through JSON, so recorded milestone numbers come back as `[]any` of `float64`, never `[]int`. Any future numeric workflow-data key needs the same normalisation.
+- The parser is deliberately scoped between `## Milestones & Phases` and the next `## ` heading. A plan's own `## Changelog` section — which this very workflow appends phase entries to — and `## Out of Scope` both contain checkbox-shaped lines, so an unscoped scan would miscount.
+- `ReferencedSteps()` now returns `implement: [reconcile_spec finished update_changelog test_plan analyze]`, so the external pin test covers the milestone step names too and a rename of any of them fails the pin.
+
+### 2026-09-23 — Phase 3.2: Document the auto_commit setting
+
+**What was done**: Documented the setting in both repos. The docs site's configuration reference gained an `auto_commit` entry describing the three values, the `off` default, and that commits are local only and use the user's own git; the key was added to the example config and the top-level key list, and the page frontmatter now names it. The spektacular README's project config example gained the key with its accepted values.
+
+**Deviations**: None.
+
+**Files changed**:
+- `docs: src/pages/configuration.mdx`
+- `spektacular: README.md`
+- `spektacular: cmd/docs_test.go`
+
+**Discoveries**:
+- The docs site's top-level key list carries a hand-written count ("Thirteen top-level keys", now "Fourteen"). Adding a config key means updating the numeral as well as the list, and nothing checks the two agree, so the count can silently drift out of step with the keys beside it.
+- `cmd/docs_test.go` asserts against the real `README.md` at the repository root rather than a rendered copy, deliberately, because the README itself is the artifact under test. That is the one place in this repo where a test reads a file outside its own scratch directory, and it is why a README change can fail the Go suite.
+- The docs repo's `make check` reports one pre-existing hint from `src/layouts/Shell.astro` (a deprecated `document.execCommand`). It is unrelated to this change; the bar for the page is 0 errors and 0 warnings, which it meets.

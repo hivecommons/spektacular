@@ -30,43 +30,43 @@ Spektacular will be able to record a project's progress in git automatically, so
 -->
 ## Requirements
 
-- [ ] **Commit mode setting**
+- [x] **Commit mode setting**
   A project can set an automatic-commit mode to one of three values: `off`, `workflow` or `full`.
-- [ ] **Off by default**
+- [x] **Off by default**
   A project that has not set the mode behaves as `off`.
-- [ ] **Off makes no commits**
+- [x] **Off makes no commits**
   In `off` mode, no spec, plan or implement workflow creates any git commit.
-- [ ] **Commit on workflow completion**
+- [x] **Commit on workflow completion**
   In `workflow` mode, the system commits the agent's changes when a spec workflow completes, when a plan workflow completes, and when an implement workflow completes.
-- [ ] **Commit on milestone completion**
+- [x] **Commit on milestone completion**
   In `full` mode, the system makes every commit that `workflow` mode makes, and also commits the agent's changes each time an implement workflow finishes one of the plan's milestones. The completion commit at the end of implementation then picks up whatever changed after the last milestone.
-- [ ] **No confirmation prompt**
+- [x] **No confirmation prompt**
   In `workflow` and `full` modes, automatic commits happen without asking the user to confirm them.
-- [ ] **Uncommitted changes flagged at workflow start**
+- [x] **Uncommitted changes flagged at workflow start**
   In `workflow` and `full` modes, when a spec, plan or implement workflow starts and any registered repository has uncommitted changes, the system tells the user which repositories have them and asks whether to commit them before the workflow begins.
-- [ ] **Pre-existing changes committed on request**
+- [x] **Pre-existing changes committed on request**
   If the user agrees, the system commits the uncommitted changes in each affected repository, with a message that names the spec about to be worked on and says they are the user's changes from before the workflow, before the workflow does any work.
-- [ ] **Declining means whole-tree commits**
+- [x] **Declining means whole-tree commits**
   If the user declines, the workflow goes ahead and every automatic commit it makes includes all uncommitted changes in the repository, both the user's and the agent's.
-- [ ] **Clean tree, no question**
+- [x] **Clean tree, no question**
   When no registered repository has uncommitted changes at workflow start, the workflow begins without asking the user anything.
-- [ ] **Commits include all changes**
+- [x] **Commits include all changes**
   Each automatic commit includes every uncommitted change in its repository at that moment, including new files that have never been added to git.
-- [ ] **New files count as uncommitted**
+- [x] **New files count as uncommitted**
   New files that have never been added to git count as uncommitted changes for the check at workflow start.
-- [ ] **Repositories outside git are skipped**
+- [x] **Repositories outside git are skipped**
   A registered repository that is not a git repository is left alone: it is not checked at workflow start, gets no automatic commits, and does not stop the workflow.
-- [ ] **Descriptive message**
+- [x] **Descriptive message**
   Each commit message names the spec it relates to, names the milestone when the commit marks one, and describes the work it contains (what was specified, planned or implemented), not just a generic label.
-- [ ] **One commit per repository**
+- [x] **One commit per repository**
   When the agent's changes span several of the project's registered repositories, each repository that changed gets its own commit.
-- [ ] **Nothing to commit**
+- [x] **Nothing to commit**
   A repository with no uncommitted changes at a commit point gets no commit, and this is not treated as an error.
-- [ ] **Failure stops the workflow**
+- [x] **Failure stops the workflow**
   If a commit can't be made (for example, a commit hook rejects it or git returns an error), the workflow stops and tells the user what failed, rather than moving on.
-- [ ] **Local only**
+- [x] **Local only**
   Automatic commits are never pushed to a remote.
-- [ ] **Documented setting**
+- [x] **Documented setting**
   The documentation site's configuration reference describes the setting, its three values and its default.
 
 <!--
@@ -97,43 +97,43 @@ Spektacular will be able to record a project's progress in git automatically, so
 -->
 ## Acceptance Criteria
 
-- [ ] **Mode accepts three values**
+- [x] **Mode accepts three values**
   A project whose settings name the mode as `off`, `workflow` or `full` runs its workflows without a settings error for each of the three values.
-- [ ] **Unset mode behaves as off**
+- [x] **Unset mode behaves as off**
   In a project that has never set the mode, running a spec, plan and implement workflow to completion leaves the git log of every registered repository unchanged.
-- [ ] **Off leaves history unchanged**
+- [x] **Off leaves history unchanged**
   With the mode set to `off`, running a spec, plan and implement workflow to completion leaves the git log of every registered repository unchanged, and the agent's changes stay uncommitted in the working tree.
-- [ ] **Workflow mode commits at each completion**
+- [x] **Workflow mode commits at each completion**
   With the mode set to `workflow`, finishing a spec workflow, a plan workflow and an implement workflow each adds exactly one new commit to each repository the agent changed during that workflow, and, apart from the optional pre-existing-changes commit at workflow start, no commits are added while those workflows are still running.
-- [ ] **Full mode commits per milestone**
+- [x] **Full mode commits per milestone**
   With the mode set to `full` and a plan with two milestones, the implement workflow adds one commit to each changed repository as each milestone finishes, then one completion commit to each repository that still has changes once the implementation completes (skipped for a repository with nothing left). The spec and plan workflows commit as in `workflow` mode.
-- [ ] **No commit prompt**
+- [x] **No commit prompt**
   In `workflow` and `full` modes, the user is never asked whether to make an automatic commit. The only commit-related question is the uncommitted-changes question at workflow start.
-- [ ] **Dirty tree is flagged**
+- [x] **Dirty tree is flagged**
   With the mode set to `workflow` or `full` and a modified file in a registered repository, starting a spec, plan or implement workflow shows the user a message naming that repository and asks whether to commit the changes first, before any workflow work begins.
-- [ ] **Accepting commits pre-existing changes first**
+- [x] **Accepting commits pre-existing changes first**
   When the user accepts, the repository's git log gains a commit containing the pre-existing change, made before any of the workflow's own commits, and its message names the spec and says it holds the user's changes from before the workflow.
-- [ ] **Declining sweeps changes into automatic commits**
+- [x] **Declining sweeps changes into automatic commits**
   When the user declines, the pre-existing modified file is included in the workflow's first automatic commit in that repository, along with the agent's changes.
-- [ ] **New file triggers the check and is committed**
+- [x] **New file triggers the check and is committed**
   With the mode set to `workflow` or `full`, a new file that has never been added to git causes the uncommitted-changes question at workflow start, and a new file created during the workflow appears in the next automatic commit.
-- [ ] **Non-git repository skipped**
+- [x] **Non-git repository skipped**
   With a registered repository that is not a git repository, a workflow in `workflow` or `full` mode runs to completion, asks no question about that repository, and reports no error for it.
-- [ ] **Clean tree starts silently**
+- [x] **Clean tree starts silently**
   With every registered repository clean, starting a workflow shows no uncommitted-changes question.
-- [ ] **Off mode never asks**
+- [x] **Off mode never asks**
   With the mode set to `off`, starting a workflow with uncommitted changes shows no uncommitted-changes question.
-- [ ] **Descriptive commit message**
+- [x] **Descriptive commit message**
   Each automatic commit's message names the spec it relates to and says what was completed (the spec, the plan, the implementation, or a named milestone), rather than a generic message that is the same for every commit.
-- [ ] **Per-repository commits**
+- [x] **Per-repository commits**
   When an implementation changes files in two registered repositories, each repository's git log gains its own commit, and each commit contains only that repository's files.
-- [ ] **Unchanged repository skipped**
+- [x] **Unchanged repository skipped**
   When a commit point is reached and a registered repository has no uncommitted changes, that repository's git log is unchanged and the workflow carries on without reporting an error.
-- [ ] **Commit failure halts the workflow**
+- [x] **Commit failure halts the workflow**
   When a commit is rejected (for example by a pre-commit hook that exits with a failure), the workflow doesn't move to its next step, and the user sees a message saying which repository failed and why.
-- [ ] **Nothing pushed**
+- [x] **Nothing pushed**
   After any automatic commit, the remote-tracking branches of every repository are unchanged.
-- [ ] **Setting documented**
+- [x] **Setting documented**
   The documentation site's configuration reference has an entry for the setting that lists `off`, `workflow` and `full`, describes what each does, and states that the default is `off`.
 
 <!--

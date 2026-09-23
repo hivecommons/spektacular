@@ -104,7 +104,7 @@ func runPlanNew(cmd *cobra.Command, _ []string) error {
 	if dryRun {
 		statePath += ".dryrun-tmp"
 	} else {
-		handled, err := resumeOrClear(statePath, cfg.Command, "plan", force)
+		handled, err := probeResume(statePath, cfg.Command, "plan", force)
 		if err != nil {
 			return err
 		}
@@ -128,7 +128,17 @@ func runPlanNew(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("name must match ^[a-z0-9_-]+$ and be at most 64 characters")
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "plan", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory}
+	// The uncommitted-changes gate runs once the name is validated, so its
+	// pre-workflow commit message can name the real spec, and before
+	// clearState — the first thing this command writes.
+	if err := startGate(cfg, root, "plan", input.Name, dataStr, dryRun); err != nil {
+		return err
+	}
+	if !dryRun {
+		clearState(statePath)
+	}
+
+	wfCfg := workflow.Config{Command: cfg.Command, Kind: "plan", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
 	steps := plan.Steps()
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, store.NewSourceStore(root, "project"), out)
@@ -197,29 +207,9 @@ func runPlanGoto(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "plan", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory}
-	steps := plan.Steps()
-	out := output.New(cmd.OutOrStdout(), globalFields)
-	wf := workflow.New(steps, stateFilePath(dataDir), wfCfg, store.NewSourceStore(root, "project"), out)
-
-	for k, v := range input {
-		if k != "step" {
-			wf.SetData(k, v)
-		}
-	}
-
-	if _, ok := wf.GetData("name"); !ok {
-		return fmt.Errorf("no active plan found — run 'plan new' first")
-	}
-
-	if err := readInputIntoWorkflow(cmd, wf); err != nil {
-		return err
-	}
-
-	if err := wf.Goto(stepVal); err != nil {
-		return err
-	}
-	return nil
+	wfCfg := workflow.Config{Command: cfg.Command, Kind: "plan", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
+	return gotoWithAutoCommit(cmd, cfg, root, stateFilePath(dataDir), "plan",
+		plan.Steps(), wfCfg, input, stepVal, "no active plan found — run 'plan new' first")
 }
 
 func runPlanStatus(cmd *cobra.Command, _ []string) error {

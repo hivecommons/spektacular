@@ -25,6 +25,15 @@ const (
 	SpecTriggerThresholdLenient  = "lenient"
 )
 
+// AutoCommit* are the values of the auto_commit project setting, which
+// decides when Spektacular makes a git commit on the user's behalf.
+// AutoCommitOff is the default: an absent key means no automatic commits.
+const (
+	AutoCommitOff      = "off"
+	AutoCommitWorkflow = "workflow"
+	AutoCommitFull     = "full"
+)
+
 // ProviderFile is the only storage provider this release ships. The provider
 // field on the spec, plan, and knowledge sections names a backend; today it
 // must always be this value.
@@ -275,6 +284,7 @@ type Config struct {
 	Command              string          `yaml:"command"`
 	Agent                string          `yaml:"agent"`
 	SpecTriggerThreshold string          `yaml:"spec_trigger_threshold"`
+	AutoCommit           string          `yaml:"auto_commit"`
 	Debug                DebugConfig     `yaml:"debug"`
 	Spec                 SpecConfig      `yaml:"spec"`
 	Plan                 PlanConfig      `yaml:"plan"`
@@ -284,12 +294,22 @@ type Config struct {
 	Repos                []RepoEntry     `yaml:"repos,omitempty"`
 }
 
+// AutoCommitMode returns the effective auto_commit mode, resolving an absent
+// key to AutoCommitOff so callers never have to special-case the empty string.
+func (c Config) AutoCommitMode() string {
+	if c.AutoCommit == "" {
+		return AutoCommitOff
+	}
+	return c.AutoCommit
+}
+
 // NewDefault returns a Config populated with default values, with its store
 // directories in their in-memory, project-root-relative form.
 func NewDefault() Config {
 	return Config{
 		Command:              "spektacular",
 		SpecTriggerThreshold: SpecTriggerThresholdModerate,
+		AutoCommit:           AutoCommitOff,
 		Debug: DebugConfig{
 			Enabled: false,
 		},
@@ -554,6 +574,15 @@ func (c Config) Validate() error {
 	case "", SpecTriggerThresholdStrict, SpecTriggerThresholdModerate, SpecTriggerThresholdLenient:
 	default:
 		return fmt.Errorf("spec_trigger_threshold must be one of %q, %q, or %q", SpecTriggerThresholdStrict, SpecTriggerThresholdModerate, SpecTriggerThresholdLenient)
+	}
+	switch c.AutoCommit {
+	case "", AutoCommitOff, AutoCommitWorkflow, AutoCommitFull:
+	default:
+		return output.NewError("config_invalid",
+			fmt.Sprintf("auto_commit must be one of %q, %q, or %q", AutoCommitOff, AutoCommitWorkflow, AutoCommitFull)).
+			WithResource("auto_commit").
+			WithNextAction(fmt.Sprintf("set auto_commit in .spektacular/config.yaml to %s, %s or %s (or remove the key to use %s)",
+				AutoCommitOff, AutoCommitWorkflow, AutoCommitFull, AutoCommitOff))
 	}
 	if err := c.Spec.Validate(); err != nil {
 		return err

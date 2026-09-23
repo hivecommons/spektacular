@@ -327,3 +327,19 @@ func TestRepoMarkdownDocsCarryNoUnaddressedDataExample(t *testing.T) {
 		}
 	}
 }
+
+// Phase 3.2 criterion 3: the README's project configuration example shows the
+// auto_commit key with its three values, so a reader setting the file up by
+// hand sees what it accepts without leaving the README.
+func TestREADMEDocumentsAutoCommitSetting(t *testing.T) {
+	readme := readRepoRootFile(t, "README.md")
+
+	require.Contains(t, readme, `auto_commit: "off"`,
+		"the README config example must show auto_commit and its default")
+	for _, value := range []string{"off", "workflow", "full"} {
+		require.Containsf(t, readme, value,
+			"the README must name the %q auto_commit value", value)
+	}
+	require.Contains(t, readme, "off | workflow | full",
+		"the README must list the three accepted auto_commit values together")
+}
