@@ -56,7 +56,7 @@ func LoadIgnore(root string) IgnoreMatcher {
 }
 
 // ignoreStore is a decorator over any Store that filters listing and search
-// through an IgnoreMatcher. Read, Write, Exists, Delete, and Root delegate
+// through an IgnoreMatcher. Read, Write, Exists, Stat, Delete, and Root delegate
 // untouched: a directly named path is never blocked by an exclusion rule.
 type ignoreStore struct {
 	inner   Store
@@ -87,6 +87,8 @@ func (s *ignoreStore) Write(path string, content []byte) error { return s.inner.
 func (s *ignoreStore) Delete(path string) error { return s.inner.Delete(path) }
 
 func (s *ignoreStore) Exists(path string) bool { return s.inner.Exists(path) }
+
+func (s *ignoreStore) Stat(path string) (FileInfo, error) { return s.inner.Stat(path) }
 
 func (s *ignoreStore) List(path string) ([]DirEntry, error) {
 	entries, err := s.inner.List(path)

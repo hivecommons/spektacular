@@ -2051,6 +2051,9 @@ func (s *tagBlindStore) Write(string, []byte) error            { return nil }
 func (s *tagBlindStore) Delete(string) error                   { return nil }
 func (s *tagBlindStore) List(string) ([]store.DirEntry, error) { return nil, nil }
 func (s *tagBlindStore) Exists(string) bool                    { return false }
+func (s *tagBlindStore) Stat(string) (store.FileInfo, error) {
+	return store.FileInfo{}, store.ErrNotFound
+}
 
 func (s *tagBlindStore) Search(_ []string, opts store.SearchOptions) ([]store.Hit, error) {
 	s.sawTags = opts.Tags
@@ -2315,6 +2318,9 @@ func (s *deleteRecordingStore) Read(string) ([]byte, error)           { return n
 func (s *deleteRecordingStore) Write(string, []byte) error            { return nil }
 func (s *deleteRecordingStore) List(string) ([]store.DirEntry, error) { return nil, nil }
 func (s *deleteRecordingStore) Exists(string) bool                    { return false }
+func (s *deleteRecordingStore) Stat(string) (store.FileInfo, error) {
+	return store.FileInfo{}, store.ErrNotFound
+}
 
 func (s *deleteRecordingStore) Search([]string, store.SearchOptions) ([]store.Hit, error) {
 	return nil, nil

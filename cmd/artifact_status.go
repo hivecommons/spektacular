@@ -3,8 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/jumppad-labs/spektacular/internal/metadata"
@@ -113,14 +111,14 @@ func isClosedDocumentStatus(s metadata.DocumentStatus) bool {
 	return s == metadata.StatusFinal || s == metadata.StatusSuperseded || s == metadata.StatusArchived
 }
 
+// artifactModTime asks the store when the artifact last changed. A backend
+// that cannot report a timestamp leaves it zero, and so does a Stat failure:
+// the artifact was already read successfully, so a failing Stat is a
+// transient race rather than a reason to fail the status call.
 func artifactModTime(st store.Store, storePath string) time.Time {
-	root := st.Root()
-	if root == "" {
-		return time.Time{}
-	}
-	info, err := os.Stat(filepath.Join(root, storePath))
+	info, err := st.Stat(storePath)
 	if err != nil {
 		return time.Time{}
 	}
-	return info.ModTime()
+	return info.ModTime
 }

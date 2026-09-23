@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // ErrNotFound is returned when the requested file or directory does not exist.
@@ -15,8 +16,19 @@ var ErrNotFound = errors.New("not found")
 // DirEntry is a typed direct child of a directory returned by List. IsDir lets
 // a caller tell a file from a subdirectory and recurse into the tree.
 type DirEntry struct {
-	Name  string // child name, not a full path
-	IsDir bool   // true for a subdirectory — recurse into it via List
+	Name    string    // child name, not a full path
+	IsDir   bool      // true for a subdirectory — recurse into it via List
+	ModTime time.Time // last modification time; zero where the backend cannot report it
+}
+
+// FileInfo is what Stat reports about one path. It is deliberately narrow:
+// timestamps are the only facts a caller has needed from a backend beyond the
+// bytes themselves, and keeping the struct small leaves a non-filesystem
+// backend little to fake. A backend that cannot report a field leaves it zero,
+// so a consumer can tell "unknown" from a real time and never has to guess.
+type FileInfo struct {
+	ModTime   time.Time // last modification time
+	CreatedAt time.Time // creation time; zero where the backend cannot report it
 }
 
 // Hit is a generic search result produced by a store's Search. It describes
@@ -77,6 +89,9 @@ type Reader interface {
 	List(path string) ([]DirEntry, error)
 	// Exists reports whether a file or directory exists at path.
 	Exists(path string) bool
+	// Stat reports the timestamps of the file or directory at path. Returns
+	// ErrNotFound if missing. Fields a backend cannot report are left zero.
+	Stat(path string) (FileInfo, error)
 	// Search returns hits for a pre-tokenized keyword query, scanning only
 	// this store. Terms arrive already lower-cased and in the order the
 	// caller indexes evidence by, so an implementation must report per-term
@@ -200,6 +215,11 @@ func (f *FileStore) List(path string) ([]DirEntry, error) {
 	result := make([]DirEntry, len(entries))
 	for i, e := range entries {
 		result[i] = DirEntry{Name: e.Name(), IsDir: e.IsDir()}
+		// An entry that vanishes between ReadDir and Info is still listed;
+		// it simply carries no timestamp, which is the documented "unknown".
+		if info, infoErr := e.Info(); infoErr == nil {
+			result[i].ModTime = info.ModTime()
+		}
 	}
 	return result, nil
 }
@@ -211,4 +231,23 @@ func (f *FileStore) Exists(path string) bool {
 	}
 	_, err = os.Stat(abs)
 	return err == nil
+}
+
+// Stat reports the filesystem timestamps for path. CreatedAt is left zero:
+// birth time is not portable across the platforms Go's os package supports,
+// and reporting it on some hosts but not others would make the field a
+// platform quirk rather than a contract.
+func (f *FileStore) Stat(path string) (FileInfo, error) {
+	abs, err := f.abs(path)
+	if err != nil {
+		return FileInfo{}, err
+	}
+	info, err := os.Stat(abs)
+	if errors.Is(err, fs.ErrNotExist) {
+		return FileInfo{}, ErrNotFound
+	}
+	if err != nil {
+		return FileInfo{}, err
+	}
+	return FileInfo{ModTime: info.ModTime()}, nil
 }
