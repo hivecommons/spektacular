@@ -21,6 +21,7 @@ type artifactStatusEnvelope struct {
 	CompletedSteps []string `json:"completed_steps"`
 	CreatedAt      string   `json:"created_at"`
 	UpdatedAt      string   `json:"updated_at"`
+	ModifiedAt     string   `json:"modified_at"`
 	ClosedAt       string   `json:"closed_at"`
 	Spec           string   `json:"spec"`
 	Plan           string   `json:"plan"`
@@ -33,6 +34,11 @@ func writeArtifactStatusFile(t *testing.T, path, frontmatter string, modTime tim
 	require.NoError(t, os.Chtimes(path, modTime, modTime))
 }
 
+// A closed artifact with no live workflow reports the store's mtime as
+// modified_at and carries no updated_at at all: absence is the explicit
+// signal that nothing is in progress, so a poller cannot mistake a checkout
+// or a reformat for activity. The whole response is pinned so a field
+// reappearing under either name is a visible diff.
 func TestSpecStatusNamedFinalArtifactReportsMetadataStatus(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -44,18 +50,23 @@ func TestSpecStatusNamedFinalArtifactReportsMetadataStatus(t *testing.T) {
 	require.Equal(t, 0, code, stdout)
 	require.Empty(t, stderr)
 
-	var got artifactStatusEnvelope
-	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
-	require.False(t, got.Error)
-	require.Equal(t, "spec", got.Kind)
-	require.Equal(t, "000001_feature", got.Name)
-	require.Equal(t, "final", got.DocumentStatus)
-	require.Equal(t, "finished", got.CurrentStep)
-	require.Empty(t, got.CompletedSteps)
-	require.Equal(t, "2026-01-02T00:00:00Z", got.CreatedAt)
-	require.Equal(t, "2026-01-03T00:00:00Z", got.ClosedAt)
-	require.Equal(t, "2026-01-04T05:06:07Z", got.UpdatedAt)
-	require.Equal(t, "000001_feature", got.Plan)
+	require.JSONEq(t, `{
+		"error": false,
+		"kind": "spec",
+		"name": "000001_feature",
+		"document_status": "final",
+		"current_step": "finished",
+		"completed_steps": [],
+		"created_at": "2026-01-02T00:00:00Z",
+		"modified_at": "2026-01-04T05:06:07Z",
+		"closed_at": "2026-01-03T00:00:00Z",
+		"spec": "",
+		"plan": "000001_feature"
+	}`, stdout)
+
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal([]byte(stdout), &raw))
+	require.NotContains(t, raw, "updated_at", "no live workflow means no updated_at, not a fallback value")
 }
 
 func TestSpecStatusNamedInProgressArtifactUsesMatchingState(t *testing.T) {
@@ -78,14 +89,29 @@ func TestSpecStatusNamedInProgressArtifactUsesMatchingState(t *testing.T) {
 	require.Equal(t, 0, code, stdout)
 	require.Empty(t, stderr)
 
-	var got artifactStatusEnvelope
-	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
-	require.Equal(t, "overview", got.CurrentStep)
-	require.Equal(t, []string{"new", "interview"}, got.CompletedSteps)
-	require.Equal(t, "2026-01-05T06:07:08Z", got.UpdatedAt)
+	// updated_at is the workflow's own clock and modified_at is the store's;
+	// the two are pinned side by side so neither can silently stand in for
+	// the other.
+	require.JSONEq(t, `{
+		"error": false,
+		"kind": "spec",
+		"name": "000002_active",
+		"document_status": "draft",
+		"current_step": "overview",
+		"completed_steps": ["new", "interview"],
+		"created_at": "2026-01-02T00:00:00Z",
+		"updated_at": "2026-01-05T06:07:08Z",
+		"modified_at": "2026-01-03T00:00:00Z",
+		"closed_at": "",
+		"spec": "",
+		"plan": ""
+	}`, stdout)
 }
 
-func TestPlanStatusNamedDraftArtifactNotInProgressUsesFileTime(t *testing.T) {
+// A draft whose in-progress state belongs to a different artifact is not
+// live: it reports modified_at from the store and omits updated_at, and its
+// current_step stays empty because nothing closed it either.
+func TestPlanStatusNamedDraftArtifactNotInProgressOmitsUpdatedAt(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	dataDir := filepath.Join(dir, ".spektacular")
@@ -112,8 +138,13 @@ func TestPlanStatusNamedDraftArtifactNotInProgressUsesFileTime(t *testing.T) {
 	require.Equal(t, "draft", got.DocumentStatus)
 	require.Equal(t, "", got.CurrentStep)
 	require.Empty(t, got.CompletedSteps)
-	require.Equal(t, "2026-02-03T04:05:06Z", got.UpdatedAt)
+	require.Equal(t, "2026-02-03T04:05:06Z", got.ModifiedAt)
+	require.Equal(t, "", got.UpdatedAt)
 	require.Equal(t, "000003_plan", got.Spec)
+
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal([]byte(stdout), &raw))
+	require.NotContains(t, raw, "updated_at", "another artifact's workflow is not this artifact's activity")
 }
 
 func TestSpecStatusNamedMissingArtifactReturnsJSONError(t *testing.T) {
@@ -148,6 +179,8 @@ func TestStatusNamedSchemaReportsArtifactShape(t *testing.T) {
 	require.Contains(t, schema.Output.Properties, "kind")
 	require.Contains(t, schema.Output.Properties, "document_status")
 	require.Contains(t, schema.Output.Properties, "closed_at")
+	require.Contains(t, schema.Output.Properties, "updated_at")
+	require.Contains(t, schema.Output.Properties, "modified_at")
 	require.NotContains(t, schema.Output.Properties, "plan_path")
 }
 
