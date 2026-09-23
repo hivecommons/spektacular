@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jumppad-labs/spektacular/internal/config"
 	"github.com/jumppad-labs/spektacular/internal/identifier"
@@ -308,6 +309,13 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool)
 				item := map[string]any{
 					"name": e.Name,
 					"path": storeRel,
+				}
+				// modified_at is the store's modification time for the entry
+				// itself: a file's content change, or for a directory the
+				// last child added or removed. It is omitted when the backend
+				// cannot report one, and it is never workflow activity.
+				if !e.ModTime.IsZero() {
+					item["modified_at"] = e.ModTime.UTC().Format(time.RFC3339)
 				}
 				var fm *metadata.Metadata
 				if !e.IsDir {

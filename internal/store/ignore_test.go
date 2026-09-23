@@ -1,9 +1,11 @@
 package store
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -192,13 +194,48 @@ func TestIgnoreStore_ListOmitsExcludedEntries(t *testing.T) {
 		{Name: IgnoreFileName, IsDir: false},
 		{Name: "kept.md", IsDir: false},
 		{Name: "sub", IsDir: true},
-	}, entries, "root listing must omit noise/ and a.log")
+	}, withoutModTime(entries), "root listing must omit noise/ and a.log")
 
 	entries, err = st.List("sub")
 	require.NoError(t, err)
 	require.ElementsMatch(t, []DirEntry{
 		{Name: "keep.md", IsDir: false},
-	}, entries, "nested listing must omit sub/b.log")
+	}, withoutModTime(entries), "nested listing must omit sub/b.log")
+}
+
+// The wrapper passes List entries through with their timestamps intact: an
+// exclusion decides whether an entry appears, never what it reports.
+func TestIgnoreStore_ListKeepsModTime(t *testing.T) {
+	st := ignoredFixture(t)
+	modTime := time.Date(2026, time.May, 6, 7, 8, 9, 0, time.UTC)
+	require.NoError(t, os.Chtimes(filepath.Join(st.Root(), "kept.md"), modTime, modTime))
+
+	entries, err := st.List("")
+	require.NoError(t, err)
+	var kept DirEntry
+	for _, e := range entries {
+		if e.Name == "kept.md" {
+			kept = e
+		}
+	}
+	require.Equal(t, "kept.md", kept.Name)
+	require.True(t, modTime.Equal(kept.ModTime), "wrapper must not strip ModTime, got %s", kept.ModTime)
+}
+
+// Criterion 2 for Stat: like Read and Exists, Stat delegates untouched, so an
+// excluded path named directly still reports its timestamps, and a missing
+// one still surfaces ErrNotFound rather than being masked by the wrapper.
+func TestIgnoreStore_StatDelegatesToWrappedStore(t *testing.T) {
+	st := ignoredFixture(t)
+	modTime := time.Date(2026, time.April, 5, 6, 7, 8, 0, time.UTC)
+	require.NoError(t, os.Chtimes(filepath.Join(st.Root(), "noise", "secret.md"), modTime, modTime))
+
+	info, err := st.Stat("noise/secret.md")
+	require.NoError(t, err)
+	require.True(t, modTime.Equal(info.ModTime), "excluded path must still Stat through the wrapper, got %s", info.ModTime)
+
+	_, err = st.Stat("noise/absent.md")
+	require.True(t, errors.Is(err, ErrNotFound))
 }
 
 // Criterion 1: Search omits hits in excluded files and in files beneath an

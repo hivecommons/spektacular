@@ -2,8 +2,10 @@ package store
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -11,6 +13,16 @@ import (
 func newTestStore(t *testing.T) *FileStore {
 	t.Helper()
 	return NewFileStore(t.TempDir(), "project")
+}
+
+// withoutModTime strips the timestamp from each entry so a test about names
+// and kinds can compare against literals without pinning the clock.
+func withoutModTime(entries []DirEntry) []DirEntry {
+	out := make([]DirEntry, len(entries))
+	for i, e := range entries {
+		out[i] = DirEntry{Name: e.Name, IsDir: e.IsDir}
+	}
+	return out
 }
 
 func TestWrite_CreatesFileAndParentDirs(t *testing.T) {
@@ -61,7 +73,28 @@ func TestList_DistinguishesFilesFromDirectories(t *testing.T) {
 		{Name: "a.txt", IsDir: false},
 		{Name: "b.txt", IsDir: false},
 		{Name: "sub", IsDir: true},
-	}, entries)
+	}, withoutModTime(entries))
+}
+
+// List carries each entry's modification time, so a caller listing N
+// artifacts learns when each last changed without N further Stat calls.
+func TestList_CarriesModTime(t *testing.T) {
+	st := newTestStore(t)
+	require.NoError(t, st.Write("dir/a.txt", []byte("a")))
+	require.NoError(t, st.Write("dir/sub/c.txt", []byte("c")))
+	fileTime := time.Date(2026, time.March, 4, 5, 6, 7, 0, time.UTC)
+	dirTime := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, os.Chtimes(filepath.Join(st.Root(), "dir", "a.txt"), fileTime, fileTime))
+	require.NoError(t, os.Chtimes(filepath.Join(st.Root(), "dir", "sub"), dirTime, dirTime))
+
+	entries, err := st.List("dir")
+	require.NoError(t, err)
+	byName := map[string]DirEntry{}
+	for _, e := range entries {
+		byName[e.Name] = e
+	}
+	require.True(t, fileTime.Equal(byName["a.txt"].ModTime), "file entry carries its mtime")
+	require.True(t, dirTime.Equal(byName["sub"].ModTime), "directory entry carries its mtime")
 }
 
 func TestList_ReturnsErrNotFoundForMissingDir(t *testing.T) {
@@ -79,6 +112,31 @@ func TestExists_TrueForFile(t *testing.T) {
 func TestExists_FalseForMissing(t *testing.T) {
 	st := newTestStore(t)
 	require.False(t, st.Exists("missing.txt"))
+}
+
+func TestStat_ReportsModTimeAndLeavesCreatedAtZero(t *testing.T) {
+	st := newTestStore(t)
+	require.NoError(t, st.Write("file.txt", []byte("x")))
+	modTime := time.Date(2026, time.January, 4, 5, 6, 7, 0, time.UTC)
+	require.NoError(t, os.Chtimes(filepath.Join(st.Root(), "file.txt"), modTime, modTime))
+
+	info, err := st.Stat("file.txt")
+	require.NoError(t, err)
+	require.True(t, modTime.Equal(info.ModTime), "ModTime must be the filesystem mtime, got %s", info.ModTime)
+	require.True(t, info.CreatedAt.IsZero(), "FileStore does not report a portable birth time")
+}
+
+func TestStat_ReturnsErrNotFoundForMissing(t *testing.T) {
+	st := newTestStore(t)
+	_, err := st.Stat("missing.txt")
+	require.True(t, errors.Is(err, ErrNotFound))
+}
+
+func TestStat_RejectsPathTraversal(t *testing.T) {
+	st := newTestStore(t)
+	_, err := st.Stat("../outside.txt")
+	require.Error(t, err)
+	require.False(t, errors.Is(err, ErrNotFound), "traversal is a refusal, not a missing file")
 }
 
 func TestRoot_ReturnsAbsolutePath(t *testing.T) {

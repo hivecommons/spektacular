@@ -24,6 +24,17 @@ Spektacular follows a three-stage workflow — **spec → plan → implement** �
 2. **Plan.** `plan new` explores your codebase, asks clarifying questions, and writes a detailed implementation plan — `plan.md`, `research.md`, and `context.md`.
 3. **Implement.** `implement new` drives the coding agent through each phase of the plan and validates the result against your acceptance criteria.
 
+Workflow progress can be inspected without reading Spektacular's state files directly. `spektacular spec status` and `spektacular plan status` keep reporting the single in-progress workflow. Passing an artifact name switches the commands to per-artifact status:
+
+```bash
+spektacular spec status <name>
+spektacular plan status <name>
+```
+
+Both take the bare artifact name with no extension (`000057_git-commit`, not `000057_git-commit.md`), the same name `state.json` records in `data.name`. That bare name is the stable key shared by convention across the spec file, the plan directory and the changelog record; it is the key to join on, and the addressing convention [#46](https://github.com/jumppad-labs/spektacular/issues/46) proposes for every verb. `plan status <name>` reports the plan's `plan.md` only, not the plan's other documents.
+
+The named form returns JSON with the artifact kind, name, document status, workflow step when that artifact is currently in progress, completed steps, `created_at`, `closed_at`, and the `spec` / `plan` frontmatter cross-references (surfaced when present, but rarely populated today). Two timestamps are kept apart: `updated_at` is workflow activity and appears only while that artifact has the in-progress workflow, so its absence means nothing is live; `modified_at` is the store's modification time for the artifact and moves on any write, including a checkout or a reformat. Frontmatter dates are stored as `YYYY-MM-DD` and are emitted as RFC3339 midnight UTC timestamps. `spec file list` and `plan file list` carry `modified_at` per entry, so polling many artifacts is one list call.
+
 For the full pipeline, see the [how-it-works documentation](https://spektacular.dev/how-it-works/).
 
 ## Install & getting started

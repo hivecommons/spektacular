@@ -32,7 +32,13 @@ type Reader interface {
     Read(path string) ([]byte, error)               // ErrNotFound if missing
     List(path string) ([]DirEntry, error)           // ErrNotFound if dir missing
     Exists(path string) bool
+    Stat(path string) (FileInfo, error)             // ErrNotFound if missing
     Search(terms []string, opts SearchOptions) ([]Hit, error)
+}
+
+type FileInfo struct {
+    ModTime   time.Time                             // last modification time
+    CreatedAt time.Time                             // zero where the backend cannot report it
 }
 
 type Writer interface {
@@ -101,8 +107,19 @@ if !st.Exists(SpecFilePath(cfg.SpecDir, name)) {
 
 ```go
 entries, err := st.List(cfg.SpecDir)
-// entries is []store.DirEntry — each has Name (the child name, not a full path)
-// and IsDir, so a caller can tell a file from a subdirectory and recurse
+// entries is []store.DirEntry — each has Name (the child name, not a full path),
+// IsDir, so a caller can tell a file from a subdirectory and recurse, and
+// ModTime, so listing N artifacts reports when each last changed without N
+// further Stat calls
+```
+
+### Ask when a file last changed
+
+```go
+info, err := st.Stat(SpecFilePath(cfg.SpecDir, name))
+// info.ModTime is the backend's modification time; info.CreatedAt is zero on
+// FileStore, which has no portable birth time. Never os.Stat a store path —
+// a non-filesystem backend has no meaningful Root() to join it against.
 ```
 
 ## Injecting the Store

@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 
@@ -135,15 +134,18 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 
 	// Precondition: the plan file must exist before an implement workflow
 	// can run against it. The workflow operates on an already-approved plan.
-	planPath := filepath.Join(root, implement.PlanFilePath(cfg.Plan.Config.Directory, input.Name))
-	if _, statErr := os.Stat(planPath); statErr != nil {
-		return fmt.Errorf("plan file not found at %s — run 'plan new' first or check the name", planPath)
+	// The check goes through the store, so a backend that is not a local
+	// directory answers it too; Root() is used only to render the path.
+	projectStore := store.NewSourceStore(root, "project")
+	planRel := implement.PlanFilePath(cfg.Plan.Config.Directory, input.Name)
+	if _, statErr := projectStore.Stat(planRel); statErr != nil {
+		return fmt.Errorf("plan file not found at %s — run 'plan new' first or check the name", filepath.Join(root, planRel))
 	}
 
 	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory}
 	steps := implement.Steps()
 	out := output.New(cmd.OutOrStdout(), globalFields)
-	wf := workflow.New(steps, statePath, wfCfg, store.NewSourceStore(root, "project"), out)
+	wf := workflow.New(steps, statePath, wfCfg, projectStore, out)
 	wf.SetData("name", input.Name)
 
 	if err := readInputIntoWorkflow(cmd, wf); err != nil {
@@ -270,7 +272,8 @@ func runImplementStatus(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("no active implement workflow found — run 'implement new' first")
 	}
 	planName := fmt.Sprintf("%v", nameVal)
-	planPath := filepath.Join(root, implement.PlanFilePath(cfg.Plan.Config.Directory, planName))
+	planRel := implement.PlanFilePath(cfg.Plan.Config.Directory, planName)
+	planPath := filepath.Join(root, planRel)
 
 	stepInfos := wf.StepStatus()
 	entries := make([]implement.StepEntry, len(stepInfos))
@@ -279,7 +282,7 @@ func runImplementStatus(cmd *cobra.Command, _ []string) error {
 	}
 
 	uncheckedPhases := 0
-	if content, readErr := os.ReadFile(planPath); readErr == nil {
+	if content, readErr := store.NewSourceStore(root, "project").Read(planRel); readErr == nil {
 		uncheckedPhases = len(uncheckedPhaseRegexp.FindAllIndex(content, -1))
 	}
 
