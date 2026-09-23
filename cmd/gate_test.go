@@ -12,7 +12,7 @@ import (
 // way out is refused on a project whose settings are behind, whose skills are
 // stale or unrecorded, or whose settings are newer than this build. Every
 // fixture is literal YAML and every expected value a hand-maintained literal;
-// the dev build version is "0.1.0".
+// the dev build version is "0.20.0".
 
 // gateNextAction is the gate's next action for a project with no configured
 // command.
@@ -78,7 +78,7 @@ repos:
 
 	require.Equal(t, "upgrade_required", er.Code)
 	require.Equal(t, cfgPath, er.Resource)
-	require.Equal(t, "this project's installed agent skills are from Spektacular 0.0.1; this Spektacular is 0.1.0", er.Message)
+	require.Equal(t, "this project's installed agent skills are from Spektacular 0.0.1; this Spektacular is 0.20.0", er.Message)
 	require.Equal(t, gateNextAction, er.NextAction)
 	require.Equal(t, before, snapshotDir(t, dir))
 
@@ -110,7 +110,7 @@ repos:
 
 	require.Equal(t, "upgrade_required", er.Code)
 	require.Equal(t, cfgPath, er.Resource)
-	require.Equal(t, "this project's installed agent skills are not recorded; this Spektacular is 0.1.0", er.Message)
+	require.Equal(t, "this project's installed agent skills are not recorded; this Spektacular is 0.20.0", er.Message)
 	require.Equal(t, gateNextAction, er.NextAction)
 }
 

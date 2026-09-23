@@ -1,23 +1,31 @@
 {
-  "kind": "implement",
+  "kind": "plan",
   "current_step": "finished",
   "completed_steps": [
     "new",
-    "read_plan",
-    "analyze",
-    "implement",
-    "test",
-    "verify",
-    "update_plan",
-    "update_changelog",
-    "test_plan",
-    "update_feature_changelog",
-    "reconcile_spec",
+    "overview",
+    "discovery",
+    "architecture",
+    "components",
+    "data_structures",
+    "implementation_detail",
+    "dependencies",
+    "testing_approach",
+    "milestones",
+    "phases",
+    "open_questions",
+    "out_of_scope",
+    "assemble",
+    "verification",
+    "write_plan",
+    "write_context",
+    "write_research",
+    "walkthrough",
     "finished"
   ],
-  "created_at": "2026-09-21T09:30:51.976357993Z",
-  "updated_at": "2026-09-21T10:17:20.427691872Z",
+  "created_at": "2026-09-22T13:59:08.36939907Z",
+  "updated_at": "2026-09-22T18:53:21.88144822Z",
   "data": {
-    "name": "000056_store_delete_and_knowledge_maintenance"
+    "name": "000057_git-commit"
   }
 }

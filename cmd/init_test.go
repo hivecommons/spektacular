@@ -89,7 +89,7 @@ func TestInit_Claude(t *testing.T) {
 
 	// The installing version is recorded in config.yaml as skills_version;
 	// no standalone version file is written.
-	require.Equal(t, "0.1.0", readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["skills_version"])
+	require.Equal(t, "0.20.0", readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["skills_version"])
 	require.NoFileExists(t, filepath.Join(dir, ".spektacular", "version"))
 }
 
@@ -108,15 +108,15 @@ func TestInit_StampsSkillsVersionAndRemovesLegacyVersionFile(t *testing.T) {
 	cfgPath := filepath.Join(dir, ".spektacular", "config.yaml")
 	raw, err := os.ReadFile(cfgPath)
 	require.NoError(t, err)
-	require.Contains(t, string(raw), "skills_version: 0.1.0\n")
-	require.NoError(t, os.WriteFile(cfgPath, []byte(strings.Replace(string(raw), "skills_version: 0.1.0\n", "skills_version: 9.9.9\n", 1)), 0o644))
+	require.Contains(t, string(raw), "skills_version: 0.20.0\n")
+	require.NoError(t, os.WriteFile(cfgPath, []byte(strings.Replace(string(raw), "skills_version: 0.20.0\n", "skills_version: 9.9.9\n", 1)), 0o644))
 	versionPath := filepath.Join(dir, ".spektacular", "version")
 	require.NoError(t, os.WriteFile(versionPath, []byte("9.9.9\n"), 0o644))
 
 	rootCmd.SetArgs([]string{"init", "claude"})
 	require.NoError(t, rootCmd.Execute())
 
-	require.Equal(t, "0.1.0", readSettingsMap(t, cfgPath)["skills_version"])
+	require.Equal(t, "0.20.0", readSettingsMap(t, cfgPath)["skills_version"])
 	require.NoFileExists(t, versionPath, "init must remove the legacy version file")
 }
 
@@ -148,7 +148,7 @@ knowledge:
 
 	cfg := readSettingsMap(t, cfgPath)
 	require.Equal(t, 3, cfg["schema"])
-	require.Equal(t, "0.1.0", cfg["skills_version"])
+	require.Equal(t, "0.20.0", cfg["skills_version"])
 	require.Equal(t, "proj", cfg["name"])
 	require.Equal(t, 2, readSettingsMap(t, repoPath)["schema"])
 	require.Equal(t, "A test project", readSettingsMap(t, repoPath)["description"])
@@ -331,7 +331,7 @@ func TestInit_Idempotent(t *testing.T) {
 	require.Equal(t, "keep-skill", string(skillData))
 
 	// The recorded skills version is still current after the second init.
-	require.Equal(t, "0.1.0", readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["skills_version"])
+	require.Equal(t, "0.20.0", readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["skills_version"])
 }
 
 // Criterion 3: a second init run produces no changes — the full recursive

@@ -15,7 +15,7 @@ import (
 
 // This file covers the `migrate` command through runRootCmd. Every fixture is
 // literal YAML and every expected value a hand-maintained literal; the dev
-// build version is "0.1.0".
+// build version is "0.20.0".
 
 // staleUnversionedConfigYAML is a config.yaml that predates format
 // versioning: no schema key and no skills_version. Paired with an unversioned
@@ -109,7 +109,7 @@ func TestMigrate_FormatBehindAndSkillsStaleReachesMatch(t *testing.T) {
 	require.FileExists(t, filepath.Join(dir, ".claude", "skills", "spek-new", "SKILL.md"))
 	cfg := readSettingsMap(t, cfgPath)
 	require.Equal(t, 3, cfg["schema"])
-	require.Equal(t, "0.1.0", cfg["skills_version"])
+	require.Equal(t, "0.20.0", cfg["skills_version"])
 	require.Equal(t, 2, readSettingsMap(t, filepath.Join(dir, ".spektacular", "repo.yaml"))["schema"])
 	require.NoFileExists(t, filepath.Join(dir, ".spektacular", "version"))
 
@@ -223,7 +223,7 @@ func TestMigrate_ReportsByteIdenticalBackup(t *testing.T) {
 
 // Success metric 4: on a current-format project whose only staleness is its
 // recorded skills version, migrate reinstalls skills for the configured
-// agent, records skills_version 0.1.0, and changes no other setting.
+// agent, records skills_version 0.20.0, and changes no other setting.
 func TestMigrate_StaleSkillsOnCurrentProjectOnlyTouchesSkillsVersion(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -267,7 +267,7 @@ repos:
 	// change" alongside it.
 	require.FileExists(t, filepath.Join(dir, ".claude", "skills", "spek-design", "SKILL.md"))
 	after := readSettingsMap(t, cfgPath)
-	require.Equal(t, "0.1.0", after["skills_version"])
+	require.Equal(t, "0.20.0", after["skills_version"])
 	for _, k := range []string{"skills_version", "written_by"} {
 		delete(before, k)
 		delete(after, k)
@@ -368,7 +368,7 @@ func TestMigrate_DifferentWrittenByIsUpToDate(t *testing.T) {
 	t.Chdir(dir)
 	writeSettingsFile(t, dir, "config.yaml", `schema: 3
 written_by: 7.7.7
-skills_version: 0.1.0
+skills_version: 0.20.0
 name: proj
 command: spektacular
 agent: claude
@@ -400,7 +400,7 @@ func TestMigrate_CarriesLegacyVersionFileIntoConfig(t *testing.T) {
 
 	rep := runMigrateReport(t)
 	require.Equal(t, "upgraded", rep.Status)
-	require.Equal(t, "0.1.0", readSettingsMap(t, cfgPath)["skills_version"])
+	require.Equal(t, "0.20.0", readSettingsMap(t, cfgPath)["skills_version"])
 	require.NoFileExists(t, versionPath)
 
 	m, _ = runVersionCheckJSON(t)
