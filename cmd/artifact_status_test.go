@@ -151,6 +151,43 @@ func TestPlanStatusNamedDraftArtifactNotInProgressOmitsUpdatedAt(t *testing.T) {
 	require.NotContains(t, raw, "updated_at", "another artifact's workflow is not this artifact's activity")
 }
 
+func TestPlanStatusNamedStrictModeReportsStaleWhenSpecChangedAfterApproval(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	dataDir := filepath.Join(dir, ".spektacular")
+	writeSpecCommandConfig(t, dir, "plan:\n  strict_spec_changes: true\n")
+	writeArtifactStatusFile(t, filepath.Join(dataDir, "specs", "000004_feature.md"), "---\ncreated_date: 2026-02-01\ndocument_status: final\n---\n", time.Date(2026, time.February, 3, 0, 0, 0, 0, time.UTC))
+	writeArtifactStatusFile(t, filepath.Join(dataDir, "plans", "000004_feature", "plan.md"), "---\ncreated_date: 2026-02-01\ndocument_status: final\nclosed_date: 2026-02-02\nspec: 000004_feature\n---\n", time.Date(2026, time.February, 2, 0, 0, 0, 0, time.UTC))
+
+	stdout, stderr, code := runRootCmd(t, "plan", "status", "000004_feature")
+	require.Equal(t, 0, code, stdout)
+	require.Empty(t, stderr)
+
+	var got artifactStatusEnvelope
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, "stale", got.DocumentStatus)
+	require.Equal(t, "stale", got.CurrentStep)
+	require.Equal(t, "000004_feature", got.Spec)
+}
+
+func TestPlanStatusNamedNonStrictModeKeepsFinalWhenSpecChanged(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	dataDir := filepath.Join(dir, ".spektacular")
+	writeSpecCommandConfig(t, dir, "")
+	writeArtifactStatusFile(t, filepath.Join(dataDir, "specs", "000005_feature.md"), "---\ncreated_date: 2026-02-01\ndocument_status: final\n---\n", time.Date(2026, time.February, 3, 0, 0, 0, 0, time.UTC))
+	writeArtifactStatusFile(t, filepath.Join(dataDir, "plans", "000005_feature", "plan.md"), "---\ncreated_date: 2026-02-01\ndocument_status: final\nclosed_date: 2026-02-02\nspec: 000005_feature\n---\n", time.Date(2026, time.February, 2, 0, 0, 0, 0, time.UTC))
+
+	stdout, stderr, code := runRootCmd(t, "plan", "status", "000005_feature")
+	require.Equal(t, 0, code, stdout)
+	require.Empty(t, stderr)
+
+	var got artifactStatusEnvelope
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, "final", got.DocumentStatus)
+	require.Equal(t, "finished", got.CurrentStep)
+}
+
 func TestSpecStatusNamedMissingArtifactReturnsJSONError(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)

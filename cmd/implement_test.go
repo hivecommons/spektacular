@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/output"
@@ -108,6 +109,23 @@ func TestImplementNew_SucceedsWithExistingPlan(t *testing.T) {
 	require.Equal(t, "fixture", result["plan_name"])
 	require.Contains(t, result["plan_path"], "plans/fixture/plan.md")
 	require.NotEmpty(t, result["instruction"])
+}
+
+func TestImplementNew_StrictModeRejectsStalePlan(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	dataDir := filepath.Join(dir, ".spektacular")
+	writeSpecCommandConfig(t, dir, "plan:\n  strict_spec_changes: true\n")
+	writeArtifactStatusFile(t, filepath.Join(dataDir, "specs", "fixture.md"), "---\ncreated_date: 2026-02-01\ndocument_status: final\n---\n", time.Date(2026, time.February, 3, 0, 0, 0, 0, time.UTC))
+	writeArtifactStatusFile(t, filepath.Join(dataDir, "plans", "fixture", "plan.md"), "---\ncreated_date: 2026-02-01\ndocument_status: final\nclosed_date: 2026-02-02\nspec: fixture\n---\n", time.Date(2026, time.February, 2, 0, 0, 0, 0, time.UTC))
+
+	var er output.ErrorResponse
+	stdout, stderr, code := runRootCmd(t, "implement", "new", "--data", `{"name":"fixture"}`)
+	require.Equal(t, 1, code)
+	require.Empty(t, stderr)
+	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
+	require.Equal(t, "plan_stale", er.Code)
+	require.Contains(t, er.NextAction, "re-run the plan workflow")
 }
 
 func TestImplementGoto_RequiresActiveWorkflow(t *testing.T) {

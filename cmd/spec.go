@@ -356,7 +356,7 @@ func runSpecStatus(cmd *cobra.Command, args []string) error {
 
 	if len(args) == 1 {
 		st := store.NewSourceStore(root, "project")
-		return runArtifactStatus(cmd, "spec", args[0], spec.SpecFilePath(cfg.Spec.Config.Directory, args[0]), stateFilePath(dataDir), cfg.Command, steps, st)
+		return runArtifactStatus(cmd, "spec", args[0], spec.SpecFilePath(cfg.Spec.Config.Directory, args[0]), stateFilePath(dataDir), cfg.Command, steps, st, nil)
 	}
 
 	// Refuse to report on an in-progress workflow of a different kind — its

@@ -279,9 +279,9 @@ func TestStoreFileWrite_FreshWriteWithClosedStatusStampsBothDates(t *testing.T) 
 }
 
 // documentStatusNextAction is the remediation every rejected
-// --document-status value must carry, naming the four allowed values in
+// --document-status value must carry, naming the allowed values in
 // lifecycle order.
-const documentStatusNextAction = "Pass --document-status with one of draft, final, superseded, archived."
+const documentStatusNextAction = "Pass --document-status with one of draft, final, stale, superseded, archived."
 
 // rejectedDocumentStatuses are --document-status values the CLI must refuse:
 // the two retired values and an unknown one.
@@ -297,14 +297,14 @@ func requireInvalidDocumentStatus(t *testing.T, bad, stdout, stderr string, code
 	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
 	require.True(t, er.IsError)
 	require.Equal(t, "invalid_document_status", er.Code)
-	require.Equal(t, `--document-status "`+bad+`" is not one of the four allowed values`, er.Message)
+	require.Equal(t, `--document-status "`+bad+`" is not one of the allowed values`, er.Message)
 	require.Equal(t, documentStatusNextAction, er.NextAction)
 }
 
 // TestStoreFileWrite_RejectsInvalidDocumentStatusFlag asserts that
-// --document-status must be one of the four enum values; the retired
+// --document-status must be one of the enum values; the retired
 // completed and in-progress and an unknown value are rejected with
-// invalid_document_status and a remediation listing the four values. A
+// invalid_document_status and a remediation listing the allowed values. A
 // seeded artifact keeps its exact bytes, and a fresh destination is not
 // created. This guards the CLI-layer validation that
 // metadataOptsForDocumentStatus performs before Merge sees the value.

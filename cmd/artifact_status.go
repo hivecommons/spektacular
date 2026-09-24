@@ -55,7 +55,9 @@ var artifactStatusOutputSchema = &schemaObj{
 	},
 }
 
-func runArtifactStatus(cmd *cobra.Command, kind, name, storePath, statePath, command string, steps []workflow.StepConfig, st store.Store) error {
+type artifactStatusHook func(*metadata.Metadata) metadata.DocumentStatus
+
+func runArtifactStatus(cmd *cobra.Command, kind, name, storePath, statePath, command string, steps []workflow.StepConfig, st store.Store, statusHook artifactStatusHook) error {
 	raw, err := st.Read(storePath)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -80,7 +82,11 @@ func runArtifactStatus(cmd *cobra.Command, kind, name, storePath, statePath, com
 		CompletedSteps: []string{},
 	}
 	if fm != nil {
-		result.DocumentStatus = string(fm.DocumentStatus)
+		status := fm.DocumentStatus
+		if statusHook != nil {
+			status = statusHook(fm)
+		}
+		result.DocumentStatus = string(status)
 		result.CreatedAt = dateAsRFC3339(fm.CreatedDate)
 		result.ClosedAt = dateAsRFC3339(fm.ClosedDate)
 		result.Spec = fm.Spec
@@ -97,7 +103,9 @@ func runArtifactStatus(cmd *cobra.Command, kind, name, storePath, statePath, com
 		result.CurrentStep = state.CurrentStep
 		result.CompletedSteps = append([]string(nil), state.CompletedSteps...)
 		result.UpdatedAt = timestampAsRFC3339(state.UpdatedAt)
-	} else if fm != nil && isClosedDocumentStatus(fm.DocumentStatus) {
+	} else if result.DocumentStatus == string(metadata.StatusStale) {
+		result.CurrentStep = "stale"
+	} else if fm != nil && isClosedDocumentStatus(metadata.DocumentStatus(result.DocumentStatus)) {
 		result.CurrentStep = "finished"
 	}
 

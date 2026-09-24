@@ -33,7 +33,7 @@ spektacular plan status <name>
 
 Both take the bare artifact name with no extension (`20260922132517-a3f9c0de-git-commit`, not `20260922132517-a3f9c0de-git-commit.md`), the same name `state.json` records in `data.name`. The status payload also returns `artifact_id`; external orchestrators should use that field as the join key across spec, plan and changelog artifacts. For new timestamp-generated artifacts `artifact_id` is the timestamp plus random-suffix name. Older counter-prefixed names remain readable aliases during migration, but projects that still choose `spec.id_method: counter` must not treat the numeric counter prefix as globally unique across branches. `plan status <name>` reports the plan's `plan.md` only, not the plan's other documents.
 
-The named form returns JSON with the artifact kind, name, document status, workflow step when that artifact is currently in progress, completed steps, `created_at`, `closed_at`, and the `spec` / `plan` frontmatter cross-references (surfaced when present, but rarely populated today). Two timestamps are kept apart: `updated_at` is workflow activity and appears only while that artifact has the in-progress workflow, so its absence means nothing is live; `modified_at` is the store's modification time for the artifact and moves on any write, including a checkout or a reformat. Frontmatter dates are stored as `YYYY-MM-DD` and are emitted as RFC3339 midnight UTC timestamps. `spec file list` and `plan file list` carry `modified_at` per entry, so polling many artifacts is one list call.
+The named form returns JSON with the artifact kind, name, document status, workflow step when that artifact is currently in progress, completed steps, `created_at`, `closed_at`, and the `spec` / `plan` frontmatter cross-references (surfaced when present, but rarely populated today). Two timestamps are kept apart: `updated_at` is workflow activity and appears only while that artifact has the in-progress workflow, so its absence means nothing is live; `modified_at` is the store's modification time for the artifact and moves on any write, including a checkout or a reformat. Frontmatter dates are stored as `YYYY-MM-DD` and are emitted as RFC3339 midnight UTC timestamps. `spec file list` and `plan file list` carry `modified_at` per entry, so polling many artifacts is one list call. When `plan.strict_spec_changes` is true, `plan status <name>` reports `document_status: "stale"` and `current_step: "stale"` once the linked spec is modified after a final plan; `implement new` and subsequent implement steps refuse that plan until it is replanned and re-approved. With the default non-strict setting, a later spec edit does not invalidate an existing plan.
 
 For the full pipeline, see the [how-it-works documentation](https://spektacular.dev/how-it-works/).
 
@@ -190,6 +190,7 @@ spec:
     directory: specs                # relative to the folder holding config.yaml
 plan:
   provider: file
+  strict_spec_changes: false        # true marks final plans stale after later spec edits
   config:
     directory: plans                # relative to the folder holding config.yaml
 changelog:

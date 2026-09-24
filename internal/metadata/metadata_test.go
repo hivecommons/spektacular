@@ -259,10 +259,10 @@ func TestMerge_LegacyStatusKeyIsDropped(t *testing.T) {
 	require.Contains(t, fm, "2026-07-15", "closed_date must be preserved")
 }
 
-// TestParseDocumentStatus asserts the validator accepts exactly the four
+// TestParseDocumentStatus asserts the validator accepts exactly the
 // named values and rejects blank and retired or unknown values.
 func TestParseDocumentStatus(t *testing.T) {
-	for _, raw := range []string{"draft", "final", "superseded", "archived"} {
+	for _, raw := range []string{"draft", "final", "stale", "superseded", "archived"} {
 		got, ok := ParseDocumentStatus(raw)
 		require.True(t, ok, "%q must be accepted", raw)
 		require.Equal(t, DocumentStatus(raw), got)
@@ -272,7 +272,7 @@ func TestParseDocumentStatus(t *testing.T) {
 		require.False(t, ok, "%q must be rejected", raw)
 		require.Equal(t, DocumentStatus(""), got)
 	}
-	require.Equal(t, []DocumentStatus{StatusDraft, StatusFinal, StatusSuperseded, StatusArchived}, DocumentStatuses())
+	require.Equal(t, []DocumentStatus{StatusDraft, StatusFinal, StatusStale, StatusSuperseded, StatusArchived}, DocumentStatuses())
 }
 
 func TestRender_SplitRoundTrip(t *testing.T) {
