@@ -16,15 +16,15 @@ import (
 // out-of-date status names `migrate` as the remedy.
 //
 // Every expected version string below is a hand-maintained oracle: the dev
-// default the binary compiles with is the literal "0.1.0" (cmd/root.go's
+// default the binary compiles with is the literal "0.20.0" (cmd/root.go's
 // `version` var), asserted as that literal and never derived from the
 // `version` var or versionString() at runtime.
 
 // currentConfigYAML is a config.yaml already at the current settings format
 // with the running build's skills recorded and no registered repos.
 const currentConfigYAML = `schema: 3
-written_by: 0.1.0
-skills_version: 0.1.0
+written_by: 0.20.0
+skills_version: 0.20.0
 name: proj
 command: spektacular
 agent: claude
@@ -73,8 +73,8 @@ func TestVersionCheck_Match(t *testing.T) {
 	require.Equal(t, 0, code)
 	require.Equal(t, false, m["error"])
 	require.Equal(t, "match", m["status"])
-	require.Equal(t, "0.1.0", m["installed_version"])
-	require.Equal(t, "0.1.0", m["current_version"])
+	require.Equal(t, "0.20.0", m["installed_version"])
+	require.Equal(t, "0.20.0", m["current_version"])
 	require.NotContains(t, m, "action", "matching versions must carry no action text")
 }
 
@@ -97,7 +97,7 @@ agent: claude
 	require.Equal(t, false, m["error"])
 	require.Equal(t, "mismatch", m["status"])
 	require.Equal(t, "9.9.9", m["installed_version"])
-	require.Equal(t, "0.1.0", m["current_version"])
+	require.Equal(t, "0.20.0", m["current_version"])
 	requireAction(t, m, "`spektacular migrate`", "`spektacular migrate --dry-run`")
 
 	require.Equal(t, before, snapshotDir(t, dir), "version check must never change any file")
@@ -148,7 +148,7 @@ func TestVersionCheck_NoProjectNamesInit(t *testing.T) {
 	require.Equal(t, false, m["error"])
 	require.Equal(t, "missing", m["status"])
 	require.NotContains(t, m, "installed_version", "missing state has nothing installed to report")
-	require.Equal(t, "0.1.0", m["current_version"])
+	require.Equal(t, "0.20.0", m["current_version"])
 	requireAction(t, m, "`spektacular init <agent>`")
 	require.NotContains(t, m["action"], "migrate")
 }
@@ -168,7 +168,7 @@ func TestVersionCheck_RepoBehindIsUpgradeNeeded(t *testing.T) {
 	m, code := runVersionCheckJSON(t)
 	require.Equal(t, 0, code)
 	require.Equal(t, "upgrade_needed", m["status"])
-	require.Equal(t, "0.1.0", m["installed_version"])
+	require.Equal(t, "0.20.0", m["installed_version"])
 	requireAction(t, m, "older format", "`spektacular migrate`")
 	require.Equal(t, before, snapshotDir(t, dir), "version check must never change any file")
 }
@@ -180,7 +180,7 @@ func TestVersionCheck_UnversionedConfigIsUpgradeNeeded(t *testing.T) {
 	writeSettingsFile(t, dir, "config.yaml", `name: proj
 command: spektacular
 agent: claude
-skills_version: 0.1.0
+skills_version: 0.20.0
 `)
 
 	m, code := runVersionCheckJSON(t)
@@ -200,12 +200,12 @@ name: proj
 command: spektacular
 agent: claude
 `)
-		writeSettingsFile(t, dir, "version", "0.1.0\n")
+		writeSettingsFile(t, dir, "version", "0.20.0\n")
 
 		m, code := runVersionCheckJSON(t)
 		require.Equal(t, 0, code)
 		require.Equal(t, "match", m["status"])
-		require.Equal(t, "0.1.0", m["installed_version"])
+		require.Equal(t, "0.20.0", m["installed_version"])
 		require.NotContains(t, m, "action")
 	})
 	t.Run("current config, legacy file stale", func(t *testing.T) {
@@ -245,7 +245,7 @@ func TestVersionCheck_DifferentWrittenByIsStillMatch(t *testing.T) {
 	t.Chdir(dir)
 	writeSettingsFile(t, dir, "config.yaml", `schema: 3
 written_by: 7.7.7
-skills_version: 0.1.0
+skills_version: 0.20.0
 name: proj
 command: spektacular
 agent: claude

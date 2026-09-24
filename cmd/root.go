@@ -21,7 +21,7 @@ import (
 // version and sha are set at build time via -ldflags
 // (see dagger/main.go's Build function).
 var (
-	version = "0.1.0"
+	version = "0.20.0"
 	sha     = ""
 )
 

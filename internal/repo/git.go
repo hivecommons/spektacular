@@ -9,16 +9,17 @@ package repo
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
+
+	"github.com/jumppad-labs/spektacular/internal/gitexec"
 )
 
 // GitRunner is the narrow surface the git provider needs from git: a plain
 // clone and two read-only head queries for the staleness check. It is
-// deliberately small so tests can fake it and it can never grow into a git
-// façade; the exec-backed implementation below is the only place in the
-// codebase that shells out.
+// deliberately small so tests can fake it and it must never grow into a git
+// façade — the commit side has its own, equally narrow interface in the
+// autocommit package. Both sit on the shared exec path in internal/gitexec,
+// which is the only place in the codebase that shells out.
 type GitRunner interface {
 	// Clone performs a plain clone of url into dir (never a submodule).
 	Clone(url, dir string) error
@@ -40,34 +41,12 @@ func NewGitRunner() GitRunner {
 
 type execGitRunner struct{}
 
-// run executes git with args, returning trimmed stdout. The child
-// environment disables interactive credential prompts so an auth failure
-// surfaces as an error instead of hanging an agent-driven session.
+// run executes git with args in the current directory, returning trimmed
+// stdout. The shared exec path in gitexec decides how the child is
+// configured; this runner never needs a working directory or stdin, since
+// the clone and head queries carry their own -C and URL arguments.
 func (execGitRunner) run(args ...string) (string, error) {
-	bin, err := exec.LookPath("git")
-	if err != nil {
-		return "", fmt.Errorf("git is not installed or not on PATH (required to clone a repo's git source): %w", err)
-	}
-
-	cmd := exec.Command(bin, args...)
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-	if os.Getenv("GIT_SSH_COMMAND") == "" {
-		cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND=ssh -oBatchMode=yes")
-	}
-
-	out, err := cmd.Output()
-	if err != nil {
-		var stderr string
-		if ee, ok := err.(*exec.ExitError); ok {
-			stderr = strings.TrimSpace(string(ee.Stderr))
-		}
-		if stderr != "" {
-			return "", fmt.Errorf("git %s: %s", args[0], stderr)
-		}
-		return "", fmt.Errorf("git %s: %w", args[0], err)
-	}
-	// TrimSpace (not just newline trimming) absorbs Windows CRLF endings.
-	return strings.TrimSpace(string(out)), nil
+	return gitexec.Run("", nil, args...)
 }
 
 func (g execGitRunner) Clone(url, dir string) error {

@@ -29,6 +29,7 @@ func TestNewDefault_HasExpectedDefaults(t *testing.T) {
 	require.False(t, cfg.Debug.Enabled)
 	require.Equal(t, "timestamp", cfg.Spec.IDMethod)
 	require.Equal(t, SpecTriggerThresholdModerate, cfg.SpecTriggerThreshold)
+	require.Equal(t, AutoCommitOff, cfg.AutoCommit)
 	require.Empty(t, cfg.Name)
 	require.Empty(t, cfg.Knowledge.Sources)
 }
@@ -103,6 +104,103 @@ repos:
 	_, err = FromYAMLFile(path)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "spec_trigger_threshold")
+}
+
+// Phase 1.1 criterion 1: each of the three auto_commit values loads without
+// error and is kept verbatim. The `off` fixture is deliberately unquoted: it
+// is a YAML 1.1 boolean, and must still arrive as the Go string "off".
+func TestFromYAMLFile_EachAutoCommitValueLoads(t *testing.T) {
+	for _, want := range []string{"off", "workflow", "full"} {
+		t.Run(want, func(t *testing.T) {
+			yaml := "name: testproj\n" +
+				"auto_commit: " + want + "\n" +
+				"repos:\n" +
+				"  - name: testproj\n" +
+				"    location: ..\n"
+			_, path := projectConfigPath(t)
+			require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+			cfg, err := FromYAMLFile(path)
+			require.NoError(t, err)
+			require.Equal(t, want, cfg.AutoCommit)
+		})
+	}
+}
+
+// Phase 1.1 criterion 2: a project that never mentions auto_commit loads as
+// off, so an existing project keeps working without an upgrade.
+func TestFromYAMLFile_AbsentAutoCommitLoadsAsOff(t *testing.T) {
+	yaml := `name: testproj
+repos:
+  - name: testproj
+    location: ..`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, AutoCommitOff, cfg.AutoCommit)
+}
+
+// Phase 1.1 criterion 3: any other auto_commit value is refused with a
+// config_invalid error that lists the three allowed values and names the key
+// and file to correct.
+func TestFromYAMLFile_UnknownAutoCommitReturnsError(t *testing.T) {
+	yaml := `name: testproj
+auto_commit: sometimes
+repos:
+  - name: testproj
+    location: ..`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	_, err := FromYAMLFile(path)
+	require.Error(t, err)
+
+	var er *output.ErrorResponse
+	require.ErrorAs(t, err, &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Equal(t, `auto_commit must be one of "off", "workflow", or "full"`, er.Message)
+	require.Equal(t, "auto_commit", er.Resource)
+	require.Equal(t, "set auto_commit in .spektacular/config.yaml to off, workflow or full (or remove the key to use off)", er.NextAction)
+}
+
+// Phase 1.1 criterion 4: `off` is a YAML 1.1 boolean, so saving the settings
+// must write it back as text — quoted or bare — and reading it back must
+// yield the Go string "off", never a boolean.
+func TestToYAMLFile_AutoCommitOffIsWrittenAsText(t *testing.T) {
+	cfg := NewDefault()
+	cfg.Name = "testproj"
+	cfg.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	_, path := projectConfigPath(t)
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Regexp(t, `auto_commit: "?off"?\n`, string(raw))
+
+	loaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "off", loaded.AutoCommit)
+}
+
+// Phase 1.1 criterion 2: AutoCommitMode resolves an absent key to off and
+// returns every configured value unchanged, so callers never special-case the
+// empty string.
+func TestAutoCommitMode_ResolvesAbsentKeyToOff(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"", "off"},
+		{"off", "off"},
+		{"workflow", "workflow"},
+		{"full", "full"},
+	}
+	for _, tc := range cases {
+		require.Equal(t, tc.want, Config{AutoCommit: tc.in}.AutoCommitMode(), "AutoCommitMode() for %q", tc.in)
+	}
 }
 
 func TestFromYAMLFile_MissingFile_ReturnsError(t *testing.T) {

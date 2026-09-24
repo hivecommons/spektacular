@@ -150,6 +150,14 @@ var _ stepkit.PathStrategy = contractStrategy{}
 // templates FS, so a newly added step cannot slip past the contract.
 func renderAllStepInstructions(t *testing.T, command string) []renderedInstruction {
 	t.Helper()
+	return renderAllStepInstructionsMode(t, command, "")
+}
+
+// renderAllStepInstructionsMode is renderAllStepInstructions with the
+// project's auto_commit mode under the caller's control, so a rendered step
+// can be compared across modes.
+func renderAllStepInstructionsMode(t *testing.T, command, autoCommit string) []renderedInstruction {
+	t.Helper()
 	requireStepTableComplete(t)
 
 	out := make([]renderedInstruction, 0, len(stepTemplateTable))
@@ -163,7 +171,7 @@ func renderAllStepInstructions(t *testing.T, command string) []renderedInstructi
 				Strategy:     contractStrategy{},
 			},
 			contractData{"name": "demo-feature"},
-			capture, nil, workflow.Config{Command: command, Kind: row.workflow},
+			capture, nil, workflow.Config{Command: command, Kind: row.workflow, AutoCommit: autoCommit},
 			func(_, _, _, instruction string) any { return instruction },
 		)
 		require.NoErrorf(t, err, "rendering %s", row.templatePath)
@@ -515,4 +523,129 @@ func TestImplementStartListsPlanDocuments(t *testing.T) {
 		require.Containsf(t, normalizeIndent(src.body), block,
 			"%s must include the shared plan-documents block", src.label)
 	}
+}
+
+// autoCommitHeading is the heading the git-commit instruction partial opens
+// with, hand-copied from templates/partials/git-commit-message.md. It is the
+// marker for "this rendered step carries the commit instruction".
+const autoCommitHeading = "## Automatic git commit"
+
+// autoCommitLeadingTemplates is the hand-written set of step templates that
+// gain the git-commit instruction in `workflow` mode: the last real step of
+// each of the three workflows, the one whose next transition is the
+// completion commit. It mirrors internal/autocommit's completionPoints by
+// hand, so a commit point quietly moved onto a different step fails here.
+//
+// Note the partial itself needs no entry in stepTemplateTable:
+// requireStepTableComplete walks only steps/<workflow>/, and the partial
+// lives under partials/, so it is out of that check's scope by construction.
+var autoCommitLeadingTemplates = map[string]bool{
+	"steps/spec/08-verification.md":        true,
+	"steps/plan/18-walkthrough.md":         true,
+	"steps/implement/11-reconcile_spec.md": true,
+}
+
+// commitLeadingInstruction renders one workflow's commit-leading step in
+// `workflow` mode and returns its instruction text.
+func commitLeadingInstruction(t *testing.T, workflowKind, stepName string) string {
+	t.Helper()
+	for _, ri := range renderAllStepInstructionsMode(t, "spektacular", config.AutoCommitWorkflow) {
+		if ri.workflow == workflowKind && ri.stepName == stepName {
+			return ri.body
+		}
+	}
+	t.Fatalf("no rendered %s/%s instruction", workflowKind, stepName)
+	return ""
+}
+
+// Phase 1.3 criterion 6: with auto_commit off — whether written out or left
+// unset entirely — every step's instruction is exactly the text it was
+// before automatic commits existed. The two renders are pinned against each
+// other rather than against a copy of their content, which the rest of this
+// file's contract assertions already cover.
+func TestAutoCommitOff_RendersIdenticallyToNoSetting(t *testing.T) {
+	unset := renderAllStepInstructionsMode(t, "spektacular", "")
+	off := renderAllStepInstructionsMode(t, "spektacular", config.AutoCommitOff)
+	require.Len(t, off, len(unset))
+
+	for i := range unset {
+		require.Equalf(t, unset[i].body, off[i].body,
+			"%s must render identically with auto_commit off and with no setting at all", unset[i].templatePath)
+		require.NotContainsf(t, off[i].body, autoCommitHeading,
+			"%s must carry no git-commit instruction with auto_commit off", off[i].templatePath)
+	}
+}
+
+// Phase 1.3 criterion 1, instruction half: in `workflow` mode only the three
+// commit-leading steps change, and each changes by gaining the git-commit
+// instruction. Every other step — including every step of the repo workflow,
+// which has no commit points at all — is byte-identical to its off-mode
+// render.
+//
+// This also covers Phase 1.1 criterion 5, "spec, plan and implement
+// workflows receive the configured mode at run time": all three kinds appear
+// in the changed set, so each of them observably renders differently under a
+// different mode, which is only possible if the mode reached it.
+func TestAutoCommitWorkflow_AddsCommitInstructionOnlyToCommitLeadingSteps(t *testing.T) {
+	off := renderAllStepInstructionsMode(t, "spektacular", config.AutoCommitOff)
+	on := renderAllStepInstructionsMode(t, "spektacular", config.AutoCommitWorkflow)
+	require.Len(t, on, len(off))
+
+	changed := map[string]bool{}
+	for i := range off {
+		if off[i].body != on[i].body {
+			changed[off[i].templatePath] = true
+		}
+	}
+	require.Equal(t, autoCommitLeadingTemplates, changed,
+		"exactly the commit-leading steps may render differently in workflow mode")
+
+	for i := range on {
+		if changed[on[i].templatePath] {
+			require.Containsf(t, on[i].body, autoCommitHeading,
+				"%s changed in workflow mode but not by gaining the git-commit instruction", on[i].templatePath)
+		}
+	}
+}
+
+// Phase 1.3 criterion 7: the commit instruction says "git commit" in so many
+// words, and says outright that this is not a document written to
+// Spektacular, so an agent cannot read it as another `spec file write`.
+//
+// The instruction is markdown, soft-wrapped for reading, so the phrase can
+// straddle a line break; whitespace is flattened before matching for that
+// reason alone.
+func TestAutoCommitInstruction_SaysGitCommitNotASpektacularDocument(t *testing.T) {
+	flat := strings.Join(strings.Fields(commitLeadingInstruction(t, "spec", "verification")), " ")
+
+	require.Contains(t, flat, "makes a **git commit** in every registered repository that has changes")
+	require.Contains(t, flat, "This is a commit to git, not a document written to Spektacular")
+}
+
+// Phase 1.3 criterion 5: the user is never asked to confirm a commit. The
+// CLI has no confirmation mechanism to exercise, so what is pinned here is
+// the other half — the instruction tells the agent, in as many words, not to
+// ask on its behalf.
+func TestAutoCommitInstruction_TellsAgentNotToAskForConfirmation(t *testing.T) {
+	flat := strings.Join(strings.Fields(commitLeadingInstruction(t, "spec", "verification")), " ")
+
+	require.Contains(t, flat, "Do not ask the user to confirm the commit — it happens without asking.")
+}
+
+// Phase 1.3: the git-commit instruction is appended before the
+// working-context footer, so a continuing step still ends with the footer
+// and the agent still refreshes its context last, exactly as
+// TestContinuingStepsEndWithIdenticalFooter requires off a commit point.
+func TestAutoCommitInstruction_PrecedesWorkingContextFooter(t *testing.T) {
+	// spec/verification is the one row that is both commit-leading and has a
+	// next step (finished), so both blocks are present at once.
+	body := commitLeadingInstruction(t, "spec", "verification")
+
+	commitAt := strings.Index(body, autoCommitHeading)
+	footerAt := strings.Index(body, contractWorkingContextFooter)
+	require.NotEqual(t, -1, commitAt, "the commit-leading step must carry the git-commit instruction")
+	require.NotEqual(t, -1, footerAt, "the commit-leading step must still carry the working-context footer")
+	require.Less(t, commitAt, footerAt, "the git-commit instruction must come before the working-context footer")
+	require.True(t, strings.HasSuffix(body, contractWorkingContextFooter),
+		"the working-context footer must still be the last thing in the instruction")
 }

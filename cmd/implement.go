@@ -108,7 +108,7 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	if dryRun {
 		statePath += ".dryrun-tmp"
 	} else {
-		handled, err := resumeOrClear(statePath, cfg.Command, "implement", force)
+		handled, err := probeResume(statePath, cfg.Command, "implement", force)
 		if err != nil {
 			return err
 		}
@@ -142,7 +142,17 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("plan file not found at %s — run 'plan new' first or check the name", filepath.Join(root, planRel))
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory}
+	// The uncommitted-changes gate runs once the plan is known to exist, so a
+	// refusal here never precedes a plan-not-found error, and before
+	// clearState — the first thing this command writes.
+	if err := startGate(cfg, root, "implement", input.Name, dataStr, dryRun); err != nil {
+		return err
+	}
+	if !dryRun {
+		clearState(statePath)
+	}
+
+	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
 	steps := implement.Steps()
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, projectStore, out)
@@ -211,29 +221,9 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory}
-	steps := implement.Steps()
-	out := output.New(cmd.OutOrStdout(), globalFields)
-	wf := workflow.New(steps, stateFilePath(dataDir), wfCfg, store.NewSourceStore(root, "project"), out)
-
-	for k, v := range input {
-		if k != "step" {
-			wf.SetData(k, v)
-		}
-	}
-
-	if _, ok := wf.GetData("name"); !ok {
-		return fmt.Errorf("no active implement workflow found — run 'implement new' first")
-	}
-
-	if err := readInputIntoWorkflow(cmd, wf); err != nil {
-		return err
-	}
-
-	if err := wf.Goto(stepVal); err != nil {
-		return err
-	}
-	return nil
+	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
+	return gotoWithAutoCommit(cmd, cfg, root, stateFilePath(dataDir), "implement",
+		implement.Steps(), wfCfg, input, stepVal, "no active implement workflow found — run 'implement new' first")
 }
 
 func runImplementStatus(cmd *cobra.Command, _ []string) error {

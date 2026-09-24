@@ -26,6 +26,10 @@ type Config struct {
 	SpecDir      string
 	PlanDir      string
 	ChangelogDir string
+	// AutoCommit is the project's resolved auto_commit mode ("off",
+	// "workflow" or "full"). Like the rest of this config it is not
+	// persisted: it is read from the project settings on every invocation.
+	AutoCommit string
 }
 
 // ResultWriter is implemented by the output writer and passed into step callbacks.

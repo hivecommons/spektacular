@@ -1,6 +1,6 @@
 schema: 3
-written_by: 0.1.0
-skills_version: 0.1.0
+written_by: 0.20.0
+skills_version: 0.20.0
 name: spektacular
 command: go run .
 agent: claude
