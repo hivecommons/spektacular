@@ -20,7 +20,7 @@ func TestHasPrefix_Counter(t *testing.T) {
 func TestHasPrefix_Timestamp(t *testing.T) {
 	require.True(t, HasPrefix(MethodTimestamp, "20260709000000-feature"))
 	require.False(t, HasPrefix(MethodTimestamp, "feature"))
-	require.False(t, HasPrefix(MethodTimestamp, "000034_feature"), "counter-shaped id must not satisfy timestamp")
+	require.True(t, HasPrefix(MethodTimestamp, "000034_feature"), "counter-shaped legacy ids stay readable under timestamp")
 }
 
 func TestHasPrefix_External(t *testing.T) {
@@ -58,6 +58,10 @@ func fixedResolveTime() time.Time {
 	return time.Date(2026, time.May, 8, 21, 2, 3, 0, time.FixedZone("EDT", -4*60*60))
 }
 
+func fixedRandomID() (string, error) {
+	return "a1b2c3d4", nil
+}
+
 func TestResolve_DefaultTimestamp(t *testing.T) {
 	st := identifierStore(t)
 
@@ -66,15 +70,16 @@ func TestResolve_DefaultTimestamp(t *testing.T) {
 		Store:    st,
 		PathFunc: docPath,
 		Now:      fixedResolveTime,
+		RandomID: fixedRandomID,
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, "20260509010203-billing-export", got.Name)
+	require.Equal(t, "20260509010203-a1b2c3d4-billing-export", got.Name)
 }
 
 func TestResolve_TimestampCollisionBumpsSeconds(t *testing.T) {
 	st := identifierStore(t)
-	writeExistingDoc(t, st, "20260509010203-billing-export")
+	writeExistingDoc(t, st, "20260509010203-a1b2c3d4-billing-export")
 
 	got, err := Resolve(Request{
 		Name:     "billing-export",
@@ -82,10 +87,11 @@ func TestResolve_TimestampCollisionBumpsSeconds(t *testing.T) {
 		Store:    st,
 		PathFunc: docPath,
 		Now:      fixedResolveTime,
+		RandomID: fixedRandomID,
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, "20260509010204-billing-export", got.Name)
+	require.Equal(t, "20260509010204-a1b2c3d4-billing-export", got.Name)
 }
 
 func TestResolve_ExplicitTimestampMethod(t *testing.T) {
@@ -97,10 +103,11 @@ func TestResolve_ExplicitTimestampMethod(t *testing.T) {
 		Store:    st,
 		PathFunc: docPath,
 		Now:      fixedResolveTime,
+		RandomID: fixedRandomID,
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, "20260509010203-billing-export", got.Name)
+	require.Equal(t, "20260509010203-a1b2c3d4-billing-export", got.Name)
 }
 
 func TestResolve_CounterEmptyStoreStartsAtOne(t *testing.T) {

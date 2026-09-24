@@ -23,7 +23,10 @@ var nameRegexp = regexp.MustCompile(`^[a-z0-9_-]+$`)
 
 const identifierInputPattern = `^[^\s/\\\x00-\x1F\x7F](?:[^/\\\x00-\x1F\x7F]*[^\s/\\\x00-\x1F\x7F])?$`
 
-var specIdentifierNow = time.Now
+var (
+	specIdentifierNow      = time.Now
+	specIdentifierRandomID func() (string, error)
+)
 
 // Schema types for --schema output.
 type schemaProp struct {
@@ -224,12 +227,13 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 	}
 
 	resolved, err := spec.ResolveIdentifier(spec.IdentifierRequest{
-		Name:    input.Name,
-		ID:      input.ID,
-		Method:  cfg.Spec.IDMethod,
-		SpecDir: cfg.Spec.Config.Directory,
-		Store:   st,
-		Now:     specIdentifierNow,
+		Name:     input.Name,
+		ID:       input.ID,
+		Method:   cfg.Spec.IDMethod,
+		SpecDir:  cfg.Spec.Config.Directory,
+		Store:    st,
+		Now:      specIdentifierNow,
+		RandomID: specIdentifierRandomID,
 	})
 	if err != nil {
 		var notAllowed *identifier.IDNotAllowedError

@@ -11,12 +11,13 @@ import (
 
 // IdentifierRequest describes the data needed to resolve a canonical spec name.
 type IdentifierRequest struct {
-	Name    string
-	ID      string
-	Method  string
-	SpecDir string // configured spec directory; defaults to config.DefaultSpecDir when empty
-	Store   store.Store
-	Now     func() time.Time
+	Name     string
+	ID       string
+	Method   string
+	SpecDir  string // configured spec directory; defaults to config.DefaultSpecDir when empty
+	Store    store.Store
+	Now      func() time.Time
+	RandomID func() (string, error)
 }
 
 // IdentifierResult is the canonical spec name.
@@ -38,6 +39,7 @@ func ResolveIdentifier(req IdentifierRequest) (IdentifierResult, error) {
 		Store:    req.Store,
 		PathFunc: SpecFilePath,
 		Now:      req.Now,
+		RandomID: req.RandomID,
 	})
 	if err != nil {
 		var unsupported *identifier.UnsupportedMethodError
