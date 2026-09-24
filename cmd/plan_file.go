@@ -1,6 +1,6 @@
 package cmd
 
-import "github.com/jumppad-labs/spektacular/internal/config"
+import "github.com/hivecommons/spektacular/internal/config"
 
 // The `plan file` subcommand group reads and writes plan documents
 // (plan.md, context.md, research.md) within the configured plan directory.

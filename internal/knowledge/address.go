@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jumppad-labs/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/output"
 )
 
 // Tier says which knowledge a store holds: the project's own shared knowledge,

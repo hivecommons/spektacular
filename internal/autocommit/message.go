@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jumppad-labs/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/output"
 )
 
 // ValidateMessage checks that an agent-written commit message says what it

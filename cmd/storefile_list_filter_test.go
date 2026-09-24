@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jumppad-labs/spektacular/internal/metadata"
+	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/stretchr/testify/require"
 )
 

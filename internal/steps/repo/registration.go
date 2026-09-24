@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
-	"github.com/jumppad-labs/spektacular/internal/output"
-	repodomain "github.com/jumppad-labs/spektacular/internal/repo"
-	"github.com/jumppad-labs/spektacular/internal/stepkit"
-	"github.com/jumppad-labs/spektacular/internal/store"
-	"github.com/jumppad-labs/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/output"
+	repodomain "github.com/hivecommons/spektacular/internal/repo"
+	"github.com/hivecommons/spektacular/internal/stepkit"
+	"github.com/hivecommons/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/workflow"
 )
 
 // Placement values. They name where the project keeps its own files for a

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jumppad-labs/spektacular/internal/design"
-	"github.com/jumppad-labs/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/design"
+	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/stretchr/testify/require"
 )
 

@@ -7,11 +7,11 @@ package autocommit_test
 import (
 	"testing"
 
-	"github.com/jumppad-labs/spektacular/internal/autocommit"
-	"github.com/jumppad-labs/spektacular/internal/steps/implement"
-	"github.com/jumppad-labs/spektacular/internal/steps/plan"
-	"github.com/jumppad-labs/spektacular/internal/steps/spec"
-	"github.com/jumppad-labs/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/autocommit"
+	"github.com/hivecommons/spektacular/internal/steps/implement"
+	"github.com/hivecommons/spektacular/internal/steps/plan"
+	"github.com/hivecommons/spektacular/internal/steps/spec"
+	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/stretchr/testify/require"
 )
 

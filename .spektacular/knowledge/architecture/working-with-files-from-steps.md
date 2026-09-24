@@ -1,10 +1,45 @@
 ---
-tags: [storage, workflow, step, paths, filesystem]
+tags: [storage, workflow, step, paths, filesystem, cli, metadata]
 ---
 
-# Working with Files from Steps
+# Working with Files from Steps and Commands
 
-Steps interact with the project's files through a `store.Store` interface — never via `os` directly.
+Steps and commands interact with the project's files through a `store.Store` interface — never via `os` directly.
+
+This binds `cmd/` exactly as it binds `internal/steps/`. A command holding a store is under the same rule as a step holding one: if the subject of the question is an artifact the store owns, the store answers it.
+
+## What "through the store" covers
+
+Everything the store knows about an artifact, not just its bytes:
+
+| Question | Ask the store | Never |
+|---|---|---|
+| What does it contain? | `st.Read(path)` | `os.ReadFile(...)` |
+| Does it exist? | `st.Exists(path)` | `os.Stat(...)` |
+| What is in this directory? | `st.List(path)` | `os.ReadDir(...)` |
+| When was it changed? | `st.Stat(path)` | `os.Stat(...).ModTime()` |
+
+`st.Root()` is for **rendering an absolute path into agent-facing output** and nothing else. Using it to rebuild a filesystem location and then read that location is the same violation as calling `os` directly — it just takes two lines instead of one.
+
+```go
+// Fine — Root() renders a path for an agent to read.
+absPath := filepath.Join(st.Root(), SpecFilePath(cfg.SpecDir, name))
+
+// Not fine — Root() used to reach the bytes behind the store's back.
+info, err := os.Stat(filepath.Join(st.Root(), storePath))
+```
+
+## Why this is stricter than it looks
+
+The interface is the seam a non-filesystem backend swaps in at. A store backed by an HTTP API has no meaningful `Root()`, so code that reaches around the interface does not fail loudly there — it **degrades silently**. `Root()` returns empty, the `os` call errors, the caller falls back to whatever default it has, and a field that should have been unavailable is instead quietly wrong. A wrong answer is worse than a missing one, especially for a value an external caller is making decisions on.
+
+That is the real cost of the shortcut: not that it is untidy, but that it converts "this backend cannot tell you" into "here is a plausible-looking wrong value".
+
+## When the contract cannot answer
+
+If the store genuinely cannot answer a question the caller needs — the interface has no method for it — the fix is to **extend the contract**, not to route around it. Add the method to `Reader` or `Writer`, implement it in `FileStore`, delegate it in `ignoreStore`, and let a future backend fill it from its own metadata. `Stat` was added exactly this way.
+
+A gap in the interface is a reason to widen the interface. It is never a licence to use `os`.
 
 ## How the Store Reaches a Step
 

@@ -3,8 +3,8 @@ package autocommit
 import (
 	"os"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
-	"github.com/jumppad-labs/spektacular/internal/repo"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/repo"
 )
 
 // Target is one git work tree that one or more registered repos resolve to.

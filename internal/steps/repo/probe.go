@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	repodomain "github.com/jumppad-labs/spektacular/internal/repo"
+	repodomain "github.com/hivecommons/spektacular/internal/repo"
 )
 
 // writable reports whether the guided add could create its folder inside dir.

@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/jumppad-labs/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/config"
 )
 
 // The `changelog file` subcommand group reads and writes changelog records.

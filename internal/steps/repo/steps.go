@@ -12,10 +12,10 @@ import (
 	"os"
 	"path/filepath"
 
-	repodomain "github.com/jumppad-labs/spektacular/internal/repo"
-	"github.com/jumppad-labs/spektacular/internal/stepkit"
-	"github.com/jumppad-labs/spektacular/internal/store"
-	"github.com/jumppad-labs/spektacular/internal/workflow"
+	repodomain "github.com/hivecommons/spektacular/internal/repo"
+	"github.com/hivecommons/spektacular/internal/stepkit"
+	"github.com/hivecommons/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/workflow"
 )
 
 // Steps returns the ordered step configs for a guided add.

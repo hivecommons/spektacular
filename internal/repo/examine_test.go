@@ -32,7 +32,7 @@ func TestExamine_GoRepoIdentityComesFromModuleNotFolderName(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "checked-out-elsewhere")
 	writeTree(t, dir, map[string]string{
 		"README.md":     "# Checked Out Elsewhere\n\nA tool for managing specifications.\nIt keeps intent beside the code.\n\n## Install\n\nrun it\n",
-		"go.mod":        "module github.com/jumppad-labs/spektacular\n\ngo 1.23\n",
+		"go.mod":        "module github.com/hivecommons/spektacular\n\ngo 1.23\n",
 		"main.go":       "package main\n",
 		"internal/a.go": "package internal\n",
 		"internal/b.go": "package internal\n",

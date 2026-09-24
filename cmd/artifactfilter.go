@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jumppad-labs/spektacular/internal/metadata"
-	"github.com/jumppad-labs/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/metadata"
+	"github.com/hivecommons/spektacular/internal/output"
 )
 
 // documentStatusValues renders the allowed document statuses, in lifecycle

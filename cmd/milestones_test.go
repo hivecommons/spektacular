@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
-	"github.com/jumppad-labs/spektacular/internal/testutil/gittest"
-	"github.com/jumppad-labs/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/testutil/gittest"
+	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/stretchr/testify/require"
 )
 

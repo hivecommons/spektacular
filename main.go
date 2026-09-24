@@ -1,6 +1,6 @@
 package main
 
-import "github.com/jumppad-labs/spektacular/cmd"
+import "github.com/hivecommons/spektacular/cmd"
 
 func main() {
 	cmd.Execute()

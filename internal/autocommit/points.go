@@ -1,6 +1,6 @@
 package autocommit
 
-import "github.com/jumppad-labs/spektacular/internal/config"
+import "github.com/hivecommons/spektacular/internal/config"
 
 // Point classifies a workflow transition for committing.
 type Point string

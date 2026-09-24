@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jumppad-labs/spektacular/internal/gitexec"
+	"github.com/hivecommons/spektacular/internal/gitexec"
 )
 
 // GitRunner is the narrow surface the git provider needs from git: a plain

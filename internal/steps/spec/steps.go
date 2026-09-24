@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/jumppad-labs/spektacular/internal/metadata"
-	"github.com/jumppad-labs/spektacular/internal/stepkit"
-	"github.com/jumppad-labs/spektacular/internal/store"
-	"github.com/jumppad-labs/spektacular/internal/workflow"
-	"github.com/jumppad-labs/spektacular/internal/workingcontext"
+	"github.com/hivecommons/spektacular/internal/metadata"
+	"github.com/hivecommons/spektacular/internal/stepkit"
+	"github.com/hivecommons/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/workingcontext"
 )
 
 // SpecFilePath returns the store-relative path for a spec file under the

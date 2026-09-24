@@ -24,8 +24,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
-	"github.com/jumppad-labs/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/store"
 )
 
 // Source is one declared design source, resolved and ready to use.

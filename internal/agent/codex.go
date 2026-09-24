@@ -3,7 +3,7 @@ package agent
 import (
 	"io"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/config"
 )
 
 type codexAgent struct{}

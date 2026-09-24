@@ -1,6 +1,6 @@
 package cmd
 
-import "github.com/jumppad-labs/spektacular/internal/config"
+import "github.com/hivecommons/spektacular/internal/config"
 
 // The `spec file` subcommand group reads and writes spec files within the
 // configured spec directory. See newStoreFileCmd for the shared implementation.

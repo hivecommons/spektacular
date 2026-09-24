@@ -14,7 +14,7 @@ package autocommit
 import (
 	"strings"
 
-	"github.com/jumppad-labs/spektacular/internal/gitexec"
+	"github.com/hivecommons/spektacular/internal/gitexec"
 )
 
 // Git is the narrow commit-side surface the engine needs. It is the

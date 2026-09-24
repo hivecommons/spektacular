@@ -8,8 +8,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/jumppad-labs/spektacular/internal/migrate"
-	"github.com/jumppad-labs/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/migrate"
+	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/stretchr/testify/require"
 )
 

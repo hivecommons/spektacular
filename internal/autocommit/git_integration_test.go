@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jumppad-labs/spektacular/internal/testutil/gittest"
+	"github.com/hivecommons/spektacular/internal/testutil/gittest"
 	"github.com/stretchr/testify/require"
 )
 

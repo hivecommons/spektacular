@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
-	"github.com/jumppad-labs/spektacular/internal/knowledge"
-	"github.com/jumppad-labs/spektacular/internal/migrate"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/knowledge"
+	"github.com/hivecommons/spektacular/internal/migrate"
 )
 
 // Footprint statuses reported by EnsureFootprint.

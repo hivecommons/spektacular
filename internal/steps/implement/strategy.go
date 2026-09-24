@@ -3,7 +3,7 @@ package implement
 import (
 	"path/filepath"
 
-	"github.com/jumppad-labs/spektacular/internal/stepkit"
+	"github.com/hivecommons/spektacular/internal/stepkit"
 )
 
 // PlanFilePath returns the store-relative path for a plan's plan.md file under
