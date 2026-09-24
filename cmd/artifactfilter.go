@@ -20,7 +20,7 @@ func documentStatusValues() string {
 }
 
 // parseDocumentStatusFlag validates a `--document-status` value supplied on
-// the command line. Input is strict: anything outside the four named values,
+// the command line. Input is strict: anything outside the named values,
 // the retired in-progress and completed included, is rejected with an
 // actionable error, unlike stored frontmatter, which reads such values as
 // blank.
@@ -28,7 +28,7 @@ func parseDocumentStatusFlag(raw string) (metadata.DocumentStatus, error) {
 	s, ok := metadata.ParseDocumentStatus(raw)
 	if !ok {
 		return "", output.NewError("invalid_document_status",
-			fmt.Sprintf("--document-status %q is not one of the four allowed values", raw)).
+			fmt.Sprintf("--document-status %q is not one of the allowed values", raw)).
 			WithNextAction(fmt.Sprintf("Pass --document-status with one of %s.", documentStatusValues()))
 	}
 	return s, nil

@@ -93,8 +93,9 @@ type FileSpecConfig struct {
 // PlanConfig holds configuration for plan creation. It names a storage
 // provider and carries that provider's settings.
 type PlanConfig struct {
-	Provider string         `yaml:"provider"`
-	Config   FilePlanConfig `yaml:"config"`
+	Provider          string         `yaml:"provider"`
+	StrictSpecChanges bool           `yaml:"strict_spec_changes"`
+	Config            FilePlanConfig `yaml:"config"`
 }
 
 // FilePlanConfig is the file-provider configuration for the plan section.

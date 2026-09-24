@@ -24,6 +24,9 @@ const (
 	StatusDraft DocumentStatus = "draft"
 	// StatusFinal marks a document its owning workflow signed off.
 	StatusFinal DocumentStatus = "final"
+	// StatusStale marks a plan invalidated by a later spec change under
+	// strict plan invalidation.
+	StatusStale DocumentStatus = "stale"
 	// StatusSuperseded marks a document replaced by a later document.
 	StatusSuperseded DocumentStatus = "superseded"
 	// StatusArchived marks a document removed from active view.
@@ -34,7 +37,7 @@ const (
 // order. It is the single list of allowed values; flag help text and error
 // messages derive from it.
 func DocumentStatuses() []DocumentStatus {
-	return []DocumentStatus{StatusDraft, StatusFinal, StatusSuperseded, StatusArchived}
+	return []DocumentStatus{StatusDraft, StatusFinal, StatusStale, StatusSuperseded, StatusArchived}
 }
 
 // ParseDocumentStatus reports whether raw is one of the four named document
@@ -239,5 +242,5 @@ func validateDocumentStatus(s DocumentStatus) error {
 // isClosed reports whether s is final, superseded or archived. Draft and
 // blank are open.
 func isClosed(s DocumentStatus) bool {
-	return s == StatusFinal || s == StatusSuperseded || s == StatusArchived
+	return s == StatusFinal || s == StatusStale || s == StatusSuperseded || s == StatusArchived
 }

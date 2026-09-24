@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"regexp"
 
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/steps/implement"
 	"github.com/hivecommons/spektacular/internal/store"
@@ -141,6 +143,9 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	if _, statErr := projectStore.Stat(planRel); statErr != nil {
 		return fmt.Errorf("plan file not found at %s — run 'plan new' first or check the name", filepath.Join(root, planRel))
 	}
+	if err := refuseStalePlan(cfg, projectStore, input.Name); err != nil {
+		return err
+	}
 
 	// The uncommitted-changes gate runs once the plan is known to exist, so a
 	// refusal here never precedes a plan-not-found error, and before
@@ -220,10 +225,38 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 	} else if handled {
 		return err
 	}
+	wf := workflow.New(implement.Steps(), stateFilePath(dataDir), workflow.Config{}, nil, nil)
+	if nameVal, ok := wf.GetData("name"); ok {
+		projectStore := store.NewSourceStore(root, "project")
+		if err := refuseStalePlan(cfg, projectStore, fmt.Sprintf("%v", nameVal)); err != nil {
+			return err
+		}
+	}
 
 	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
 	return gotoWithAutoCommit(cmd, cfg, root, stateFilePath(dataDir), "implement",
 		implement.Steps(), wfCfg, input, stepVal, "no active implement workflow found — run 'implement new' first")
+}
+
+func refuseStalePlan(cfg config.Config, st store.Store, planName string) error {
+	if !cfg.Plan.StrictSpecChanges {
+		return nil
+	}
+	raw, err := st.Read(implement.PlanFilePath(cfg.Plan.Config.Directory, planName))
+	if err != nil {
+		return err
+	}
+	fm, _, err := metadata.Split(raw)
+	if err != nil {
+		return err
+	}
+	if !strictPlanIsStale(cfg, st, planName, fm) {
+		return nil
+	}
+	return output.NewError("plan_stale",
+		fmt.Sprintf("plan %q is stale because its spec changed after approval", planName)).
+		WithResource(planName).
+		WithNextAction("re-run the plan workflow against the updated spec and approve the fresh plan before implementing")
 }
 
 func runImplementStatus(cmd *cobra.Command, _ []string) error {

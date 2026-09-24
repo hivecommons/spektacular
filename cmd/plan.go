@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/steps/plan"
+	specsteps "github.com/hivecommons/spektacular/internal/steps/spec"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/spf13/cobra"
@@ -239,7 +242,7 @@ func runPlanStatus(cmd *cobra.Command, args []string) error {
 
 	if len(args) == 1 {
 		st := store.NewSourceStore(root, "project")
-		return runArtifactStatus(cmd, "plan", args[0], plan.PlanFilePath(cfg.Plan.Config.Directory, args[0]), stateFilePath(dataDir), cfg.Command, steps, st)
+		return runArtifactStatus(cmd, "plan", args[0], plan.PlanFilePath(cfg.Plan.Config.Directory, args[0]), stateFilePath(dataDir), cfg.Command, steps, st, strictPlanStatusHook(cfg, st, args[0]))
 	}
 
 	// Refuse to report on an in-progress workflow of a different kind — its
@@ -276,6 +279,37 @@ func runPlanStatus(cmd *cobra.Command, args []string) error {
 		Progress:       fmt.Sprintf("%d/%d", len(st.CompletedSteps), len(steps)),
 		Steps:          entries,
 	})
+}
+
+func strictPlanStatusHook(cfg config.Config, st store.Store, planName string) artifactStatusHook {
+	if !cfg.Plan.StrictSpecChanges {
+		return nil
+	}
+	return func(fm *metadata.Metadata) metadata.DocumentStatus {
+		if strictPlanIsStale(cfg, st, planName, fm) {
+			return metadata.StatusStale
+		}
+		return fm.DocumentStatus
+	}
+}
+
+func strictPlanIsStale(cfg config.Config, st store.Store, planName string, fm *metadata.Metadata) bool {
+	if fm == nil || fm.DocumentStatus != metadata.StatusFinal {
+		return false
+	}
+	specName := fm.Spec
+	if specName == "" {
+		specName = planName
+	}
+	planInfo, err := st.Stat(plan.PlanFilePath(cfg.Plan.Config.Directory, planName))
+	if err != nil {
+		return false
+	}
+	specInfo, err := st.Stat(specsteps.SpecFilePath(cfg.Spec.Config.Directory, specName))
+	if err != nil {
+		return false
+	}
+	return specInfo.ModTime.After(planInfo.ModTime)
 }
 
 func runPlanSteps(cmd *cobra.Command, _ []string) error {
