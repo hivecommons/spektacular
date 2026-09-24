@@ -18,8 +18,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
-	"github.com/jumppad-labs/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/store"
 )
 
 const (

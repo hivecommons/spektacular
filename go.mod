@@ -1,4 +1,4 @@
-module github.com/jumppad-labs/spektacular
+module github.com/hivecommons/spektacular
 
 go 1.25.0
 

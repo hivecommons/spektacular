@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
-	"github.com/jumppad-labs/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/stretchr/testify/require"
 )
 

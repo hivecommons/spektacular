@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/jumppad-labs/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/store"
 )
 
 // CategoryTier declares how a category's entries are retrieved. A category's

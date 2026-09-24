@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
-	"github.com/jumppad-labs/spektacular/internal/metadata"
-	"github.com/jumppad-labs/spektacular/internal/output"
-	"github.com/jumppad-labs/spektacular/internal/repo"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/metadata"
+	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/repo"
 	"github.com/stretchr/testify/require"
 )
 

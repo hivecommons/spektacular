@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/cbroglie/mustache"
-	"github.com/jumppad-labs/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/config"
 )
 
 const (

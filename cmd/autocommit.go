@@ -10,12 +10,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jumppad-labs/spektacular/internal/autocommit"
-	"github.com/jumppad-labs/spektacular/internal/config"
-	"github.com/jumppad-labs/spektacular/internal/output"
-	"github.com/jumppad-labs/spektacular/internal/steps/implement"
-	"github.com/jumppad-labs/spektacular/internal/store"
-	"github.com/jumppad-labs/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/autocommit"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/steps/implement"
+	"github.com/hivecommons/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/spf13/cobra"
 )
 

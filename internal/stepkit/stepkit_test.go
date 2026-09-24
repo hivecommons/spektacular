@@ -7,8 +7,8 @@ import (
 	"testing/fstest"
 
 	"github.com/cbroglie/mustache"
-	"github.com/jumppad-labs/spektacular/internal/store"
-	"github.com/jumppad-labs/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/stretchr/testify/require"
 )
 

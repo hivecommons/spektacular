@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/config"
 )
 
 // Agent is implemented by each supported AI coding agent integration.

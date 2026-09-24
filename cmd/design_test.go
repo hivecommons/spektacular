@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jumppad-labs/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/stretchr/testify/require"
 )
 

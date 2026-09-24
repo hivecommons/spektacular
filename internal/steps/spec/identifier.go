@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jumppad-labs/spektacular/internal/identifier"
-	"github.com/jumppad-labs/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/identifier"
+	"github.com/hivecommons/spektacular/internal/store"
 )
 
 // IdentifierRequest describes the data needed to resolve a canonical spec name.

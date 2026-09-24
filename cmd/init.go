@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jumppad-labs/spektacular/internal/agent"
-	"github.com/jumppad-labs/spektacular/internal/config"
-	"github.com/jumppad-labs/spektacular/internal/migrate"
-	"github.com/jumppad-labs/spektacular/internal/project"
+	"github.com/hivecommons/spektacular/internal/agent"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/migrate"
+	"github.com/hivecommons/spektacular/internal/project"
 	"github.com/spf13/cobra"
 )
 

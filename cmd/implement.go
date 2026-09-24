@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/jumppad-labs/spektacular/internal/output"
-	"github.com/jumppad-labs/spektacular/internal/steps/implement"
-	"github.com/jumppad-labs/spektacular/internal/store"
-	"github.com/jumppad-labs/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/steps/implement"
+	"github.com/hivecommons/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/spf13/cobra"
 )
 

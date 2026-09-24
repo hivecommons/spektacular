@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"dagger/spektacular/internal/dagger"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -12,8 +13,21 @@ import (
 
 var oses = []string{"linux", "darwin", "windows"}
 var arches = []string{"amd64", "arm64"}
-var owner = "jumppad-labs"
+var owner = "hivecommons"
 var repo = "spektacular"
+
+// brewTaps are the Homebrew taps a release publishes the formula to, in order.
+//
+// hivecommons/homebrew-repo is the canonical tap. jumppad-labs/homebrew-repo is
+// published to as well for the duration of the org migration, so anyone who
+// already ran `brew tap jumppad-labs/homebrew-repo` keeps receiving updates
+// rather than silently pinning to the last pre-move release. Drop the legacy
+// entry once the deprecation window closes; the release token must hold write
+// access to every tap listed here.
+var brewTaps = []string{
+	"hivecommons/homebrew-repo",
+	"jumppad-labs/homebrew-repo",
+}
 
 func New() *Spektacular {
 	return &Spektacular{}
@@ -103,7 +117,7 @@ func (d *Spektacular) Release(
 	// create a new github release
 	version, _ := d.GithubRelease(ctx, src, archives, githubToken)
 
-	// update the brew formula at jumppad-labs/homebrew-repo
+	// update the brew formula in every tap listed in brewTaps
 	d.UpdateBrew(ctx, version, githubToken)
 
 	//	update the gemfury repository
@@ -149,7 +163,7 @@ func (d *Spektacular) Build(
 				WithExec([]string{
 					"go", "build",
 					"-o", path,
-					"-ldflags", fmt.Sprintf("-X github.com/jumppad-labs/spektacular/cmd.version=%s -X github.com/jumppad-labs/spektacular/cmd.sha=%s", version, sha),
+					"-ldflags", fmt.Sprintf("-X github.com/hivecommons/spektacular/cmd.version=%s -X github.com/hivecommons/spektacular/cmd.sha=%s", version, sha),
 				}).
 				Sync(ctx)
 
@@ -440,23 +454,37 @@ func (d *Spektacular) UpdateBrew(
 
 	cli := dag
 
-	_, err := cli.Brew().Formula(
-		ctx,
-		"https://jumppad.dev",
-		"jumppad-labs/homebrew-repo",
-		version,
-		"Mr Jumppad",
-		"hello@jumppad.dev",
-		"spektacular",
-		githubToken,
-		dagger.BrewFormulaOpts{
-			DarwinX86Url:   fmt.Sprintf("https://github.com/jumppad-labs/spektacular/releases/download/%s/spektacular_%s_darwin_x86_64.zip", version, version),
-			DarwinArm64Url: fmt.Sprintf("https://github.com/jumppad-labs/spektacular/releases/download/%s/spektacular_%s_darwin_arm64.zip", version, version),
-			LinuxX86Url:    fmt.Sprintf("https://github.com/jumppad-labs/spektacular/releases/download/%s/spektacular_%s_linux_x86_64.tar.gz", version, version),
-			LinuxArm64Url:  fmt.Sprintf("https://github.com/jumppad-labs/spektacular/releases/download/%s/spektacular_%s_linux_arm64.tar.gz", version, version),
-		},
-	)
+	opts := dagger.BrewFormulaOpts{
+		DarwinX86Url:   fmt.Sprintf("https://github.com/hivecommons/spektacular/releases/download/%s/spektacular_%s_darwin_x86_64.zip", version, version),
+		DarwinArm64Url: fmt.Sprintf("https://github.com/hivecommons/spektacular/releases/download/%s/spektacular_%s_darwin_arm64.zip", version, version),
+		LinuxX86Url:    fmt.Sprintf("https://github.com/hivecommons/spektacular/releases/download/%s/spektacular_%s_linux_x86_64.tar.gz", version, version),
+		LinuxArm64Url:  fmt.Sprintf("https://github.com/hivecommons/spektacular/releases/download/%s/spektacular_%s_linux_arm64.tar.gz", version, version),
+	}
 
+	// Publish to every tap. A failure against one does not skip the rest: a
+	// release that updated the canonical tap but not the legacy one is still
+	// worth knowing about, and stopping early would hide which taps are now
+	// out of step with the release.
+	var errs []error
+	for _, tap := range brewTaps {
+		log.Info("updating brew formula", "tap", tap, "version", version)
+
+		if _, err := cli.Brew().Formula(
+			ctx,
+			"https://hivecommons.dev",
+			tap,
+			version,
+			"Queen Bee",
+			"bee@hivecommons.com",
+			"spektacular",
+			githubToken,
+			opts,
+		); err != nil {
+			errs = append(errs, fmt.Errorf("updating brew formula in %s: %w", tap, err))
+		}
+	}
+
+	err := errors.Join(errs...)
 	if err != nil {
 		d.lastError = err
 	}

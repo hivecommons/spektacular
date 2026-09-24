@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jumppad-labs/spektacular/internal/output"
-	"github.com/jumppad-labs/spektacular/templates"
+	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/templates"
 	"github.com/spf13/cobra"
 )
 

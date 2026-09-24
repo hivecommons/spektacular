@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jumppad-labs/spektacular/internal/output"
-	"github.com/jumppad-labs/spektacular/internal/stepkit"
-	"github.com/jumppad-labs/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/stepkit"
+	"github.com/hivecommons/spektacular/internal/workflow"
 )
 
 // resumeInstruction renders the resume-prompt template into the NextAction of

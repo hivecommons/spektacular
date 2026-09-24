@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/cbroglie/mustache"
-	"github.com/jumppad-labs/spektacular/templates"
+	"github.com/hivecommons/spektacular/templates"
 	"github.com/stretchr/testify/require"
 )
 

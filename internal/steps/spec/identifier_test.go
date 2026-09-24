@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jumppad-labs/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/stretchr/testify/require"
 )
 

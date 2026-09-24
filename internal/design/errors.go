@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jumppad-labs/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/output"
 )
 
 // Every refusal in this package names what went wrong and a runnable next

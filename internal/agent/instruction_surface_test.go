@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
-	"github.com/jumppad-labs/spektacular/internal/stepkit"
-	"github.com/jumppad-labs/spektacular/templates"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/stepkit"
+	"github.com/hivecommons/spektacular/templates"
 	"github.com/stretchr/testify/require"
 )
 

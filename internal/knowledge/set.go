@@ -13,9 +13,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
-	"github.com/jumppad-labs/spektacular/internal/output"
-	"github.com/jumppad-labs/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/store"
 )
 
 // scopedStore pairs a configured store with the address it answers to and the

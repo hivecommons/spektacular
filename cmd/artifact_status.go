@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jumppad-labs/spektacular/internal/metadata"
-	"github.com/jumppad-labs/spektacular/internal/output"
-	"github.com/jumppad-labs/spektacular/internal/store"
-	"github.com/jumppad-labs/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/metadata"
+	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/spf13/cobra"
 )
 

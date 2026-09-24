@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jumppad-labs/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/store"
 )
 
 // Bounds on what an examination reads. The examiner runs while a user waits

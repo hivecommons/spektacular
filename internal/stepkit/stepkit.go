@@ -12,10 +12,10 @@ import (
 	"strings"
 
 	"github.com/cbroglie/mustache"
-	"github.com/jumppad-labs/spektacular/internal/autocommit"
-	"github.com/jumppad-labs/spektacular/internal/store"
-	"github.com/jumppad-labs/spektacular/internal/workflow"
-	"github.com/jumppad-labs/spektacular/templates"
+	"github.com/hivecommons/spektacular/internal/autocommit"
+	"github.com/hivecommons/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/templates"
 )
 
 // PathStrategy injects workflow-specific template variables and identifies

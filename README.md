@@ -2,7 +2,7 @@
 
 Agent-agnostic CLI tool for spec-driven development, providing skills and integrations for coding agents (Claude, Bob, Codex) to plan and implement work from a written spec.
 
-> **Status:** early development — see the [releases page](https://github.com/jumppad-labs/spektacular/releases) for the latest version.
+> **Status:** early development — see the [releases page](https://github.com/hivecommons/spektacular/releases) for the latest version.
 
 ## What is Spektacular?
 
@@ -31,7 +31,7 @@ spektacular spec status <name>
 spektacular plan status <name>
 ```
 
-Both take the bare artifact name with no extension (`000057_git-commit`, not `000057_git-commit.md`), the same name `state.json` records in `data.name`. That bare name is the stable key shared by convention across the spec file, the plan directory and the changelog record; it is the key to join on, and the addressing convention [#46](https://github.com/jumppad-labs/spektacular/issues/46) proposes for every verb. `plan status <name>` reports the plan's `plan.md` only, not the plan's other documents.
+Both take the bare artifact name with no extension (`000057_git-commit`, not `000057_git-commit.md`), the same name `state.json` records in `data.name`. That bare name is the stable key shared by convention across the spec file, the plan directory and the changelog record; it is the key to join on, and the addressing convention [#46](https://github.com/hivecommons/spektacular/issues/46) proposes for every verb. `plan status <name>` reports the plan's `plan.md` only, not the plan's other documents.
 
 The named form returns JSON with the artifact kind, name, document status, workflow step when that artifact is currently in progress, completed steps, `created_at`, `closed_at`, and the `spec` / `plan` frontmatter cross-references (surfaced when present, but rarely populated today). Two timestamps are kept apart: `updated_at` is workflow activity and appears only while that artifact has the in-progress workflow, so its absence means nothing is live; `modified_at` is the store's modification time for the artifact and moves on any write, including a checkout or a reformat. Frontmatter dates are stored as `YYYY-MM-DD` and are emitted as RFC3339 midnight UTC timestamps. `spec file list` and `plan file list` carry `modified_at` per entry, so polling many artifacts is one list call.
 
@@ -43,13 +43,13 @@ Spektacular is a single self-contained Go binary.
 
 ```bash
 # Homebrew
-brew install jumppad-labs/homebrew-repo/spektacular
+brew install hivecommons/homebrew-repo/spektacular
 
 # Go 1.21+
-go install github.com/jumppad-labs/spektacular@latest
+go install github.com/hivecommons/spektacular@latest
 ```
 
-Or download a pre-built binary from the [releases page](https://github.com/jumppad-labs/spektacular/releases). See the [install docs](https://spektacular.dev/install/) for apt and other methods. You also need a supported coding agent CLI (claude, bob, or codex) installed and configured.
+Or download a pre-built binary from the [releases page](https://github.com/hivecommons/spektacular/releases). See the [install docs](https://spektacular.dev/install/) for apt and other methods. You also need a supported coding agent CLI (claude, bob, or codex) installed and configured.
 
 Once installed, the minimal path is initialise → spec → plan → implement:
 

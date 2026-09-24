@@ -3,7 +3,7 @@ package spec
 import (
 	"path/filepath"
 
-	"github.com/jumppad-labs/spektacular/internal/stepkit"
+	"github.com/hivecommons/spektacular/internal/stepkit"
 )
 
 // strategy implements stepkit.PathStrategy for the spec workflow. specDir is

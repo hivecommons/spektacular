@@ -11,7 +11,7 @@ package migrate
 import (
 	"fmt"
 
-	"github.com/jumppad-labs/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
