@@ -36,7 +36,7 @@ a `gotcha`.
 
 ### A single source of truth
 
-The category model is declared **once**, in a registry in the code
+The category model is declared **once**, in Spektacular (Spek), in a registry in the code
 (`internal/knowledge/category.go`). That one declaration drives everything
 downstream:
 

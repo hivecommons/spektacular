@@ -254,9 +254,9 @@ func refuseStalePlan(cfg config.Config, st store.Store, planName string) error {
 		return nil
 	}
 	return output.NewError("plan_stale",
-		fmt.Sprintf("plan %q is stale because its spec changed after approval", planName)).
+		fmt.Sprintf("plan %q is stale because its spek changed after approval", planName)).
 		WithResource(planName).
-		WithNextAction("re-run the plan workflow against the updated spec and approve the fresh plan before implementing")
+		WithNextAction("re-run the plan workflow against the updated spek and approve the fresh plan before implementing")
 }
 
 func runImplementStatus(cmd *cobra.Command, _ []string) error {
