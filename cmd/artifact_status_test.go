@@ -16,6 +16,7 @@ type artifactStatusEnvelope struct {
 	Error          bool     `json:"error"`
 	Kind           string   `json:"kind"`
 	Name           string   `json:"name"`
+	ArtifactID     string   `json:"artifact_id"`
 	DocumentStatus string   `json:"document_status"`
 	CurrentStep    string   `json:"current_step"`
 	CompletedSteps []string `json:"completed_steps"`
@@ -54,6 +55,7 @@ func TestSpecStatusNamedFinalArtifactReportsMetadataStatus(t *testing.T) {
 		"error": false,
 		"kind": "spec",
 		"name": "000001_feature",
+		"artifact_id": "000001_feature",
 		"document_status": "final",
 		"current_step": "finished",
 		"completed_steps": [],
@@ -96,6 +98,7 @@ func TestSpecStatusNamedInProgressArtifactUsesMatchingState(t *testing.T) {
 		"error": false,
 		"kind": "spec",
 		"name": "000002_active",
+		"artifact_id": "000002_active",
 		"document_status": "draft",
 		"current_step": "overview",
 		"completed_steps": ["new", "interview"],
@@ -135,6 +138,7 @@ func TestPlanStatusNamedDraftArtifactNotInProgressOmitsUpdatedAt(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	require.Equal(t, "plan", got.Kind)
 	require.Equal(t, "000003_plan", got.Name)
+	require.Equal(t, "000003_plan", got.ArtifactID)
 	require.Equal(t, "draft", got.DocumentStatus)
 	require.Equal(t, "", got.CurrentStep)
 	require.Empty(t, got.CompletedSteps)
@@ -177,6 +181,7 @@ func TestStatusNamedSchemaReportsArtifactShape(t *testing.T) {
 	var schema commandSchema
 	require.NoError(t, json.Unmarshal([]byte(stdout), &schema))
 	require.Contains(t, schema.Output.Properties, "kind")
+	require.Contains(t, schema.Output.Properties, "artifact_id")
 	require.Contains(t, schema.Output.Properties, "document_status")
 	require.Contains(t, schema.Output.Properties, "closed_at")
 	require.Contains(t, schema.Output.Properties, "updated_at")

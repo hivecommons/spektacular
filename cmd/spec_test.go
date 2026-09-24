@@ -62,6 +62,15 @@ func setSpecIdentifierNow(t *testing.T, now time.Time) {
 	})
 }
 
+func setSpecIdentifierRandomID(t *testing.T, id string) {
+	t.Helper()
+	original := specIdentifierRandomID
+	specIdentifierRandomID = func() (string, error) { return id, nil }
+	t.Cleanup(func() {
+		specIdentifierRandomID = original
+	})
+}
+
 func runSpecNewForTest(t *testing.T, args ...string) (specCommandResult, error) {
 	t.Helper()
 	resetRootCmd(t)
@@ -110,7 +119,7 @@ func TestSpecNew_DefaultUsesTimestampPrefix(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "new", result.Step)
-	require.Regexp(t, regexp.MustCompile(`^\d{14}-billing-export$`), result.SpecName)
+	require.Regexp(t, regexp.MustCompile(`^\d{14}-[0-9a-f]{8}-billing-export$`), result.SpecName)
 	require.Equal(t, filepath.Join(dir, ".spektacular", "specs", result.SpecName+".md"), result.SpecPath)
 	require.FileExists(t, result.SpecPath)
 }
@@ -120,13 +129,14 @@ func TestSpecNew_TimestampCollisionBumpsSeconds(t *testing.T) {
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "")
 	setSpecIdentifierNow(t, time.Date(2026, time.May, 9, 1, 2, 3, 0, time.UTC))
-	writeSpecCommandFile(t, dir, "20260509010203-billing-export")
+	setSpecIdentifierRandomID(t, "a1b2c3d4")
+	writeSpecCommandFile(t, dir, "20260509010203-a1b2c3d4-billing-export")
 
 	result, err := runSpecNewForTest(t, "--data", `{"name":"billing-export"}`)
 	require.NoError(t, err)
 
-	require.Equal(t, "20260509010204-billing-export", result.SpecName)
-	require.FileExists(t, filepath.Join(dir, ".spektacular", "specs", "20260509010203-billing-export.md"))
+	require.Equal(t, "20260509010204-a1b2c3d4-billing-export", result.SpecName)
+	require.FileExists(t, filepath.Join(dir, ".spektacular", "specs", "20260509010203-a1b2c3d4-billing-export.md"))
 	require.FileExists(t, result.SpecPath)
 }
 

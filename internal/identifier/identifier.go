@@ -10,6 +10,8 @@
 package identifier
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
@@ -50,6 +52,7 @@ type Request struct {
 	Store    store.Store
 	PathFunc PathFunc // required for generated (non-external) methods; builds the path Store.Exists checks
 	Now      func() time.Time
+	RandomID func() (string, error)
 }
 
 // Result is the canonical, ID-prefixed document name.
@@ -153,7 +156,9 @@ func NormalizePart(label, raw string) (string, error) {
 }
 
 // HasPrefix reports whether name begins with an ID matching the given
-// id_method scheme (counter: 6 digits + "_"; timestamp: 14 digits + "-").
+// id_method scheme. The timestamp method accepts both timestamp-generated
+// names and legacy counter-generated names so projects can migrate away from
+// branch-local counters without renaming historical artifacts.
 // MethodExternal has no fixed shape to check mechanically, so it always
 // reports true — external IDs are the caller's responsibility. An empty
 // method defaults to MethodTimestamp, matching Resolve's own default.
@@ -165,7 +170,7 @@ func HasPrefix(method, name string) bool {
 	case MethodCounter:
 		return counterPrefixRE.MatchString(name)
 	case MethodTimestamp:
-		return timestampPrefixRE.MatchString(name)
+		return timestampPrefixRE.MatchString(name) || counterPrefixRE.MatchString(name)
 	case MethodExternal:
 		return true
 	default:
@@ -210,10 +215,18 @@ func resolveTimestamp(req Request, dir, name string) (Result, error) {
 	if now == nil {
 		now = time.Now
 	}
+	randomID := req.RandomID
+	if randomID == nil {
+		randomID = randomHexID
+	}
 
 	timestamp := now().UTC()
 	for {
-		resolved := fmt.Sprintf("%s-%s", timestamp.Format("20060102150405"), name)
+		suffix, err := randomID()
+		if err != nil {
+			return Result{}, err
+		}
+		resolved := fmt.Sprintf("%s-%s-%s", timestamp.Format("20060102150405"), suffix, name)
 		exists, err := documentExists(req.Store, req.PathFunc, dir, resolved)
 		if err != nil {
 			return Result{}, err
@@ -223,6 +236,14 @@ func resolveTimestamp(req Request, dir, name string) (Result, error) {
 		}
 		timestamp = timestamp.Add(time.Second)
 	}
+}
+
+func randomHexID() (string, error) {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("generating timestamp id suffix: %w", err)
+	}
+	return hex.EncodeToString(b[:]), nil
 }
 
 func resolveCounter(req Request, dir, name string) (Result, error) {

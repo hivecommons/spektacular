@@ -19,17 +19,20 @@ func fixedIdentifierTime() time.Time {
 
 func TestResolveIdentifier_UsesSpecFilePathForExistenceChecks(t *testing.T) {
 	st := store.NewFileStore(t.TempDir(), "project")
-	require.NoError(t, st.Write(SpecFilePath("specs", "20260509010203-billing-export"), []byte("existing")))
+	require.NoError(t, st.Write(SpecFilePath("specs", "20260509010203-a1b2c3d4-billing-export"), []byte("existing")))
 
 	got, err := ResolveIdentifier(IdentifierRequest{
 		Name:    "billing-export",
 		SpecDir: "specs",
 		Store:   st,
 		Now:     fixedIdentifierTime,
+		RandomID: func() (string, error) {
+			return "a1b2c3d4", nil
+		},
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, "20260509010204-billing-export", got.Name, "must have detected the collision via SpecFilePath and bumped the timestamp")
+	require.Equal(t, "20260509010204-a1b2c3d4-billing-export", got.Name, "must have detected the collision via SpecFilePath and bumped the timestamp")
 }
 
 func TestResolveIdentifier_CounterEnumeratesConfiguredSpecDir(t *testing.T) {

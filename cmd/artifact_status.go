@@ -25,6 +25,7 @@ import (
 type artifactStatusResult struct {
 	Kind           string   `json:"kind"`
 	Name           string   `json:"name"`
+	ArtifactID     string   `json:"artifact_id"`
 	DocumentStatus string   `json:"document_status"`
 	CurrentStep    string   `json:"current_step"`
 	CompletedSteps []string `json:"completed_steps"`
@@ -41,6 +42,7 @@ var artifactStatusOutputSchema = &schemaObj{
 	Properties: map[string]*schemaProp{
 		"kind":            {Type: "string"},
 		"name":            {Type: "string"},
+		"artifact_id":     {Type: "string"},
 		"document_status": {Type: "string"},
 		"current_step":    {Type: "string"},
 		"completed_steps": {Type: "array", Items: &schemaProp{Type: "string"}},
@@ -74,6 +76,7 @@ func runArtifactStatus(cmd *cobra.Command, kind, name, storePath, statePath, com
 	result := artifactStatusResult{
 		Kind:           kind,
 		Name:           name,
+		ArtifactID:     name,
 		CompletedSteps: []string{},
 	}
 	if fm != nil {
