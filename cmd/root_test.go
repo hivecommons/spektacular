@@ -548,7 +548,7 @@ func TestUnknownSubcommand_ReturnsStructuredErrorNamingValidSubcommands(t *testi
 	t.Run("--help still works and is unaffected", func(t *testing.T) {
 		stdout, _, code := runRootCmd(t, "spec", "--help")
 		require.Equal(t, 0, code)
-		require.Contains(t, stdout, "Manage spec workflow")
+		require.Contains(t, stdout, "Manage spek workflow")
 		require.NotContains(t, stdout, `"error"`)
 	})
 }

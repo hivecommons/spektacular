@@ -30,7 +30,7 @@ var globalFields string
 
 var rootCmd = &cobra.Command{
 	Use:     "spektacular",
-	Short:   "Agent-driven tool for spec-driven development",
+	Short:   "Agent-driven tool for spec-driven development with speks",
 	Version: versionString(),
 	RunE:    runUnknownSubcommand,
 }
@@ -292,7 +292,7 @@ func noProjectError(cfgPath string) *output.ErrorResponse {
 	cwd := filepath.Dir(filepath.Dir(cfgPath))
 	return output.NewError(
 		"no_project",
-		fmt.Sprintf("no Spektacular project is configured in %s (missing .spektacular/config.yaml)", cwd),
+		fmt.Sprintf("no Spektacular (Spek) project is configured in %s (missing .spektacular/config.yaml)", cwd),
 	).WithResource(cfgPath).
 		WithNextAction("run `spektacular init <agent>` in the project directory to initialise a project, or change to a directory that contains one")
 }

@@ -274,7 +274,7 @@ func TestVersionCheck_NewerFormatIsUnsupported(t *testing.T) {
 	m, code := runVersionCheckJSON(t)
 	require.Equal(t, 0, code)
 	require.Equal(t, "unsupported_format", m["status"])
-	requireAction(t, m, "newer Spektacular", "update Spektacular")
+	requireAction(t, m, "newer Spek", "update Spek")
 	require.NotContains(t, m["action"], "`spektacular migrate`", "migrate cannot fix a newer format")
 
 	after, err := os.ReadFile(path)

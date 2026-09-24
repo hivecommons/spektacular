@@ -79,13 +79,13 @@ var statusOutputSchema = &schemaObj{
 
 var specCmd = &cobra.Command{
 	Use:   "spec",
-	Short: "Manage spec workflow",
+	Short: "Manage spek workflow",
 	RunE:  runUnknownSubcommand,
 }
 
 var specNewCmd = &cobra.Command{
 	Use:   "new",
-	Short: "Create a new spec workflow",
+	Short: "Create a new spek workflow",
 	RunE:  runSpecNew,
 }
 
@@ -209,8 +209,8 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 
 	// No workflow to resume — starting fresh requires a name.
 	if dataStr == "" {
-		return output.NewError("name_required", "no spec name was provided").
-			WithNextAction(`specify the spec name with --data '{"name":"<spec_name>"}'; to see existing specs, run "spec file list"`)
+		return output.NewError("name_required", "no spek name was provided").
+			WithNextAction(`specify the spek name with --data '{"name":"<spec_name>"}'; to see existing speks, run "spec file list"`)
 	}
 	var input struct {
 		Name string `json:"name"`

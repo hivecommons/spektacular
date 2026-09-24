@@ -103,7 +103,7 @@ func runPlanNew(cmd *cobra.Command, _ []string) error {
 
 	// Check for an in-progress workflow BEFORE requiring a name — mirrors
 	// spec new so the driving agent can offer resume without first
-	// prompting the user for a spec name.
+	// prompting the user for a spek name.
 	statePath := stateFilePath(dataDir)
 	if dryRun {
 		statePath += ".dryrun-tmp"
@@ -119,8 +119,8 @@ func runPlanNew(cmd *cobra.Command, _ []string) error {
 
 	// No workflow to resume — starting fresh requires a name.
 	if dataStr == "" {
-		return output.NewError("name_required", "no spec name was provided").
-			WithNextAction(`specify the spec to plan against with --data '{"name":"<spec_name>"}'; to see existing specs, run "spec file list"`)
+		return output.NewError("name_required", "no spek name was provided").
+			WithNextAction(`specify the spek to plan against with --data '{"name":"<spec_name>"}'; to see existing speks, run "spec file list"`)
 	}
 	var input struct {
 		Name string `json:"name"`
@@ -204,7 +204,7 @@ func runPlanGoto(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Refuse to operate on an in-progress workflow of a different kind (e.g. a
-	// spec); resuming it from here would apply plan steps to a spec's state.
+	// spec); resuming it from here would apply plan steps to a spek's state.
 	if handled, err := guardKind(stateFilePath(dataDir), cfg.Command, "plan"); err != nil {
 		return err
 	} else if handled {

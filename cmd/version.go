@@ -71,7 +71,7 @@ func runVersionCheck(cmd *cobra.Command, _ []string) error {
 	rep, err := migrate.Inspect(root, version)
 	if fe, ok := config.IsFormatError(err); ok && fe.Newer() {
 		result.Status = "unsupported_format"
-		result.Action = fmt.Sprintf("the project's settings were written by a newer Spektacular (%s needs settings format %d; this build supports format %d) — ask the user to update Spektacular to a newer release before continuing", fe.Path, fe.Found, fe.Want)
+		result.Action = fmt.Sprintf("the project's settings were written by a newer Spek (%s needs settings format %d; this build supports format %d) — ask the user to update Spek to a newer release before continuing", fe.Path, fe.Found, fe.Want)
 		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(result)
 	}
 	if err != nil {
