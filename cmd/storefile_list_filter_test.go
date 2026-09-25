@@ -40,9 +40,10 @@ func runListJSON(t *testing.T, kind string, args ...string) listResponse {
 // families for the Phase 2.1 acceptance tests. Each row uses a docs-rooted
 // directory (not the default .spektacular data dir) and a listPath the tests
 // pass to `<kind> file list` — for spec/changelog that's "" (list the store
-// root, where the artifacts sit directly), for plan it's the plan
-// subdirectory so metadata-bearing files inside are listed instead of the
-// per-plan directory entries at the top level.
+// root, where the artifacts sit directly), for plan it's the plan's feature
+// name so the metadata-bearing documents inside are listed instead of the
+// per-plan feature folders at the top level. Listed names are bare: the
+// seeded file "draft.md" lists as "draft".
 type listFilterFixture struct {
 	kind       string
 	configYAML string
@@ -50,8 +51,9 @@ type listFilterFixture struct {
 	// for a given filename, so plan's per-plan subdirectory nesting can be
 	// expressed once and reused for every seed.
 	artifactPath func(name string) string
-	// listPath is passed as the positional argument to `<kind> file list`
-	// (empty means the store root).
+	// listPath is passed as the positional argument to `<kind> file list`:
+	// the plan feature whose documents are listed (empty means the store
+	// root, which is the only listing spec and changelog have).
 	listPath string
 }
 
@@ -153,23 +155,23 @@ func TestStoreFileList_UnfilteredReturnsAllWithMetadataFields(t *testing.T) {
 				resp = runListJSON(t, fx.kind, fx.listPath)
 			}
 
-			require.ElementsMatch(t, []string{"bare.md", "final.md", "draft.md"}, fileNames(resp.Files),
+			require.ElementsMatch(t, []string{"bare", "final", "draft"}, fileNames(resp.Files),
 				"unfiltered list must include every seeded artifact, bare ones included")
 
-			draft := findFile(resp.Files, "draft.md")
+			draft := findFile(resp.Files, "draft")
 			require.NotNil(t, draft)
 			require.Equal(t, "draft", draft["document_status"])
 			require.Equal(t, "2026-01-10", draft["created_date"])
 			_, hasClosed := draft["closed_date"]
 			require.False(t, hasClosed, "a draft artifact must not carry a closed_date field")
 
-			final := findFile(resp.Files, "final.md")
+			final := findFile(resp.Files, "final")
 			require.NotNil(t, final)
 			require.Equal(t, "final", final["document_status"])
 			require.Equal(t, "2026-01-20", final["created_date"])
 			require.Equal(t, "2026-02-05", final["closed_date"])
 
-			bare := findFile(resp.Files, "bare.md")
+			bare := findFile(resp.Files, "bare")
 			require.NotNil(t, bare)
 			_, hasStatus := bare["document_status"]
 			require.False(t, hasStatus, "a bare artifact must not carry a document_status field")
@@ -216,7 +218,7 @@ func TestStoreFileList_StatusFilterExcludesNonMatching(t *testing.T) {
 			}
 			resp := runListJSON(t, fx.kind, args...)
 
-			require.Equal(t, []string{"final.md"}, fileNames(resp.Files),
+			require.Equal(t, []string{"final"}, fileNames(resp.Files),
 				"a --document-status final filter must return only the final artifact and exclude the bare one")
 			require.Equal(t, "final", resp.Files[0]["document_status"])
 		})
@@ -259,7 +261,7 @@ func TestStoreFileList_CreatedDateRangeInclusive(t *testing.T) {
 			}
 			resp := runListJSON(t, fx.kind, args...)
 
-			require.Equal(t, []string{"jan15.md"}, fileNames(resp.Files),
+			require.Equal(t, []string{"jan15"}, fileNames(resp.Files),
 				"only the boundary-inclusive artifact must appear when after == before")
 			require.Equal(t, "2026-01-15", resp.Files[0]["created_date"])
 		})
@@ -301,7 +303,7 @@ func TestStoreFileList_ClosedDateRangeExcludesInProgress(t *testing.T) {
 			}
 			resp := runListJSON(t, fx.kind, args...)
 
-			require.Equal(t, []string{"closed.md"}, fileNames(resp.Files),
+			require.Equal(t, []string{"closed"}, fileNames(resp.Files),
 				"only the artifact with a non-zero closed_date on or after the bound must appear")
 			require.Equal(t, "2026-02-01", resp.Files[0]["closed_date"])
 		})
@@ -351,8 +353,8 @@ func TestStoreFileList_CombinedFiltersIntersect(t *testing.T) {
 			}
 			resp := runListJSON(t, fx.kind, args...)
 
-			require.Equal(t, []string{"final-feb.md"}, fileNames(resp.Files),
-				"the intersection of --document-status final AND --created-after 2026-02-01 must contain only final-feb.md — not the union")
+			require.Equal(t, []string{"final-feb"}, fileNames(resp.Files),
+				"the intersection of --document-status final AND --created-after 2026-02-01 must contain only final-feb — not the union")
 		})
 	}
 }
@@ -387,7 +389,7 @@ func TestStoreFileList_BareArtifactsExcludedFromAnyFilter(t *testing.T) {
 			} else {
 				unfiltered = runListJSON(t, fx.kind, fx.listPath)
 			}
-			require.ElementsMatch(t, []string{"bare.md", "draft.md"}, fileNames(unfiltered.Files),
+			require.ElementsMatch(t, []string{"bare", "draft"}, fileNames(unfiltered.Files),
 				"unfiltered list must include the bare artifact")
 
 			// Filtered: only the draft artifact appears; the bare one is silently excluded.
@@ -397,7 +399,7 @@ func TestStoreFileList_BareArtifactsExcludedFromAnyFilter(t *testing.T) {
 				args = append([]string{fx.listPath}, args...)
 			}
 			filtered := runListJSON(t, fx.kind, args...)
-			require.Equal(t, []string{"draft.md"}, fileNames(filtered.Files),
+			require.Equal(t, []string{"draft"}, fileNames(filtered.Files),
 				"any metadata filter must exclude the bare artifact silently")
 		})
 	}
@@ -433,7 +435,7 @@ func TestStoreFileList_TopLevelPlanDirectoryEntriesCarryNameAndPathOnly(t *testi
 
 	planDir := resp.Files[0]
 	require.Equal(t, "20260709000000-feature", planDir["name"])
-	require.Contains(t, planDir, "path")
+	require.Equal(t, "../docs/plans/20260709000000-feature", planDir["path"])
 	// Directory entries must not carry metadata fields — those live on the
 	// plan.md file inside, not on the containing directory.
 	_, hasStatus := planDir["document_status"]
@@ -486,10 +488,10 @@ func TestStoreFileList_FiltersByEveryDocumentStatus(t *testing.T) {
 		{"archived.md", metadata.Metadata{CreatedDate: created, DocumentStatus: metadata.StatusArchived, ClosedDate: closed}},
 	}
 	want := map[string]string{
-		"draft":      "draft.md",
-		"final":      "final.md",
-		"superseded": "superseded.md",
-		"archived":   "archived.md",
+		"draft":      "draft",
+		"final":      "final",
+		"superseded": "superseded",
+		"archived":   "archived",
 	}
 
 	for _, fx := range listFilterFixtures() {
@@ -544,8 +546,8 @@ func TestStoreFileList_LegacyAndUnknownStatusReadAsBlank(t *testing.T) {
 
 			resetRootCmd(t)
 			all := runListJSON(t, fx.kind, fx.listArgs()...)
-			require.Equal(t, []string{"bogus.md", "draft.md", "final.md", "legacy.md"}, fileNames(all.Files))
-			for _, name := range []string{"legacy.md", "bogus.md"} {
+			require.Equal(t, []string{"bogus", "draft", "final", "legacy"}, fileNames(all.Files))
+			for _, name := range []string{"legacy", "bogus"} {
 				entry := findFile(all.Files, name)
 				require.NotNil(t, entry)
 				require.Equal(t, "", entry["document_status"], name)
@@ -554,11 +556,11 @@ func TestStoreFileList_LegacyAndUnknownStatusReadAsBlank(t *testing.T) {
 
 			resetRootCmd(t)
 			drafts := runListJSON(t, fx.kind, fx.listArgs("--document-status", "draft")...)
-			require.Equal(t, []string{"draft.md"}, fileNames(drafts.Files))
+			require.Equal(t, []string{"draft"}, fileNames(drafts.Files))
 
 			resetRootCmd(t)
 			finals := runListJSON(t, fx.kind, fx.listArgs("--document-status", "final")...)
-			require.Equal(t, []string{"final.md"}, fileNames(finals.Files))
+			require.Equal(t, []string{"final"}, fileNames(finals.Files))
 		})
 	}
 }

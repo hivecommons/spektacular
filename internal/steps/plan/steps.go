@@ -3,6 +3,7 @@ package plan
 import (
 	"errors"
 
+	"github.com/hivecommons/spektacular/internal/artifact"
 	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/stepkit"
 	"github.com/hivecommons/spektacular/internal/store"
@@ -12,19 +13,25 @@ import (
 // PlanFilePath returns the store-relative path for a plan file under the
 // configured plan directory.
 func PlanFilePath(dir, name string) string {
-	return dir + "/" + name + "/plan.md"
+	return documentPath(dir, name, "plan")
 }
 
 // ContextFilePath returns the store-relative path for a plan's context file
 // under the configured plan directory.
 func ContextFilePath(dir, name string) string {
-	return dir + "/" + name + "/context.md"
+	return documentPath(dir, name, "context")
 }
 
 // ResearchFilePath returns the store-relative path for a plan's research file
 // under the configured plan directory.
 func ResearchFilePath(dir, name string) string {
-	return dir + "/" + name + "/research.md"
+	return documentPath(dir, name, "research")
+}
+
+// documentPath is where the plan document addressed by feature name and
+// document is stored under the configured plan directory.
+func documentPath(dir, name, document string) string {
+	return artifact.Address{Kind: artifact.KindPlan, Feature: name, Document: document}.StorePath(dir)
 }
 
 // Steps returns the ordered step configs for a plan workflow.
@@ -56,10 +63,11 @@ func Steps() []workflow.StepConfig {
 // buildResult is the stepkit.ResultBuilder for the plan workflow.
 func buildResult(stepName, instanceName, primaryPath, instruction string) any {
 	return Result{
-		Step:        stepName,
-		PlanPath:    primaryPath,
-		PlanName:    instanceName,
-		Instruction: instruction,
+		Step:         stepName,
+		PlanPath:     primaryPath,
+		PlanName:     instanceName,
+		PlanDocument: "plan",
+		Instruction:  instruction,
 	}
 }
 
@@ -71,7 +79,7 @@ func writeStep(stepName, nextStep, templatePath string, data workflow.Data, out 
 			StepName:     stepName,
 			NextStep:     nextStep,
 			TemplatePath: templatePath,
-			Strategy:     strategy{planDir: cfg.PlanDir, specDir: cfg.SpecDir},
+			Strategy:     strategy{planDir: cfg.PlanDir},
 			Extra:        extra,
 		},
 		data, out, st, cfg,

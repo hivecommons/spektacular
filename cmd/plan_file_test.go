@@ -21,7 +21,7 @@ func TestPlanFileWrite_ResolvesConfiguredDirectory(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, []byte("plan body"), 0o644))
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"plan", "file", "write", "20260709000000-feature/plan.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"plan", "file", "write", "20260709000000-feature", "plan", "--from", srcPath})
 
 	require.NoError(t, rootCmd.Execute())
 
@@ -50,7 +50,7 @@ func TestPlanFileWrite_PreservesProblematicCharacters(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, body, 0o644))
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"plan", "file", "write", "20260709000000-feature/plan.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"plan", "file", "write", "20260709000000-feature", "plan", "--from", srcPath})
 
 	require.NoError(t, rootCmd.Execute())
 
@@ -75,7 +75,7 @@ func TestPlanFileWrite_MissingSourceErrors(t *testing.T) {
 	srcPath := filepath.Join(t.TempDir(), "missing.md")
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"plan", "file", "write", "20260709000000-feature/plan.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"plan", "file", "write", "20260709000000-feature", "plan", "--from", srcPath})
 
 	err := rootCmd.Execute()
 	require.Error(t, err)
@@ -95,7 +95,7 @@ func TestPlanFileWrite_PreservesSourceFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, body, 0o644))
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"plan", "file", "write", "20260709000000-feature/plan.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"plan", "file", "write", "20260709000000-feature", "plan", "--from", srcPath})
 
 	require.NoError(t, rootCmd.Execute())
 
@@ -115,7 +115,7 @@ func TestPlanFileWrite_PipedStdinWithoutFromFails(t *testing.T) {
 	setupImplementCmd(t)
 	rootCmd.SetIn(strings.NewReader("ignored"))
 	t.Cleanup(func() { rootCmd.SetIn(nil) })
-	rootCmd.SetArgs([]string{"plan", "file", "write", "feature/plan.md"})
+	rootCmd.SetArgs([]string{"plan", "file", "write", "feature", "plan"})
 
 	err := rootCmd.Execute()
 	require.Error(t, err)
@@ -134,7 +134,7 @@ func TestPlanFileRead_ResolvesConfiguredDirectory(t *testing.T) {
 	require.NoError(t, os.WriteFile(planPath, []byte("stored context"), 0o644))
 
 	stdout, _ := setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"plan", "file", "read", "feature/context.md"})
+	rootCmd.SetArgs([]string{"plan", "file", "read", "feature", "context"})
 
 	require.NoError(t, rootCmd.Execute())
 	require.Equal(t, "stored context", stdout.String())
@@ -154,11 +154,11 @@ func TestPlanFileWrite_RejectsNameWithoutIDPrefix(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, []byte("plan body"), 0o644))
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"plan", "file", "write", "feature/plan.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"plan", "file", "write", "feature", "plan", "--from", srcPath})
 
 	err := rootCmd.Execute()
 	require.Error(t, err)
-	require.ErrorContains(t, err, "feature/plan.md")
+	require.ErrorContains(t, err, "feature", "plan")
 	require.ErrorContains(t, err, "spec.id_method")
 	require.NoFileExists(t, filepath.Join(dir, "docs", "plans", "feature", "plan.md"))
 }
@@ -175,7 +175,7 @@ func TestPlanFileWrite_AcceptsCounterIDPrefix(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, []byte("plan body"), 0o644))
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"plan", "file", "write", "000034_feature/plan.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"plan", "file", "write", "000034_feature", "plan", "--from", srcPath})
 
 	require.NoError(t, rootCmd.Execute())
 
@@ -200,7 +200,7 @@ func TestPlanFileWrite_RejectsTimestampIDWhenCounterConfigured(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, []byte("plan body"), 0o644))
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"plan", "file", "write", "20260709000000-feature/plan.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"plan", "file", "write", "20260709000000-feature", "plan", "--from", srcPath})
 
 	err := rootCmd.Execute()
 	require.Error(t, err)
@@ -218,7 +218,7 @@ func TestPlanFileWrite_CustomDirectoryResolvesFromSettingsFolder(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, []byte("plan body"), 0o644))
 
 	resetRootCmd(t)
-	stdout, stderr, code := runRootCmd(t, "plan", "file", "write", "20260709000000-feature/plan.md", "--from", srcPath)
+	stdout, stderr, code := runRootCmd(t, "plan", "file", "write", "20260709000000-feature", "plan", "--from", srcPath)
 	require.Equal(t, 0, code, stdout)
 	require.Empty(t, stderr)
 

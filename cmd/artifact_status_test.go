@@ -246,7 +246,7 @@ func TestSpecStatusWithoutNameKeepsWorkflowStatusShape(t *testing.T) {
 	require.JSONEq(t, `{
 		"error": false,
 		"spec_name": "000004_resume",
-		"spec_path": "`+filepath.Join(dir, ".spektacular", "specs", "000004_resume.md")+`",
+		"spec_path": "specs/000004_resume.md",
 		"current_step": "overview",
 		"completed_steps": ["new", "interview"],
 		"total_steps": 11,

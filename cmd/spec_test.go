@@ -120,8 +120,9 @@ func TestSpecNew_DefaultUsesTimestampPrefix(t *testing.T) {
 
 	require.Equal(t, "new", result.Step)
 	require.Regexp(t, regexp.MustCompile(`^\d{14}-[0-9a-f]{8}-billing-export$`), result.SpecName)
-	require.Equal(t, filepath.Join(dir, ".spektacular", "specs", result.SpecName+".md"), result.SpecPath)
-	require.FileExists(t, result.SpecPath)
+	require.Equal(t, "specs/"+result.SpecName+".md", result.SpecPath,
+		"spec_path is relative to the folder holding config.yaml")
+	require.FileExists(t, filepath.Join(dir, ".spektacular", result.SpecPath))
 }
 
 func TestSpecNew_TimestampCollisionBumpsSeconds(t *testing.T) {
@@ -136,8 +137,9 @@ func TestSpecNew_TimestampCollisionBumpsSeconds(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "20260509010204-a1b2c3d4-billing-export", result.SpecName)
+	require.Equal(t, "specs/20260509010204-a1b2c3d4-billing-export.md", result.SpecPath)
 	require.FileExists(t, filepath.Join(dir, ".spektacular", "specs", "20260509010203-a1b2c3d4-billing-export.md"))
-	require.FileExists(t, result.SpecPath)
+	require.FileExists(t, filepath.Join(dir, ".spektacular", "specs", "20260509010204-a1b2c3d4-billing-export.md"))
 }
 
 func TestSpecNew_ExplicitIDUnderCounterModeRejectedWithoutSideEffects(t *testing.T) {
@@ -165,7 +167,8 @@ func TestSpecNew_ExternalModeWithIDCreatesSpec(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "ext-user-123-billing-export", result.SpecName)
-	require.FileExists(t, result.SpecPath)
+	require.Equal(t, "specs/ext-user-123-billing-export.md", result.SpecPath)
+	require.FileExists(t, filepath.Join(dir, ".spektacular", "specs", "ext-user-123-billing-export.md"))
 }
 
 func TestSpecNew_ExternalModeRequiresIDWithoutSideEffects(t *testing.T) {
@@ -191,7 +194,8 @@ func TestSpecNew_CounterModeUsesNextValueFromStore(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "000008_billing-export", result.SpecName)
-	require.FileExists(t, result.SpecPath)
+	require.Equal(t, "specs/000008_billing-export.md", result.SpecPath)
+	require.FileExists(t, filepath.Join(dir, ".spektacular", "specs", "000008_billing-export.md"))
 }
 
 func TestSpecNew_CounterModeCollisionBumpsValue(t *testing.T) {
@@ -205,7 +209,8 @@ func TestSpecNew_CounterModeCollisionBumpsValue(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "000009_billing-export", result.SpecName)
-	require.FileExists(t, result.SpecPath)
+	require.Equal(t, "specs/000009_billing-export.md", result.SpecPath)
+	require.FileExists(t, filepath.Join(dir, ".spektacular", "specs", "000009_billing-export.md"))
 }
 
 func TestSpecNew_DryRunReportsCanonicalNameWithoutWrites(t *testing.T) {
@@ -219,8 +224,8 @@ func TestSpecNew_DryRunReportsCanonicalNameWithoutWrites(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "000008_billing-export", result.SpecName)
-	require.Equal(t, filepath.Join(dataDir, "specs", "000008_billing-export.md"), result.SpecPath)
-	require.NoFileExists(t, result.SpecPath)
+	require.Equal(t, "specs/000008_billing-export.md", result.SpecPath)
+	require.NoFileExists(t, filepath.Join(dataDir, "specs", "000008_billing-export.md"))
 	require.NoFileExists(t, filepath.Join(dataDir, "state.json"))
 }
 
@@ -385,7 +390,8 @@ func TestSpecNew_ForceStartsFreshOverInProgress(t *testing.T) {
 	var result specCommandResult
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &result))
 	require.Equal(t, "new", result.Step)
-	require.FileExists(t, result.SpecPath)
+	require.Equal(t, "specs/"+result.SpecName+".md", result.SpecPath)
+	require.FileExists(t, filepath.Join(dataDir, "specs", result.SpecName+".md"))
 }
 
 // TestSpecNew_CleanDirSucceedsWithoutError asserts that `spec new` in a clean
@@ -448,8 +454,8 @@ func TestSpecNew_CustomDirectoryResolvesFromSettingsFolder(t *testing.T) {
 
 	var result specCommandResult
 	require.NoError(t, json.Unmarshal([]byte(stdout), &result))
-	require.Equal(t, filepath.Join(dir, ".spektacular", "x", result.SpecName+".md"), result.SpecPath)
-	require.FileExists(t, result.SpecPath)
+	require.Equal(t, "x/"+result.SpecName+".md", result.SpecPath)
+	require.FileExists(t, filepath.Join(dir, ".spektacular", "x", result.SpecName+".md"))
 	require.NoDirExists(t, filepath.Join(dir, "x"))
 }
 

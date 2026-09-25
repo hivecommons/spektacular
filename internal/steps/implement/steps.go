@@ -3,7 +3,6 @@ package implement
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 
 	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
@@ -45,10 +44,11 @@ func Steps() []workflow.StepConfig {
 // buildResult is the stepkit.ResultBuilder for the implement workflow.
 func buildResult(stepName, instanceName, primaryPath, instruction string) any {
 	return Result{
-		Step:        stepName,
-		PlanPath:    primaryPath,
-		PlanName:    instanceName,
-		Instruction: instruction,
+		Step:         stepName,
+		PlanPath:     primaryPath,
+		PlanName:     instanceName,
+		PlanDocument: "plan",
+		Instruction:  instruction,
 	}
 }
 
@@ -60,7 +60,7 @@ func writeStep(stepName, nextStep, templatePath string, data workflow.Data, out 
 			StepName:     stepName,
 			NextStep:     nextStep,
 			TemplatePath: templatePath,
-			Strategy:     strategy{planDir: cfg.PlanDir, changelogDir: cfg.ChangelogDir, specDir: cfg.SpecDir},
+			Strategy:     strategy{planDir: cfg.PlanDir},
 			Extra:        extra,
 		},
 		data, out, st, cfg,
@@ -223,7 +223,7 @@ func finished() workflow.StepCallback {
 			planName := stepkit.GetString(data, "name")
 
 			// Test plan: tolerate absence, close if present.
-			testPlanPath := filepath.Join(cfg.PlanDir, planName, "test-plan.md")
+			testPlanPath := PlanDocumentPath(cfg.PlanDir, planName, "test-plan")
 			if err := metadata.Close(st, testPlanPath, metadata.StatusFinal); err != nil && !errors.Is(err, store.ErrNotFound) {
 				return "", err
 			}

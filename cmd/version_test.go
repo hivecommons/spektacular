@@ -15,9 +15,9 @@ import (
 // project's settings files and installed skills are current, and every
 // out-of-date status names `migrate` as the remedy.
 //
-// Every expected version string below is a hand-maintained oracle: the dev
-// default the binary compiles with is the literal "0.20.0" (cmd/root.go's
-// `version` var), asserted as that literal and never derived from the
+// Every expected version string below is a hand-maintained oracle: the
+// version TestMain pins the build to is the literal "0.20.0"
+// (cmd/main_test.go), asserted as that literal and never derived from the
 // `version` var or versionString() at runtime.
 
 // currentConfigYAML is a config.yaml already at the current settings format

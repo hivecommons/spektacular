@@ -19,10 +19,11 @@ import (
 var implementResultOutputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
-		"step":        {Type: "string"},
-		"plan_path":   {Type: "string"},
-		"plan_name":   {Type: "string"},
-		"instruction": {Type: "string"},
+		"step":          {Type: "string"},
+		"plan_path":     {Type: "string", Description: "the plan's location relative to the folder holding config.yaml"},
+		"plan_document": {Type: "string", Description: `the plan's document name, always "plan"`},
+		"plan_name":     {Type: "string"},
+		"instruction":   {Type: "string"},
 	},
 }
 
@@ -30,7 +31,8 @@ var implementStatusOutputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
 		"plan_name":        {Type: "string"},
-		"plan_path":        {Type: "string"},
+		"plan_document":    {Type: "string", Description: `the plan's document name, always "plan"`},
+		"plan_path":        {Type: "string", Description: "the plan's location relative to the folder holding config.yaml"},
 		"current_step":     {Type: "string"},
 		"completed_steps":  {Type: "array", Items: &schemaProp{Type: "string"}},
 		"total_steps":      {Type: "integer"},
@@ -362,7 +364,7 @@ func runImplementStatus(cmd *cobra.Command, _ []string) error {
 	}
 	planName := fmt.Sprintf("%v", nameVal)
 	planRel := implement.PlanFilePath(cfg.Plan.Config.Directory, planName)
-	planPath := filepath.Join(root, planRel)
+	planPath := reportedLocation(centralLocationBase, planRel)
 	task := ""
 	if v, ok := wf.GetData("task"); ok {
 		task = fmt.Sprintf("%v", v)
@@ -384,6 +386,7 @@ func runImplementStatus(cmd *cobra.Command, _ []string) error {
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	return out.WriteResult(implement.StatusResult{
 		PlanName:        planName,
+		PlanDocument:    "plan",
 		PlanPath:        planPath,
 		CurrentStep:     wf.Current(),
 		CompletedSteps:  st.CompletedSteps,

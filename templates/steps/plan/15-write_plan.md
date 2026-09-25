@@ -6,7 +6,7 @@ Commit the staged **plan.md** to the plan store. The plan documents are owned by
 plan.md was assembled and staged at `.spektacular/tmp/plan_template.md` in the assemble step. Commit it now, then remove the scratch file:
 
 ```
-{{config.command}} plan file write {{plan_name}}/plan.md --from .spektacular/tmp/plan_template.md
+{{config.command}} plan file write {{plan_name}} plan --from .spektacular/tmp/plan_template.md
 rm .spektacular/tmp/plan_template.md
 ```
 

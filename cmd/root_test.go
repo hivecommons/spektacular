@@ -77,7 +77,7 @@ func runRootCmd(t *testing.T, args ...string) (stdout, stderr string, code int) 
 
 // currentConfigHeader is the preamble every hand-written project config.yaml
 // fixture carries so the loaders accept it: the current settings format and
-// the skills version this (dev) build installs.
+// the skills version this build installs.
 func currentConfigHeader() string {
 	return fmt.Sprintf("schema: %d\nskills_version: %s\n", config.CurrentProjectSchema, version)
 }
@@ -208,12 +208,12 @@ func TestWrapper_SuccessAndFailureBothStreamOnStdoutOnly(t *testing.T) {
 		// file read's success path is a deliberate, documented exception: it
 		// writes raw file bytes to stdout, not the JSON envelope. Only its
 		// failure path goes through the envelope.
-		stdout, stderr, code := runRootCmd(t, "spec", "file", "read", "feature.md")
+		stdout, stderr, code := runRootCmd(t, "spec", "file", "read", "feature")
 		require.Equal(t, 0, code)
 		require.Equal(t, "stored body", stdout)
 		require.Empty(t, stderr)
 
-		stdout, stderr, code = runRootCmd(t, "spec", "file", "read", "missing.md")
+		stdout, stderr, code = runRootCmd(t, "spec", "file", "read", "missing")
 		require.Equal(t, 1, code)
 		require.NotEmpty(t, stdout)
 		require.Empty(t, stderr)
@@ -367,7 +367,7 @@ func TestWrapper_ErrorDiscriminantAndExitCode(t *testing.T) {
 		stdout, _, code := runRootCmd(t, "spec", "file", "list")
 		assertSuccessEnvelope(t, stdout, code)
 
-		stdout, _, code = runRootCmd(t, "spec", "file", "read", "missing.md")
+		stdout, _, code = runRootCmd(t, "spec", "file", "read", "missing")
 		assertFailureEnvelope(t, stdout, code)
 	})
 
@@ -460,7 +460,7 @@ func TestWrapper_FailureIsPrintedExactlyOnceWithNoCobraBoilerplate(t *testing.T)
 
 	t.Run("file", func(t *testing.T) {
 		writeSpecFileFixture(t)
-		stdout, stderr, code := runRootCmd(t, "spec", "file", "read", "missing.md")
+		stdout, stderr, code := runRootCmd(t, "spec", "file", "read", "missing")
 		assertNoCobraBoilerplate(t, stdout, stderr, code)
 	})
 
@@ -852,8 +852,7 @@ func TestSessionLog_EnabledDoesNotChangeCallerVisibleOutput(t *testing.T) {
 
 			require.Equal(t, offCode, onCode)
 
-			// Responses can embed each run's own absolute temp-dir path
-			// (e.g. spec_path), so the two necessarily-distinct temp dirs
+			// Responses can embed each run's own absolute temp-dir path, so the two necessarily-distinct temp dirs
 			// are normalized to a common placeholder before the
 			// byte-identical comparison; everything else must match exactly.
 			normalize := func(s, dir string) string { return strings.ReplaceAll(s, dir, "TESTDIR") }

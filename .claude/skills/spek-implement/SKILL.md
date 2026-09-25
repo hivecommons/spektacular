@@ -31,11 +31,11 @@ On each turn, the CLI returns JSON containing an `instruction` field. That instr
 
 The CLI owns the plan documents — `plan.md`, the plan's `context.md`, and `research.md`. All plan document access goes through `go run . plan file`:
 
-- `go run . plan file read <name>/<doc>.md` — read a plan document from the plan store.
-- `go run . plan file write <name>/<doc>.md --from <source-path>` — write a plan document into the plan store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
+- `go run . plan file read <name> <doc>` — read a plan document from the plan store.
+- `go run . plan file write <name> <doc> --from <source-path>` — write a plan document into the plan store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
 - `go run . plan file list` — list plans in the plan store.
 
-This includes the edits the implement workflow makes to `plan.md` — ticking task checkboxes and appending changelog entries. Read the document with `plan file read`, apply the change, and commit it with `plan file write`. Path arguments are plan-directory-relative document paths (e.g. `my-feature/plan.md`).
+This includes the edits the implement workflow makes to `plan.md` — ticking task checkboxes and appending changelog entries. Read the document with `plan file read`, apply the change, and commit it with `plan file write`. A plan document is addressed by the feature name and the document name as two arguments, never as a path or with a file extension (e.g. `plan file read my-feature plan`).
 
 # How to start
 
@@ -43,9 +43,9 @@ This includes the edits the implement workflow makes to `plan.md` — ticking ta
 
 An implementation works from three documents in the plan store. Together they are the approved plan and the only source of truth for what to build. Read each in full with `go run . plan file read`, never with the `Read` tool:
 
-- **`plan.md`**: the approved plan. It holds the overview, architecture and design decisions, testing approach, and the `## Milestones & Tasks` checklist of tasks (`## Milestones & Phases` of phases, in a plan written before tasks), whose first unchecked `#### - [ ] Task:` (or `Phase`) heading is the current task. Read it with `go run . plan file read <plan_name>/plan.md`.
-- **The plan's `context.md`**: the per-task technical detail. It holds one `### Task: <title>` section per task (`### Phase N.M:` per phase in an older plan) with the files to change, complexity and agent strategy. Read it with `go run . plan file read <plan_name>/context.md`.
-- **`research.md`**: the decision log. It holds rejected alternatives, supporting evidence, files examined and open assumptions. Read it with `go run . plan file read <plan_name>/research.md`.
+- **`plan.md`**: the approved plan. It holds the overview, architecture and design decisions, testing approach, and the `## Milestones & Tasks` checklist of tasks (`## Milestones & Phases` of phases, in a plan written before tasks), whose first unchecked `#### - [ ] Task:` (or `Phase`) heading is the current task. Read it with `go run . plan file read <plan_name> plan`.
+- **The plan's `context.md`**: the per-task technical detail. It holds one `### Task: <title>` section per task (`### Phase N.M:` per phase in an older plan) with the files to change, complexity and agent strategy. Read it with `go run . plan file read <plan_name> context`.
+- **`research.md`**: the decision log. It holds rejected alternatives, supporting evidence, files examined and open assumptions. Read it with `go run . plan file read <plan_name> research`.
 
 None of these is the working context, `.spektacular/working-context.md`, which holds only a session's notes and never replaces the plan.
 

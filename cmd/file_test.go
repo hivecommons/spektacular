@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -25,7 +24,7 @@ func TestSpecFileWrite_ResolvesConfiguredDirectory(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, []byte("spec body"), 0o644))
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"spec", "file", "write", "feature.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"spec", "file", "write", "feature", "--from", srcPath})
 
 	require.NoError(t, rootCmd.Execute())
 
@@ -54,7 +53,7 @@ func TestSpecFileWrite_PreservesProblematicCharacters(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, body, 0o644))
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"spec", "file", "write", "feature.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"spec", "file", "write", "feature", "--from", srcPath})
 
 	require.NoError(t, rootCmd.Execute())
 
@@ -79,7 +78,7 @@ func TestSpecFileWrite_MissingSourceErrors(t *testing.T) {
 	srcPath := filepath.Join(t.TempDir(), "missing.md")
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"spec", "file", "write", "feature.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"spec", "file", "write", "feature", "--from", srcPath})
 
 	err := rootCmd.Execute()
 	require.Error(t, err)
@@ -99,7 +98,7 @@ func TestSpecFileWrite_PreservesSourceFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, body, 0o644))
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"spec", "file", "write", "feature.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"spec", "file", "write", "feature", "--from", srcPath})
 
 	require.NoError(t, rootCmd.Execute())
 
@@ -119,7 +118,7 @@ func TestSpecFileWrite_PipedStdinWithoutFromFails(t *testing.T) {
 	setupImplementCmd(t)
 	rootCmd.SetIn(strings.NewReader("ignored"))
 	t.Cleanup(func() { rootCmd.SetIn(nil) })
-	rootCmd.SetArgs([]string{"spec", "file", "write", "feature.md"})
+	rootCmd.SetArgs([]string{"spec", "file", "write", "feature"})
 
 	err := rootCmd.Execute()
 	require.Error(t, err)
@@ -138,7 +137,7 @@ func TestSpecFileRead_ResolvesConfiguredDirectory(t *testing.T) {
 	require.NoError(t, os.WriteFile(specPath, []byte("stored body"), 0o644))
 
 	stdout, _ := setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"spec", "file", "read", "feature.md"})
+	rootCmd.SetArgs([]string{"spec", "file", "read", "feature"})
 
 	require.NoError(t, rootCmd.Execute())
 	require.Equal(t, "stored body", stdout.String())
@@ -152,7 +151,7 @@ func TestSpecFileRead_ResolvesConfiguredDirectory(t *testing.T) {
 func TestSpecFileRead_MissingFileNamesResourceInError(t *testing.T) {
 	writeSpecFileFixture(t)
 
-	stdout, stderr, code := runRootCmd(t, "spec", "file", "read", "missing.md")
+	stdout, stderr, code := runRootCmd(t, "spec", "file", "read", "missing")
 
 	require.Equal(t, 1, code)
 	require.Empty(t, stderr)
@@ -161,8 +160,8 @@ func TestSpecFileRead_MissingFileNamesResourceInError(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
 	require.True(t, er.IsError)
 	require.Equal(t, "not_found", er.Code)
-	require.Contains(t, er.Message, "missing.md")
-	require.Equal(t, "missing.md", er.Resource)
+	require.Equal(t, `no spec named "missing"`, er.Message)
+	require.Equal(t, "missing", er.Resource)
 }
 
 // ---------------------------------------------------------------------------
@@ -179,29 +178,17 @@ func TestSpecFileRead_MissingFileNamesResourceInError(t *testing.T) {
 // repeated here.
 // ---------------------------------------------------------------------------
 
-// storeArtifactDir returns the store-relative directory holding fx's artifact,
-// as an argument for `<kind> file list`, plus the artifact's own base name.
-// The plan fixture nests its artifact one directory down
-// (`<id>-feature/plan.md`), so listing its containing directory — rather than
-// the store root — is what shows the artifact itself.
-func storeArtifactDir(fx kindFixture) (listArg, baseName string) {
-	slash := filepath.ToSlash(fx.artifactName)
-	dir := path.Dir(slash)
-	if dir == "." {
-		dir = ""
-	}
-	return dir, path.Base(slash)
-}
-
-// storeListNames runs `<kind> file list` against the directory holding fx's
-// artifact and returns the entry names it reports, so a test can assert what
-// the store advertises before and after a delete.
+// storeListNames runs the `<kind> file list` that shows fx's artifact and
+// returns the entry names it reports, so a test can assert what the store
+// advertises before and after a delete. A plan's documents are listed under
+// their feature (`plan file list <feature>`), so that is the listing that
+// shows the plan document itself; a spec or changelog record is listed at
+// the store root.
 func storeListNames(t *testing.T, fx kindFixture) []string {
 	t.Helper()
-	listArg, _ := storeArtifactDir(fx)
 	args := []string{fx.kind, "file", "list"}
-	if listArg != "" {
-		args = append(args, listArg)
+	if fx.document != "" {
+		args = append(args, fx.feature)
 	}
 	stdout, stderr, code := runRootCmd(t, args...)
 	require.Equalf(t, 0, code, "list failed: %s", stdout)
@@ -226,7 +213,7 @@ func writeStoreArtifact(t *testing.T, fx kindFixture, body string) {
 	t.Helper()
 	srcPath := filepath.Join(t.TempDir(), "source.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte(body), 0o644))
-	stdout, _, code := runRootCmd(t, fx.kind, "file", "write", fx.artifactName, "--from", srcPath)
+	stdout, _, code := runRootCmd(t, fx.cmd("write", "--from", srcPath)...)
 	require.Equalf(t, 0, code, "write failed: %s", stdout)
 }
 
@@ -249,18 +236,23 @@ func TestStoreFileDelete_RemovesStoredDocumentByName(t *testing.T) {
 			abs := filepath.Join(dir, fx.storeRelPath)
 			require.FileExists(t, abs)
 
-			_, baseName := storeArtifactDir(fx)
-			require.Contains(t, storeListNames(t, fx), baseName,
+			// A listed name is the bare name the other verbs accept: the
+			// document for a plan, the feature otherwise.
+			listed := fx.feature
+			if fx.document != "" {
+				listed = fx.document
+			}
+			require.Contains(t, storeListNames(t, fx), listed,
 				"the artifact must be listed before it is deleted")
 
-			stdout, stderr, code := runRootCmd(t, fx.kind, "file", "delete", fx.artifactName)
+			stdout, stderr, code := runRootCmd(t, fx.cmd("delete")...)
 			require.Equal(t, 0, code)
 			require.Empty(t, stderr)
 			require.Equal(t, "", stdout,
 				"delete emits no envelope today — nothing at all is written to stdout")
 
 			require.NoFileExists(t, abs)
-			require.NotContains(t, storeListNames(t, fx), baseName,
+			require.NotContains(t, storeListNames(t, fx), listed,
 				"the deleted artifact must no longer be listed")
 		})
 	}
@@ -291,7 +283,11 @@ func TestStoreFileDelete_AbsentDocumentSucceedsAndChangesNothing(t *testing.T) {
 				// `delete` performs no ID-prefix validation, so an arbitrary
 				// name reaches the store layer even for the kinds whose
 				// `write` would reject it.
-				stdout, stderr, code := runRootCmd(t, fx.kind, "file", "delete", "not-here.md")
+				absent := []string{fx.kind, "file", "delete", "not-here"}
+				if fx.document != "" {
+					absent = append(absent, fx.document)
+				}
+				stdout, stderr, code := runRootCmd(t, absent...)
 				require.Equal(t, 0, code, "deleting an absent document is a success")
 				require.Empty(t, stderr)
 				require.Equal(t, "", stdout)
@@ -310,11 +306,11 @@ func TestStoreFileDelete_AbsentDocumentSucceedsAndChangesNothing(t *testing.T) {
 
 				writeStoreArtifact(t, fx, "stored body")
 
-				_, _, code := runRootCmd(t, fx.kind, "file", "delete", fx.artifactName)
+				_, _, code := runRootCmd(t, fx.cmd("delete")...)
 				require.Equal(t, 0, code)
 				namesAfterFirst := storeListNames(t, fx)
 
-				stdout, stderr, code := runRootCmd(t, fx.kind, "file", "delete", fx.artifactName)
+				stdout, stderr, code := runRootCmd(t, fx.cmd("delete")...)
 				require.Equal(t, 0, code, "a repeated, identical delete is a success")
 				require.Empty(t, stderr)
 				require.Equal(t, "", stdout)
@@ -343,7 +339,7 @@ func TestChangelogFileDelete_DoesNotHonourRepoRouting(t *testing.T) {
 
 	// The sibling verbs accept --repo; delete does not have the flag at all,
 	// so cobra rejects it during parsing.
-	stdout, stderr, code := runRootCmd(t, "changelog", "file", "delete", "20260709000000-release-notes.md", "--repo", "testproj")
+	stdout, stderr, code := runRootCmd(t, "changelog", "file", "delete", "20260709000000-release-notes", "--repo", "testproj")
 	require.Equal(t, 1, code)
 	require.Empty(t, stderr)
 

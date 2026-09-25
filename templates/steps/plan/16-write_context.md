@@ -6,7 +6,7 @@ Commit the plan's staged **context.md** to the plan store. Never write or edit t
 The plan's `context.md` was assembled and staged at `.spektacular/tmp/context_template.md` in the assemble step. Commit it now, then remove the scratch file:
 
 ```
-{{config.command}} plan file write {{plan_name}}/context.md --from .spektacular/tmp/context_template.md
+{{config.command}} plan file write {{plan_name}} context --from .spektacular/tmp/context_template.md
 rm .spektacular/tmp/context_template.md
 ```
 

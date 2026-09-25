@@ -19,17 +19,22 @@ import (
 	"github.com/hivecommons/spektacular/templates"
 )
 
-// PathStrategy injects workflow-specific template variables and identifies
-// which path is "primary" for the workflow's Result struct.
+// PathStrategy injects workflow-specific template variables and reports the
+// location of the workflow's primary document for its Result struct.
+//
+// A document Spektacular owns may not be on disk at all, so the template
+// variables a strategy provides name documents by address (a spec name, a
+// plan name) and never by host path: an instruction points an agent at the
+// CLI command that reads the document, not at a file to open.
 type PathStrategy interface {
-	// PathVars returns the workflow-specific path and name template variables
-	// given the workflow instance name (e.g. plan name, spec name) and the
-	// store root.
+	// PathVars returns the workflow-specific template variables given the
+	// workflow instance name (e.g. plan name, spec name) and the store root.
 	PathVars(instanceName, storeRoot string) map[string]any
-	// PrimaryPathField returns the key in the PathVars map whose value is the
-	// "primary" path for this workflow (e.g. "plan_path", "spec_path"). It is
-	// used to populate the Result struct's primary path field.
-	PrimaryPathField() string
+	// PrimaryLocation returns where the workflow's primary document is kept,
+	// relative to the folder holding the config file that declares its store
+	// (e.g. "plans/<name>/plan.md"). It populates the Result struct's primary
+	// path field.
+	PrimaryLocation(instanceName string) string
 }
 
 // StepRequest bundles the inputs to WriteStepResult.
@@ -123,9 +128,9 @@ func WriteStepResult(
 			// A completion commit that ends a single-task run early can also
 			// close a milestone in full mode, and must then name it.
 			"may_close_milestone": point == autocommit.PointCompletion && cfg.AutoCommit == config.AutoCommitFull && req.StepName == "update_changelog",
-			"kind":      cfg.Kind,
-			"spec_name": instanceName,
-			"tmp_path":  commitMessageTmpPath,
+			"kind":                cfg.Kind,
+			"spec_name":           instanceName,
+			"tmp_path":            commitMessageTmpPath,
 		}
 		partial, err := RenderTemplate(gitCommitPartialPath, commitVars)
 		if err != nil {
@@ -141,8 +146,7 @@ func WriteStepResult(
 		instruction = strings.TrimRight(instruction, "\n") + "\n\n---\n\n" + footer
 	}
 
-	primaryPath, _ := pathVars[req.Strategy.PrimaryPathField()].(string)
-	return out.WriteResult(build(req.StepName, instanceName, primaryPath, instruction))
+	return out.WriteResult(build(req.StepName, instanceName, req.Strategy.PrimaryLocation(instanceName), instruction))
 }
 
 // StepTitle converts a snake_case step name like "acceptance_criteria" into

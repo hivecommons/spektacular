@@ -1,31 +1,30 @@
 package cmd
 
 import (
-	"path/filepath"
-
+	"github.com/hivecommons/spektacular/internal/artifact"
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/plantask"
 )
 
-// The `plan file` subcommand group reads and writes plan documents
-// (plan.md, context.md, research.md) within the configured plan directory.
-// See newStoreFileCmd for the shared implementation.
+// The `plan file` subcommand group reads and writes plan documents (plan,
+// context, research, test-plan), each addressed by the feature's bare name
+// and a document name. See newStoreFileCmd for the shared implementation.
 func init() {
-	planCmd.AddCommand(newStoreFileCmd(
-		"Read and write files in the plan store",
-		func(c config.Config) string { return c.Plan.Config.Directory },
-		true,
-		false,
-		validatePlanDocument,
-	))
+	planCmd.AddCommand(newStoreFileCmd(storeFileKind{
+		kind:      artifact.KindPlan,
+		short:     "Read and write plan documents in the plan store",
+		dir:       func(c config.Config) string { return c.Plan.Config.Directory },
+		requireID: true,
+		validate:  validatePlanDocument,
+	}))
 }
 
-// validatePlanDocument refuses a plan.md whose tasks break the task format's
-// structural rules. Only plan.md is checked, and only when it is written in
+// validatePlanDocument refuses a plan document whose tasks break the task
+// format's structural rules. Only the `plan` document is checked, and only when it is written in
 // the task format: a plan whose work is still "Phase N.M" headings saves
 // unvalidated, so whole-plan implement keeps ticking old plans.
-func validatePlanDocument(cfg config.Config, docPath string, body []byte) error {
-	if filepath.Base(docPath) != "plan.md" {
+func validatePlanDocument(cfg config.Config, addr artifact.Address, body []byte) error {
+	if addr.Document != "plan" {
 		return nil
 	}
 	p := plantask.Parse(body)

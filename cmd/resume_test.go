@@ -165,7 +165,7 @@ func TestResumeImplement_ReadsPlanFirstAtEveryStep(t *testing.T) {
 				"the implement resume must include the shared plan-documents block")
 			require.Contains(t, out, "first unchecked")
 
-			planRead := command + " plan file read <plan_name>/plan.md"
+			planRead := command + " plan file read <plan_name> plan"
 			// The partial also names the working-context path, so anchor on
 			// the numbered item that tells the agent to read it.
 			workingContext := "\n2. Read `.spektacular/working-context.md`"

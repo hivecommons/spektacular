@@ -57,8 +57,8 @@ spektacular implement goto --data '{"step":"update_feature_changelog"}'
 From that point on, follow each rendered instruction exactly. In
 particular, at the `update_feature_changelog` step you MUST:
 
-1. Read the spec through `spektacular spec file read 20260101000000-jwt-auth.md`
-   and the plan through `spektacular plan file read 20260101000000-jwt-auth/plan.md` —
+1. Read the spec through `spektacular spec file read 20260101000000-jwt-auth`
+   and the plan through `spektacular plan file read 20260101000000-jwt-auth plan` —
    never with the `Read` tool.
 2. Identify the affected member repos from the plan's `## Changelog`
    section's Files-changed lists. Both `auth` (colocated, unprefixed
@@ -69,7 +69,7 @@ particular, at the `update_feature_changelog` step you MUST:
    finished step will error if it is missing:
 
    ```bash
-   spektacular changelog file write 20260101000000-jwt-auth.md \
+   spektacular changelog file write 20260101000000-jwt-auth \
        --from .spektacular/tmp/changelog_project.md
    ```
 
@@ -78,9 +78,9 @@ particular, at the `update_feature_changelog` step you MUST:
    through the CLI with `--repo`:
 
    ```bash
-   spektacular changelog file write 20260101000000-jwt-auth.md \
+   spektacular changelog file write 20260101000000-jwt-auth \
        --repo auth --from .spektacular/tmp/changelog_auth.md
-   spektacular changelog file write 20260101000000-jwt-auth.md \
+   spektacular changelog file write 20260101000000-jwt-auth \
        --repo docs --from .spektacular/tmp/changelog_docs.md
    ```
 

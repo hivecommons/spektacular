@@ -89,8 +89,12 @@ API and end users who need reliable login across services.
 CONTENT
 
 # Commit the completed spec into the store through the CLI. The spec file is
-# owned by spektacular — never edit it directly with built-in file tools.
-cat /tmp/spec_final.md | spektacular spec file write "$SPEC_NAME.md"
+# owned by spektacular — never edit it directly with built-in file tools. The
+# body is staged under .spektacular/tmp/ and passed with --from.
+mkdir -p .spektacular/tmp
+cp /tmp/spec_final.md .spektacular/tmp/spec_final.md
+spektacular spec file write "$SPEC_NAME" --from .spektacular/tmp/spec_final.md
+rm .spektacular/tmp/spec_final.md
 
 # Finish the workflow.
 spektacular spec goto --data '{"step":"finished"}'

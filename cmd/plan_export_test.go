@@ -32,7 +32,7 @@ func exportProject(t *testing.T) string {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "")
-	stdout, code := writePlanDoc(t, taskPlanName, "plan.md", exportPlan(true))
+	stdout, code := writePlanDoc(t, taskPlanName, "plan", exportPlan(true))
 	require.Equal(t, 0, code, stdout)
 	return dir
 }
@@ -53,9 +53,9 @@ func TestPlanExport_JSONCarriesTheDesignFields(t *testing.T) {
 	require.Equal(t, 0, code, stdout)
 
 	var got struct {
-		Kind           string          `json:"kind"`
-		Name           string          `json:"name"`
-		DocumentStatus string          `json:"document_status"`
+		Kind           string           `json:"kind"`
+		Name           string           `json:"name"`
+		DocumentStatus string           `json:"document_status"`
 		Tasks          []map[string]any `json:"tasks"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
@@ -158,7 +158,7 @@ func TestPlanExport_ReflectsTheCurrentPlan(t *testing.T) {
 	require.Equal(t, false, exportJSON(t)["tasks"].([]any)[1].(map[string]any)["completed"])
 
 	ticked := strings.Replace(exportPlan(true), "#### - [ ] Task: Add the plan export command", "#### - [x] Task: Add the plan export command", 1)
-	_, code := writePlanDoc(t, taskPlanName, "plan.md", ticked)
+	_, code := writePlanDoc(t, taskPlanName, "plan", ticked)
 	require.Equal(t, 0, code)
 	require.Equal(t, true, exportJSON(t)["tasks"].([]any)[1].(map[string]any)["completed"])
 }
@@ -177,7 +177,7 @@ func TestPlanExport_DocumentStatusMatchesPlanStatus(t *testing.T) {
 	require.Equal(t, "draft", statusOf())
 	require.Equal(t, statusOf(), exportJSON(t)["document_status"])
 
-	_, _, code := runRootCmd(t, "plan", "file", "set-document-status", taskPlanName+"/plan.md", "--document-status", "final")
+	_, _, code := runRootCmd(t, "plan", "file", "set-document-status", taskPlanName, "plan", "--document-status", "final")
 	require.Equal(t, 0, code)
 	require.Equal(t, "final", statusOf())
 	require.Equal(t, statusOf(), exportJSON(t)["document_status"])
@@ -196,7 +196,7 @@ func TestPlanExport_PlanWithoutTasksSaysWhatIsMissing(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "")
-	_, code := writePlanDoc(t, taskPlanName, "plan.md", "# Plan\n\n## Milestones & Phases\n\n### Milestone 1: M\n\n#### - [ ] Phase 1.1: Work\n")
+	_, code := writePlanDoc(t, taskPlanName, "plan", "# Plan\n\n## Milestones & Phases\n\n### Milestone 1: M\n\n#### - [ ] Phase 1.1: Work\n")
 	require.Equal(t, 0, code)
 
 	for _, format := range []string{"pretty", "json"} {
@@ -218,7 +218,7 @@ func TestPlanExport_EverySavedPlanExports(t *testing.T) {
 	writeSpecCommandConfig(t, dir, "")
 
 	for _, body := range []string{exportPlan(true), exportPlan(false), validTaskPlan()} {
-		_, code := writePlanDoc(t, taskPlanName, "plan.md", body)
+		_, code := writePlanDoc(t, taskPlanName, "plan", body)
 		require.Equal(t, 0, code)
 		for _, format := range []string{"pretty", "json"} {
 			stdout, _, code := runRootCmd(t, "plan", "export", taskPlanName, "--format", format)
@@ -242,7 +242,7 @@ func TestPlanScaffoldTaskFormatSavesAndExports(t *testing.T) {
 		"<one registered repo name>", "testproj",
 	).Replace(scaffold)
 
-	stdout, code := writePlanDoc(t, taskPlanName, "plan.md", filled)
+	stdout, code := writePlanDoc(t, taskPlanName, "plan", filled)
 	require.Equal(t, 0, code, stdout)
 
 	tasks := exportJSON(t)["tasks"].([]any)

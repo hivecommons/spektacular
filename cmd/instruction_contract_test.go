@@ -118,29 +118,26 @@ type contractCapture struct{ result any }
 
 func (c *contractCapture) WriteResult(v any) error { c.result = v; return nil }
 
-// contractStrategy supplies realistic path and name variables for every
-// workflow at once, so any step template renders with its placeholders
-// filled.
+// contractStrategy supplies the name variables every workflow provides, so
+// any step template renders with its placeholders filled. Documents are named
+// by address only; repo_path is the one host path a strategy provides,
+// because a repo's code folder is not a stored document.
 type contractStrategy struct{}
 
 func (contractStrategy) PathVars(instanceName, _ string) map[string]any {
-	planDir := "/proj/.spektacular/plans/" + instanceName
 	return map[string]any{
-		"name":           instanceName,
-		"plan_name":      instanceName,
-		"spec_name":      instanceName,
-		"repo_name":      instanceName,
-		"plan_dir":       planDir,
-		"plan_path":      planDir + "/plan.md",
-		"context_path":   planDir + "/context.md",
-		"research_path":  planDir + "/research.md",
-		"spec_path":      "/proj/.spektacular/specs/" + instanceName + ".md",
-		"changelog_path": "/proj/.spektacular/changelog/" + instanceName + ".md",
-		"repo_path":      "/proj/repos/" + instanceName,
+		"name":                   instanceName,
+		"plan_name":              instanceName,
+		"spec_name":              instanceName,
+		"repo_name":              instanceName,
+		"changelog_section_name": "## Changelog",
+		"repo_path":              "/proj/repos/" + instanceName,
 	}
 }
 
-func (contractStrategy) PrimaryPathField() string { return "plan_path" }
+func (contractStrategy) PrimaryLocation(instanceName string) string {
+	return "plans/" + instanceName + "/plan.md"
+}
 
 var _ stepkit.PathStrategy = contractStrategy{}
 
@@ -343,20 +340,41 @@ const oldWorkingContextPath = ".spektacular/context.md"
 // into a fresh skill project fixture, so callers must not run in parallel.
 func agentFacingCorpus(t *testing.T, command string) []instructionSource {
 	t.Helper()
-	installDir := installClaudeInto(t, command)
-	corpus := workflowInstructionCorpus(t, command, installDir)
+	corpus, _, _ := agentFacingCorpusWithRoots(t, command)
+	return corpus
+}
+
+// agentFacingCorpusWithRoots is agentFacingCorpus that also returns the temp
+// install dir and the temp skill project root the corpus was produced in.
+func agentFacingCorpusWithRoots(t *testing.T, command string) (corpus []instructionSource, installDir, projectDir string) {
+	t.Helper()
+	installDir = installClaudeInto(t, command)
+	corpus = workflowInstructionCorpus(t, command, installDir)
 
 	agentsMD, err := os.ReadFile(filepath.Join(installDir, "AGENTS.md"))
 	require.NoError(t, err, "the claude install must write the managed AGENTS.md sections")
 	corpus = append(corpus, instructionSource{"AGENTS.md (managed sections)", string(agentsMD)})
 
 	skillProject(t)
+	projectDir, err = os.Getwd()
+	require.NoError(t, err)
 	helperSkills := listSkills()
 	require.NotEmpty(t, helperSkills, "the skill library must serve helper skills to check")
 	for _, name := range helperSkills {
 		corpus = append(corpus, instructionSource{"skill " + name, fetchSkillInstructions(t, name)})
 	}
-	return corpus
+	return corpus, installDir, projectDir
+}
+
+// A document Spektacular owns may not be on disk, so no agent-facing
+// instruction may carry the host path of the project it was produced in.
+func TestNoAgentFacingInstructionCarriesProjectRoot(t *testing.T) {
+	corpus, installDir, projectDir := agentFacingCorpusWithRoots(t, "spektacular")
+	require.NotEmpty(t, corpus)
+	for _, src := range corpus {
+		require.NotContainsf(t, src.body, installDir, "%s carries the install dir host path", src.label)
+		require.NotContainsf(t, src.body, projectDir, "%s carries the project root host path", src.label)
+	}
 }
 
 func TestNoEmittedInstructionNamesOldWorkingContext(t *testing.T) {
@@ -396,9 +414,6 @@ func unqualifiedContextMd(line string) (mentions int, unqualified bool) {
 	}
 	for _, qualifier := range []string{
 		"plan's",
-		"demo-feature/context.md",
-		"<plan_name>/context.md",
-		"<name>/context.md",
 		"/demo-feature/",
 	} {
 		if strings.Contains(line, qualifier) {
@@ -410,14 +425,44 @@ func unqualifiedContextMd(line string) (mentions int, unqualified bool) {
 
 func TestUnqualifiedContextMdFlagsBareMention(t *testing.T) {
 	for line, want := range map[string]bool{
-		"stop and move it to context.md.":                         true,
-		"record the decision in the plan's `context.md`.":         false,
-		"run `spektacular plan file read <plan_name>/context.md`": false,
-		"refresh `.spektacular/working-context.md` before goto":   false,
+		"stop and move it to context.md.":                       true,
+		"record the decision in the plan's `context.md`.":       false,
+		"run `spektacular plan file read <plan_name> context`":  false,
+		"refresh `.spektacular/working-context.md` before goto": false,
 	} {
 		_, got := unqualifiedContextMd(line)
 		require.Equalf(t, want, got, "unqualified verdict for %q", line)
 	}
+}
+
+// retiredAddressing matches the ways of addressing a spec, plan document or
+// changelog record that the CLI now refuses: a name carrying a file
+// extension, or a plan document written as one joined path. Hand-maintained
+// here rather than shared with the template guard, so the two checks stay
+// independent.
+var retiredAddressing = []*regexp.Regexp{
+	regexp.MustCompile("(spec|changelog) file (read|write|delete|set-document-status) [^ `\n]*\\.md"),
+	regexp.MustCompile("plan file (read|write|delete|set-document-status|list) [^ `\n]*/"),
+	regexp.MustCompile("plan file (read|write|delete|set-document-status) [^ `\n]+ [^ `\n-][^ `\n]*\\.md"),
+}
+
+// Every rendered step instruction, skill and managed AGENTS.md section must
+// address documents the way the CLI accepts them, or an agent following it
+// hits an unexpected_extension refusal.
+func TestNoAgentFacingInstructionUsesOldAddressing(t *testing.T) {
+	addressed := 0
+	for _, src := range agentFacingCorpus(t, "spektacular") {
+		for i, line := range strings.Split(src.body, "\n") {
+			for _, re := range retiredAddressing {
+				m := re.FindString(line)
+				require.Emptyf(t, m, "%s:%d: retired document address %q: %s", src.label, i+1, m, line)
+			}
+			if strings.Contains(line, " file read ") || strings.Contains(line, " file write ") {
+				addressed++
+			}
+		}
+	}
+	require.NotZero(t, addressed, "the corpus must contain document commands to check")
 }
 
 // Two different files are called context.md in this project's history, so
@@ -511,9 +556,9 @@ func TestImplementStartListsPlanDocuments(t *testing.T) {
 	}
 	for _, src := range surfaces {
 		for _, anchor := range []string{
-			command + " plan file read <plan_name>/plan.md",
-			command + " plan file read <plan_name>/context.md",
-			command + " plan file read <plan_name>/research.md",
+			command + " plan file read <plan_name> plan",
+			command + " plan file read <plan_name> context",
+			command + " plan file read <plan_name> research",
 			"the per-task technical detail",
 			"the decision log",
 			".spektacular/working-context.md",

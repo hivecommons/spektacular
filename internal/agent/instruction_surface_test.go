@@ -39,11 +39,39 @@ var forbiddenInstructionSubstrings = []string{
 	"with no frontmatter added and nothing reformatted",
 }
 
+// forbiddenAddressingPatterns match the retired ways of addressing a spec,
+// plan document or changelog record: a name carrying a file extension, or a
+// plan document written as one joined path. The CLI refuses both, so an
+// instruction spelling either would hand an agent a command that fails. The
+// last pattern catches a template building such a name from its own
+// variables; the leading character class lets a work-folder path such as
+// `.spektacular/work/{{plan_name}}/` through, since that is a scratch file,
+// not a store address.
+var forbiddenAddressingPatterns = []*regexp.Regexp{
+	regexp.MustCompile("(spec|changelog) file (read|write|delete|set-document-status) [^ `\n]*\\.md"),
+	regexp.MustCompile("plan file (read|write|delete|set-document-status|list) [^ `\n]*/"),
+	regexp.MustCompile("plan file (read|write|delete|set-document-status) [^ `\n]+ [^ `\n-][^ `\n]*\\.md"),
+	regexp.MustCompile("(^|[^/])\\{\\{(plan|spec)_name\\}\\}(\\.md|/)"),
+}
+
+// retiredPathVariables are the template variables that used to render a
+// store document's host path. Strategies no longer provide them: a document
+// Spektacular owns may not be on disk, so an instruction names it by address
+// and the CLI command that reads it. Any tag form — escaped, unescaped or a
+// section — over one of these names is forbidden in an instruction template.
+var retiredPathVariables = regexp.MustCompile(`\{\{[{&#^/]?\s*(spec_path|plan_path|context_path|research_path|changelog_path|plan_dir)\s*\}`)
+
+// instructionTemplateRoots are the embedded template trees that reach an
+// agent: workflow skills, step instructions, the partials they include and
+// the managed AGENTS.md sections.
+var instructionTemplateRoots = []string{"skills/workflows", "steps", "partials", "agents"}
+
 // TestEmbeddedTemplatesAvoidStdinInstructionSurface walks the embedded
-// templates filesystem under skills/workflows/ and steps/ and asserts no
-// markdown file contains a pattern from the old stdin/heredoc CLI surface.
+// templates that reach an agent and asserts no markdown file contains a
+// pattern from the old stdin/heredoc CLI surface or a retired document
+// address.
 func TestEmbeddedTemplatesAvoidStdinInstructionSurface(t *testing.T) {
-	roots := []string{"skills/workflows", "steps"}
+	roots := instructionTemplateRoots
 	for _, root := range roots {
 		err := fs.WalkDir(templates.FS, root, func(path string, d fs.DirEntry, err error) error {
 			require.NoError(t, err)
@@ -53,9 +81,36 @@ func TestEmbeddedTemplatesAvoidStdinInstructionSurface(t *testing.T) {
 			body, err := fs.ReadFile(templates.FS, path)
 			require.NoError(t, err)
 			assertNoForbiddenSubstring(t, path, string(body))
+			assertNoOldAddressing(t, path, string(body))
+			require.Emptyf(t, retiredPathVariables.FindString(string(body)),
+				"%s renders a document's host path through a retired template variable", path)
 			return nil
 		})
 		require.NoError(t, err)
+	}
+}
+
+// TestRetiredPathVariablesPatternMatchesEveryTagForm pins the guard's
+// pattern against hand-written tags, so a pattern that silently stopped
+// matching cannot make the template walk above pass vacuously.
+func TestRetiredPathVariablesPatternMatchesEveryTagForm(t *testing.T) {
+	for tag, want := range map[string]bool{
+		"{{spec_path}}":              true,
+		"{{plan_path}}":              true,
+		"{{context_path}}":           true,
+		"{{research_path}}":          true,
+		"{{changelog_path}}":         true,
+		"{{plan_dir}}":               true,
+		"{{{plan_path}}}":            true,
+		"{{ spec_path }}":            true,
+		"{{#plan_dir}}":              true,
+		"{{plan_name}}":              false,
+		"{{spec_name}}":              false,
+		"{{config.command}}":         false,
+		"the plan_path field":        false,
+		"{{changelog_section_name}}": false,
+	} {
+		require.Equalf(t, want, retiredPathVariables.MatchString(tag), "match verdict for %q", tag)
 	}
 }
 
@@ -79,6 +134,7 @@ func TestRenderedSkillsAvoidStdinInstructionSurface(t *testing.T) {
 		body, err := os.ReadFile(path)
 		require.NoError(t, err)
 		assertNoForbiddenSubstring(t, path, string(body))
+		assertNoOldAddressing(t, path, string(body))
 		return nil
 	})
 	require.NoError(t, err)
@@ -1144,5 +1200,16 @@ func assertNoForbiddenSubstring(t *testing.T, path, body string) {
 	t.Helper()
 	for _, needle := range forbiddenInstructionSubstrings {
 		require.NotContains(t, body, needle, "%s contains forbidden instruction-surface pattern %q", path, needle)
+	}
+}
+
+// assertNoOldAddressing fails when body addresses a store document in a
+// spelling the CLI now refuses.
+func assertNoOldAddressing(t *testing.T, path, body string) {
+	t.Helper()
+	for _, re := range forbiddenAddressingPatterns {
+		if m := re.FindString(body); m != "" {
+			t.Errorf("%s addresses a document in a retired spelling: %q (pattern %s)", path, m, re)
+		}
 	}
 }

@@ -13,6 +13,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// DevVersion is the version a build made without release -ldflags reports
+// (go build, go run). It has no place in the release sequence, so it is never
+// compared with a project's installed skills version: see classifySkills.
+const DevVersion = "dev"
+
 // ErrNoAgent is the cause of a skills reinstall that cannot run because the
 // project settings record no agent.
 var ErrNoAgent = errors.New("the project settings record no agent to reinstall skills for")
@@ -392,12 +397,14 @@ func readLegacyVersion(cfgDir string) string {
 }
 
 // classifySkills compares the installed skills version with the running
-// build: empty is "missing", equal is "match", anything else "mismatch".
+// build: empty is "missing", equal is "match", anything else "mismatch". A
+// development build matches any recorded version, since it cannot say whether
+// it is ahead of or behind the release that installed the skills.
 func classifySkills(installed, current string) string {
-	switch installed {
-	case "":
+	switch {
+	case installed == "":
 		return "missing"
-	case current:
+	case installed == current, current == DevVersion:
 		return "match"
 	default:
 		return "mismatch"

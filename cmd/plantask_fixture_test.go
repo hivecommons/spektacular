@@ -67,13 +67,14 @@ func taskPlanDoc(milestones ...string) string {
 	return b.String()
 }
 
-// writePlanDoc writes body as <name>/<doc> through `plan file write` and
-// returns the command's stdout and exit code.
+// writePlanDoc writes body as plan <name>'s document <doc> (a bare document
+// name such as "plan") through `plan file write` and returns the command's
+// stdout and exit code.
 func writePlanDoc(t *testing.T, name, doc, body string) (string, int) {
 	t.Helper()
 	src := filepath.Join(t.TempDir(), "source.md")
 	require.NoError(t, os.WriteFile(src, []byte(body), 0o644))
-	stdout, _, code := runRootCmd(t, "plan", "file", "write", name+"/"+doc, "--from", src)
+	stdout, _, code := runRootCmd(t, "plan", "file", "write", name, doc, "--from", src)
 	return stdout, code
 }
 

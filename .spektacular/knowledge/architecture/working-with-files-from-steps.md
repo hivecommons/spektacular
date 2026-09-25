@@ -1,5 +1,5 @@
 ---
-tags: [storage, workflow, step, paths, filesystem, cli, metadata]
+tags: [storage, workflow, step, paths, filesystem, cli, metadata, template, addressing]
 ---
 
 # Working with Files from Steps and Commands
@@ -19,15 +19,29 @@ Everything the store knows about an artifact, not just its bytes:
 | What is in this directory? | `st.List(path)` | `os.ReadDir(...)` |
 | When was it changed? | `st.Stat(path)` | `os.Stat(...).ModTime()` |
 
-`st.Root()` is for **rendering an absolute path into agent-facing output** and nothing else. Using it to rebuild a filesystem location and then read that location is the same violation as calling `os` directly — it just takes two lines instead of one.
+`st.Root()` is never used to build a location for a store document, whether to read it or to show it to an agent. Using it to rebuild a filesystem location and then read that location is the same violation as calling `os` directly; it just takes two lines instead of one.
 
 ```go
-// Fine — Root() renders a path for an agent to read.
-absPath := filepath.Join(st.Root(), SpecFilePath(cfg.SpecDir, name))
-
-// Not fine — Root() used to reach the bytes behind the store's back.
+// Not fine: Root() used to reach the bytes behind the store's back.
 info, err := os.Stat(filepath.Join(st.Root(), storePath))
+
+// Not fine either: Root() used to hand an agent a path to open.
+absPath := filepath.Join(st.Root(), SpecFilePath(cfg.SpecDir, name))
 ```
+
+## Agent-facing output names documents, never paths
+
+Nothing an agent or an external caller reads may contain a path to a store document: not a step instruction, not a command result, not a `next_action`. A store's documents may not be on disk at all, and a host path invites the reader to open the file with its own tools instead of going through Spektacular.
+
+Instead, output names the document by its address and the CLI command that reads it:
+
+- a spec: `spektacular spec file read <feature>`
+- a plan document: `spektacular plan file read <feature> <document>`
+- a changelog record: `spektacular changelog file read <feature> [--repo <name>]`
+
+In templates that means the address variables (`{{spec_name}}`, `{{plan_name}}`) inside a CLI read, never a path variable.
+
+Where output also reports *where* a document is stored, such as a list's `path` or a status `plan_path`, that location is relative to the folder holding the configuration file that declares the store (for example `specs/<feature>.md`). It is informational only, never an address and never something to open.
 
 ## Why this is stricter than it looks
 
@@ -107,11 +121,7 @@ func SpecFilePath(dir, name string) string {
 `dir` comes from the workflow config (`cfg.SpecDir`, itself from `config.yaml`, defaulting to
 `.spektacular/specs`) — never hard-code it.
 
-Use `st.Root()` only when you need the absolute path for output shown to agents:
-
-```go
-absPath := filepath.Join(st.Root(), SpecFilePath(cfg.SpecDir, name))
-```
+These helpers are the file provider's layout, used inside Spektacular to reach the store. They are never rendered into agent-facing output. See "Agent-facing output names documents, never paths" above.
 
 ## Common Patterns
 

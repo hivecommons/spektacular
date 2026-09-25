@@ -1,0 +1,11 @@
+- **Design documents are unchanged.** They stay addressed by source and path, and design sources keep reporting their location as they do today. A user-supplied design may be in any format, so its extension is meaningful. (Spec non-goal.)
+- **No `implement` document command.** A feature's implementation record stays under `changelog file`, with no alias. (Spec non-goal; issue #46 open question 1.)
+- **Knowledge commands are unchanged.** They already address entries by name and report config-relative locations. (Spec non-goal.)
+- **Workflow commands' input is unchanged.** `spec new`, `plan new`, `implement new` and the status commands already take the bare feature name. (Spec non-goal.)
+- **No deprecation window.** Old spellings are refused from the release that ships this. The CLI never accepts both forms. (Spec constraint.)
+- **Workflow step paths stay absolute.** The `{{spec_path}}`/`{{plan_path}}` template variables and the `plan_path` in `plan new`/`goto` and `implement new`/`goto` results stay absolute host paths for the driving agent. Only the list commands and the two status commands change location convention.
+- **The named `plan status <feature>` form is unchanged.** It already reports the bare name and no location. `spec status` is unchanged.
+- **No `--repo` on changelog delete or set-document-status.** Those verbs keep working on the central changelog only, as today.
+- **`artifacts list` is unchanged.** Its pre-existing mismatch is left alone: it scans central changelog records one folder below where they are written. It is a separate command outside this spec, and worth its own issue.
+- **No site-wide command reference.** The new docs page covers the spec, plan and changelog document commands only, not every CLI command.
+- **No template-drift cleanup beyond regeneration.** Regenerating the installed skill copies picks up unrelated earlier template changes as a side effect. No other reconciliation of those copies is planned.

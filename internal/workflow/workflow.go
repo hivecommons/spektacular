@@ -236,7 +236,7 @@ func (w *Workflow) translateTransitionError(event string, err error) error {
 func (w *Workflow) walkthroughRevisionHint() string {
 	name, _ := w.GetData("name")
 	return fmt.Sprintf(
-		"the walkthrough only ever advances to finished — to revise an earlier, already-committed section, edit it directly and commit with `%s %s file write %v/<doc>.md --from <scratch>`, then resume the walkthrough (do not try to goto backward to re-run a step); if no revision is needed,",
+		"the walkthrough only ever advances to finished — to revise an earlier, already-committed section, edit it directly and commit with `%s %s file write %v <doc> --from <scratch>`, then resume the walkthrough (do not try to goto backward to re-run a step); if no revision is needed,",
 		w.cfg.Command, w.cfg.Kind, name)
 }
 

@@ -12,7 +12,7 @@ import (
 // way out is refused on a project whose settings are behind, whose skills are
 // stale or unrecorded, or whose settings are newer than this build. Every
 // fixture is literal YAML and every expected value a hand-maintained literal;
-// the dev build version is "0.20.0".
+// the test build version is "0.20.0" (see TestMain).
 
 // gateNextAction is the gate's next action for a project with no configured
 // command.
@@ -112,6 +112,42 @@ repos:
 	require.Equal(t, cfgPath, er.Resource)
 	require.Equal(t, "this project's installed agent skills are not recorded; this Spektacular is 0.20.0", er.Message)
 	require.Equal(t, gateNextAction, er.NextAction)
+}
+
+// An unstamped development build cannot place itself in the release
+// sequence, so it runs against a project whose skills were installed by any
+// release. Settings-format checks still apply to it.
+func TestGate_DevBuildIgnoresSkillsVersion(t *testing.T) {
+	version = "dev"
+	t.Cleanup(func() { version = "0.20.0" })
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSettingsFile(t, dir, "config.yaml", `schema: 3
+skills_version: 0.23.0
+name: proj
+command: spektacular
+agent: claude
+repos:
+    - name: proj
+      location: .
+`)
+	writeSettingsFile(t, dir, "repo.yaml", currentRepoYAML)
+
+	stdout, stderr, code := runRootCmd(t, "repo", "list")
+	require.Equal(t, 0, code, stdout)
+	require.Empty(t, stderr)
+}
+
+// A development build still refuses a project whose settings are behind.
+func TestGate_DevBuildStillRefusesOutdatedSettings(t *testing.T) {
+	version = "dev"
+	t.Cleanup(func() { version = "0.20.0" })
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeStaleUnversionedProject(t, dir)
+
+	er := runRootError(t, "repo", "list")
+	require.Equal(t, "upgrade_required", er.Code)
 }
 
 // Criterion 3: the way out, and cobra's help and completion, all run on a

@@ -173,7 +173,7 @@ None — every implementation uncertainty was resolved during planning.
 - Fine-grained permission scoping beyond role
 PLAN_EOF
 sed -i -e "s/__TASK_1_ID__/${TASK_1_ID}/g" -e "s/__TASK_2_ID__/${TASK_2_ID}/g" -e "s/__REPO__/${REPO}/g" /tmp/plan.md
-spektacular plan file write 20260101000000-user-auth/plan.md --from /tmp/plan.md
+spektacular plan file write 20260101000000-user-auth plan --from /tmp/plan.md
 
 cat > /tmp/context.md <<'CONTEXT_EOF'
 # Context: 20260101000000-user-auth
@@ -241,7 +241,7 @@ Token verification must add less than 5ms p99 latency. RS256 verification
 is CPU-bound; benchmarks show ~0.3ms per verification on the production
 hardware profile.
 CONTEXT_EOF
-spektacular plan file write 20260101000000-user-auth/context.md --from /tmp/context.md
+spektacular plan file write 20260101000000-user-auth context --from /tmp/context.md
 
 cat > /tmp/research.md <<'RESEARCH_EOF'
 # Research: 20260101000000-user-auth
@@ -308,7 +308,7 @@ negligible latency to the refresh flow.
 - `auth/session/session.go` shows the current auth path
 - `router/router.go:42` is where the new middleware slots in
 RESEARCH_EOF
-spektacular plan file write 20260101000000-user-auth/research.md --from /tmp/research.md
+spektacular plan file write 20260101000000-user-auth research --from /tmp/research.md
 
 # Advance through the write steps — each verifies its document was committed —
 # then through the mandatory walkthrough review (sign-off) to the finished step.

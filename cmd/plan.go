@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/metadata"
@@ -18,10 +17,11 @@ import (
 var planResultOutputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
-		"step":        {Type: "string"},
-		"plan_path":   {Type: "string"},
-		"plan_name":   {Type: "string"},
-		"instruction": {Type: "string"},
+		"step":          {Type: "string"},
+		"plan_path":     {Type: "string", Description: "the plan's location relative to the folder holding config.yaml"},
+		"plan_document": {Type: "string", Description: `the plan's document name, always "plan"`},
+		"plan_name":     {Type: "string"},
+		"instruction":   {Type: "string"},
 	},
 }
 
@@ -29,7 +29,8 @@ var planStatusOutputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
 		"plan_name":       {Type: "string"},
-		"plan_path":       {Type: "string"},
+		"plan_document":   {Type: "string", Description: `the plan's document name, always "plan"`},
+		"plan_path":       {Type: "string", Description: "the plan's location relative to the folder holding config.yaml"},
 		"current_step":    {Type: "string"},
 		"completed_steps": {Type: "array", Items: &schemaProp{Type: "string"}},
 		"total_steps":     {Type: "integer"},
@@ -261,7 +262,7 @@ func runPlanStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no active plan found — run 'plan new' first")
 	}
 	planName := fmt.Sprintf("%v", nameVal)
-	planPath := filepath.Join(root, plan.PlanFilePath(cfg.Plan.Config.Directory, planName))
+	planPath := reportedLocation(centralLocationBase, plan.PlanFilePath(cfg.Plan.Config.Directory, planName))
 
 	stepInfos := wf.StepStatus()
 	entries := make([]plan.StepEntry, len(stepInfos))
@@ -272,6 +273,7 @@ func runPlanStatus(cmd *cobra.Command, args []string) error {
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	return out.WriteResult(plan.StatusResult{
 		PlanName:       planName,
+		PlanDocument:   "plan",
 		PlanPath:       planPath,
 		CurrentStep:    wf.Current(),
 		CompletedSteps: st.CompletedSteps,

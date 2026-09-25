@@ -4,7 +4,7 @@ Identify the current task, then research the codebase touchpoints before writing
 
 ### Step 1: Pick the current task
 
-Re-read plan.md through the plan store — `{{config.command}} plan file read {{plan_name}}/plan.md` — and locate the current task.
+Re-read plan.md through the plan store — `{{config.command}} plan file read {{plan_name}} plan` — and locate the current task.
 
 {{> partials/implement-current-task}}
 
@@ -19,7 +19,7 @@ If every task is already checked, STOP — this should only happen if the user m
 
 ### Step 2: Read the task's technical detail
 
-Read the plan's `context.md` through the plan store — `{{config.command}} plan file read {{plan_name}}/context.md` — and find the section the `*Technical detail:*` link points to. Read the entire section. It should contain file:line references, complexity, token estimate, and an agent strategy.
+Read the plan's `context.md` through the plan store — `{{config.command}} plan file read {{plan_name}} context` — and find the section the `*Technical detail:*` link points to. Read the entire section. It should contain file:line references, complexity, token estimate, and an agent strategy.
 
 Always read the plan documents with `{{config.command}} plan file read`, never with the `Read` tool. If the section is missing, unreadable, or empty, STOP and ask the user whether to fix the plan's `context.md` before proceeding. This is a plan/reality mismatch — do not guess.
 

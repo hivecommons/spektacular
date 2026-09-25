@@ -1,7 +1,6 @@
 package stepkit
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -34,29 +33,14 @@ func (c *captureWriter) WriteResult(v any) error {
 	return nil
 }
 
-type fakeStrategy struct {
-	primary string
-	vars    map[string]any
+type fakeStrategy struct{}
+
+func (fakeStrategy) PathVars(instanceName, _ string) map[string]any {
+	return map[string]any{"fake_name": instanceName}
 }
 
-func (f fakeStrategy) PathVars(instanceName, storeRoot string) map[string]any {
-	out := map[string]any{
-		"fake_path":    filepath.Join(storeRoot, "fake", instanceName+".md"),
-		"fake_name":    instanceName,
-		"fake_store":   storeRoot,
-		"fake_primary": filepath.Join(storeRoot, instanceName),
-	}
-	for k, v := range f.vars {
-		out[k] = v
-	}
-	return out
-}
-
-func (f fakeStrategy) PrimaryPathField() string {
-	if f.primary != "" {
-		return f.primary
-	}
-	return "fake_primary"
+func (fakeStrategy) PrimaryLocation(instanceName string) string {
+	return "fakes/" + instanceName + "/fake.md"
 }
 
 type fakeResult struct {
@@ -141,7 +125,9 @@ func TestWriteStepResultStandardAndStrategyVars(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "overview", got.StepName)
 	require.Equal(t, "widget", got.InstanceName)
-	require.Equal(t, filepath.Join(tmp, "widget"), got.PrimaryPath)
+	require.Equal(t, "fakes/widget/fake.md", got.PrimaryPath,
+		"the Result's primary path must be the strategy's PrimaryLocation, never a host path")
+	require.NotContains(t, got.PrimaryPath, tmp)
 	require.NotEmpty(t, got.Instruction)
 }
 
@@ -151,11 +137,8 @@ func TestWriteStepResultExtraOverridesStrategy(t *testing.T) {
 	writer := &captureWriter{}
 	st := store.NewFileStore(tmp, "project")
 
-	// Inject a fake strategy that returns fake_primary = X, then override
-	// via Extra to Y. Result should reflect the pre-override strategy value
-	// because PrimaryPathField reads from pathVars, not the merged vars —
-	// this is intentional so per-callback Extras can override rendered
-	// template text without changing the emitted Result's primary path.
+	// Extras override rendered template text; the Result's primary path
+	// comes from PrimaryLocation and is unaffected by them.
 	err := WriteStepResult(
 		StepRequest{
 			StepName:     "overview",
@@ -171,6 +154,7 @@ func TestWriteStepResultExtraOverridesStrategy(t *testing.T) {
 
 	got := writer.result.(fakeResult)
 	require.Contains(t, got.Instruction, "OverriddenTitle")
+	require.Equal(t, "fakes/widget/fake.md", got.PrimaryPath)
 }
 
 func TestWriteStepResultMissingTemplateError(t *testing.T) {

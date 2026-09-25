@@ -14,7 +14,7 @@ import (
 )
 
 // This file covers the `migrate` command through runRootCmd. Every fixture is
-// literal YAML and every expected value a hand-maintained literal; the dev
+// literal YAML and every expected value a hand-maintained literal; the test
 // build version is "0.20.0".
 
 // staleUnversionedConfigYAML is a config.yaml that predates format
@@ -486,13 +486,14 @@ func TestMigrate_LegacyStoreFoldersKeepEveryArtifact(t *testing.T) {
 	require.NotContains(t, string(raw), ".spektacular/")
 
 	resetRootCmd(t)
-	require.Equal(t, []string{"20260101000000-alpha.md", "20260102000000-beta.md"}, fileNames(runListJSON(t, "spec").Files))
+	require.Equal(t, []string{"20260101000000-alpha", "20260102000000-beta"}, fileNames(runListJSON(t, "spec").Files))
 	resetRootCmd(t)
 	require.Equal(t, []string{"000001_p"}, fileNames(runListJSON(t, "plan").Files))
 	resetRootCmd(t)
-	require.Equal(t, []string{"proj"}, fileNames(runListJSON(t, "changelog").Files))
-	resetRootCmd(t)
-	require.Equal(t, []string{"20260101000000-alpha.md"}, fileNames(runListJSON(t, "changelog", "proj").Files))
+	// The legacy changelog entry sits in the proj/ namespace folder, which is
+	// where the repo named proj (located at the project root) keeps its
+	// project-namespaced records.
+	require.Equal(t, []string{"20260101000000-alpha"}, fileNames(runListJSON(t, "changelog", "--repo", "proj").Files))
 	resetRootCmd(t)
 	require.Equal(t, []string{
 		"changelog .spektacular/changelog/proj/20260101000000-alpha.md",
@@ -507,8 +508,8 @@ func TestMigrate_LegacyStoreFoldersKeepEveryArtifact(t *testing.T) {
 	require.Empty(t, stderr)
 	var result specCommandResult
 	require.NoError(t, json.Unmarshal([]byte(stdout), &result))
-	require.Equal(t, filepath.Join(dir, ".spektacular", "specs", result.SpecName+".md"), result.SpecPath)
-	require.FileExists(t, result.SpecPath)
+	require.Equal(t, "specs/"+result.SpecName+".md", result.SpecPath)
+	require.FileExists(t, filepath.Join(dir, ".spektacular", "specs", result.SpecName+".md"))
 	require.NoDirExists(t, filepath.Join(dir, ".spektacular", ".spektacular"))
 }
 
@@ -546,5 +547,5 @@ repos:
 	require.FileExists(t, filepath.Join(dir, "docs", "specs", "a.md"))
 	require.NoDirExists(t, filepath.Join(dir, ".spektacular", "docs"))
 	resetRootCmd(t)
-	require.Equal(t, []string{"a.md"}, fileNames(runListJSON(t, "spec").Files))
+	require.Equal(t, []string{"a"}, fileNames(runListJSON(t, "spec").Files))
 }

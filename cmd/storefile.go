@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
+	"github.com/hivecommons/spektacular/internal/artifact"
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/identifier"
 	"github.com/hivecommons/spektacular/internal/metadata"
@@ -22,8 +22,37 @@ import (
 type storeDirFunc func(config.Config) string
 
 // writeValidator checks a document's body, stripped of front matter, before a
-// `file write` stores it. docPath is the store-relative path being written.
-type writeValidator func(cfg config.Config, docPath string, body []byte) error
+// `file write` stores it. addr is the address being written.
+type writeValidator func(cfg config.Config, addr artifact.Address, body []byte) error
+
+// storeFileKind describes one `file` subcommand group: which kind of document
+// it addresses, which configured directory holds it, and the per-kind rules
+// newStoreFileCmd applies.
+//
+// requireID gates ID-prefix validation on write. Spec is where an ID is born
+// (resolved by ResolveIdentifier before spec new ever calls this write path),
+// so `spec file` leaves it false. Plan and changelog names must reuse that
+// same spec ID rather than mint their own, so `plan file` and `changelog file`
+// set it: a write whose feature lacks an ID matching the configured
+// spec.id_method scheme is rejected.
+//
+// repoRouted adds an optional `--repo <name>` flag to write, read, and list:
+// when set, the command operates on the named member repo's own changelog
+// store (rooted at the resolved repo, namespaced by the project name) instead
+// of the central one, and writes are auto-stamped with provenance front
+// matter. Only the changelog group opts in.
+//
+// validate, when non-nil, checks a document's body before it is stored. A
+// refusal returns before anything is written, so the stored document is left
+// exactly as it was. Only the plan group sets one.
+type storeFileKind struct {
+	kind       artifact.Kind
+	short      string
+	dir        storeDirFunc
+	requireID  bool
+	repoRouted bool
+	validate   writeValidator
+}
 
 // stripLeadingFrontmatterBlocks removes zero or more leading YAML frontmatter
 // blocks from raw. Each `<kind> file write` is idempotent under repeated
@@ -61,26 +90,20 @@ func metadataOptsForDocumentStatus(raw string) (metadata.UpdateOptions, error) {
 	return metadata.UpdateOptions{DocumentStatus: &s}, nil
 }
 
-// validateIDPrefix checks that the leading path segment of a store-relative
-// write path carries an ID matching the configured spec.id_method scheme
-// (e.g. "000034_feature/plan.md" for counter, "20260709062525-feature.md"
-// for timestamp). Plan and changelog entries must reuse the ID minted for
-// their originating spec rather than mint their own, so a write whose name
-// lacks a matching ID is rejected with guidance to reuse the spec's ID.
-func validateIDPrefix(cfg config.Config, writePath string) error {
-	name := writePath
-	if idx := strings.IndexAny(name, "/\\"); idx >= 0 {
-		name = name[:idx]
-	}
-	name = strings.TrimSuffix(name, filepath.Ext(name))
-
-	if identifier.HasPrefix(cfg.Spec.IDMethod, name) {
+// validateIDPrefix checks that a feature name carries an ID matching the
+// configured spec.id_method scheme (e.g. "000034_feature" for counter,
+// "20260709062525-feature" for timestamp). Plan and changelog entries must
+// reuse the ID minted for their originating spec rather than mint their own,
+// so a write whose feature lacks a matching ID is rejected with guidance to
+// reuse the spec's ID.
+func validateIDPrefix(cfg config.Config, feature string) error {
+	if identifier.HasPrefix(cfg.Spec.IDMethod, feature) {
 		return nil
 	}
 	return output.NewError("missing_id_prefix",
-		fmt.Sprintf("%q has no ID prefix matching the configured spec.id_method (%q) — reuse the ID from the originating spec's filename rather than inventing a new one", writePath, cfg.Spec.IDMethod)).
-		WithResource(writePath).
-		WithNextAction("Find the originating spec's ID (e.g. via `spec file list`) and prefix this name with it, matching spec.id_method's format.")
+		fmt.Sprintf("%q has no ID prefix matching the configured spec.id_method (%q) — reuse the ID from the originating spec's name rather than inventing a new one", feature, cfg.Spec.IDMethod)).
+		WithResource(feature).
+		WithNextAction(fmt.Sprintf("Find the originating spec's ID (run `%s spec file list`) and prefix this name with it, matching spec.id_method's format.", cfg.Command))
 }
 
 // storeFileStore builds a store rooted at the project root and returns it
@@ -141,53 +164,65 @@ func repoRoutedStore(repoName string) (store.Store, string, error) {
 
 // provenanceOpts returns the merge options a repo-routed changelog write is
 // stamped with: the project's name and source, plus the spec and plan
-// identifiers derived from the written filename (the plan-slug-equals-
+// identifiers, which are the feature name itself (the plan-slug-equals-
 // spec-slug convention). Stamping is mechanical and CLI-owned so derived
 // entries always carry reliable provenance regardless of what the staged
 // body contains.
-func provenanceOpts(cfg config.Config, writePath string) metadata.UpdateOptions {
-	slug := strings.TrimSuffix(filepath.Base(writePath), filepath.Ext(writePath))
+func provenanceOpts(cfg config.Config, feature string) metadata.UpdateOptions {
 	return metadata.UpdateOptions{
 		Project:       cfg.Name,
 		ProjectSource: cfg.Source,
-		Spec:          slug,
-		Plan:          slug,
+		Spec:          feature,
+		Plan:          feature,
 	}
 }
 
-// newStoreFileCmd builds a `file` subcommand group (write/read/delete/list)
-// that reads and writes files within a configured store directory. Path
-// arguments are resolved relative to that directory, so callers pass a file
-// name rather than a full project path. It backs `spec file`, `plan file`,
-// and `changelog file`, which differ only in which configured directory they
-// target and whether writes require an ID prefix.
+// newStoreFileCmd builds a `file` subcommand group (write, read, delete, list,
+// set-document-status) for one kind of document. It backs `spec file`,
+// `plan file` and `changelog file`, which differ only in the storeFileKind
+// they are built from.
 //
-// requireID gates ID-prefix validation on write. Spec is where an ID is
-// born (resolved by ResolveIdentifier before spec new ever calls this write
-// path), so `spec file` passes false. Plan and changelog names must reuse
-// that same spec ID rather than mint their own, so `plan file` and
-// `changelog file` pass true: a write whose leading path segment lacks an ID
-// matching the configured spec.id_method scheme is rejected.
-//
-// repoRouted adds an optional `--repo <name>` flag to write, read, and list:
-// when set, the command operates on the named member repo's own changelog
-// store (rooted at the resolved repo, namespaced by the project name) instead
-// of the central one, and writes are auto-stamped with provenance front
-// matter. Only the changelog group opts in.
-//
-// validate, when non-nil, checks a document's body before it is stored. A
-// refusal returns before anything is written, so the stored document is left
-// exactly as it was. Only the plan group sets one.
-func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool, validate writeValidator) *cobra.Command {
-	fileCmd := &cobra.Command{Use: "file", Short: short, RunE: runUnknownSubcommand}
+// Every verb addresses a document by name, never by path: a spec or
+// changelog record by the feature's bare name, a plan document by the
+// feature and a document name as two arguments. Each verb parses its
+// arguments through artifact.Parse before it touches a store, so a name
+// carrying an extension or a joined path is refused with the same command
+// correctly spelled and the store is left untouched. What list prints as
+// `name` is exactly what the other verbs accept.
+func newStoreFileCmd(k storeFileKind) *cobra.Command {
+	fileCmd := &cobra.Command{Use: "file", Short: k.short, RunE: runUnknownSubcommand}
 
 	// resolveStore picks the central store or, when repoRouted and the
-	// command's --repo flag is set, the named member repo's store.
-	resolveStore := func(repoName string) (store.Store, string, error) {
+	// command's --repo flag is set, the named member repo's store. base is
+	// the store-relative folder of the config file declaring that store,
+	// which reported locations are made relative to.
+	resolveStore := func(repoName string) (st store.Store, storeDir, base string, err error) {
 		if repoName == "" {
-			return storeFileStore(dir)
+			st, storeDir, err = storeFileStore(k.dir)
+			return st, storeDir, centralLocationBase, err
 		}
-		return repoRoutedStore(repoName)
+		st, storeDir, err = repoRoutedStore(repoName)
+		return st, storeDir, "", err
+	}
+
+	// parse turns a verb's arguments into an address, rendering a parse
+	// failure as a refusal that restates the command correctly spelled.
+	parse := func(cmd *cobra.Command, args []string) (artifact.Address, error) {
+		addr, err := artifact.Parse(k.kind, args)
+		if err != nil {
+			return artifact.Address{}, addressRefusal(cmd, k.kind, args, err)
+		}
+		return addr, nil
+	}
+
+	docArgs := cobra.ExactArgs(1)
+	addrUse := "<feature>"
+	if k.kind == artifact.KindPlan {
+		// A single argument must reach the parser so a feature with no
+		// document gets the actionable document_required refusal rather
+		// than cobra's generic arity error.
+		docArgs = cobra.RangeArgs(1, 2)
+		addrUse = "<feature> <document>"
 	}
 
 	var (
@@ -196,20 +231,24 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool,
 		writeRepoName      string
 	)
 	write := &cobra.Command{
-		Use:   "write <path>",
+		Use:   "write " + addrUse,
 		Short: "Write the contents of a source file into the store",
-		Args:  cobra.ExactArgs(1),
+		Args:  docArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			addr, err := parse(cmd, args)
+			if err != nil {
+				return err
+			}
 			cfg, err := loadConfig()
 			if err != nil {
 				return err
 			}
-			if requireID {
-				if err := validateIDPrefix(cfg, args[0]); err != nil {
+			if k.requireID {
+				if err := validateIDPrefix(cfg, addr.Feature); err != nil {
 					return err
 				}
 			}
-			st, storeDir, err := resolveStore(writeRepoName)
+			st, storeDir, _, err := resolveStore(writeRepoName)
 			if err != nil {
 				return err
 			}
@@ -217,7 +256,7 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool,
 			if err != nil {
 				return fmt.Errorf("reading source file %q: %w", fromPath, err)
 			}
-			storePath := filepath.Join(storeDir, args[0])
+			storePath := addr.StorePath(storeDir)
 			existing, err := st.Read(storePath)
 			if err != nil && !errors.Is(err, store.ErrNotFound) {
 				return err
@@ -227,21 +266,21 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool,
 				return err
 			}
 			if writeRepoName != "" {
-				prov := provenanceOpts(cfg, args[0])
+				prov := provenanceOpts(cfg, addr.Feature)
 				opts.Project = prov.Project
 				opts.ProjectSource = prov.ProjectSource
 				opts.Spec = prov.Spec
 				opts.Plan = prov.Plan
 			}
 			body := stripLeadingFrontmatterBlocks(content)
-			if validate != nil {
-				if err := validate(cfg, args[0], body); err != nil {
+			if k.validate != nil {
+				if err := k.validate(cfg, addr, body); err != nil {
 					return err
 				}
 			}
 			merged, err := metadata.Merge(existing, body, opts)
 			if err != nil {
-				return output.NewError("metadata_merge_failed", err.Error()).WithResource(args[0])
+				return output.NewError("metadata_merge_failed", err.Error()).WithResource(addressString(addr))
 			}
 			return st.Write(storePath, merged)
 		},
@@ -252,19 +291,22 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool,
 
 	var readRepoName string
 	read := &cobra.Command{
-		Use:   "read <path>",
-		Short: "Read a file from the store and write it to stdout",
-		Args:  cobra.ExactArgs(1),
+		Use:   "read " + addrUse,
+		Short: "Read a document from the store and write it to stdout",
+		Args:  docArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			st, storeDir, err := resolveStore(readRepoName)
+			addr, err := parse(cmd, args)
 			if err != nil {
 				return err
 			}
-			content, err := st.Read(filepath.Join(storeDir, args[0]))
+			st, storeDir, _, err := resolveStore(readRepoName)
+			if err != nil {
+				return err
+			}
+			content, err := st.Read(addr.StorePath(storeDir))
 			if err != nil {
 				if errors.Is(err, store.ErrNotFound) {
-					return output.NewError("not_found", fmt.Sprintf("file %q not found", args[0])).
-						WithResource(args[0])
+					return addressNotFound(cmd, addr)
 				}
 				return err
 			}
@@ -274,15 +316,19 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool,
 	}
 
 	del := &cobra.Command{
-		Use:   "delete <path>",
-		Short: "Delete a file from the store",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			st, storeDir, err := storeFileStore(dir)
+		Use:   "delete " + addrUse,
+		Short: "Delete a document from the store",
+		Args:  docArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			addr, err := parse(cmd, args)
 			if err != nil {
 				return err
 			}
-			return st.Delete(filepath.Join(storeDir, args[0]))
+			st, storeDir, err := storeFileStore(k.dir)
+			if err != nil {
+				return err
+			}
+			return st.Delete(addr.StorePath(storeDir))
 		},
 	}
 
@@ -294,34 +340,58 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool,
 		listClosedBefore   string
 		listRepoName       string
 	)
+	listUse, listArgs := "list", cobra.NoArgs
+	if k.kind == artifact.KindPlan {
+		listUse, listArgs = "list [<feature>]", cobra.MaximumNArgs(1)
+	}
 	list := &cobra.Command{
-		Use:   "list [path]",
-		Short: "List files in the store, optionally filtered by metadata",
-		Args:  cobra.MaximumNArgs(1),
+		Use:   listUse,
+		Short: "List documents in the store by name, optionally filtered by metadata",
+		Args:  listArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filter, err := parseListFilter(listDocumentStatus, listCreatedAfter, listCreatedBefore, listClosedAfter, listClosedBefore)
 			if err != nil {
 				return err
 			}
-			st, storeDir, err := resolveStore(listRepoName)
+			// Plans list feature folders; one plan's listing, specs and
+			// changelog records list document files.
+			want := artifact.EntryFile
+			feature := ""
+			if k.kind == artifact.KindPlan {
+				want = artifact.EntryFeatureDir
+				if len(args) > 0 {
+					feature, err = artifact.ParseFeature(k.kind, args[0])
+					if err != nil {
+						return addressRefusal(cmd, k.kind, args, err)
+					}
+					want = artifact.EntryFile
+				}
+			}
+			st, storeDir, base, err := resolveStore(listRepoName)
 			if err != nil {
 				return err
 			}
 			path := storeDir
-			if len(args) > 0 {
-				path = filepath.Join(storeDir, args[0])
+			if feature != "" {
+				path = artifact.FeatureDir(storeDir, feature)
 			}
 			entries, err := st.List(path)
 			if err != nil {
+				if feature != "" && errors.Is(err, store.ErrNotFound) {
+					return addressNotFound(cmd, artifact.Address{Kind: k.kind, Feature: feature})
+				}
 				return err
 			}
 			files := make([]map[string]any, 0, len(entries))
 			for _, e := range entries {
+				name, ok := artifact.NameFromEntry(e.Name, e.IsDir, want)
+				if !ok {
+					continue
+				}
 				entryPath := filepath.Join(path, e.Name)
-				storeRel := filepath.ToSlash(strings.TrimPrefix(entryPath, st.Root()+string(filepath.Separator)))
 				item := map[string]any{
-					"name": e.Name,
-					"path": storeRel,
+					"name": name,
+					"path": reportedLocation(base, entryPath),
 				}
 				// modified_at is the store's modification time for the entry
 				// itself: a file's content change, or for a directory the
@@ -363,7 +433,7 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool,
 	list.Flags().StringVar(&listClosedAfter, "closed-after", "", "Filter to artifacts whose closed_date is on or after this YYYY-MM-DD date")
 	list.Flags().StringVar(&listClosedBefore, "closed-before", "", "Filter to artifacts whose closed_date is on or before this YYYY-MM-DD date")
 
-	if repoRouted {
+	if k.repoRouted {
 		const repoFlagHelp = "Route through the named registered repo's own changelog store instead of the central one"
 		write.Flags().StringVar(&writeRepoName, "repo", "", repoFlagHelp)
 		read.Flags().StringVar(&readRepoName, "repo", "", repoFlagHelp)
@@ -372,16 +442,20 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool,
 
 	var setDocumentStatusFlag string
 	setDocumentStatus := &cobra.Command{
-		Use:   "set-document-status <path>",
+		Use:   "set-document-status " + addrUse,
 		Short: "Update the document status of a stored artifact without rewriting its body",
-		Args:  cobra.ExactArgs(1),
+		Args:  docArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			addr, err := parse(cmd, args)
+			if err != nil {
+				return err
+			}
 			cfg, err := loadConfig()
 			if err != nil {
 				return err
 			}
-			if requireID {
-				if err := validateIDPrefix(cfg, args[0]); err != nil {
+			if k.requireID {
+				if err := validateIDPrefix(cfg, addr.Feature); err != nil {
 					return err
 				}
 			}
@@ -394,16 +468,15 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool,
 					"--document-status is required for set-document-status").
 					WithNextAction(fmt.Sprintf("Pass --document-status with one of %s.", documentStatusValues()))
 			}
-			st, storeDir, err := storeFileStore(dir)
+			st, storeDir, err := storeFileStore(k.dir)
 			if err != nil {
 				return err
 			}
-			storePath := filepath.Join(storeDir, args[0])
+			storePath := addr.StorePath(storeDir)
 			existing, err := st.Read(storePath)
 			if err != nil {
 				if errors.Is(err, store.ErrNotFound) {
-					return output.NewError("not_found", fmt.Sprintf("file %q not found", args[0])).
-						WithResource(args[0])
+					return addressNotFound(cmd, addr)
 				}
 				return err
 			}
@@ -413,15 +486,19 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool,
 			}
 			merged, err := metadata.Merge(existing, body, opts)
 			if err != nil {
-				return output.NewError("metadata_merge_failed", err.Error()).WithResource(args[0])
+				return output.NewError("metadata_merge_failed", err.Error()).WithResource(addressString(addr))
 			}
 			if err := st.Write(storePath, merged); err != nil {
 				return err
 			}
 			fm, _, splitErr := metadata.Split(merged)
 			payload := map[string]any{
-				"path":            args[0],
+				"name":            addr.Feature,
+				"path":            reportedLocation(centralLocationBase, storePath),
 				"document_status": string(*opts.DocumentStatus),
+			}
+			if addr.Document != "" {
+				payload["document"] = addr.Document
 			}
 			if splitErr == nil && fm != nil && !fm.ClosedDate.IsZero() {
 				payload["closed_date"] = fm.ClosedDate.Format("2006-01-02")

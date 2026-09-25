@@ -31,8 +31,8 @@ Before any section is drafted, the workflow opens with an `interview` step: a si
 
 The CLI owns the spec file. All spec file access goes through `{{command}} spec file`:
 
-- `{{command}} spec file read <name>.md` — read a spec file from the spec store.
-- `{{command}} spec file write <name>.md --from <source-path>` — write a spec file into the spec store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
+- `{{command}} spec file read <name>` — read a spec file from the spec store.
+- `{{command}} spec file write <name> --from <source-path>` — write a spec file into the spec store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
 - `{{command}} spec file list` — list spec files in the spec store.
 
 Path arguments are spec file names; `spec file` resolves them against the configured spec directory itself.

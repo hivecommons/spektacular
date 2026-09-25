@@ -1,0 +1,13 @@
+- **Design documents this plan was built on: none.** Spec 000059 carries no design references (`design ref list` reported zero refs, zero unresolved). The command shapes come from the spec's Technical Approach and GitHub issue hivecommons/spektacular#46.
+- **`internal/store` (spektacular)**: the backend-agnostic `Store`/`Reader`/`Writer` interfaces every document verb reads and writes through. Used as-is, no changes.
+- **`internal/config` (spektacular)**: supplies the configured store directories (already project-root-relative) and the settings-folder name that reported locations are made relative to. Used as-is.
+- **`internal/repo` (spektacular)**: resolves a named repo for `--repo` changelog routing and its repo.yaml folder. Used as-is.
+- **`internal/output` (spektacular)**: the error envelope (`NewError`, `WithResource`, `WithNextAction`) that both new refusals use. No changes.
+- **`internal/metadata` (spektacular)**: front-matter merge and split on write and set-document-status. Unchanged, but now fed the parsed address.
+- **`internal/steps/spec`, `internal/steps/plan`, `internal/steps/implement` (spektacular)**: their typed layout helpers change to delegate to the new artifact address package; their outputs must stay byte-identical.
+- **`internal/agent` skill installer (spektacular)**: renders the installed skills and managed AGENTS.md sections from templates. It is used unchanged via `go run . init claude` and `go run . init bob` to regenerate the copies. Regeneration also pulls in pre-existing template drift in those copies.
+- **`github.com/spf13/cobra`**: command arity for the plan verbs changes from `ExactArgs(1)` to a range. No version change.
+- **Harbor e2e harness (`tests/harbor/*`, spektacular)**: requires the `harbor` CLI, Docker and Claude credentials to run the spec, plan and implement suites that verify a full run hits no addressing refusal. It does not run in CI.
+- **docs repo (spektacular-website, Astro 5 + MDX)**: existing section components (`Hero`, `Section`, `Prose`, `ConfigurationKeys`, `ConfigKey`) and the Resources navigation. Docs changes land on its `f-normalize-commands` branch and must build and type-check cleanly.
+- **Prior work**: builds on spec/plan 000058 (plan task graph, already released), whose status and task code is touched by the status changes, and on 000047/000050 (knowledge addressing and config-relative locations), which established the "name is the address, location is relative to the declaring config" model this plan extends. Nothing must land first.
+- **External consumer**: Hive (hivecommons/hive#8227) will adopt the new addressing once released. It is not a build dependency.

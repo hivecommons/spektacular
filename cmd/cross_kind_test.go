@@ -312,7 +312,8 @@ func TestSpecNew_NotRefusedWhileAGuidedAddIsInProgress(t *testing.T) {
 	var result specCommandResult
 	require.NoError(t, json.Unmarshal([]byte(stdout), &result))
 	require.Equal(t, "new", result.Step)
-	require.FileExists(t, result.SpecPath)
+	require.Equal(t, "specs/"+result.SpecName+".md", result.SpecPath)
+	require.FileExists(t, filepath.Join(project, ".spektacular", result.SpecPath))
 
 	addState := readRepoWorkflowState(t, project)
 	require.Equal(t, "repo", addState.Kind)

@@ -15,7 +15,7 @@ import (
 // first, each ticked or not as asked.
 func twoTaskPlan(aDone, bDone bool) string {
 	return taskPlanDoc(
-		taskBlock("Task A", aDone, agentFields(idA), "- [ ] a works")+
+		taskBlock("Task A", aDone, agentFields(idA), "- [ ] a works") +
 			taskBlock("Task B", bDone, agentFields(idB, idA+" — Task A"), "- [ ] b works"),
 	)
 }
@@ -47,7 +47,7 @@ func TestTaskRun_WrapUpHappensOnlyOnTheLastTask(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "")
-	_, code := writePlanDoc(t, taskPlanName, "plan.md", twoTaskPlan(false, false))
+	_, code := writePlanDoc(t, taskPlanName, "plan", twoTaskPlan(false, false))
 	require.Equal(t, 0, code)
 	dataDir := filepath.Join(dir, ".spektacular")
 	testPlan := filepath.Join(dataDir, "plans", taskPlanName, "test-plan.md")
@@ -55,7 +55,7 @@ func TestTaskRun_WrapUpHappensOnlyOnTheLastTask(t *testing.T) {
 
 	// First run: task A, with task B still open afterwards.
 	runTaskTo(t, idA)
-	_, code = writePlanDoc(t, taskPlanName, "plan.md", twoTaskPlan(true, false))
+	_, code = writePlanDoc(t, taskPlanName, "plan", twoTaskPlan(true, false))
 	require.Equal(t, 0, code)
 	stdout, code := gotoStep(t, "update_changelog")
 	require.Equal(t, 0, code, stdout)
@@ -72,7 +72,7 @@ func TestTaskRun_WrapUpHappensOnlyOnTheLastTask(t *testing.T) {
 
 	// Second run: task B completes the plan and does the wrap-up.
 	runTaskTo(t, idB)
-	_, code = writePlanDoc(t, taskPlanName, "plan.md", twoTaskPlan(true, true))
+	_, code = writePlanDoc(t, taskPlanName, "plan", twoTaskPlan(true, true))
 	require.Equal(t, 0, code)
 	stdout, code = gotoStep(t, "update_changelog")
 	require.Equal(t, 0, code, stdout)
@@ -89,7 +89,7 @@ func TestTaskRun_WrapUpHappensOnlyOnTheLastTask(t *testing.T) {
 	walkSteps(t, "implement", "test_plan", "update_feature_changelog")
 	src := filepath.Join(t.TempDir(), "changelog.md")
 	require.NoError(t, os.WriteFile(src, []byte("# feature\n\nwhat was built\n"), 0o644))
-	_, _, code = runRootCmd(t, "changelog", "file", "write", taskPlanName+".md", "--from", src)
+	_, _, code = runRootCmd(t, "changelog", "file", "write", taskPlanName, "--from", src)
 	require.Equal(t, 0, code)
 	walkSteps(t, "implement", "reconcile_spec", "finished")
 	require.FileExists(t, changelog)
@@ -99,7 +99,7 @@ func TestWholePlanRun_UpdateChangelogExitsAreUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "")
-	_, code := writePlanDoc(t, taskPlanName, "plan.md", twoTaskPlan(false, false))
+	_, code := writePlanDoc(t, taskPlanName, "plan", twoTaskPlan(false, false))
 	require.Equal(t, 0, code)
 
 	_, _, code = runRootCmd(t, "implement", "new", "--data", `{"name":"`+taskPlanName+`"}`)
