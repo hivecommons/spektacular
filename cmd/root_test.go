@@ -77,7 +77,7 @@ func runRootCmd(t *testing.T, args ...string) (stdout, stderr string, code int) 
 
 // currentConfigHeader is the preamble every hand-written project config.yaml
 // fixture carries so the loaders accept it: the current settings format and
-// the skills version this (dev) build installs.
+// the skills version this build installs.
 func currentConfigHeader() string {
 	return fmt.Sprintf("schema: %d\nskills_version: %s\n", config.CurrentProjectSchema, version)
 }

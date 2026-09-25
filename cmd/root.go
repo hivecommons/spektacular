@@ -13,15 +13,18 @@ import (
 	"time"
 
 	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/migrate"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/sessionlog"
 	"github.com/spf13/cobra"
 )
 
 // version and sha are set at build time via -ldflags
-// (see dagger/main.go's Build function).
+// (see dagger/main.go's Build function). A build without them (go build,
+// go run) reports migrate.DevVersion, which the upgrade gate does not hold
+// against the project's installed skills version.
 var (
-	version = "0.20.0"
+	version = migrate.DevVersion
 	sha     = ""
 )
 

@@ -72,6 +72,16 @@ func TestInspect_LegacySingleFileReportsActions(t *testing.T) {
 	require.Equal(t, SkillsReport{Installed: "0.0.9", Current: "0.1.0", Status: "mismatch", Agent: "claude", Reinstall: true}, rep.Skills)
 }
 
+func TestInspect_DevBuildMatchesAnyInstalledSkills(t *testing.T) {
+	root := newProject(t, "legacy_single")
+
+	rep, err := Inspect(root, "dev")
+	require.NoError(t, err)
+
+	require.Equal(t, SkillsReport{Installed: "0.0.9", Current: "dev", Status: "match", Agent: "claude"}, rep.Skills)
+	require.Len(t, rep.Files, 1, "settings-format upgrades still apply to a dev build")
+}
+
 func TestInspect_CurrentProjectHasNothingPending(t *testing.T) {
 	root := newProject(t, "current")
 

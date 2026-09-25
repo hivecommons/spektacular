@@ -14,7 +14,7 @@ import (
 )
 
 // This file covers the `migrate` command through runRootCmd. Every fixture is
-// literal YAML and every expected value a hand-maintained literal; the dev
+// literal YAML and every expected value a hand-maintained literal; the test
 // build version is "0.20.0".
 
 // staleUnversionedConfigYAML is a config.yaml that predates format
