@@ -55,11 +55,11 @@ func TestPlanFileWrite_RefusesInvalidTaskStructure(t *testing.T) {
 			t.Chdir(dir)
 			writeSpecCommandConfig(t, dir, "")
 
-			_, code := writePlanDoc(t, taskPlanName, "plan.md", validTaskPlan())
+			_, code := writePlanDoc(t, taskPlanName, "plan", validTaskPlan())
 			require.Equal(t, 0, code)
 			before := planOnDisk(t, dir)
 
-			stdout, code := writePlanDoc(t, taskPlanName, "plan.md", taskPlanDoc(reader+tc.broken))
+			stdout, code := writePlanDoc(t, taskPlanName, "plan", taskPlanDoc(reader+tc.broken))
 			require.Equal(t, 1, code)
 			er := decodeError(t, stdout)
 			require.Equal(t, plantask.CodeTaskInvalid, er.Code)
@@ -76,7 +76,7 @@ func TestPlanFileWrite_UnregisteredRepoListsRegisteredRepos(t *testing.T) {
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "repos:\n  - name: alpha\n    location: .\n  - name: beta\n    location: .\n")
 
-	stdout, code := writePlanDoc(t, taskPlanName, "plan.md", taskPlanDoc(
+	stdout, code := writePlanDoc(t, taskPlanName, "plan", taskPlanDoc(
 		taskBlock("Wrong repo", false, []string{"**Id:** " + idA, "**Repo:** gamma", "**Depends on:** none", "**Execution:** agent"}),
 	))
 	require.Equal(t, 1, code)
@@ -97,19 +97,19 @@ func TestPlanFileWrite_AcceptsValidAndNonTaskDocuments(t *testing.T) {
 		taskBlock("Build the export", false, agentFields(idB, idA+" — Build the reader"))+human,
 	)
 	legacy := "# Plan\n\n## Milestones & Phases\n\n### Milestone 1: M\n\n#### - [ ] Phase 1.1: Old work\n**Repo:** anything, at all\n"
-	// Documents other than plan.md are never checked, even when they quote
-	// task headings that would be refused in plan.md.
+	// Documents other than the plan document are never checked, even when
+	// they quote task headings that would be refused in it.
 	stray := "## Milestones & Tasks\n\n#### - [ ] Task: Quoted in prose\n"
 
-	for _, doc := range []struct{ path, body string }{
-		{"plan.md", valid},
-		{"plan.md", legacy},
-		{"context.md", stray},
-		{"research.md", stray},
-		{"test-plan.md", stray},
+	for _, doc := range []struct{ document, body string }{
+		{"plan", valid},
+		{"plan", legacy},
+		{"context", stray},
+		{"research", stray},
+		{"test-plan", stray},
 	} {
-		stdout, code := writePlanDoc(t, taskPlanName, doc.path, doc.body)
-		require.Equal(t, 0, code, "%s: %s", doc.path, stdout)
+		stdout, code := writePlanDoc(t, taskPlanName, doc.document, doc.body)
+		require.Equal(t, 0, code, "%s: %s", doc.document, stdout)
 	}
 }
 
@@ -118,7 +118,7 @@ func TestPlanFileWrite_IdsSurviveEdits(t *testing.T) {
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "")
 
-	_, code := writePlanDoc(t, taskPlanName, "plan.md", validTaskPlan())
+	_, code := writePlanDoc(t, taskPlanName, "plan", validTaskPlan())
 	require.Equal(t, 0, code)
 
 	// Reorder the two tasks, retitle one and add a third.
@@ -127,7 +127,7 @@ func TestPlanFileWrite_IdsSurviveEdits(t *testing.T) {
 			taskBlock("Build the reader", false, agentFields(idA)) +
 			taskBlock("Document it", false, agentFields(idC, idB+" — Build the export command")),
 	)
-	stdout, code := writePlanDoc(t, taskPlanName, "plan.md", edited)
+	stdout, code := writePlanDoc(t, taskPlanName, "plan", edited)
 	require.Equal(t, 0, code, stdout)
 
 	p := plantask.Parse(planOnDisk(t, dir))

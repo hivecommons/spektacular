@@ -7,7 +7,7 @@ Produce the **test plan** artifact for the success metrics that could not be cov
 Read the plan's Testing Approach through the plan store — never with the `Read` tool:
 
 ```
-{{config.command}} plan file read {{plan_name}}/plan.md
+{{config.command}} plan file read {{plan_name}} plan
 ```
 
 In the `## Testing Approach` section the planner classified each of the spec's success metrics as either **covered by a behavioural test** or **manual — to be captured in the implementation test plan**. Collect the manual ones. Also include any metric the plan expected to be automatable but that proved otherwise while implementing (you noted these during the `test` step).
@@ -33,11 +33,11 @@ The test plan is a plan-store artifact. **Never write it with the `Write`/`Edit`
 2. Commit it and remove the scratch file:
 
    ```
-   {{config.command}} plan file write {{plan_name}}/test-plan.md --from .spektacular/tmp/test-plan.md
+   {{config.command}} plan file write {{plan_name}} test-plan --from .spektacular/tmp/test-plan.md
    rm .spektacular/tmp/test-plan.md
    ```
 
-After the write succeeds, confirm it with `{{config.command}} plan file read {{plan_name}}/test-plan.md`.
+After the write succeeds, confirm it with `{{config.command}} plan file read {{plan_name}} test-plan`.
 
 ### STOP-on-mismatch
 

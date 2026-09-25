@@ -23,12 +23,12 @@ func TestChangelogFileWriteRead_RoundTrips(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, []byte("changelog body"), 0o644))
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"changelog", "file", "write", "20260709000000-release-notes.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"changelog", "file", "write", "20260709000000-release-notes", "--from", srcPath})
 
 	require.NoError(t, rootCmd.Execute())
 
 	stdout, _ := setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"changelog", "file", "read", "20260709000000-release-notes.md"})
+	rootCmd.SetArgs([]string{"changelog", "file", "read", "20260709000000-release-notes"})
 
 	require.NoError(t, rootCmd.Execute())
 	// The stored file now carries a frontmatter block; read returns the raw
@@ -48,14 +48,14 @@ func TestChangelogFileWriteRead_RoundTrips(t *testing.T) {
 func TestChangelogFileWrite_LandsFlatInConfiguredChangelogDirectory(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	// counter id_method so the `<id>_<slug>.md` name clears validateIDPrefix.
+	// counter id_method so the `<id>_<slug>` name clears validateIDPrefix.
 	writeSpecCommandConfig(t, dir, "spec:\n  id_method: counter\nchangelog:\n  config:\n    directory: ../docs/changelog\n")
 
 	srcPath := filepath.Join(t.TempDir(), "staged.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("implement run record"), 0o644))
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())
 
 	// On disk the record sits directly under the configured changelog
@@ -66,7 +66,7 @@ func TestChangelogFileWrite_LandsFlatInConfiguredChangelogDirectory(t *testing.T
 
 	// Reading back by the same flat, agent-facing name returns the content.
 	stdout, _ := setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"changelog", "file", "read", "000001_feat.md"})
+	rootCmd.SetArgs([]string{"changelog", "file", "read", "000001_feat"})
 	require.NoError(t, rootCmd.Execute())
 
 	meta, body, err := metadata.Split(stdout.Bytes())
@@ -77,7 +77,7 @@ func TestChangelogFileWrite_LandsFlatInConfiguredChangelogDirectory(t *testing.T
 
 // Criterion 1: the ID-prefix rule is unchanged by the namespace folder —
 // validateIDPrefix still sees the ID as the leading segment of the
-// user-supplied path, so a name without an ID prefix is rejected and no file
+// feature name, so a name without an ID prefix is rejected and no file
 // is created anywhere in the store.
 func TestChangelogFileWrite_StillRejectsNameWithoutIDPrefix(t *testing.T) {
 	dir := t.TempDir()
@@ -87,14 +87,14 @@ func TestChangelogFileWrite_StillRejectsNameWithoutIDPrefix(t *testing.T) {
 	srcPath := filepath.Join(t.TempDir(), "staged.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("body"), 0o644))
 
-	stdout, _, code := runRootCmd(t, "changelog", "file", "write", "nope.md", "--from", srcPath)
+	stdout, _, code := runRootCmd(t, "changelog", "file", "write", "nope", "--from", srcPath)
 	require.Equal(t, 1, code)
 
 	var er output.ErrorResponse
 	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
 	require.True(t, er.IsError)
 	require.Equal(t, "missing_id_prefix", er.Code)
-	require.Equal(t, "nope.md", er.Resource)
+	require.Equal(t, "nope", er.Resource)
 
 	require.NoFileExists(t, filepath.Join(dir, "docs", "changelog", "nope.md"))
 	require.NoFileExists(t, filepath.Join(dir, "docs", "changelog", "testproj", "nope.md"))
@@ -109,11 +109,11 @@ func TestChangelogFileList_ShowsAllWrittenRecords(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, []byte("entry body"), 0o644))
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"changelog", "file", "write", "20260709000000-alpha.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"changelog", "file", "write", "20260709000000-alpha", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())
 
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"changelog", "file", "write", "20260709000001-beta.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"changelog", "file", "write", "20260709000001-beta", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())
 
 	stdout, _ := setupImplementCmd(t)
@@ -131,7 +131,7 @@ func TestChangelogFileList_ShowsAllWrittenRecords(t *testing.T) {
 	for i, f := range result.Files {
 		names[i] = f.Name
 	}
-	require.ElementsMatch(t, []string{"20260709000000-alpha.md", "20260709000001-beta.md"}, names)
+	require.ElementsMatch(t, []string{"20260709000000-alpha", "20260709000001-beta"}, names)
 }
 
 // --- Phase 3.2: repo-routed changelog writes (`--repo`) ---
@@ -185,7 +185,7 @@ func TestChangelogFileWriteRepo_RoutesToMemberStoreWithProvenance(t *testing.T) 
 
 	resetRootCmd(t)
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--repo", "member", "--from", srcPath})
+	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat", "--repo", "member", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())
 
 	// The entry sits in the member repo's own changelog directory (the
@@ -218,11 +218,11 @@ func TestChangelogFileReadRepo_ReturnsMemberEntry(t *testing.T) {
 
 	resetRootCmd(t)
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--repo", "member", "--from", srcPath})
+	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat", "--repo", "member", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())
 
 	stdout, _ := setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"changelog", "file", "read", "000001_feat.md", "--repo", "member"})
+	rootCmd.SetArgs([]string{"changelog", "file", "read", "000001_feat", "--repo", "member"})
 	require.NoError(t, rootCmd.Execute())
 
 	meta, gotBody, err := metadata.Split(stdout.Bytes())
@@ -242,7 +242,7 @@ func TestChangelogFileWriteRepo_MissingFootprintErrorsWithRepairOffer(t *testing
 	require.NoError(t, os.WriteFile(srcPath, []byte("body"), 0o644))
 
 	resetRootCmd(t)
-	stdout, _, code := runRootCmd(t, "changelog", "file", "write", "000001_feat.md", "--repo", "member", "--from", srcPath)
+	stdout, _, code := runRootCmd(t, "changelog", "file", "write", "000001_feat", "--repo", "member", "--from", srcPath)
 	require.Equal(t, 1, code)
 
 	var er output.ErrorResponse
@@ -281,7 +281,7 @@ func TestChangelogFileWriteRepo_TwoProjectsUseSeparateNamespaceFolders(t *testin
 
 		resetRootCmd(t)
 		setupImplementCmd(t)
-		rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--repo", "member", "--from", srcPath})
+		rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat", "--repo", "member", "--from", srcPath})
 		require.NoError(t, rootCmd.Execute())
 	}
 
@@ -301,7 +301,7 @@ func TestChangelogFileWriteRepo_TwoProjectsUseSeparateNamespaceFolders(t *testin
 	for _, p := range projects {
 		t.Chdir(dirs[p.name])
 		stdout, _ := setupImplementCmd(t)
-		rootCmd.SetArgs([]string{"changelog", "file", "read", "000001_feat.md", "--repo", "member"})
+		rootCmd.SetArgs([]string{"changelog", "file", "read", "000001_feat", "--repo", "member"})
 		require.NoError(t, rootCmd.Execute())
 		_, gotBody, err := metadata.Split(stdout.Bytes())
 		require.NoError(t, err)
@@ -320,7 +320,7 @@ func TestChangelogFileWrite_CentralWriteCarriesNoProvenance(t *testing.T) {
 
 	resetRootCmd(t)
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--from", srcPath})
+	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())
 
 	content, err := os.ReadFile(filepath.Join(projectDir, "docs", "changelog", "000001_feat.md"))
@@ -348,7 +348,7 @@ func TestSpecAndPlanFileWrite_HaveNoRepoFlag(t *testing.T) {
 			require.NoError(t, os.WriteFile(srcPath, []byte("body"), 0o644))
 
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{kind, "file", "write", "000001_feat.md", "--repo", "member", "--from", srcPath})
+			rootCmd.SetArgs([]string{kind, "file", "write", "000001_feat", "--repo", "member", "--from", srcPath})
 
 			err := rootCmd.Execute()
 			require.Error(t, err)
@@ -377,7 +377,7 @@ func TestChangelogFileWriteRepo_RewriteStampsProvenanceAndPreservesCreatedDate(t
 
 	resetRootCmd(t)
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--repo", "member", "--from", srcPath})
+	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat", "--repo", "member", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())
 
 	content, err := os.ReadFile(entryPath)
@@ -401,7 +401,7 @@ func TestChangelogFileListRepo_ListsMemberEntries(t *testing.T) {
 	srcPath := filepath.Join(t.TempDir(), "staged.md")
 	require.NoError(t, os.WriteFile(srcPath, []byte("entry body"), 0o644))
 
-	for _, name := range []string{"000001_feat.md", "000002_more.md"} {
+	for _, name := range []string{"000001_feat", "000002_more"} {
 		resetRootCmd(t)
 		setupImplementCmd(t)
 		rootCmd.SetArgs([]string{"changelog", "file", "write", name, "--repo", "member", "--from", srcPath})
@@ -423,7 +423,7 @@ func TestChangelogFileListRepo_ListsMemberEntries(t *testing.T) {
 	for i, f := range result.Files {
 		names[i] = f.Name
 	}
-	require.ElementsMatch(t, []string{"000001_feat.md", "000002_more.md"}, names)
+	require.ElementsMatch(t, []string{"000001_feat", "000002_more"}, names)
 }
 
 // Phase 1.4 criterion 4: a repo-routed changelog write for a member whose
@@ -452,7 +452,7 @@ func TestChangelogFileWriteRepo_MemberWithFileSourceWritesAtLocationNotSource(t 
 
 	resetRootCmd(t)
 	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat.md", "--repo", "api", "--from", srcPath})
+	rootCmd.SetArgs([]string{"changelog", "file", "write", "000001_feat", "--repo", "api", "--from", srcPath})
 	require.NoError(t, rootCmd.Execute())
 
 	entryPath := filepath.Join(projectDir, "repos", "api", ".spektacular", "changelog", "testproj", "000001_feat.md")
@@ -483,7 +483,7 @@ func TestChangelogFileWrite_CustomDirectoryResolvesFromSettingsFolder(t *testing
 	require.NoError(t, os.WriteFile(srcPath, []byte("changelog body"), 0o644))
 
 	resetRootCmd(t)
-	stdout, stderr, code := runRootCmd(t, "changelog", "file", "write", "20260709000000-release-notes.md", "--from", srcPath)
+	stdout, stderr, code := runRootCmd(t, "changelog", "file", "write", "20260709000000-release-notes", "--from", srcPath)
 	require.Equal(t, 0, code, stdout)
 	require.Empty(t, stderr)
 

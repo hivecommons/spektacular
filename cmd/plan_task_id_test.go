@@ -36,7 +36,7 @@ func TestPlanTaskID_UnknownProviderFailsOnlyTheRequest(t *testing.T) {
 	require.Contains(t, er.NextAction, "uuid")
 
 	// The setting does not stop the rest of the CLI from working.
-	stdout, code = writePlanDoc(t, taskPlanName, "plan.md", validTaskPlan())
+	stdout, code = writePlanDoc(t, taskPlanName, "plan", validTaskPlan())
 	require.Equal(t, 0, code, stdout)
 	stdout, _, code = runRootCmd(t, "plan", "file", "list")
 	require.Equal(t, 0, code, stdout)

@@ -13,7 +13,10 @@ type strategy struct {
 	repoPath string
 }
 
-func (strategy) PrimaryPathField() string { return "repo_path" }
+// PrimaryLocation is the repo's code folder. It is not a stored document, so
+// the rule that documents are reported by config-relative location does not
+// apply to it.
+func (s strategy) PrimaryLocation(string) string { return s.repoPath }
 
 func (s strategy) PathVars(instanceName, _ string) map[string]any {
 	return map[string]any{

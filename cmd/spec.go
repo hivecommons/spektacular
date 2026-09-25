@@ -30,12 +30,13 @@ var (
 
 // Schema types for --schema output.
 type schemaProp struct {
-	Type       string                 `json:"type"`
-	Enum       []string               `json:"enum,omitempty"`
-	Pattern    string                 `json:"pattern,omitempty"`
-	MaxLen     int                    `json:"maxLength,omitempty"`
-	Items      *schemaProp            `json:"items,omitempty"`
-	Properties map[string]*schemaProp `json:"properties,omitempty"`
+	Type        string                 `json:"type"`
+	Description string                 `json:"description,omitempty"`
+	Enum        []string               `json:"enum,omitempty"`
+	Pattern     string                 `json:"pattern,omitempty"`
+	MaxLen      int                    `json:"maxLength,omitempty"`
+	Items       *schemaProp            `json:"items,omitempty"`
+	Properties  map[string]*schemaProp `json:"properties,omitempty"`
 }
 
 type schemaObj struct {
@@ -58,7 +59,7 @@ var resultOutputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
 		"step":        {Type: "string"},
-		"spec_path":   {Type: "string"},
+		"spec_path":   {Type: "string", Description: "the spec's location relative to the folder holding config.yaml"},
 		"spec_name":   {Type: "string"},
 		"instruction": {Type: "string"},
 	},
@@ -68,7 +69,7 @@ var statusOutputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
 		"spec_name":       {Type: "string"},
-		"spec_path":       {Type: "string"},
+		"spec_path":       {Type: "string", Description: "the spec's location relative to the folder holding config.yaml"},
 		"current_step":    {Type: "string"},
 		"completed_steps": {Type: "array", Items: &schemaProp{Type: "string"}},
 		"total_steps":     {Type: "integer"},
@@ -371,7 +372,7 @@ func runSpecStatus(cmd *cobra.Command, args []string) error {
 	st := wf.State()
 
 	specName, _ := wf.GetData("name")
-	specPath := filepath.Join(root, spec.SpecFilePath(cfg.Spec.Config.Directory, fmt.Sprintf("%v", specName)))
+	specPath := reportedLocation(centralLocationBase, spec.SpecFilePath(cfg.Spec.Config.Directory, fmt.Sprintf("%v", specName)))
 
 	stepInfos := wf.StepStatus()
 	entries := make([]spec.StepEntry, len(stepInfos))

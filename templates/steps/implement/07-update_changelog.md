@@ -6,7 +6,7 @@ The plan documents are owned by spektacular. **Never read or edit plan.md with t
 
 ### Step 1: Ensure the `{{changelog_section_name}}` section exists
 
-Read plan.md with `{{config.command}} plan file read {{plan_name}}/plan.md`. If the `{{changelog_section_name}}` heading is absent, this is the first `update_changelog` invocation for this plan — append a new `{{changelog_section_name}}` section **after** the existing `## Out of Scope` section (or at the very end of the file if `## Out of Scope` is missing).
+Read plan.md with `{{config.command}} plan file read {{plan_name}} plan`. If the `{{changelog_section_name}}` heading is absent, this is the first `update_changelog` invocation for this plan — append a new `{{changelog_section_name}}` section **after** the existing `## Out of Scope` section (or at the very end of the file if `## Out of Scope` is missing).
 
 If the `{{changelog_section_name}}` heading is present, append new entries under the existing section, after any entries already there.
 
@@ -37,10 +37,10 @@ For the exact format and more examples, launch a sub-agent with:
 {{config.command}} skill update-changelog
 ```
 
-Apply the entry by reading plan.md with `{{config.command}} plan file read {{plan_name}}/plan.md`, adding the entry, staging the updated document with the `Write` tool at the scratch path `.spektacular/tmp/plan_update.md`, then committing it and removing the scratch file:
+Apply the entry by reading plan.md with `{{config.command}} plan file read {{plan_name}} plan`, adding the entry, staging the updated document with the `Write` tool at the scratch path `.spektacular/tmp/plan_update.md`, then committing it and removing the scratch file:
 
 ```
-{{config.command}} plan file write {{plan_name}}/plan.md --from .spektacular/tmp/plan_update.md
+{{config.command}} plan file write {{plan_name}} plan --from .spektacular/tmp/plan_update.md
 rm .spektacular/tmp/plan_update.md
 ```
 
@@ -76,7 +76,7 @@ Other tasks in the plan are still open, so the feature-level wrap-up (test plan,
 {{^task}}
 ### Step 3: Check for remaining unchecked tasks
 
-Re-read plan.md with `{{config.command}} plan file read {{plan_name}}/plan.md` and count the unchecked `#### - [ ] Task:` headings under `## Milestones & Tasks` (`#### - [ ] Phase` headings under `## Milestones & Phases` in a plan written before tasks).
+Re-read plan.md with `{{config.command}} plan file read {{plan_name}} plan` and count the unchecked `#### - [ ] Task:` headings under `## Milestones & Tasks` (`#### - [ ] Phase` headings under `## Milestones & Phases` in a plan written before tasks).
 
 **If unchecked tasks remain**:
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,10 +22,13 @@ type kindFixture struct {
 	// configYAML is the config body written to .spektacular/config.yaml that
 	// points this kind's `directory` under a docs-rooted subtree.
 	configYAML string
-	// artifactName is the argument passed to `<kind> file write`. Every kind
-	// that carries an ID prefix uses a name matching the default id_method
-	// (timestamp) so validateIDPrefix accepts it.
-	artifactName string
+	// feature is the bare feature name every verb addresses the artifact by.
+	// Every kind that carries an ID prefix uses a name matching the default
+	// id_method (timestamp) so validateIDPrefix accepts it.
+	feature string
+	// document is the plan document name passed as the second address
+	// argument. It is empty for a spec or changelog record.
+	document string
 	// storeRelPath is the on-disk path relative to the project root where the
 	// artifact ends up after a write.
 	storeRelPath string
@@ -40,13 +44,14 @@ func kindFixtures() []kindFixture {
 		{
 			kind:         "spec",
 			configYAML:   "spec:\n  config:\n    directory: ../docs/specs\n",
-			artifactName: "20260709000000-feature.md",
+			feature:      "20260709000000-feature",
 			storeRelPath: filepath.Join("docs", "specs", "20260709000000-feature.md"),
 		},
 		{
 			kind:         "plan",
 			configYAML:   "plan:\n  config:\n    directory: ../docs/plans\n",
-			artifactName: "20260709000000-feature/plan.md",
+			feature:      "20260709000000-feature",
+			document:     "plan",
 			storeRelPath: filepath.Join("docs", "plans", "20260709000000-feature", "plan.md"),
 		},
 		{
@@ -55,10 +60,30 @@ func kindFixtures() []kindFixture {
 			// Central (no --repo) writes land flat under the configured
 			// changelog directory; no project subfolder — that is a
 			// repo-routed concern (see repoRoutedStore in cmd/storefile.go).
-			artifactName: "20260709000000-release-notes.md",
+			feature:      "20260709000000-release-notes",
 			storeRelPath: filepath.Join("docs", "changelog", "20260709000000-release-notes.md"),
 		},
 	}
+}
+
+// addressArgs is the positional address a verb takes for fx's artifact: the
+// feature, plus the document for a plan.
+func (fx kindFixture) addressArgs() []string {
+	if fx.document == "" {
+		return []string{fx.feature}
+	}
+	return []string{fx.feature, fx.document}
+}
+
+// address is the address as a refusal names it in its resource field.
+func (fx kindFixture) address() string {
+	return strings.Join(fx.addressArgs(), " ")
+}
+
+// cmd builds `<kind> file <verb> <address...> <rest...>` for fx.
+func (fx kindFixture) cmd(verb string, rest ...string) []string {
+	args := append([]string{fx.kind, "file", verb}, fx.addressArgs()...)
+	return append(args, rest...)
 }
 
 // today returns today's date at UTC midnight, matching the truncation the
@@ -83,7 +108,7 @@ func TestStoreFileWrite_FreshWriteStampsMetadata(t *testing.T) {
 			require.NoError(t, os.WriteFile(srcPath, []byte("fresh body"), 0o644))
 
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "write", fx.artifactName, "--from", srcPath})
+			rootCmd.SetArgs(fx.cmd("write", "--from", srcPath))
 
 			require.NoError(t, rootCmd.Execute())
 
@@ -134,7 +159,7 @@ func TestStoreFileWrite_ExistingArtifactPreservesCreatedDate(t *testing.T) {
 			require.NoError(t, os.WriteFile(srcPath, []byte("updated body"), 0o644))
 
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "write", fx.artifactName, "--from", srcPath})
+			rootCmd.SetArgs(fx.cmd("write", "--from", srcPath))
 
 			require.NoError(t, rootCmd.Execute())
 
@@ -180,7 +205,7 @@ func TestStoreFileWrite_StatusFlagTransitionsAndStampsClosedDate(t *testing.T) {
 
 			resetRootCmd(t)
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--document-status", "final"})
+			rootCmd.SetArgs(fx.cmd("write", "--from", srcPath, "--document-status", "final"))
 
 			require.NoError(t, rootCmd.Execute())
 
@@ -222,7 +247,7 @@ func TestStoreFileWrite_BareArtifactIsUpgradedInPlace(t *testing.T) {
 			require.NoError(t, os.WriteFile(srcPath, []byte("upgraded body"), 0o644))
 
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "write", fx.artifactName, "--from", srcPath})
+			rootCmd.SetArgs(fx.cmd("write", "--from", srcPath))
 
 			require.NoError(t, rootCmd.Execute(),
 				"bare-artifact upgrade must not error")
@@ -259,7 +284,7 @@ func TestStoreFileWrite_FreshWriteWithClosedStatusStampsBothDates(t *testing.T) 
 
 			resetRootCmd(t)
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--document-status", "final"})
+			rootCmd.SetArgs(fx.cmd("write", "--from", srcPath, "--document-status", "final"))
 
 			require.NoError(t, rootCmd.Execute())
 
@@ -321,7 +346,7 @@ func TestStoreFileWrite_RejectsInvalidDocumentStatusFlag(t *testing.T) {
 
 				t.Run("fresh destination is not created", func(t *testing.T) {
 					resetRootCmd(t)
-					stdout, stderr, code := runRootCmd(t, fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--document-status", bad)
+					stdout, stderr, code := runRootCmd(t, fx.cmd("write", "--from", srcPath, "--document-status", bad)...)
 					requireInvalidDocumentStatus(t, bad, stdout, stderr, code)
 					require.NoFileExists(t, filepath.Join(dir, fx.storeRelPath),
 						"a rejected --document-status must not create the destination file")
@@ -337,7 +362,7 @@ func TestStoreFileWrite_RejectsInvalidDocumentStatusFlag(t *testing.T) {
 					require.NoError(t, err)
 
 					resetRootCmd(t)
-					stdout, stderr, code := runRootCmd(t, fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--document-status", bad)
+					stdout, stderr, code := runRootCmd(t, fx.cmd("write", "--from", srcPath, "--document-status", bad)...)
 					requireInvalidDocumentStatus(t, bad, stdout, stderr, code)
 
 					after, err := os.ReadFile(abs)
@@ -387,7 +412,7 @@ func TestStoreFileSetDocumentStatus_MutatesFrontmatterOnly_PreservesBody(t *test
 
 			resetRootCmd(t)
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", "final"})
+			rootCmd.SetArgs(fx.cmd("set-document-status", "--document-status", "final"))
 
 			require.NoError(t, rootCmd.Execute())
 
@@ -436,7 +461,7 @@ func TestStoreFileSetDocumentStatus_RejectsInvalidStatus_LeavesFileUntouched(t *
 				require.NoError(t, err)
 
 				resetRootCmd(t)
-				stdout, stderr, code := runRootCmd(t, fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", bad)
+				stdout, stderr, code := runRootCmd(t, fx.cmd("set-document-status", "--document-status", bad)...)
 				requireInvalidDocumentStatus(t, bad, stdout, stderr, code)
 
 				after, err := os.ReadFile(abs)
@@ -468,7 +493,7 @@ func TestStoreFileSetDocumentStatus_OnBareArtifact_AttachesFrontmatter(t *testin
 
 			resetRootCmd(t)
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", "archived"})
+			rootCmd.SetArgs(fx.cmd("set-document-status", "--document-status", "archived"))
 
 			require.NoError(t, rootCmd.Execute())
 
@@ -514,7 +539,7 @@ func TestStoreFileSetDocumentStatus_Idempotent(t *testing.T) {
 			// First set-document-status: transitions to final, stamps closed_date.
 			resetRootCmd(t)
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", "final"})
+			rootCmd.SetArgs(fx.cmd("set-document-status", "--document-status", "final"))
 			require.NoError(t, rootCmd.Execute())
 
 			abs := filepath.Join(dir, fx.storeRelPath)
@@ -525,7 +550,7 @@ func TestStoreFileSetDocumentStatus_Idempotent(t *testing.T) {
 			// untouched — including the closed_date stamped on the first call.
 			resetRootCmd(t)
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", "final"})
+			rootCmd.SetArgs(fx.cmd("set-document-status", "--document-status", "final"))
 			require.NoError(t, rootCmd.Execute())
 
 			afterSecond, err := os.ReadFile(abs)
@@ -561,7 +586,7 @@ func TestStoreFileSetDocumentStatus_MissingStatusIsError(t *testing.T) {
 			require.NoError(t, err)
 
 			resetRootCmd(t)
-			stdout, stderr, code := runRootCmd(t, fx.kind, "file", "set-document-status", fx.artifactName)
+			stdout, stderr, code := runRootCmd(t, fx.cmd("set-document-status")...)
 			require.Equal(t, 1, code, "set-document-status without --document-status must error")
 			require.Empty(t, stderr)
 
@@ -592,7 +617,7 @@ func TestStoreFileSetDocumentStatus_MissingFileIsError(t *testing.T) {
 			writeSpecCommandConfig(t, dir, fx.configYAML)
 
 			resetRootCmd(t)
-			stdout, stderr, code := runRootCmd(t, fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", "final")
+			stdout, stderr, code := runRootCmd(t, fx.cmd("set-document-status", "--document-status", "final")...)
 
 			require.Equal(t, 1, code)
 			require.Empty(t, stderr)
@@ -601,7 +626,7 @@ func TestStoreFileSetDocumentStatus_MissingFileIsError(t *testing.T) {
 			require.NoError(t, json.Unmarshal([]byte(stdout), &er))
 			require.True(t, er.IsError)
 			require.Equal(t, "not_found", er.Code)
-			require.Equal(t, fx.artifactName, er.Resource)
+			require.Equal(t, fx.address(), er.Resource)
 
 			require.NoFileExists(t, filepath.Join(dir, fx.storeRelPath),
 				"a not_found error must not create the destination file")
@@ -643,7 +668,7 @@ func TestStoreFileWrite_IdempotentUnderRepeatedWrites(t *testing.T) {
 			require.NoError(t, os.WriteFile(srcPath, stacked, 0o644))
 
 			setupImplementCmd(t)
-			rootCmd.SetArgs([]string{fx.kind, "file", "write", fx.artifactName, "--from", srcPath})
+			rootCmd.SetArgs(fx.cmd("write", "--from", srcPath))
 			require.NoError(t, rootCmd.Execute())
 
 			content, err := os.ReadFile(filepath.Join(dir, fx.storeRelPath))
@@ -691,7 +716,7 @@ func TestStoreFileDocumentStatus_SetOnWriteAndChangeForEveryValue(t *testing.T) 
 				abs := filepath.Join(dir, fx.storeRelPath)
 
 				resetRootCmd(t)
-				stdout, _, code := runRootCmd(t, fx.kind, "file", "write", fx.artifactName, "--from", srcPath, "--document-status", tr.write)
+				stdout, _, code := runRootCmd(t, fx.cmd("write", "--from", srcPath, "--document-status", tr.write)...)
 				require.Equalf(t, 0, code, "write failed: %s", stdout)
 
 				content, err := os.ReadFile(abs)
@@ -702,7 +727,7 @@ func TestStoreFileDocumentStatus_SetOnWriteAndChangeForEveryValue(t *testing.T) 
 				require.Equal(t, tr.write, string(meta.DocumentStatus))
 
 				resetRootCmd(t)
-				stdout, _, code = runRootCmd(t, fx.kind, "file", "set-document-status", fx.artifactName, "--document-status", tr.change)
+				stdout, _, code = runRootCmd(t, fx.cmd("set-document-status", "--document-status", tr.change)...)
 				require.Equalf(t, 0, code, "set-document-status failed: %s", stdout)
 
 				var resp map[string]any
@@ -747,9 +772,9 @@ func TestStoreFile_RetiredStatusFlagAndSubcommandAreUnknown(t *testing.T) {
 			require.NoError(t, os.WriteFile(srcPath, []byte("new body"), 0o644))
 
 			cases := map[string][]string{
-				"write --status":      {fx.kind, "file", "write", fx.artifactName, "--status", "final", "--from", srcPath},
+				"write --status":      fx.cmd("write", "--status", "final", "--from", srcPath),
 				"list --status":       {fx.kind, "file", "list", "--status", "final"},
-				"set-status --status": {fx.kind, "file", "set-status", fx.artifactName, "--status", "final"},
+				"set-status --status": fx.cmd("set-status", "--status", "final"),
 			}
 			for name, args := range cases {
 				t.Run(name, func(t *testing.T) {
@@ -769,7 +794,7 @@ func TestStoreFile_RetiredStatusFlagAndSubcommandAreUnknown(t *testing.T) {
 			}
 
 			t.Run("set-status without flags", func(t *testing.T) {
-				stdout, stderr, code := runRootCmd(t, fx.kind, "file", "set-status", fx.artifactName)
+				stdout, stderr, code := runRootCmd(t, fx.cmd("set-status")...)
 				require.Equal(t, 1, code)
 				require.Empty(t, stderr)
 
@@ -831,7 +856,7 @@ func TestStoreFileWrite_SpecDesignReferencesSurviveOrdinaryWrite(t *testing.T) {
 	require.NoError(t, os.WriteFile(srcPath, []byte("updated body\n"), 0o644))
 
 	resetRootCmd(t)
-	stdout, _, code := runRootCmd(t, fx.kind, "file", "write", fx.artifactName, "--from", srcPath)
+	stdout, _, code := runRootCmd(t, fx.cmd("write", "--from", srcPath)...)
 	require.Equalf(t, 0, code, "write failed: %s", stdout)
 
 	content, err := os.ReadFile(filepath.Join(dir, fx.storeRelPath))

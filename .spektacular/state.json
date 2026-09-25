@@ -1,31 +1,22 @@
 {
-  "kind": "plan",
-  "current_step": "finished",
+  "kind": "implement",
+  "current_step": "analyze",
   "completed_steps": [
     "new",
-    "overview",
-    "discovery",
-    "architecture",
-    "components",
-    "data_structures",
-    "implementation_detail",
-    "dependencies",
-    "testing_approach",
-    "milestones",
-    "tasks",
-    "open_questions",
-    "out_of_scope",
-    "assemble",
-    "verification",
-    "write_plan",
-    "write_context",
-    "write_research",
-    "walkthrough",
-    "finished"
+    "read_plan",
+    "analyze",
+    "implement",
+    "test",
+    "verify",
+    "update_plan",
+    "update_changelog"
   ],
-  "created_at": "2026-09-25T12:15:01.108824228Z",
-  "updated_at": "2026-09-25T13:23:54.181985382Z",
+  "created_at": "2026-09-25T13:25:27.465463216Z",
+  "updated_at": "2026-09-25T13:50:41.608323027Z",
   "data": {
+    "committed_milestones": [
+      2
+    ],
     "name": "000059_normalise-artifact-addressing"
   }
 }

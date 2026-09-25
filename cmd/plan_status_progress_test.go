@@ -29,7 +29,7 @@ func TestPlanStatus_ReportsProgressPerTask(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "")
-	_, code := writePlanDoc(t, taskPlanName, "plan.md", taskPlanDoc(
+	_, code := writePlanDoc(t, taskPlanName, "plan", taskPlanDoc(
 		taskBlock("One", true, agentFields(idA), "- [x] a", "- [x] b", "- [ ] c")+
 			taskBlock("Two", true, agentFields(idB), "- [x] a", "- [ ] b"),
 		taskBlock("Three", false, agentFields(idC), "- [ ] a")+
@@ -59,7 +59,7 @@ func TestPlanStatus_LegacyPlanKeepsItsPreviousShape(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "")
-	_, code := writePlanDoc(t, taskPlanName, "plan.md", "# Plan\n\n## Milestones & Phases\n\n### Milestone 1: M\n\n#### - [x] Phase 1.1: Work\n")
+	_, code := writePlanDoc(t, taskPlanName, "plan", "# Plan\n\n## Milestones & Phases\n\n### Milestone 1: M\n\n#### - [x] Phase 1.1: Work\n")
 	require.Equal(t, 0, code)
 
 	got := namedPlanStatus(t)

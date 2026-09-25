@@ -27,11 +27,11 @@ On each turn, the CLI returns JSON containing an `instruction` field. That instr
 
 The CLI owns the plan documents — `plan.md`, the plan's `context.md`, and `research.md`. All plan document access goes through `{{command}} plan file`:
 
-- `{{command}} plan file read <name>/<doc>.md` — read a plan document from the plan store.
-- `{{command}} plan file write <name>/<doc>.md --from <source-path>` — write a plan document into the plan store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
+- `{{command}} plan file read <name> <doc>` — read a plan document from the plan store.
+- `{{command}} plan file write <name> <doc> --from <source-path>` — write a plan document into the plan store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
 - `{{command}} plan file list` — list plans in the plan store.
 
-This includes the edits the implement workflow makes to `plan.md` — ticking task checkboxes and appending changelog entries. Read the document with `plan file read`, apply the change, and commit it with `plan file write`. Path arguments are plan-directory-relative document paths (e.g. `my-feature/plan.md`).
+This includes the edits the implement workflow makes to `plan.md` — ticking task checkboxes and appending changelog entries. Read the document with `plan file read`, apply the change, and commit it with `plan file write`. A plan document is addressed by the feature name and the document name as two arguments, never as a path or with a file extension (e.g. `plan file read my-feature plan`).
 
 # How to start
 

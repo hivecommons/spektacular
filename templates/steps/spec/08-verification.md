@@ -101,13 +101,13 @@ Once the user is happy, commit the staged spec to the spec store.
 The approved content is already staged at `.spektacular/tmp/spec_template.md` from the steps above. Point `spec file write` at it with `--from`, then remove the scratch file:
 
 ```
-{{config.command}} spec file write {{spec_name}}.md --from .spektacular/tmp/spec_template.md
+{{config.command}} spec file write {{spec_name}} --from .spektacular/tmp/spec_template.md
 rm .spektacular/tmp/spec_template.md
 ```
 
-That writes the final spec into the configured spec directory through Spektacular. The path argument is the spec file name only — `spec file write` resolves it against the configured spec directory for you.
+That writes the final spec into the configured spec directory through Spektacular. The argument is the bare spec name, with no file extension — `spec file write` finds the configured spec directory for you.
 
-After `spec file write` succeeds, verify the stored spec with `{{config.command}} spec file read {{spec_name}}.md`. Once you have confirmed it is correct, the per-section working files have served their purpose — remove the working directory with your own file tools:
+After `spec file write` succeeds, verify the stored spec with `{{config.command}} spec file read {{spec_name}}`. Once you have confirmed it is correct, the per-section working files have served their purpose — remove the working directory with your own file tools:
 
 ```
 rm -rf .spektacular/work/{{spec_name}}

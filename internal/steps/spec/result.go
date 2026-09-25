@@ -1,6 +1,8 @@
 package spec
 
-// Result is returned by the new and goto subcommands.
+// Result is returned by the new and goto subcommands. SpecName is the spec's
+// address; SpecPath is its location relative to the folder holding the config
+// file that declares the spec store.
 type Result struct {
 	Step        string `json:"step"`
 	SpecPath    string `json:"spec_path"`

@@ -16,12 +16,12 @@ For the current task (the one you just implemented, tested, and verified):
 
 The plan documents are owned by spektacular. **Never edit plan.md with the `Write` or `Edit` tools** — read and write it through the CLI:
 
-1. Read the current plan.md: `{{config.command}} plan file read {{plan_name}}/plan.md`.
+1. Read the current plan.md: `{{config.command}} plan file read {{plan_name}} plan`.
 2. Apply the checkbox changes above to the content you read.
 3. Stage the updated plan.md with the `Write` tool at the scratch path `.spektacular/tmp/plan_update.md`, point `plan file write` at it with `--from`, then remove the scratch file:
 
    ```
-   {{config.command}} plan file write {{plan_name}}/plan.md --from .spektacular/tmp/plan_update.md
+   {{config.command}} plan file write {{plan_name}} plan --from .spektacular/tmp/plan_update.md
    rm .spektacular/tmp/plan_update.md
    ```
 

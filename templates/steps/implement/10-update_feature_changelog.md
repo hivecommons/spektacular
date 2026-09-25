@@ -12,8 +12,8 @@ Two kinds of record are written every time:
 Read the feature's spec and the plan's accumulated implementation history through their respective stores — never with the `Read` tool:
 
 ```
-{{config.command}} spec file read {{plan_name}}.md
-{{config.command}} plan file read {{plan_name}}/plan.md
+{{config.command}} spec file read {{plan_name}}
+{{config.command}} plan file read {{plan_name}} plan
 ```
 
 From the spec, take the Overview/Requirements — the "why it matters" framing for a reader who has not seen the spec. From the plan, take the `{{changelog_section_name}}` section — the task-by-task implementation audit log already written by the `update_changelog` step (phase by phase in a plan written before tasks), including each entry's **What was done**, **Deviations**, **Files changed**, and **Discoveries** entries. This is where the actual-vs-planned divergence is captured; lean on it rather than re-deriving anything from the original plan text.
@@ -43,11 +43,11 @@ Author a self-contained Markdown record covering the entire feature, understanda
 Stage it with the `Write` tool at `.spektacular/tmp/changelog_project.md`, then commit it and remove the scratch file:
 
 ```
-{{config.command}} changelog file write {{plan_name}}.md --from .spektacular/tmp/changelog_project.md
+{{config.command}} changelog file write {{plan_name}} --from .spektacular/tmp/changelog_project.md
 rm .spektacular/tmp/changelog_project.md
 ```
 
-Confirm the write with `{{config.command}} changelog file read {{plan_name}}.md`. This record is a required artifact — the workflow's `finished` step will error if it is missing.
+Confirm the write with `{{config.command}} changelog file read {{plan_name}}`. This record is a required artifact — the workflow's `finished` step will error if it is missing.
 
 ### Step 4: Write one record per affected repo
 
@@ -61,17 +61,17 @@ For **each** affected repo identified in Step 2, including the project's own rep
 Stage each record with the `Write` tool at `.spektacular/tmp/changelog_<repo>.md`, then commit it and remove the scratch file:
 
 ```
-{{config.command}} changelog file write {{plan_name}}.md --repo <repo-name> --from .spektacular/tmp/changelog_<repo>.md
+{{config.command}} changelog file write {{plan_name}} --repo <repo-name> --from .spektacular/tmp/changelog_<repo>.md
 rm .spektacular/tmp/changelog_<repo>.md
 ```
 
 The `--repo` flag routes the write into that repo's own changelog store, under a `<project>/` subfolder (so multiple projects sharing a member repo cannot collide), and stamps the project name, source, and spec/plan identifiers into the front matter automatically — the body carries the readable reference line, the front matter carries the structured provenance.
 
-Confirm each write with `{{config.command}} changelog file read {{plan_name}}.md --repo <repo-name>`.
+Confirm each write with `{{config.command}} changelog file read {{plan_name}} --repo <repo-name>`.
 
 ### STOP-on-mismatch
 
-If the feature's spec cannot be found under `{{plan_name}}.md`, or the plan's `{{changelog_section_name}}` section is missing or empty, STOP and report it to the user: ask whether to (a) locate the correct spec name and retry, (b) author the records from the plan alone, or (c) skip this step. Do not silently invent a record from nothing. Likewise, if a repo-level write fails because a repo's footprint is missing or broken, surface the repair offer from the error to the user rather than skipping the repo silently.
+If the feature's spec cannot be read by the name `{{plan_name}}`, or the plan's `{{changelog_section_name}}` section is missing or empty, STOP and report it to the user: ask whether to (a) locate the correct spec name and retry, (b) author the records from the plan alone, or (c) skip this step. Do not silently invent a record from nothing. Likewise, if a repo-level write fails because a repo's footprint is missing or broken, surface the repair offer from the error to the user rather than skipping the repo silently.
 
 ### Advance
 

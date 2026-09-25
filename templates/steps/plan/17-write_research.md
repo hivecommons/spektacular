@@ -6,7 +6,7 @@ Commit the staged **research.md** to the plan store — the last of the three do
 research.md was assembled and staged at `.spektacular/tmp/research_template.md` in the assemble step. Commit it now, then remove the scratch file:
 
 ```
-{{config.command}} plan file write {{plan_name}}/research.md --from .spektacular/tmp/research_template.md
+{{config.command}} plan file write {{plan_name}} research --from .spektacular/tmp/research_template.md
 rm .spektacular/tmp/research_template.md
 ```
 

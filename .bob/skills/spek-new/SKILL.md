@@ -35,8 +35,8 @@ Before any section is drafted, the workflow opens with an `interview` step: a si
 
 The CLI owns the spec file. All spec file access goes through `go run . spec file`:
 
-- `go run . spec file read <name>.md` — read a spec file from the spec store.
-- `go run . spec file write <name>.md --from <source-path>` — write a spec file into the spec store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
+- `go run . spec file read <name>` — read a spec file from the spec store.
+- `go run . spec file write <name> --from <source-path>` — write a spec file into the spec store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
 - `go run . spec file list` — list spec files in the spec store.
 
 Path arguments are spec file names; `spec file` resolves them against the configured spec directory itself.
@@ -50,12 +50,22 @@ it instead of its content. The technical-approach step makes that offer at the p
 would otherwise be compressed to a one-line steer; it is always an offer, and nothing is written
 without the user's explicit agreement.
 
+A design does not have to already exist to be captured. Where it has been settled in
+conversation but never written down, the `spek-design` skill runs a guided interview and writes
+the document from it; where the user already has the document, it is stored exactly as supplied.
+
 Design documents are reached through the CLI, never by reading files directly:
 
 - `go run . design sources` — the design sources this project declares, with their locations.
 - `go run . design list` — the design documents in them.
 - `go run . design write --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
-  design document, byte for byte, with no frontmatter added and nothing reformatted.
+  design document Spektacular did not author, byte for byte, adding no frontmatter to it and
+  reformatting nothing.
+- `go run . design author --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
+  design Spektacular wrote with the user, stamping the same lifecycle record every spec and plan
+  carries. Optionally `--spec <spec>` to record which spec's conversation produced it, and
+  `--document-status <draft|final|superseded|archived>`. Rewriting an authored design this way
+  keeps its original capture date and the specs already referencing it.
 - `go run . design ref add --data '{"spec":"<spec>","source":"<name>","path":"<path>"}'` —
   record the reference on the spec. A reference naming a source the project has not declared is
   refused and nothing is recorded.
@@ -100,6 +110,29 @@ Under `timestamp` or `counter` (the default is `timestamp`), **never pass `id`**
 The CLI may normalize and prefix the requested name. Always use the returned `spec_name` and `spec_path` as the source of truth for follow-up workflows.
 
 The command creates the spec file and state file automatically and returns the first `instruction`. From that point on, follow the loop above: do what the instruction says, then call `go run . spec goto --data '{"step":"<next_step>"}'` to get the next one. Do not invent step names — every instruction tells you the exact `goto` command to run next.
+
+### If the project has uncommitted changes
+
+When the project sets `auto_commit` to `workflow` or `full`, the named `spec new` above may instead return an **uncommitted-changes report** (`code: uncommitted_changes`) and change nothing on disk. Its `message` names every registered repository holding uncommitted work, and `resource` lists their names.
+
+This is a question for the user, not a decision for you. Tell them which repositories have uncommitted changes and ask whether to git commit that work **before** the spec workflow starts. Then re-run the same command with their answer:
+
+To commit the existing changes first:
+
+```
+go run . spec new --data '{"name": "<spec_name>", "commit_existing": true}'
+```
+
+To start without committing them:
+
+```
+go run . spec new --data '{"name": "<spec_name>", "commit_existing": false}'
+```
+
+- `true` commits the existing changes first, in their own commit whose message says they are the user's work from before the workflow. The workflow then starts on a clean tree.
+- `false` starts the workflow without committing, so the workflow's own automatic commits will include that work alongside the agent's.
+
+Never choose for the user, and never guess from context which they would want — the whole point of the report is that their uncommitted work is about to be swept into a commit they did not make. If the commit fails (`code: auto_commit_failed`), tell them which repository failed and the reason git gave; the workflow has not started.
 
 ## Resuming an in-progress workflow
 

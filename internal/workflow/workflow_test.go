@@ -169,7 +169,7 @@ func TestGotoFromWalkthroughHintsAtFileWriteForRevisions(t *testing.T) {
 	var errResp *output.ErrorResponse
 	require.True(t, errors.As(err, &errResp), "expected *output.ErrorResponse, got %T: %v", err, err)
 	require.Equal(t, "invalid_transition", errResp.Code)
-	require.Contains(t, errResp.NextAction, "go run . plan file write 000045_config-file-migration/<doc>.md --from <scratch>")
+	require.Contains(t, errResp.NextAction, "go run . plan file write 000045_config-file-migration <doc> --from <scratch>")
 	require.Contains(t, errResp.NextAction, "do not try to goto backward")
 	require.Contains(t, errResp.NextAction, `run: go run . plan goto --data '{"step":"finished"}'`)
 }

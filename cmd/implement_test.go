@@ -107,7 +107,8 @@ func TestImplementNew_SucceedsWithExistingPlan(t *testing.T) {
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &result))
 	require.Equal(t, "read_plan", result["step"])
 	require.Equal(t, "fixture", result["plan_name"])
-	require.Contains(t, result["plan_path"], "plans/fixture/plan.md")
+	require.Equal(t, "plans/fixture/plan.md", result["plan_path"])
+	require.Equal(t, "plan", result["plan_document"])
 	require.NotEmpty(t, result["instruction"])
 }
 
@@ -227,7 +228,7 @@ func TestImplementStatus_CountsUncheckedTasksInTaskPlan(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	writeSpecCommandConfig(t, dir, "")
-	_, code := writePlanDoc(t, taskPlanName, "plan.md", taskPlanDoc(
+	_, code := writePlanDoc(t, taskPlanName, "plan", taskPlanDoc(
 		taskBlock("Done", true, agentFields(idA)),
 		taskBlock("Open one", false, agentFields(idB))+taskBlock("Open two", false, agentFields(idC)),
 	))

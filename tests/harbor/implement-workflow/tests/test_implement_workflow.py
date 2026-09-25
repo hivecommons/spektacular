@@ -94,12 +94,12 @@ EXTERNAL_REPO_CHANGELOG_PATH = (
 
 # CLI substrings that must appear in Bash tool_use inputs. Substrings, not
 # exact matches, so `--from ...` argument tail is free to vary.
-PROJECT_WRITE_SUBSTR = f"changelog file write {PLAN_NAME}.md --from"
+PROJECT_WRITE_SUBSTR = f"changelog file write {PLAN_NAME} --from"
 COLOCATED_WRITE_SUBSTR = (
-    f"changelog file write {PLAN_NAME}.md --repo {COLOCATED_REPO_NAME}"
+    f"changelog file write {PLAN_NAME} --repo {COLOCATED_REPO_NAME}"
 )
 EXTERNAL_WRITE_SUBSTR = (
-    f"changelog file write {PLAN_NAME}.md --repo {EXTERNAL_REPO_NAME}"
+    f"changelog file write {PLAN_NAME} --repo {EXTERNAL_REPO_NAME}"
 )
 
 # The finished template renders these substrings — used to prove the
@@ -241,7 +241,7 @@ def test_project_level_changelog_exists_at_flat_path():
     assert PROJECT_CHANGELOG_PATH.exists(), (
         f"project-level changelog missing at {PROJECT_CHANGELOG_PATH} — this is "
         "the exact regression the fix addressed. update_feature_changelog must "
-        "commit the aggregate record with `changelog file write <plan>.md --from ...` "
+        "commit the aggregate record with `changelog file write <plan> --from ...` "
         "(no --repo flag). The finished step should have failed hard if this "
         "was not written, so seeing this test fail while `finished` was reached "
         "means the finished-step guard was also regressed."
@@ -252,7 +252,7 @@ def test_colocated_repo_changelog_exists_under_project_subfolder():
     assert COLOCATED_REPO_CHANGELOG_PATH.exists(), (
         f"colocated repo-level changelog missing at {COLOCATED_REPO_CHANGELOG_PATH} — "
         f"update_feature_changelog must commit the colocated repo's own record with "
-        f"`changelog file write <plan>.md --repo {COLOCATED_REPO_NAME} --from ...`. "
+        f"`changelog file write <plan> --repo {COLOCATED_REPO_NAME} --from ...`. "
         "Every affected repo, INCLUDING the colocated one, gets its own repo-level "
         "record; there is no 'the project-level already covers it' carve-out."
     )
@@ -262,7 +262,7 @@ def test_external_repo_changelog_exists_under_project_subfolder():
     assert EXTERNAL_REPO_CHANGELOG_PATH.exists(), (
         f"external repo-level changelog missing at {EXTERNAL_REPO_CHANGELOG_PATH} — "
         f"update_feature_changelog must commit the docs repo's own record with "
-        f"`changelog file write <plan>.md --repo {EXTERNAL_REPO_NAME} --from ...`. "
+        f"`changelog file write <plan> --repo {EXTERNAL_REPO_NAME} --from ...`. "
         "The write routes into the external repo's own changelog store, under a "
         f"{PROJECT_NAME}/ subfolder so multiple projects sharing that repo cannot collide."
     )

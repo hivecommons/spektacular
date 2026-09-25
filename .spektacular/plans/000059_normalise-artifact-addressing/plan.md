@@ -225,7 +225,7 @@ The existing store-file suites are rewritten to the new spelling rather than dup
 - `plan file read <feature>` is refused with `document_required`.
 - A manual spec → plan → implement run completes without an addressing refusal.
 
-#### - [ ] Task: Add the artifact address package
+#### - [x] Task: Add the artifact address package
 **Id:** d20ef613-ccf0-47b6-84d7-5df0b7e34ab1
 **Repo:** spektacular
 **Depends on:** none
@@ -236,12 +236,12 @@ Introduce a small package that owns what a document address is: a kind, a featur
 *Technical detail:* [context.md#task-add-the-artifact-address-package](./context.md#task-add-the-artifact-address-package)
 
 **Acceptance criteria**:
-- [ ] Bare spec, changelog and plan-document addresses parse, and each maps to the exact file location the workflows already write.
-- [ ] Any address segment containing a `.` or `/` (such as `x.md`, `x/plan.md` or `specs/x`) is refused as an unexpected extension, and the refusal carries the correctly spelled address.
-- [ ] A plan document address with only a feature is refused as document required.
-- [ ] A listed file or folder entry turns back into exactly the bare name that parses to it, and entries that are not documents are reported as not addressable.
+- [x] Bare spec, changelog and plan-document addresses parse, and each maps to the exact file location the workflows already write.
+- [x] Any address segment containing a `.` or `/` (such as `x.md`, `x/plan.md` or `specs/x`) is refused as an unexpected extension, and the refusal carries the correctly spelled address.
+- [x] A plan document address with only a feature is refused as document required.
+- [x] A listed file or folder entry turns back into exactly the bare name that parses to it, and entries that are not documents are reported as not addressable.
 
-#### - [ ] Task: Address spec, plan and changelog document commands by bare name
+#### - [x] Task: Address spec, plan and changelog document commands by bare name
 **Id:** 5abaeadf-acd7-41a4-8038-50b6fd0d2e15
 **Repo:** spektacular
 **Depends on:**
@@ -253,13 +253,13 @@ Rework the one command builder behind every `spec file`, `plan file` and `change
 *Technical detail:* [context.md#task-address-spec-plan-and-changelog-document-commands-by-bare-name](./context.md#task-address-spec-plan-and-changelog-document-commands-by-bare-name)
 
 **Acceptance criteria**:
-- [ ] Every name printed by listing specs, changelog records (with and without a repo), plans and one plan's documents, passed unchanged to read, returns that document's content, and no listed name ends in an extension.
-- [ ] Write, delete and set-document-status succeed with the bare names a list printed and act on the same document read returns. Changelog write, read and list with `--repo` still route to the named repo.
-- [ ] Every verb given a name ending in `.md`, or a plan addressed as `feature/plan.md`, fails with `unexpected_extension`, changes nothing in the store, and its next action is the same command correctly spelled.
-- [ ] Every plan document verb given only a feature fails with `document_required`, never an internal error. Its message contains no absolute path, and its next action names `plan file list <feature>` and an example read.
-- [ ] The ID-prefix check, repo provenance stamping and plan-body validation behave exactly as before for correctly addressed writes.
+- [x] Every name printed by listing specs, changelog records (with and without a repo), plans and one plan's documents, passed unchanged to read, returns that document's content, and no listed name ends in an extension.
+- [x] Write, delete and set-document-status succeed with the bare names a list printed and act on the same document read returns. Changelog write, read and list with `--repo` still route to the named repo.
+- [x] Every verb given a name ending in `.md`, or a plan addressed as `feature/plan.md`, fails with `unexpected_extension`, changes nothing in the store, and its next action is the same command correctly spelled.
+- [x] Every plan document verb given only a feature fails with `document_required`, never an internal error. Its message contains no absolute path, and its next action names `plan file list <feature>` and an example read.
+- [x] The ID-prefix check, repo provenance stamping and plan-body validation behave exactly as before for correctly addressed writes.
 
-#### - [ ] Task: Route workflow layout helpers and the walkthrough hint through the address
+#### - [x] Task: Route workflow layout helpers and the walkthrough hint through the address
 **Id:** 9e200427-c471-4d7f-af3e-df8795c0659d
 **Repo:** spektacular
 **Depends on:**
@@ -271,10 +271,10 @@ Make the spec, plan and implement workflow packages' existing path helpers deleg
 *Technical detail:* [context.md#task-route-workflow-layout-helpers-and-the-walkthrough-hint-through-the-address](./context.md#task-route-workflow-layout-helpers-and-the-walkthrough-hint-through-the-address)
 
 **Acceptance criteria**:
-- [ ] Every workflow still creates, reads and writes the same spec, plan, context, research, test-plan and changelog files it did before.
-- [ ] The walkthrough revision hint names `plan file write <feature> <doc> --from <scratch>` and no longer mentions a `.md` document path.
+- [x] Every workflow still creates, reads and writes the same spec, plan, context, research, test-plan and changelog files it did before.
+- [x] The walkthrough revision hint names `plan file write <feature> <doc> --from <scratch>` and no longer mentions a `.md` document path.
 
-#### - [ ] Task: Move shipped skills and step instructions to the new addressing
+#### - [x] Task: Move shipped skills and step instructions to the new addressing
 **Id:** 5e105e3b-47be-4a35-9719-a41556c34edd
 **Repo:** spektacular
 **Depends on:**
@@ -287,11 +287,11 @@ Rewrite every workflow skill, step template and shared partial that tells an age
 *Technical detail:* [context.md#task-move-shipped-skills-and-step-instructions-to-the-new-addressing](./context.md#task-move-shipped-skills-and-step-instructions-to-the-new-addressing)
 
 **Acceptance criteria**:
-- [ ] No shipped skill, step instruction, partial or managed agent section addresses a spec, plan document or changelog record with an extension or a joined path.
-- [ ] A test fails if an old spelling is reintroduced in any template, including partials and managed agent sections, or in any rendered agent-facing instruction.
-- [ ] The installed Claude and Bob skill copies and the managed AGENTS.md sections in this repo match what the templates now render.
+- [x] No shipped skill, step instruction, partial or managed agent section addresses a spec, plan document or changelog record with an extension or a joined path.
+- [x] A test fails if an old spelling is reintroduced in any template, including partials and managed agent sections, or in any rendered agent-facing instruction.
+- [x] The installed Claude and Bob skill copies and the managed AGENTS.md sections in this repo match what the templates now render.
 
-#### - [ ] Task: Update harbor end-to-end suites to the new addressing
+#### - [x] Task: Update harbor end-to-end suites to the new addressing
 **Id:** 8ce57330-46a5-43fd-b48e-a594303a3118
 **Repo:** spektacular
 **Depends on:**
@@ -303,8 +303,8 @@ The harbor suites carry hand-maintained copies of CLI spellings in their task in
 *Technical detail:* [context.md#task-update-harbor-end-to-end-suites-to-the-new-addressing](./context.md#task-update-harbor-end-to-end-suites-to-the-new-addressing)
 
 **Acceptance criteria**:
-- [ ] No harbor suite instruction, scripted solution or verifier oracle uses an extension or joined-path address.
-- [ ] The implement suite's verifier looks for the bare-name changelog writes the updated step instructions now produce.
+- [x] No harbor suite instruction, scripted solution or verifier oracle uses an extension or joined-path address.
+- [x] The implement suite's verifier looks for the bare-name changelog writes the updated step instructions now produce.
 
 #### - [ ] Task: Manually test a full run with the new addressing
 **Id:** 7558648e-d65e-409e-a125-b6d84c6e8bf4
@@ -331,7 +331,7 @@ Drive a real spec → plan → implement run by hand, using only the shipped ski
 - On this repo, `spec file list`, `plan file list`, `plan file list <feature>` and `changelog file list` (with and without `--repo spektacular`) print paths starting with the configured directory, with no `.spektacular/` prefix and no absolute path.
 - `plan status` and `implement status` during a run show `plan_document: "plan"` and a relative `plan_path`.
 
-#### - [ ] Task: Report list locations relative to the declaring configuration
+#### - [x] Task: Report list locations relative to the declaring configuration
 **Id:** b741574a-ce76-41f8-a559-82e188d1ec7f
 **Repo:** spektacular
 **Depends on:**
@@ -343,11 +343,11 @@ Make every `path` printed by the spec, plan and changelog list commands, and by 
 *Technical detail:* [context.md#task-report-list-locations-relative-to-the-declaring-configuration](./context.md#task-report-list-locations-relative-to-the-declaring-configuration)
 
 **Acceptance criteria**:
-- [ ] Locations printed by listing specs, plans, a plan's documents and changelog records start with the store's configured directory, and contain neither the project's hidden settings folder prefix nor an absolute path.
-- [ ] Changelog locations follow the same convention whether or not a repo is named.
-- [ ] Set-document-status reports its location in the same convention.
+- [x] Locations printed by listing specs, plans, a plan's documents and changelog records start with the store's configured directory, and contain neither the project's hidden settings folder prefix nor an absolute path.
+- [x] Changelog locations follow the same convention whether or not a repo is named.
+- [x] Set-document-status reports its location in the same convention.
 
-#### - [ ] Task: Report the plan by address and relative location in status
+#### - [x] Task: Report the plan by address and relative location in status
 **Id:** 364d550d-1546-4e57-98f8-b6b7ccdd5865
 **Repo:** spektacular
 **Depends on:**
@@ -359,12 +359,12 @@ Make `plan status` and `implement status` report the plan by address, with the e
 *Technical detail:* [context.md#task-report-the-plan-by-address-and-relative-location-in-status](./context.md#task-report-the-plan-by-address-and-relative-location-in-status)
 
 **Acceptance criteria**:
-- [ ] During an active plan or implement run, the status output shows the bare `plan_name`, `plan_document` of `plan`, and a `plan_path` such as `plans/<feature>/plan.md`.
-- [ ] No absolute host path appears in either status output.
-- [ ] Both commands' schema output lists `plan_document` and describes `plan_path` as config-relative.
-- [ ] The feature name recorded in workflow state reads the feature's spec, `plan` document and changelog record with no string manipulation.
+- [x] During an active plan or implement run, the status output shows the bare `plan_name`, `plan_document` of `plan`, and a `plan_path` such as `plans/<feature>/plan.md`.
+- [x] No absolute host path appears in either status output.
+- [x] Both commands' schema output lists `plan_document` and describes `plan_path` as config-relative.
+- [x] The feature name recorded in workflow state reads the feature's spec, `plan` document and changelog record with no string manipulation.
 
-#### - [ ] Task: Name documents by address in workflow output and step instructions
+#### - [x] Task: Name documents by address in workflow output and step instructions
 **Id:** 32733cb9-3068-475f-8b86-e58c60fb6076
 **Repo:** spektacular
 **Depends on:**
@@ -377,9 +377,9 @@ Stop handing agents host file paths for documents Spektacular owns, because thos
 *Technical detail:* [context.md#task-name-documents-by-address-in-workflow-output-and-step-instructions](./context.md#task-name-documents-by-address-in-workflow-output-and-step-instructions)
 
 **Acceptance criteria**:
-- [ ] No rendered step instruction contains a host path to a spec, plan document or changelog record. Every reference names the document and the CLI command that reads it.
-- [ ] A template that tries to use a removed path variable fails a test.
-- [ ] The `new`, `goto` and status results for spec, plan and implement workflows report locations relative to the declaring configuration, with no absolute host path, alongside the document's address.
+- [x] No rendered step instruction contains a host path to a spec, plan document or changelog record. Every reference names the document and the CLI command that reads it.
+- [x] A template that tries to use a removed path variable fails a test.
+- [x] The `new`, `goto` and status results for spec, plan and implement workflows report locations relative to the declaring configuration, with no absolute host path, alongside the document's address.
 
 ### Milestone 3: The new addressing and location convention are documented, with a migration note
 
@@ -528,3 +528,179 @@ No other implementation-time uncertainties remain. Every other decision is recor
 - **`artifacts list` is unchanged.** Its pre-existing mismatch is left alone: it scans central changelog records one folder below where they are written. It is a separate command outside this spec, and worth its own issue.
 - **No site-wide command reference.** The new docs page covers the spec, plan and changelog document commands only, not every CLI command.
 - **No template-drift cleanup beyond regeneration.** Regenerating the installed skill copies picks up unrelated earlier template changes as a side effect. No other reconciliation of those copies is planned.
+
+## Changelog
+
+### 2026-09-25 — Task: Add the artifact address package
+
+**What was done**: Added `internal/artifact`, which parses what a caller typed for a spec, plan or changelog verb into `Address{Kind, Feature, Document}`, refuses extension/joined-path segments with `*ExtensionError` (carrying the corrected address) and a feature-only plan address with `*DocumentRequiredError`, maps an address to the file layout (`StorePath`, `FeatureDir`) and maps listed entries back to bare names (`NameFromEntry`). Defines `ErrCodeUnexpectedExtension` and `ErrCodeDocumentRequired`.
+
+**Deviations**: Added `ParseFeature(kind, input)` for the single-feature form used by `plan file list <feature>`, and an `ErrEmptyName` sentinel for empty segments (the command layer maps it to `bad_input`). `StorePath` keeps the existing slash-concatenation (`dir + "/" + ...`) rather than `filepath.Join`, so delegating layout helpers stay byte-identical.
+
+**Files changed**:
+- `spektacular: internal/artifact/address.go`
+- `spektacular: internal/artifact/address_test.go`
+
+**Discoveries**: A plan given one extension-carrying argument with no separator (`x.md`) cannot recover a document name; its correction leaves `Document` empty, so the command layer must render a `<document>` placeholder in that next action.
+
+### 2026-09-25 — Task: Address spec, plan and changelog document commands by bare name
+
+**What was done**: `newStoreFileCmd` now takes a `storeFileKind` descriptor and parses every verb's arguments through `artifact.Parse` before touching a store. Spec and changelog verbs take `<feature>`; plan document verbs take `<feature> <document>` (`RangeArgs(1,2)` so one argument reaches the parser); `plan file list [<feature>]` lists feature folders or one plan's documents; spec/changelog `list` take no positional argument. Lists print bare names and drop non-document entries. New `cmd/storefile_address.go` renders `unexpected_extension`, `document_required`, `bad_input` and `not_found` refusals whose next action restates the caller's command (configured command name, corrected args, flags the caller set). `set-document-status` now reports `name`, `document` (plan) and `path`.
+
+**Deviations**: `delete` stays idempotent on a missing document (store contract), so it has no `not_found`. A missing central list directory still surfaces the raw store error as before; only `plan file list <feature>` for a missing feature became `not_found`.
+
+**Files changed**:
+- `spektacular: cmd/storefile.go`
+- `spektacular: cmd/storefile_address.go`
+- `spektacular: cmd/storefile_address_test.go`
+- `spektacular: cmd/file.go`
+- `spektacular: cmd/plan_file.go`
+- `spektacular: cmd/changelog_file.go`
+- `spektacular: cmd/file_test.go`
+- `spektacular: cmd/plan_file_test.go`
+- `spektacular: cmd/plan_file_validate_test.go`
+- `spektacular: cmd/changelog_file_test.go`
+- `spektacular: cmd/storefile_metadata_test.go`
+- `spektacular: cmd/storefile_list_filter_test.go`
+- `spektacular: cmd/storefile_list_modified_test.go`
+- `spektacular: cmd/plantask_fixture_test.go`
+- `spektacular: cmd/root_test.go`
+- `spektacular: cmd/migrate_test.go`
+- `spektacular: cmd/implement_task_test.go`
+- `spektacular: cmd/implement_task_run_test.go`
+- `spektacular: cmd/implement_test.go`
+- `spektacular: cmd/plan_export_test.go`
+- `spektacular: cmd/plan_status_progress_test.go`
+- `spektacular: cmd/plan_task_id_test.go`
+
+**Discoveries**: pflag's `FlagSet.Visit` yields every flag ever marked set on that FlagSet, and the shared cobra tree in tests is never rebuilt, so rebuilding "the caller's flags" must also check `f.Changed` (which `resetRootCmd` clears) or earlier test invocations leak into next actions. The legacy migrate test now reaches the old `proj/` changelog folder via `changelog file list --repo proj` because positional list sub-paths are gone.
+
+### 2026-09-25 — Task: Route workflow layout helpers and the walkthrough hint through the address
+
+**What was done**: `spec.SpecFilePath`, `plan.PlanFilePath`/`ContextFilePath`/`ResearchFilePath`, the implement package's duplicates and `ChangelogFilePath` now delegate to `artifact.Address.StorePath`, as does the implement `finished` step's test-plan path and both strategies' spec path. The walkthrough revision hint now says `<cmd> plan file write <feature> <doc> --from <scratch>`.
+
+**Deviations**: Added `implement.PlanDocumentPath(dir, name, document)` (and an unexported `documentPath` in the plan package) so the test-plan path goes through the address too, rather than inlining an `artifact.Address` literal at each call site.
+
+**Files changed**:
+- `spektacular: internal/steps/spec/steps.go`
+- `spektacular: internal/steps/plan/steps.go`
+- `spektacular: internal/steps/plan/strategy.go`
+- `spektacular: internal/steps/implement/strategy.go`
+- `spektacular: internal/steps/implement/steps.go`
+- `spektacular: internal/workflow/workflow.go`
+- `spektacular: internal/workflow/workflow_test.go`
+
+**Discoveries**: None. The existing step tests passed unchanged, confirming byte-identical store paths.
+
+### 2026-09-25 — Task: Move shipped skills and step instructions to the new addressing
+
+**What was done**: Rewrote every spec, plan and changelog document command in the workflow skills, step templates and the implement plan-documents partial to the bare-name and `<feature> <document>` forms, and reworded the prose that described path arguments or a spec "found under `<name>.md`". Widened the instruction-surface guard to walk `partials/` and `agents/` and to reject retired spellings (template and rendered skill), added `TestNoAgentFacingInstructionUsesOldAddressing` over the rendered agent-facing corpus, updated pinned spellings in the step and contract tests, and regenerated the `.claude`/`.bob` skill copies with `init claude` and `init bob`.
+
+**Deviations**: The plan's `\{\{(plan|spec)_name\}\}(\.md|/)` guard pattern would flag legitimate `.spektacular/work/{{plan_name}}/` scratch paths, so it requires the preceding character not to be `/`. Dropped the obsolete `demo-feature/context.md`-style qualifiers from `unqualifiedContextMd`; new-form reads no longer mention `context.md` at all. `init` also rewrote `.spektacular/config.yaml` (agent and version fields); that change was reverted, only skill copies were kept.
+
+**Files changed**:
+- `spektacular: templates/skills/workflows/spek-new/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-plan/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: templates/partials/implement-plan-documents.md`
+- `spektacular: templates/steps/implement/*.md`
+- `spektacular: templates/steps/plan/*.md`
+- `spektacular: templates/steps/spec/*.md`
+- `spektacular: internal/agent/instruction_surface_test.go`
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: cmd/resume_test.go`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: .claude/skills/*/SKILL.md`
+- `spektacular: .bob/skills/*`, `.bob/commands/spek-design.md` (regenerated; includes pre-existing drift such as the missing spek-design copy)
+
+**Discoveries**: `go run . init <agent>` is not just a skill regenerator in this repo: it also rewrites `config.yaml`'s `agent`, `written_by` and `skills_version`, so regenerating copies here needs config.yaml restored afterwards.
+
+### 2026-09-25 — Task: Update harbor end-to-end suites to the new addressing
+
+**What was done**: Updated the spec, plan and implement harbor suites' instructions, scripted solutions and the implement verifier's oracle literals to bare-name and `<feature> <document>` addressing, as hand-maintained literals. The spec suite's solution now stages its body under `.spektacular/tmp/` and writes with `--from` instead of the retired stdin pipe.
+
+**Deviations**: None. The verifier's on-disk path constants (`.../changelog/<plan>.md`) are filesystem locations, not addresses, and were left alone. Suites not run, per the user's decision to verify end to end by hand.
+
+**Files changed**:
+- `spektacular: tests/harbor/implement-workflow/instruction.md`
+- `spektacular: tests/harbor/implement-workflow/tests/test_implement_workflow.py`
+- `spektacular: tests/harbor/plan-workflow/instruction.md`
+- `spektacular: tests/harbor/plan-workflow/solution/solve.sh`
+- `spektacular: tests/harbor/spec-workflow/solution/solve.sh`
+
+**Discoveries**: None.
+
+### 2026-09-25 — Task: Report list locations relative to the declaring configuration
+
+**What was done**: `resolveStore` now also returns the location base: `.spektacular` (the config.yaml folder) for the central stores and `""` for a repo-routed changelog store, which is rooted at its repo.yaml folder. New `cmd/storefile_location.go` holds `reportedLocation(base, storePath)`, used for every list `path` and for `set-document-status`'s `path`, replacing the no-op `TrimPrefix(…, st.Root())`.
+
+**Deviations**: `storeFileStore` keeps its two-value signature (the design-ref command also uses it); the base is attached in `resolveStore` instead. A store configured outside `.spektacular/` (e.g. `../docs/plans`) reports a `../`-prefixed path, which is the configured directory as written.
+
+**Files changed**:
+- `spektacular: cmd/storefile.go`
+- `spektacular: cmd/storefile_location.go`
+- `spektacular: cmd/storefile_location_test.go`
+- `spektacular: cmd/storefile_list_filter_test.go`
+- `spektacular: cmd/storefile_list_modified_test.go`
+
+**Discoveries**: None.
+
+### 2026-09-25 — Task: Report the plan by address and relative location in status
+
+**What was done**: `plan.StatusResult` and `implement.StatusResult` gained `plan_document` (always `plan`), and `plan status` / `implement status` now report `plan_path` through `reportedLocation` relative to the config.yaml folder (`plans/<feature>/plan.md`) instead of an absolute host path. Both status schemas list `plan_document` and describe `plan_path`. Tests cover both status forms, the schemas, and the success metric: the name recorded in workflow state reads the spec, the `plan` document and the changelog record unchanged.
+
+**Deviations**: Added an optional `description` field to the shared `schemaProp` type so the schema can describe `plan_path` as config-relative.
+
+**Files changed**:
+- `spektacular: internal/steps/plan/result.go`
+- `spektacular: internal/steps/implement/result.go`
+- `spektacular: cmd/plan.go`
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/spec.go`
+- `spektacular: cmd/status_address_test.go`
+
+**Discoveries**: None.
+
+### 2026-09-25 — Task: Name documents by address in workflow output and step instructions
+
+**What was done**: `stepkit.PathStrategy.PrimaryPathField()` became `PrimaryLocation(instanceName)`, which returns the primary document's config-relative location. The spec, plan and implement strategies no longer provide `spec_path`, `plan_path`, `context_path`, `research_path`, `changelog_path` or `plan_dir`; they provide names only. Every template that rendered one now names the document and gives its CLI read. `new`/`goto` results report `spec_path`/`plan_path` config-relative, plan and implement results gain `plan_document`, `spec status` reports a relative `spec_path`, and the result schemas describe the paths. The location helper moved to `artifact.Location`, with `cmd`'s `reportedLocation` delegating to it. Guards forbid the removed variables in any template and assert that no rendered agent-facing text carries the test project root.
+
+**Deviations**: The repo workflow keeps its absolute `repo_path`, since it is a code folder rather than a stored document. The plan-document `not_found` message now reads `plan "<f>" has no document named "<doc>"` instead of joining feature and document into one quoted name.
+
+**Files changed**:
+- `spektacular: internal/stepkit/stepkit.go`
+- `spektacular: internal/stepkit/stepkit_test.go`
+- `spektacular: internal/artifact/address.go`
+- `spektacular: internal/steps/spec/strategy.go`
+- `spektacular: internal/steps/spec/result.go`
+- `spektacular: internal/steps/plan/strategy.go`
+- `spektacular: internal/steps/plan/steps.go`
+- `spektacular: internal/steps/plan/result.go`
+- `spektacular: internal/steps/implement/strategy.go`
+- `spektacular: internal/steps/implement/strategy_test.go`
+- `spektacular: internal/steps/implement/steps.go`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: internal/steps/implement/result.go`
+- `spektacular: internal/steps/repo/strategy.go`
+- `spektacular: internal/agent/instruction_surface_test.go`
+- `spektacular: templates/steps/implement/01-read_plan.md`
+- `spektacular: templates/steps/implement/12-finished.md`
+- `spektacular: templates/steps/plan/01-overview.md`
+- `spektacular: templates/steps/plan/18-walkthrough.md`
+- `spektacular: templates/steps/plan/19-finished.md`
+- `spektacular: templates/steps/spec/00-new.md`
+- `spektacular: cmd/spec.go`
+- `spektacular: cmd/plan.go`
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/storefile_location.go`
+- `spektacular: cmd/storefile_address.go`
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: cmd/status_address_test.go`
+- `spektacular: cmd/implement_test.go`
+- `spektacular: cmd/spec_test.go`
+- `spektacular: cmd/cross_kind_test.go`
+- `spektacular: cmd/migrate_test.go`
+- `spektacular: cmd/artifact_status_test.go`
+- `spektacular: cmd/root_test.go`
+
+**Discoveries**: Many `spec new` tests passed the result's `spec_path` straight to `FileExists`, relying on it being a host path. Anything that wants to touch a document on disk now has to join the project's settings folder itself, which is the point: the result is an address and location, not a file handle.

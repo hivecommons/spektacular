@@ -3,7 +3,7 @@ step: new
 next: interview
 ---
 
-The spec scaffold has been created at `{{spec_path}}`.
+The spec scaffold has been created in the spec store as `{{spec_name}}` (read it with `{{config.command}} spec file read {{spec_name}}`).
 
 Before proceeding to the overview step, write the current conversation context to `.spektacular/working-context.md` if meaningful context exists. The file is yours in full — it was cleared for this workflow, so write your context straight into it. Capture the full discussion in detail:
 

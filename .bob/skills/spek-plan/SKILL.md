@@ -16,7 +16,7 @@ description: Create a new Plan from an approved Specification.
 
 This skill drives a **multi-step interactive workflow** that produces a complete implementation plan — the assembled `plan.md`, the plan's `context.md`, and `research.md` documents committed to the plan store — from an existing spec. The workflow is owned by the `go run .` CLI, not by you — the CLI is the state machine and you are the executor, and the CLI (not the filesystem) is how you reach every plan document.
 
-On each turn, the CLI returns JSON containing an `instruction` field. That instruction describes exactly one step (e.g. discovery, data structures, phases, testing approach, walkthrough, …). You must:
+On each turn, the CLI returns JSON containing an `instruction` field. That instruction describes exactly one step (e.g. discovery, data structures, tasks, testing approach, walkthrough, …). You must:
 
 1. Read the `instruction` carefully.
 2. Perform the step — this may mean researching the codebase, spawning subagents, interviewing the user, or committing a plan document to the store.
@@ -33,11 +33,11 @@ On each turn, the CLI returns JSON containing an `instruction` field. That instr
 
 The CLI owns the plan documents — `plan.md`, the plan's `context.md`, and `research.md`. All plan document access goes through `go run . plan file`:
 
-- `go run . plan file read <name>/<doc>.md` — read a plan document from the plan store.
-- `go run . plan file write <name>/<doc>.md --from <source-path>` — write a plan document into the plan store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
+- `go run . plan file read <name> <doc>` — read a plan document from the plan store.
+- `go run . plan file write <name> <doc> --from <source-path>` — write a plan document into the plan store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
 - `go run . plan file list` — list plans in the plan store.
 
-Path arguments are plan-directory-relative document paths (e.g. `my-feature/plan.md`); `plan file` resolves them against the configured plan directory itself.
+A plan document is addressed by the feature name and the document name as two arguments, never as a path or with a file extension (e.g. `plan file read my-feature plan`); `plan file list <feature>` shows the documents a plan holds.
 
 # Design documents a spec references
 
@@ -63,7 +63,7 @@ meant to surface here, not during implementation.
 
 The drafting steps run without stopping for section approval — draft each section, save it, and advance; only a genuinely blocking question (no reasonable default, or information only the user holds) interrupts the user before the walkthrough.
 
-While you gather each section, write that section's drafted content directly to its own git-tracked working file under `.spektacular/work/<plan_name>/<section>.md` using your own `Write` tool (the phases step writes two: `phases_plan.md` and `phases_context.md`; every drafting step also appends its judgement calls to a shared `assumptions.md` in the same directory). These working files are **not** store documents — writing them directly with `Write` is correct and expected, and is the one deliberate exception to the "never use `Write`/`Edit`" rule above. That rule protects only the **final assembled** `plan.md`, the plan's `context.md`, and `research.md`, which are written solely through `go run . plan file write`. The per-section working files are scratch-but-durable: the assemble step reads them back to build the three documents (staged to `.spektacular/tmp/`), the verification step checks the staged documents, the write steps commit them, and then the working directory is removed once all three store writes succeed.
+While you gather each section, write that section's drafted content directly to its own git-tracked working file under `.spektacular/work/<plan_name>/<section>.md` using your own `Write` tool (the tasks step writes two: `tasks_plan.md` and `tasks_context.md`, and gets every task id from `go run . plan task-id`; every drafting step also appends its judgement calls to a shared `assumptions.md` in the same directory). These working files are **not** store documents — writing them directly with `Write` is correct and expected, and is the one deliberate exception to the "never use `Write`/`Edit`" rule above. That rule protects only the **final assembled** `plan.md`, the plan's `context.md`, and `research.md`, which are written solely through `go run . plan file write`. The per-section working files are scratch-but-durable: the assemble step reads them back to build the three documents (staged to `.spektacular/tmp/`), the verification step checks the staged documents, the write steps commit them, and then the working directory is removed once all three store writes succeed.
 
 The working sidecar `.spektacular/working-context.md` (at the repo's `.spektacular/` root — not the plan's own `context.md` document) has a narrower role: it holds only your cross-cutting learnings and the answers the user gave to your questions — never a copy of section content (that lives in the per-section working files). On resume, read back **both** the section working files in `.spektacular/work/<plan_name>/` (including the `assumptions.md` judgement-call log) and `.spektacular/working-context.md`, so you continue from the interrupted step without re-asking for sections already completed or re-deciding calls already recorded.
 
@@ -84,7 +84,7 @@ go run . plan new --data '{"name": "<spec_name>"}'
 **First check the report's `kind`.** If it is **not** `plan`, a *different* workflow (a spec or implement run) is in progress — you cannot resume it from the plan skill, and the CLI will refuse to. Do **not** run a `plan goto`. Instead follow the report's `instruction`: tell the user a `<kind>` workflow is in progress and let them choose — continue it with that workflow's skill (`go run . <kind> goto`), or discard it and start the plan with `go run . plan new --force`. Only proceed with the steps below when the report's `kind` is `plan`.
 
 1. Ask the user whether to **resume** the in-progress plan or **start a new one**. (The report's `instruction` field restates both options.)
-2. **To resume**, first read back the previous session's work with your own file tools: the per-section working files under `.spektacular/work/<name>/` (sections already completed) **and** `.spektacular/working-context.md` (learnings + the user's answers). If the report's `current_step` is `walkthrough`, the per-section working files have already been removed — read the committed documents back with `go run . plan file read <name>/<doc>.md` instead, then continue the interrupted review from there. Then run the resume command using the report's `current_step`:
+2. **To resume**, first read back the previous session's work with your own file tools: the per-section working files under `.spektacular/work/<name>/` (sections already completed) **and** `.spektacular/working-context.md` (learnings + the user's answers). If the report's `current_step` is `walkthrough`, the per-section working files have already been removed — read the committed documents back with `go run . plan file read <name> <doc>` instead, then continue the interrupted review from there. Then run the resume command using the report's `current_step`:
 
    ```
    go run . plan goto --data '{"step":"<current_step>"}'
@@ -96,3 +96,26 @@ go run . plan new --data '{"name": "<spec_name>"}'
    ```
 
 Otherwise the command returns the first `instruction` and a fresh workflow has started. From that point on, follow the loop above: do what the instruction says, then call `go run . plan goto --data '{"step":"<next_step>"}'` to get the next one. Do not invent step names — every instruction tells you the exact `goto` command to run next.
+
+## If the project has uncommitted changes
+
+When the project sets `auto_commit` to `workflow` or `full`, `plan new` may instead return an **uncommitted-changes report** (`code: uncommitted_changes`) and change nothing on disk. Its `message` names every registered repository holding uncommitted work, and `resource` lists their names.
+
+This is a question for the user, not a decision for you. Tell them which repositories have uncommitted changes and ask whether to git commit that work **before** the plan workflow starts. Then re-run the same command with their answer:
+
+To commit the existing changes first:
+
+```
+go run . plan new --data '{"name": "<spec_name>", "commit_existing": true}'
+```
+
+To start without committing them:
+
+```
+go run . plan new --data '{"name": "<spec_name>", "commit_existing": false}'
+```
+
+- `true` commits the existing changes first, in their own commit whose message says they are the user's work from before the workflow. The workflow then starts on a clean tree.
+- `false` starts the workflow without committing, so the workflow's own automatic commits will include that work alongside the agent's.
+
+Never choose for the user, and never guess from context which they would want — the whole point of the report is that their uncommitted work is about to be swept into a commit they did not make. If the commit fails (`code: auto_commit_failed`), tell them which repository failed and the reason git gave; the workflow has not started.

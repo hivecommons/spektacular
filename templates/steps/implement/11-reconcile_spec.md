@@ -7,8 +7,8 @@ Reconcile the specification's own Requirements and Acceptance Criteria against w
 Read the feature's spec and the plan's accumulated implementation history through their respective stores — never with the `Read` tool:
 
 ```
-{{config.command}} spec file read {{plan_name}}.md
-{{config.command}} plan file read {{plan_name}}/plan.md
+{{config.command}} spec file read {{plan_name}}
+{{config.command}} plan file read {{plan_name}} plan
 ```
 
 From the spec, take every `- [ ]`/`- [x]` checkbox under `## Requirements` and `## Acceptance Criteria`. From the plan, take the `{{changelog_section_name}}` section — the task-by-task implementation audit log (phase by phase in a plan written before tasks), including each entry's **What was done**, **Deviations**, **Files changed**, and **Discoveries** entries. This is the record of what was actually built; judge against it rather than re-deriving anything from the original plan text.
@@ -30,15 +30,15 @@ The spec is a spec-store artifact. **Never write it with the `Write`/`Edit` tool
 2. Commit it and remove the scratch file:
 
    ```
-   {{config.command}} spec file write {{plan_name}}.md --from .spektacular/tmp/spec_reconcile.md
+   {{config.command}} spec file write {{plan_name}} --from .spektacular/tmp/spec_reconcile.md
    rm .spektacular/tmp/spec_reconcile.md
    ```
 
-After the write succeeds, confirm it with `{{config.command}} spec file read {{plan_name}}.md`.
+After the write succeeds, confirm it with `{{config.command}} spec file read {{plan_name}}`.
 
 ### STOP-on-mismatch
 
-If the feature's spec cannot be found under `{{plan_name}}.md`, or the plan's `{{changelog_section_name}}` section is missing or empty, STOP and report it to the user: ask whether to (a) locate the correct spec name and retry, (b) skip reconciliation and leave the spec untouched, or (c) proceed with only the partial record available. Do not guess at satisfaction from nothing.
+If the feature's spec cannot be read by the name `{{plan_name}}`, or the plan's `{{changelog_section_name}}` section is missing or empty, STOP and report it to the user: ask whether to (a) locate the correct spec name and retry, (b) skip reconciliation and leave the spec untouched, or (c) proceed with only the partial record available. Do not guess at satisfaction from nothing.
 
 ### Advance
 

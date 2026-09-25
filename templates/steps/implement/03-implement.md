@@ -8,8 +8,8 @@ Do not rely on an earlier step's output still being in your context. Read the ta
 
 {{> partials/implement-current-task}}
 
-1. Run `{{config.command}} plan file read {{plan_name}}/plan.md` and find the current task's heading.
-2. Run `{{config.command}} plan file read {{plan_name}}/context.md` and read the current task's section of the plan's `context.md` in full.
+1. Run `{{config.command}} plan file read {{plan_name}} plan` and find the current task's heading.
+2. Run `{{config.command}} plan file read {{plan_name}} context` and read the current task's section of the plan's `context.md` in full.
 
 If the section is missing, unreadable, or empty, STOP and ask the user whether to fix the plan's `context.md` before proceeding. This is a plan/reality mismatch — do not guess.
 

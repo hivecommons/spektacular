@@ -11,7 +11,7 @@ description: Search, contribute to, or update the project's knowledge base.
 
 # What this skill does
 
-This skill orchestrates the existing `go run . knowledge` CRUD surface for ad-hoc read, contribute, update, and audit operations on the project's knowledge store, without starting a spec/plan/implement flow. Unlike `spek-new`, `spek-plan`, and `spek-implement`, it does not drive an interactive CLI state machine — it is a static playbook. The agent recognises the user's natural-language intent, picks one of four branches (lookup / contribute / update / audit), and calls the matching `go run . knowledge` command directly.
+This skill orchestrates the existing `go run . knowledge` CRUD surface for ad-hoc read, contribute, update, audit, and maintenance operations on the project's knowledge store, without starting a spec/plan/implement flow. Unlike `spek-new`, `spek-plan`, and `spek-implement`, it does not drive an interactive CLI state machine — it is a static playbook. The agent recognises the user's natural-language intent, picks one of five branches (lookup / contribute / update / audit / maintenance), and calls the matching `go run . knowledge` command directly.
 
 # When to invoke
 
@@ -23,8 +23,9 @@ Invoke this skill any time the user references the knowledge base, an entry, a c
 - "Update what we have on W."
 - "Recall the convention for V."
 - "Check the tags on our entries." / "Are our knowledge entries tagged properly?"
+- "Is the knowledge base still accurate?" / "Are these entries still true?" / "Review the knowledge base for anything out of date."
 
-One skill handles all four intents. Discriminate by what the user actually said — do not ask the user to pick a slash command per intent.
+One skill handles all five intents. Discriminate by what the user actually said — do not ask the user to pick a slash command per intent.
 
 # Intent: lookup
 
@@ -124,10 +125,47 @@ Triggered when the user wants the tags on existing entries reviewed — entries 
 
 An audit that reaches `go run . knowledge write` without passing the per-entry confirmation in step 4 is a bug in the skill's execution, exactly as it would be in the contribute and update intents.
 
+# Intent: maintenance
+
+Triggered when the user wants to know whether the knowledge base is still **true** — not whether it is well labelled, which is the audit intent one section above. Maintenance **reads and proposes only**. It composes the primitives the other intents already use plus `go run . knowledge delete`, and adds no bulk operation, no recursive operation and no second write path.
+
+1. Enumerate the entries in scope with `go run . knowledge list`, narrowing with `--tier` and a repeatable `--filter` when the user names particular stores.
+2. Read each entry in scope with `go run . knowledge read --data '{"tier":"<tier>","name":"<name>","path":"<path>"}'`.
+3. Classify each entry as exactly one of four verdicts:
+   - **current** — the entry still describes how the project works, or states a standard it is meant to meet.
+   - **stale** — the entry's subject no longer exists. The file, command, flag, package or behaviour it is about is gone.
+   - **incorrect** — the subject still exists but the entry describes it wrongly.
+   - **unverifiable** — the entry cannot be checked from the code, for example a claim about intent, process or an external system.
+
+4. **The classification rule that decides whether this review helps or harms.** An entry stating a standard the code has not yet met is **current**, not stale. In this project an entry states the target and the code is what has yet to meet it, so a difference between an entry and the code is work to do, never evidence against the entry. Only an entry whose **subject no longer exists** is stale.
+
+   The failure mode to avoid, concretely: an architecture entry says every store write goes through the CLI, and you find three places writing files directly. That entry is **current** and the code is out of step with it. Proposing its removal would delete the entry doing the most work in the knowledge base. Say the code disagrees with it, and leave the entry alone.
+
+   Likewise, never classify from age or tone. "Looks old", "seems outdated" and "probably superseded" are not findings.
+
+5. **State the evidence for every stale or incorrect verdict.** Name the specific file, command or behaviour that changed, so the user can check the finding rather than take it on trust. A verdict you cannot attach evidence to is **unverifiable**, not stale.
+6. **Report drifted category descriptions.** A category's own `README.md` is generated from the project's definition of that category, and one that no longer matches has drifted. Enumerate them with `go run . knowledge list`, read each with `go run . knowledge read`, and compare against `go run . knowledge categories`. Report any mismatch naming the store, the path, and `go run . init <agent>` as the remedy. The review **reports drift and never repairs it** — bringing a store back into line stays something the user runs deliberately.
+7. **Propose per entry, and confirm per entry.** Show the user one entry's tier, store name, path, verdict and the evidence for it, together with what you propose: leave it, correct it, or remove it. Wait for **explicit confirmation for that entry**. Accepting one entry's outcome never applies another's, and declining one never carries to the next — each entry is its own decision.
+8. Only after explicit confirmation for that entry:
+   - To **correct** it, stage the revised body under `.spektacular/tmp/<slug>.md` with the `Write` tool and write it at the entry's **original** tier, name and path:
+     ```
+     go run . knowledge write --data '{"tier":"<tier>","name":"<name>","path":"<path>"}' --file .spektacular/tmp/<slug>.md
+     ```
+     Remove the scratch file after a successful write: `rm .spektacular/tmp/<slug>.md`.
+   - To **remove** it, delete it through the tool and never with your own file tools:
+     ```
+     go run . knowledge delete --data '{"tier":"<tier>","name":"<name>","path":"<path>"}'
+     ```
+9. Move to the next entry.
+
+A maintenance review that reaches `go run . knowledge write` or `go run . knowledge delete` without passing the per-entry confirmation in step 7 is a bug in the skill's execution, exactly as it would be in the contribute, update and audit intents.
+
 # Decline handling
 
 If the user declines, asks for changes, or expresses uncertainty at any propose-then-confirm checkpoint, **do not invoke `go run . knowledge write`**. Either loop back to refine the proposal — adjust the tier, store name, path, or body and re-show — or stop and leave the knowledge store untouched. Removing the staged scratch file at `.spektacular/tmp/<slug>.md` is fine either way; a half-finished proposal should not linger on disk.
 
-In the audit intent the same rule applies **per entry**. A decline on one entry stops that entry's change and nothing else: do not carry it forward as a decline of the whole audit, and never treat approval of an earlier entry as approval of a later one. Move on to the next entry and propose it on its own merits.
+In the audit and maintenance intents the same rule applies **per entry**. A decline on one entry stops that entry's change and nothing else: do not carry it forward as a decline of the whole review, and never treat approval of an earlier entry as approval of a later one. Move on to the next entry and propose it on its own merits.
+
+Maintenance is the first intent that can **remove** an entry rather than only rewrite one, so the rule binds harder there. A decline in maintenance means the entry is left exactly as it is — nothing is written and, above all, nothing is deleted. `go run . knowledge delete` is reached only after explicit agreement for that one entry, and agreement to remove one entry is never agreement to remove another.
 
 The propose-then-confirm contract is enforced by this prose, not by a CLI guard. Treat it as load-bearing: a write without explicit user approval is a bug in the skill's execution, not an acceptable shortcut.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/hivecommons/spektacular/internal/artifact"
 	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/stepkit"
 	"github.com/hivecommons/spektacular/internal/store"
@@ -13,9 +14,9 @@ import (
 )
 
 // SpecFilePath returns the store-relative path for a spec file under the
-// configured spec directory.
+// configured spec directory: where the spec addressed by name is stored.
 func SpecFilePath(dir, name string) string {
-	return dir + "/" + name + ".md"
+	return artifact.Address{Kind: artifact.KindSpec, Feature: name}.StorePath(dir)
 }
 
 // Steps returns the ordered step configs for a spec workflow.

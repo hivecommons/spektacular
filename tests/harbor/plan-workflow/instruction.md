@@ -17,7 +17,7 @@ feature. Read it through the CLI before you start planning — the plan
 workflow's first step needs that context:
 
 ```bash
-spektacular spec file read 20260101000000-user-auth.md
+spektacular spec file read 20260101000000-user-auth
 ```
 
 ## Task
@@ -42,7 +42,7 @@ The skill will guide you through every plan step from `overview` through
 - At the `verification` step, retrieve the `gather-project-metadata` and
   `determine-feature-slug` skills the template references. Then follow the
   rendered instructions to commit each filled document into the plan store
-  with `spektacular plan file write 20260101000000-user-auth/<doc>.md` across the
+  with `spektacular plan file write 20260101000000-user-auth <doc>` across the
   `write_plan`, `write_context`, and `write_research` steps. Never write or
   edit the plan documents (`plan.md`, `context.md`, `research.md`) with the
   `Write` or `Edit` tools — `plan file write` is the only supported way to
