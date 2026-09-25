@@ -59,3 +59,20 @@ What Hive actually does (read from hivecommons/hive `src/docs/spektacular.md`, `
 # Issue #46
 
 Decisions from the 2026-09-25 discussion are posted on the issue: https://github.com/hivecommons/spektacular/issues/46#issuecomment-5830556246
+
+---
+
+# Plan workflow — 000058_plan-task-graph (started 2026-09-25)
+
+- User chose spec 000058_plan-task-graph; committed the pending `auto_commit: full` config change before starting (commit 93ebe26).
+- Discovery done: research in `.spektacular/work/000058_plan-task-graph/research.md`; judgement calls in `assumptions.md` (repo.location git-only; legacy Phase plans bypass write validation; task-id provider resolved on request, no schema bump; v4 UUID via crypto/rand).
+- Target repos: spektacular (CLI, templates, skills, harbor oracles, glossary `phase.md`) and docs (how-it-works.mdx, configuration.mdx, new page + Nav.astro).
+- Knowledge that binds: harbor oracles must change with step/template/scaffold changes (testing-architecture.md); validation belongs where remediation facts live; no em dashes in docs prose; plan content pages need a **Content outline**.
+- Key mechanics: plan.md write choke point `cmd/storefile.go:228-233`; implement FSM has no single-task path; `finished()` hard-fails without feature changelog; milestone parser only knows `Phase`.
+- Architecture: Option A chosen (shared plantask reader, existing implement FSM + update_changelog→finished edge, step phases→tasks rename). See assumptions.md.
+- Sections drafted through testing_approach; next milestones then phases (this plan itself uses the CURRENT Phase format since the new format does not exist yet).
+- Phases drafted: 12 phases (M1 1.1-1.4, M2 2.1-2.2, M3 3.1-3.3, M4 4.1-4.3 incl. docs content outline in plan.md phase 4.3).
+- Assembled and staged plan/context/research to .spektacular/tmp/*_template.md
+- Verification passed (all sections present; shell commands removed from plan.md working files).
+- All three docs committed; now at walkthrough (awaiting user sign-off).
+- User signed off the walkthrough (all assumptions accepted, incl. repo.location git-only).
