@@ -1,6 +1,7 @@
 package plantask
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -252,4 +253,32 @@ func TestParse_OtherHeadingsInsideAMilestoneKeepIt(t *testing.T) {
 #### - [x] Phase 1.1: still milestone one
 `))
 	require.Equal(t, []int{1}, p.CompletedMilestones())
+}
+
+func TestRenderPretty_Layout(t *testing.T) {
+	e := NewExport("000058_plan-task-graph", "final", Parse([]byte(taskPlan)), func(repo string) string {
+		return map[string]string{"spektacular": "https://github.com/hivecommons/spektacular"}[repo]
+	})
+
+	var b strings.Builder
+	require.NoError(t, RenderPretty(&b, e))
+	require.Equal(t, `000058_plan-task-graph  (final)  1/3 tasks complete
+
+Milestone 1
+  [x] Add a plan task reader            spektacular   agent
+      0b9f6d2e-5a41-4c7b-9e08-3d1f7a6c2b95
+  [ ] Add the `+"`plan export`"+` command     spektacular   agent
+      7c1e4b0a-9d3f-4e2a-8b61-0f5d2c9a7e34
+      depends on: Add a plan task reader
+
+Milestone 2
+  [ ] Publish the release signing key   docs          human: needs access to the production key vault
+      e4a8c3f1-2b6d-4f90-a7c5-91d0b3e6f428
+      depends on: Add the `+"`plan export`"+` command, Add a plan task reader
+`, b.String())
+
+	require.Equal(t, "https://github.com/hivecommons/spektacular", e.Tasks[0].Repo.Location)
+	require.Equal(t, "", e.Tasks[2].Repo.Location)
+	require.NotNil(t, e.Tasks[0].DependsOn)
+	require.Empty(t, e.Tasks[0].DependsOn)
 }

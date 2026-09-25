@@ -12,10 +12,11 @@
     "update_changelog"
   ],
   "created_at": "2026-09-25T10:28:20.081026817Z",
-  "updated_at": "2026-09-25T10:40:59.977014407Z",
+  "updated_at": "2026-09-25T10:44:44.202291197Z",
   "data": {
     "committed_milestones": [
-      1
+      1,
+      2
     ],
     "name": "000058_plan-task-graph"
   }

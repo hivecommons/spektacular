@@ -7,6 +7,7 @@ import (
 
 	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/plantask"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/spf13/cobra"
@@ -35,6 +36,28 @@ type artifactStatusResult struct {
 	ClosedAt       string   `json:"closed_at"`
 	Spec           string   `json:"spec"`
 	Plan           string   `json:"plan"`
+
+	// Progress and Tasks report a task-format plan's work, task by task. They
+	// are absent for specs and for plans without task structure.
+	Progress *taskProgress `json:"progress,omitempty"`
+	Tasks    []taskStatus  `json:"tasks,omitempty"`
+}
+
+// taskProgress totals a plan's tasks.
+type taskProgress struct {
+	TasksCompleted int `json:"tasks_completed"`
+	TasksTotal     int `json:"tasks_total"`
+}
+
+// taskStatus is one task's progress. Completion (the heading checkbox) and
+// acceptance criteria are separate facts: a task can be completed with a
+// criterion unmet, and that must stay visible.
+type taskStatus struct {
+	ID                 string            `json:"id"`
+	Title              string            `json:"title"`
+	Milestone          int               `json:"milestone"`
+	Completed          bool              `json:"completed"`
+	AcceptanceCriteria plantask.Criteria `json:"acceptance_criteria"`
 }
 
 var artifactStatusOutputSchema = &schemaObj{
@@ -55,9 +78,72 @@ var artifactStatusOutputSchema = &schemaObj{
 	},
 }
 
+// planArtifactStatusOutputSchema is the named plan status schema: the shared
+// artifact fields plus the optional per-task progress.
+var planArtifactStatusOutputSchema = func() *schemaObj {
+	props := make(map[string]*schemaProp, len(artifactStatusOutputSchema.Properties)+2)
+	for k, v := range artifactStatusOutputSchema.Properties {
+		props[k] = v
+	}
+	props["progress"] = &schemaProp{Type: "object", Properties: map[string]*schemaProp{
+		"tasks_completed": {Type: "integer"},
+		"tasks_total":     {Type: "integer"},
+	}}
+	props["tasks"] = &schemaProp{Type: "array", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
+		"id":        {Type: "string"},
+		"title":     {Type: "string"},
+		"milestone": {Type: "integer"},
+		"completed": {Type: "boolean"},
+		"acceptance_criteria": {Type: "object", Properties: map[string]*schemaProp{
+			"met":   {Type: "integer"},
+			"total": {Type: "integer"},
+		}},
+	}}}
+	return &schemaObj{Type: "object", Properties: props}
+}()
+
 type artifactStatusHook func(*metadata.Metadata) metadata.DocumentStatus
 
-func runArtifactStatus(cmd *cobra.Command, kind, name, storePath, statePath, command string, steps []workflow.StepConfig, st store.Store, statusHook artifactStatusHook) error {
+// artifactBodyHook adds kind-specific facts read from an artifact's body to
+// its status. Only plans set one.
+type artifactBodyHook func(body []byte, r *artifactStatusResult)
+
+// planTaskProgress fills a task-format plan's progress and per-task list.
+func planTaskProgress(body []byte, r *artifactStatusResult) {
+	p := plantask.Parse(body)
+	if p.Format != plantask.FormatTasks {
+		return
+	}
+	r.Progress = &taskProgress{TasksTotal: len(p.Tasks)}
+	r.Tasks = make([]taskStatus, 0, len(p.Tasks))
+	for _, t := range p.Tasks {
+		if t.Completed {
+			r.Progress.TasksCompleted++
+		}
+		r.Tasks = append(r.Tasks, taskStatus{
+			ID:                 t.ID,
+			Title:              t.Title,
+			Milestone:          t.Milestone,
+			Completed:          t.Completed,
+			AcceptanceCriteria: t.Criteria,
+		})
+	}
+}
+
+// resolveDocumentStatus is an artifact's reported document status: the
+// stored one, as adjusted by hook when the kind has one. Every command that
+// reports a document status goes through it, so they always agree.
+func resolveDocumentStatus(fm *metadata.Metadata, hook artifactStatusHook) metadata.DocumentStatus {
+	if fm == nil {
+		return ""
+	}
+	if hook != nil {
+		return hook(fm)
+	}
+	return fm.DocumentStatus
+}
+
+func runArtifactStatus(cmd *cobra.Command, kind, name, storePath, statePath, command string, steps []workflow.StepConfig, st store.Store, statusHook artifactStatusHook, bodyHook artifactBodyHook) error {
 	raw, err := st.Read(storePath)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -68,7 +154,7 @@ func runArtifactStatus(cmd *cobra.Command, kind, name, storePath, statePath, com
 		return err
 	}
 
-	fm, _, err := metadata.Split(raw)
+	fm, body, err := metadata.Split(raw)
 	if err != nil {
 		return output.NewError("metadata_read_failed", fmt.Sprintf("could not read metadata for %s artifact %q: %v", kind, name, err)).
 			WithResource(name).
@@ -82,15 +168,15 @@ func runArtifactStatus(cmd *cobra.Command, kind, name, storePath, statePath, com
 		CompletedSteps: []string{},
 	}
 	if fm != nil {
-		status := fm.DocumentStatus
-		if statusHook != nil {
-			status = statusHook(fm)
-		}
-		result.DocumentStatus = string(status)
+		result.DocumentStatus = string(resolveDocumentStatus(fm, statusHook))
 		result.CreatedAt = dateAsRFC3339(fm.CreatedDate)
 		result.ClosedAt = dateAsRFC3339(fm.ClosedDate)
 		result.Spec = fm.Spec
 		result.Plan = fm.Plan
+	}
+
+	if bodyHook != nil {
+		bodyHook(body, &result)
 	}
 
 	// modified_at comes from the store regardless of workflow state: it is a

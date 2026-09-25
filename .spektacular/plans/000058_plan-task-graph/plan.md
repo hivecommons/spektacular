@@ -374,7 +374,7 @@ Rebuild milestone completion detection and the unchecked-work count in implement
 
 **Validation point**: Exporting a task plan in both formats matches the design's shapes. Ticking a task shows up in the next export and in plan status. Draft and final plans both export, with the same document status plan status reports. Unsupported formats and legacy plans give structured errors, and the full Go test suite passes.
 
-#### - [ ] Phase 2.1: Add `plan export` with pretty and JSON output
+#### - [x] Phase 2.1: Add `plan export` with pretty and JSON output
 **Repo:** spektacular
 
 Add `plan export <name> [--format pretty|json]`, which parses the plan at call time and prints the design's grouped text view by default or the JSON task graph on request. Repository location comes only from a declared git source, and document status matches what plan status reports.
@@ -382,14 +382,14 @@ Add `plan export <name> [--format pretty|json]`, which parses the plan at call t
 *Technical detail:* [context.md#phase-21](./context.md#phase-21-add-plan-export-with-pretty-and-json-output)
 
 **Acceptance criteria**:
-- [ ] `--format json` prints one document with kind `plan`, the plan's name, its document status, and every task in plan order with exactly the design's fields; a task declaring `none` has an empty dependency list.
-- [ ] No format and `--format pretty` print identical text grouped by milestone, showing each task's completion, title, repo, executor (with reason for human tasks), id and dependencies by title.
-- [ ] Any other format is refused with a structured error naming `pretty` and `json`, and no tasks are printed.
-- [ ] A repo with a declared git source exports that location; a repo with a file or no declared source exports an empty location even when its checkout has a git remote.
-- [ ] After a task is ticked, the next export shows it completed; draft and final plans both export with the document status plan status reports.
-- [ ] A missing plan, and a plan without task structure, fail with structured errors; the latter says what is missing and never mentions the plan's age or format version.
+- [x] `--format json` prints one document with kind `plan`, the plan's name, its document status, and every task in plan order with exactly the design's fields; a task declaring `none` has an empty dependency list.
+- [x] No format and `--format pretty` print identical text grouped by milestone, showing each task's completion, title, repo, executor (with reason for human tasks), id and dependencies by title.
+- [x] Any other format is refused with a structured error naming `pretty` and `json`, and no tasks are printed.
+- [x] A repo with a declared git source exports that location; a repo with a file or no declared source exports an empty location even when its checkout has a git remote.
+- [x] After a task is ticked, the next export shows it completed; draft and final plans both export with the document status plan status reports.
+- [x] A missing plan, and a plan without task structure, fail with structured errors; the latter says what is missing and never mentions the plan's age or format version.
 
-#### - [ ] Phase 2.2: Report per-task progress in plan status
+#### - [x] Phase 2.2: Report per-task progress in plan status
 **Repo:** spektacular
 
 Add task totals and a per-task list (completion plus acceptance criteria met out of total) to `plan status <name>` for task-format plans, alongside every existing field.
@@ -397,9 +397,9 @@ Add task totals and a per-task list (completion plus acceptance criteria met out
 *Technical detail:* [context.md#phase-22](./context.md#phase-22-report-per-task-progress-in-plan-status)
 
 **Acceptance criteria**:
-- [ ] For a four-task plan with two complete, one of which has two of three criteria met, plan status reports two of four tasks completed and that task as completed with two of three criteria met.
-- [ ] A task marked complete with unmet criteria is visibly reported as such.
-- [ ] Every field plan status reported before this change is still present with the same meaning, for task and legacy plans alike.
+- [x] For a four-task plan with two complete, one of which has two of three criteria met, plan status reports two of four tasks completed and that task as completed with two of three criteria met.
+- [x] A task marked complete with unmet criteria is visibly reported as such.
+- [x] Every field plan status reported before this change is still present with the same meaning, for task and legacy plans alike.
 
 ### Milestone 3: One task of a plan can be implemented on its own
 
@@ -599,3 +599,33 @@ No other implementation-time uncertainties remain; every other decision is recor
 - `spektacular: cmd/milestones_test.go`
 
 **Discoveries**: The old `unchecked_phases` regex matched open phase headings anywhere in plan.md; the reader counts them only inside the Milestones section, a slight tightening that no test or fixture depends on.
+
+### 2026-09-25 — Phase 2.1: Add `plan export` with pretty and JSON output
+
+**What was done**: Added `plan export <name> [--format pretty|json]`. It reads plan.md through the plan store at call time, parses it with the task reader, refuses plans without task structure (`plan_structure_invalid`), and builds `plantask.Export` in the design's shape. `repo.location` comes from the repo's repo.yaml only when its source provider is git (never from git remotes, never cloning). JSON goes through the output writer; `pretty` is a pure renderer (`plantask.RenderPretty`). Unsupported formats give `export_format_unsupported`; a missing plan gives `artifact_not_found`. Document status comes from a new shared `resolveDocumentStatus(fm, strictPlanStatusHook(...))`, which `runArtifactStatus` now uses too.
+
+**Deviations**: The format is checked before config or plan are read, so a bad format never prints tasks. The export model and renderer live in `internal/plantask/export.go`.
+
+**Files changed**:
+- `spektacular: cmd/plan_export.go`
+- `spektacular: cmd/plan_export_test.go`
+- `spektacular: cmd/artifact_status.go`
+- `spektacular: cmd/root_test.go`
+- `spektacular: internal/plantask/export.go`
+- `spektacular: internal/plantask/plantask_test.go`
+
+**Discoveries**: `Set.DescriptiveMetadata` reads repo.yaml only for repos on disk, so a registry entry whose location is not checked out exports an empty location. The JSON output carries the usual `"error": false` discriminant from `output.Write`; unknown fields are ignored by Go decoders such as Hive's.
+
+### 2026-09-25 — Phase 2.2: Report per-task progress in plan status
+
+**What was done**: `plan status <name>` now adds `progress {tasks_completed, tasks_total}` and `tasks[] {id, title, milestone, completed, acceptance_criteria {met, total}}` for task-format plans, through a new plan-only `artifactBodyHook` passed to `runArtifactStatus` (spec status passes nil). Every existing field is unchanged, and plans without tasks report exactly the previous key set.
+
+**Deviations**: Rather than extending the shared `artifactStatusOutputSchema` (which spec status also publishes), plan status's `--schema` uses a new `planArtifactStatusOutputSchema` that adds the two optional fields, so spec status's schema is unchanged.
+
+**Files changed**:
+- `spektacular: cmd/artifact_status.go`
+- `spektacular: cmd/plan.go`
+- `spektacular: cmd/spec.go`
+- `spektacular: cmd/plan_status_progress_test.go`
+
+**Discoveries**: None.
