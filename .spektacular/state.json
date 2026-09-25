@@ -1,6 +1,6 @@
 {
   "kind": "implement",
-  "current_step": "test_plan",
+  "current_step": "finished",
   "completed_steps": [
     "new",
     "read_plan",
@@ -9,10 +9,14 @@
     "test",
     "verify",
     "update_plan",
-    "update_changelog"
+    "update_changelog",
+    "test_plan",
+    "update_feature_changelog",
+    "reconcile_spec",
+    "finished"
   ],
   "created_at": "2026-09-25T10:28:20.081026817Z",
-  "updated_at": "2026-09-25T11:31:57.823295577Z",
+  "updated_at": "2026-09-25T11:33:15.179090869Z",
   "data": {
     "committed_milestones": [
       1,
