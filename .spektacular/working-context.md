@@ -1,26 +1,23 @@
 # Working context — implement 000059_normalise-artifact-addressing
 
-Plan: `000059_normalise-artifact-addressing` (10 tasks, 3 milestones). Repos: spektacular
-(`/home/nicj/code/github.com/jumppad-labs/spektacular`, branch `f-normalize`) and docs
-(`/home/nicj/code/github.com/jumppad-labs/spektacular-website`, branch `f-normalize-commands`).
+Plan: `000059_normalise-artifact-addressing`. Repos: spektacular (branch `f-normalize`) and docs
+(`../spektacular-website`, branch `f-normalize-commands`).
 
-## read_plan (2026-09-25)
-- Structure valid; all 10 task headings resolve in context.md.
-- Drift: none. Plan written at 82ceb1b; no code changes since (only the plan commit).
-- Spec coverage: every requirement and acceptance criterion covered; nothing descoped.
-- Changelog mode: first-task (no `## Changelog` in plan.md).
-
-## Expected hazard (plan Open Question)
-Once the command builder is address-driven, the running workflow's own rendered instructions
-may say `plan file read <name>/plan.md` and be refused. Run the refusal's `next_action` (same
-command, correctly spelled) and carry on. Do not add temporary old-spelling tolerance.
-After task 2 lands: read plan docs with `go run . plan file read 000059_normalise-artifact-addressing plan`.
+## State (2026-09-25)
+- Every agent task is done, ticked and logged in the plan's `## Changelog`. Milestones 2 and 3 are
+  committed (auto_commit) in both repos.
+- ONLY OPEN TASK: "Manually test a full run with the new addressing" (human). The workflow is
+  parked at `analyze`. After the person runs it and it passes: tick that task in plan.md (via
+  `plan file read/write <f> plan`), go through update_changelog, then `goto test_plan` (a Milestone 1
+  commit message will be required), then update_feature_changelog and reconcile_spec.
+- CHANGELOG.md already has the 000059 entry with the breaking-change paragraph; the
+  update_feature_changelog step should verify it, not add a second one.
 
 ## Decisions / learnings
-- User (2026-09-25): "just do the full implementation" — run all tasks autonomously, no continue/pause prompts.
-- Task 1 done: `internal/artifact` (Parse, ParseFeature, StorePath, FeatureDir, NameFromEntry, ErrEmptyName).
-  StorePath uses slash-concat to stay byte-identical with old helpers.
-- Helper scripts in session scratchpad: tick.py (tick a task), clog.py (append changelog entry).
-- Task 2 done: address-driven builder + cmd/storefile_address.go (addressRefusal/addressNotFound/restateCommand).
-  Plan docs now read with `plan file read <f> plan`. restateCommand must check f.Changed (pflag Visit leaks across test runs).
-- To offer the user at the end (knowledge capture): pflag Visit/Changed gotcha.
+- User (2026-09-25): "just do the full implementation" — run autonomously, no continue prompts.
+- Plan docs are read with `go run . plan file read <f> plan|context|research` now.
+- restateCommand must check pflag `f.Changed` (Visit leaks flags across test invocations).
+- `go run . init <agent>` also rewrites config.yaml (agent, written_by, skills_version):
+  restore config.yaml after regenerating skill copies.
+- Pending knowledge-capture offers for the user: the pflag Visit/Changed gotcha; init rewriting config.yaml.
+- Pre-existing, out of scope: unregistered `--repo` on changelog file commands returns internal_error.

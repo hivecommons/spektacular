@@ -397,7 +397,7 @@ A migration note, in the CLI CHANGELOG and on the site, maps each old spelling t
 - Every command, field and error code on it matches the CLI's actual output on a scratch project.
 - The README and CHANGELOG contain the location rule and the migration mapping.
 
-#### - [ ] Task: Document addressing, locations and migration in the CLI repo
+#### - [x] Task: Document addressing, locations and migration in the CLI repo
 **Id:** f76db69e-9c1c-42dc-9a47-ff7b956cf8e4
 **Repo:** spektacular
 **Depends on:**
@@ -452,7 +452,7 @@ the declaring config file (e.g. `specs/<name>.md`), and both status commands add
 - [ ] The CHANGELOG carries a breaking-change note mapping every old spelling to its new form and stating that old spellings are refused.
 - [ ] Every command shown in the README and CHANGELOG succeeds, or is refused, exactly as documented when run against this repo.
 
-#### - [ ] Task: Publish the document command reference and migration note on the docs site
+#### - [x] Task: Publish the document command reference and migration note on the docs site
 **Id:** 36248681-b4f7-45f2-8df2-7c405d0b5efb
 **Repo:** docs
 **Depends on:**
@@ -504,11 +504,11 @@ Add a new documentation page, linked from the Resources navigation, that is the 
 ```
 
 **Acceptance criteria**:
-- [ ] A reader can find a Documents page from the Resources menu that explains how specs, plan documents and changelog records are addressed, what list prints, both new error codes, and how to migrate from the old spellings.
-- [ ] The configuration reference states that reported locations are relative to the folder holding the configuration file that declares the store.
-- [ ] The plan-tasks page's status example shows `plan_name`, `plan_document` and a relative `plan_path`.
-- [ ] The site builds and type-checks cleanly, page bodies carry no layout HTML, and no authored text uses em dashes.
-- [ ] Every command, output field and error code shown matches the CLI's real behaviour.
+- [x] A reader can find a Documents page from the Resources menu that explains how specs, plan documents and changelog records are addressed, what list prints, both new error codes, and how to migrate from the old spellings.
+- [x] The configuration reference states that reported locations are relative to the folder holding the configuration file that declares the store.
+- [x] The plan-tasks page's status example shows `plan_name`, `plan_document` and a relative `plan_path`.
+- [x] The site builds and type-checks cleanly, page bodies carry no layout HTML, and no authored text uses em dashes.
+- [x] Every command, output field and error code shown matches the CLI's real behaviour.
 
 ## Open Questions
 
@@ -704,3 +704,29 @@ No other implementation-time uncertainties remain. Every other decision is recor
 - `spektacular: cmd/root_test.go`
 
 **Discoveries**: Many `spec new` tests passed the result's `spec_path` straight to `FileExists`, relying on it being a host path. Anything that wants to touch a document on disk now has to join the project's settings folder itself, which is the point: the result is an address and location, not a file handle.
+
+### 2026-09-25 — Task: Document addressing, locations and migration in the CLI repo
+
+**What was done**: The README gained an "Addressing specs, plans and changelog records" subsection (bare names, the `<feature> <document>` plan form, list `name`/`path`, status `plan_name`/`plan_document`/`plan_path`, both refusal codes) and the "Relative locations" paragraph now says reported locations share the config.yaml base. `CHANGELOG.md` gained the 000059 entry with a `**Breaking change**:` paragraph mapping every old spelling to its new form. Every README command was run against this repo and behaved as documented.
+
+**Deviations**: The CHANGELOG entry was written now rather than verified at `update_feature_changelog`, because the feature wrap-up cannot run until the human end-to-end task is done; that step should check it rather than add a second entry. The store-access knowledge entry names commands only, so it needed no change.
+
+**Files changed**:
+- `spektacular: README.md`
+- `spektacular: CHANGELOG.md`
+
+**Discoveries**: None.
+
+### 2026-09-25 — Task: Publish the document command reference and migration note on the docs site
+
+**What was done**: Added a Documents page to the site (linked from Resources after Design Documents) covering the addressing rules, the `spec file`, `plan file` and `changelog file` commands, list `name` and `path`, the status plan fields, an Error codes block and an "Upgrading from earlier spellings" old-to-new table, with JSON samples taken from real CLI output. The configuration reference's `spec`, `plan` and `changelog` keys now say reported locations are relative to the folder holding `config.yaml` and link to the new page. `npm run build` and `npx astro check` are clean, and the no-layout-HTML guard and em-dash check pass.
+
+**Deviations**: The plan-tasks status sample documents `plan status <name>`, which by design carries no `plan_path`, so it was left alone; an `implement status` sample showing `plan_name`, `plan_document` and `plan_path` was added to the "Implementing one task" section instead. The Error codes block also documents `not_found`. The site changes were committed with the Milestone 2 commit because auto-commit commits every registered repo with changes.
+
+**Files changed**:
+- `docs: src/pages/documents.mdx`
+- `docs: src/components/Nav.astro`
+- `docs: src/pages/configuration.mdx`
+- `docs: src/pages/plan-tasks.mdx`
+
+**Discoveries**: An unregistered `--repo` name on `changelog file` commands returns `internal_error` with an empty next action. This is pre-existing and outside this change, but worth its own issue.
