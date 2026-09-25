@@ -22,5 +22,6 @@ func init() {
 		func(c config.Config) string { return c.Changelog.Config.Directory },
 		true,
 		true,
+		nil,
 	))
 }

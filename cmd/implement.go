@@ -4,18 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"regexp"
 
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/plantask"
 	"github.com/hivecommons/spektacular/internal/steps/implement"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/spf13/cobra"
 )
-
-var uncheckedPhaseRegexp = regexp.MustCompile(`(?m)^#### - \[ \] Phase \d+\.\d+:`)
 
 var implementResultOutputSchema = &schemaObj{
 	Type: "object",
@@ -304,9 +302,11 @@ func runImplementStatus(cmd *cobra.Command, _ []string) error {
 		entries[i] = implement.StepEntry{Name: info.Name, Status: info.Status}
 	}
 
+	// unchecked_phases keeps its name so existing readers keep working; it
+	// counts open tasks in a task-format plan and open phases in an older one.
 	uncheckedPhases := 0
 	if content, readErr := store.NewSourceStore(root, "project").Read(planRel); readErr == nil {
-		uncheckedPhases = len(uncheckedPhaseRegexp.FindAllIndex(content, -1))
+		uncheckedPhases = plantask.Parse(content).OpenItems()
 	}
 
 	out := output.New(cmd.OutOrStdout(), globalFields)

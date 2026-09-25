@@ -76,3 +76,12 @@ Decisions from the 2026-09-25 discussion are posted on the issue: https://github
 - Verification passed (all sections present; shell commands removed from plan.md working files).
 - All three docs committed; now at walkthrough (awaiting user sign-off).
 - User signed off the walkthrough (all assumptions accepted, incl. repo.location git-only).
+
+## Implement run (started 2026-09-25)
+
+- Plan `000058_plan-task-graph` validated; first-phase invocation (no `## Changelog` yet). Plan itself is in legacy `Phase N.M` format on purpose.
+- Drift: context.md Phase 1.2 names `cmd/spec_file.go`; the spec store-file caller is actually `cmd/file.go`. User chose "proceed, map on the fly".
+- Makefile harbor targets: `harbor-test-plan` and `harbor-test-implement` exist.
+- Internal packages name commands without the binary prefix in next_action (e.g. 'plan task-id'), like internal/design/errors.go. plantask.Validate(p, repos) therefore takes no command param.
+- User chose "run without asking" after Phase 1.1: loop phases autonomously; stop only for real decisions, failures, the glossary knowledge write (propose-then-confirm) and harbor runs.
+- Phase 1.1 done: internal/plantask (Parse/Validate/RequireTasks/Task/OpenTasks/OpenItems/CompletedMilestones).

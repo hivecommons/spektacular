@@ -223,6 +223,26 @@ func TestImplementStatus_ReportsUncheckedPhases(t *testing.T) {
 	require.EqualValues(t, 12, status["total_steps"])
 }
 
+func TestImplementStatus_CountsUncheckedTasksInTaskPlan(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, "")
+	_, code := writePlanDoc(t, taskPlanName, "plan.md", taskPlanDoc(
+		taskBlock("Done", true, agentFields(idA)),
+		taskBlock("Open one", false, agentFields(idB))+taskBlock("Open two", false, agentFields(idC)),
+	))
+	require.Equal(t, 0, code)
+
+	_, _, code = runRootCmd(t, "implement", "new", "--data", `{"name":"`+taskPlanName+`"}`)
+	require.Equal(t, 0, code)
+	stdout, _, code := runRootCmd(t, "implement", "status")
+	require.Equal(t, 0, code)
+
+	var status map[string]any
+	require.NoError(t, json.Unmarshal([]byte(stdout), &status))
+	require.EqualValues(t, 2, status["unchecked_phases"], "the existing field counts open tasks")
+}
+
 func TestImplementSteps_ListsAllSteps(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)

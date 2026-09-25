@@ -318,7 +318,7 @@ Testing follows the project's three layers: Go unit and command tests, template-
 
 **Validation point**: Saving a hand-written task-format plan succeeds. Saving each invalid variant is refused with the task named, and the stored plan is unchanged. `plan task-id` returns fresh UUIDs, and an unknown provider name is reported. Milestone auto-commits still fire for both a legacy plan and a task plan, and the full Go test suite passes.
 
-#### - [ ] Phase 1.1: Add the plan task reader and validator
+#### - [x] Phase 1.1: Add the plan task reader and validator
 **Repo:** spektacular
 
 Add one reusable reader that turns a plan's Milestones & Tasks section into milestones and tasks, recognising legacy phase plans as a separate format. Add the structural rules from the design as a validator that names the offending task. Every later phase reads plans through this reader instead of its own pattern match.
@@ -326,12 +326,12 @@ Add one reusable reader that turns a plan's Milestones & Tasks section into mile
 *Technical detail:* [context.md#phase-11](./context.md#phase-11-add-the-plan-task-reader-and-validator)
 
 **Acceptance criteria**:
-- [ ] A well-formed task plan is read with every task's id, title, milestone, repo, dependency ids, executor, completion and acceptance-criteria counts; `none` yields no dependencies and dependency titles never affect resolution.
-- [ ] A legacy phase plan is recognised as legacy and still reports correct per-milestone completion.
-- [ ] Checkbox lines outside the Milestones & Tasks section are never counted as tasks or criteria.
-- [ ] Each rule in the design (missing id, repo, dependency declaration or executor; two repos; unregistered repo; unknown dependency; cycle; duplicate id; unknown executor; human without reason) is refused with an error naming the task and the rule.
+- [x] A well-formed task plan is read with every task's id, title, milestone, repo, dependency ids, executor, completion and acceptance-criteria counts; `none` yields no dependencies and dependency titles never affect resolution.
+- [x] A legacy phase plan is recognised as legacy and still reports correct per-milestone completion.
+- [x] Checkbox lines outside the Milestones & Tasks section are never counted as tasks or criteria.
+- [x] Each rule in the design (missing id, repo, dependency declaration or executor; two repos; unregistered repo; unknown dependency; cycle; duplicate id; unknown executor; human without reason) is refused with an error naming the task and the rule.
 
-#### - [ ] Phase 1.2: Refuse invalid task structure when a plan is saved
+#### - [x] Phase 1.2: Refuse invalid task structure when a plan is saved
 **Repo:** spektacular
 
 Hook the validator into `plan file write` for plan.md so a task-format plan with any structural error is refused before anything is stored. Legacy phase plans and the plan's other documents save exactly as they do today.
@@ -339,12 +339,12 @@ Hook the validator into `plan file write` for plan.md so a task-format plan with
 *Technical detail:* [context.md#phase-12](./context.md#phase-12-refuse-invalid-task-structure-when-a-plan-is-saved)
 
 **Acceptance criteria**:
-- [ ] Saving a task plan with any invalid structure is refused with a structured error naming the task, and reading the plan afterwards returns the previously saved version unchanged.
-- [ ] An unregistered repo refusal lists the registered repo names in its next action.
-- [ ] A valid task plan, a legacy phase plan, and context, research and test-plan documents all save successfully.
-- [ ] After a task plan is saved, edited (tasks reordered, a task added, titles changed) and saved again, every existing task keeps its identifier.
+- [x] Saving a task plan with any invalid structure is refused with a structured error naming the task, and reading the plan afterwards returns the previously saved version unchanged.
+- [x] An unregistered repo refusal lists the registered repo names in its next action.
+- [x] A valid task plan, a legacy phase plan, and context, research and test-plan documents all save successfully.
+- [x] After a task plan is saved, edited (tasks reordered, a task added, titles changed) and saved again, every existing task keeps its identifier.
 
-#### - [ ] Phase 1.3: Issue task identifiers from a pluggable provider
+#### - [x] Phase 1.3: Issue task identifiers from a pluggable provider
 **Repo:** spektacular
 
 Add `plan task-id`, which returns a fresh identifier from the provider named by `plan.task_id.provider`, defaulting to random UUIDs. An unknown provider is reported only when an id is requested, so the rest of the CLI keeps working and existing config files need no migration.
@@ -352,11 +352,11 @@ Add `plan task-id`, which returns a fresh identifier from the provider named by 
 *Technical detail:* [context.md#phase-13](./context.md#phase-13-issue-task-identifiers-from-a-pluggable-provider)
 
 **Acceptance criteria**:
-- [ ] Each request returns a new valid random UUID by default, and two hundred consecutive requests contain no duplicates.
-- [ ] A config naming a provider that does not exist gets a structured error naming that provider and listing the available ones when an id is requested.
-- [ ] Existing config files without the new key load unchanged and use the UUID provider.
+- [x] Each request returns a new valid random UUID by default, and two hundred consecutive requests contain no duplicates.
+- [x] A config naming a provider that does not exist gets a structured error naming that provider and listing the available ones when an id is requested.
+- [x] Existing config files without the new key load unchanged and use the UUID provider.
 
-#### - [ ] Phase 1.4: Move milestone commits and unchecked-work counts onto the task reader
+#### - [x] Phase 1.4: Move milestone commits and unchecked-work counts onto the task reader
 **Repo:** spektacular
 
 Rebuild milestone completion detection and the unchecked-work count in implement status on the shared reader, so both work for task plans and continue to work for legacy phase plans.
@@ -364,9 +364,9 @@ Rebuild milestone completion detection and the unchecked-work count in implement
 *Technical detail:* [context.md#phase-14](./context.md#phase-14-move-milestone-commits-and-unchecked-work-counts-onto-the-task-reader)
 
 **Acceptance criteria**:
-- [ ] A milestone whose tasks are all ticked triggers its milestone commit in a task plan, exactly as a fully ticked milestone of phases does in a legacy plan.
-- [ ] Implement status reports the number of unchecked work items for both task and legacy plans, with its existing field name unchanged.
-- [ ] All existing milestone-commit behaviour on legacy plans is unchanged.
+- [x] A milestone whose tasks are all ticked triggers its milestone commit in a task plan, exactly as a fully ticked milestone of phases does in a legacy plan.
+- [x] Implement status reports the number of unchecked work items for both task and legacy plans, with its existing field name unchanged.
+- [x] All existing milestone-commit behaviour on legacy plans is unchanged.
 
 ### Milestone 2: Orchestrators can export a plan's task graph and read per-task progress
 
@@ -532,3 +532,70 @@ No other implementation-time uncertainties remain; every other decision is recor
 - **Inferring a repo's location from git remotes or from file-provider sources.** `repo.location` is filled only from a declared git source.
 - **Other task id providers.** Only `uuid` ships. The registry is the extension point, and providers with external side effects are a future concern.
 - **Adding per-task progress to `plan status` without a name** (the in-progress workflow view). Only the named artifact status gains it.
+
+## Changelog
+
+### 2026-09-25 — Phase 1.1: Add the plan task reader and validator
+
+**What was done**: Added `internal/plantask`, the single reader of a plan's `## Milestones & Tasks` (or legacy `## Milestones & Phases`) section. `Parse` returns milestones and tasks (id, title, milestone, repo, dependency ids, execution, completion, criteria met/total) and reports the plan's format; `Validate` applies the design's structural rules and returns a `plan_task_invalid` error naming the task; `RequireTasks` returns `plan_structure_invalid` ("the plan contains no task ids") for legacy or task-less plans.
+
+**Deviations**: Tests were written alongside the code in the implement step rather than by a separate test sub-agent. Added `Plan.OpenItems()` and `Plan.CompletedMilestones()` beyond the planned interface, ready for Phase 1.4. `Validate` takes no command-name parameter: next_action names commands without the binary prefix (`'plan task-id'`), matching `internal/design/errors.go`.
+
+**Files changed**:
+- `spektacular: internal/plantask/plantask.go`
+- `spektacular: internal/plantask/validate.go`
+- `spektacular: internal/plantask/plantask_test.go`
+- `spektacular: internal/plantask/validate_test.go`
+
+**Discoveries**: A repeated `### Milestone N:` heading continues the same milestone (the old autocommit scanner merged by number), so `Parse` merges too. The field separator accepts `—`, `-`, `--` and `:` so hand-typed plans still parse.
+
+### 2026-09-25 — Phase 1.2: Refuse invalid task structure when a plan is saved
+
+**What was done**: `newStoreFileCmd` gained an optional `writeValidator`, called after front matter is stripped and before the metadata merge and store write, so a refusal leaves the stored file untouched. The plan group passes `validatePlanDocument`, which checks only `plan.md`, only when it is in the task format, against the registered repo names from `cfg.Repos`.
+
+**Deviations**: The spec store-file caller lives in `cmd/file.go`, not `cmd/spec_file.go` as the plan said (drift noted at read_plan). Added a shared cmd test fixture file (`cmd/plantask_fixture_test.go`) for task-format plans, for reuse by the export, status and implement tests.
+
+**Files changed**:
+- `spektacular: cmd/storefile.go`
+- `spektacular: cmd/plan_file.go`
+- `spektacular: cmd/file.go`
+- `spektacular: cmd/changelog_file.go`
+- `spektacular: cmd/plantask_fixture_test.go`
+- `spektacular: cmd/plan_file_validate_test.go`
+
+**Discoveries**: Every test project registers at least one repo (`writeSpecCommandConfig` adds `testproj`), so the unregistered-repo rule always has a list to offer.
+
+### 2026-09-25 — Phase 1.3: Issue task identifiers from a pluggable provider
+
+**What was done**: Added `plan task-id`, which prints `{ "id": ... }` from the provider named by `plan.task_id.provider`. The provider registry lives in `internal/identifier/taskid.go` with one entry, `uuid`, a v4 UUID from `crypto/rand`. An unknown name is refused only when an id is requested, with `task_id_provider_unknown` naming it and listing the available providers. `PlanConfig` gained `TaskID` (default `uuid`, `config.DefaultTaskIDProvider`) with no schema bump.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: internal/identifier/taskid.go`
+- `spektacular: internal/identifier/taskid_test.go`
+- `spektacular: internal/config/config.go`
+- `spektacular: cmd/plan_task_id.go`
+- `spektacular: cmd/plan_task_id_test.go`
+- `spektacular: cmd/root_test.go`
+
+**Discoveries**: Open question resolved: `ToYAMLFile` now writes `plan.task_id.provider: uuid` into newly written configs, and no migration golden changed. `cmd/root_test.go` pins the `plan` subcommand list in its unknown-subcommand test, so each new `plan` subcommand updates it. `plan file list` on an empty plan store fails with `not found` (existing behaviour).
+
+### 2026-09-25 — Phase 1.4: Move milestone commits and unchecked-work counts onto the task reader
+
+**What was done**: `autocommit.CompletedMilestones` now delegates to `plantask.Parse(...).CompletedMilestones()`, so milestone commits fire for task plans as well as phase plans. `implement status` computes `unchecked_phases` with `plantask.Parse(...).OpenItems()` (open tasks, or open phase headings in older plans); the field name is unchanged. The commit-message refusal now says "whose tasks are now all complete".
+
+**Deviations**: None. To keep legacy behaviour identical the reader was adjusted: a non-milestone `###` heading no longer ends the current milestone, and open phase headings are counted even when no milestone heading precedes them (the old `unchecked_phases` regex did).
+
+**Files changed**:
+- `spektacular: internal/autocommit/milestones.go`
+- `spektacular: internal/autocommit/milestones_test.go`
+- `spektacular: internal/autocommit/message.go`
+- `spektacular: internal/plantask/plantask.go`
+- `spektacular: internal/plantask/plantask_test.go`
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/implement_test.go`
+- `spektacular: cmd/autocommit.go`
+- `spektacular: cmd/milestones_test.go`
+
+**Discoveries**: The old `unchecked_phases` regex matched open phase headings anywhere in plan.md; the reader counts them only inside the Milestones section, a slight tightening that no test or fixture depends on.

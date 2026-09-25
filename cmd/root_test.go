@@ -531,7 +531,7 @@ func TestUnknownSubcommand_ReturnsStructuredErrorNamingValidSubcommands(t *testi
 		require.True(t, er.IsError)
 		require.Equal(t, "unknown_subcommand", er.Code)
 		require.Equal(t, `unknown subcommand "resume" for "spektacular plan"`, er.Message)
-		require.Equal(t, "run one of: file, goto, new, status, steps", er.NextAction)
+		require.Equal(t, "run one of: file, goto, new, status, steps, task-id", er.NextAction)
 	})
 
 	t.Run("missing subcommand reports no subcommand given", func(t *testing.T) {

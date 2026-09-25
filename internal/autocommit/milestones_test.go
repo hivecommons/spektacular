@@ -132,6 +132,33 @@ fixture
 `,
 			want: nil,
 		},
+		{
+			name: "a task plan milestone with every task ticked is complete",
+			plan: `# Plan: billing
+
+## Milestones & Tasks
+
+### Milestone 1: first
+
+#### - [x] Task: a
+**Id:** a
+
+**Acceptance criteria**:
+- [ ] a criterion never makes a task open
+
+#### - [x] Task: b
+**Id:** b
+
+### Milestone 2: second
+
+#### - [x] Task: c
+**Id:** c
+
+#### - [ ] Task: d
+**Id:** d
+`,
+			want: []int{1},
+		},
 	}
 
 	for _, tc := range cases {

@@ -295,7 +295,7 @@ func targetNames(targets []autocommit.Target) string {
 // milestones have already been committed, so none is committed twice.
 const committedMilestonesKey = "committed_milestones"
 
-// dueMilestones reports the milestones whose phases are now all ticked and
+// dueMilestones reports the milestones whose work items are now all ticked and
 // that have not been committed yet. It reads the plan through the store, the
 // same way the implement steps reach it.
 func dueMilestones(cfg config.Config, root string, wf *workflow.Workflow, name string) ([]int, error) {

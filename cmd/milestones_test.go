@@ -50,6 +50,42 @@ fixture
 	return planPath
 }
 
+// writeTwoMilestoneTaskPlan is writeTwoMilestonePlan in the task format:
+// two milestones of one open task each.
+func writeTwoMilestoneTaskPlan(t *testing.T, dataDir, name string) string {
+	t.Helper()
+	planDir := filepath.Join(dataDir, "plans", name)
+	require.NoError(t, os.MkdirAll(planDir, 0o755))
+	planPath := filepath.Join(planDir, "plan.md")
+	body := `# Plan: ` + name + `
+
+## Overview
+
+fixture
+
+## Milestones & Tasks
+
+### Milestone 1: first
+
+#### - [ ] Task: a
+**Id:** 11111111-1111-4111-8111-111111111111
+**Repo:** root
+**Depends on:** none
+**Execution:** agent
+
+### Milestone 2: second
+
+#### - [ ] Task: b
+**Id:** 22222222-2222-4222-8222-222222222222
+**Repo:** root
+**Depends on:**
+- 11111111-1111-4111-8111-111111111111 — a
+**Execution:** agent
+`
+	require.NoError(t, os.WriteFile(planPath, []byte(body), 0o644))
+	return planPath
+}
+
 // tickPhase ticks one phase's checkbox in the plan on disk, standing in for
 // what the agent does during the update_plan step.
 func tickPhase(t *testing.T, planPath, phase string) {
@@ -68,9 +104,15 @@ func tickPhase(t *testing.T, planPath, phase string) {
 // up front, the way update_feature_changelog would have written it.
 func milestoneProject(t *testing.T, mode string) (gitFixture, string) {
 	t.Helper()
+	return milestoneProjectWith(t, mode, writeTwoMilestonePlan)
+}
+
+// milestoneProjectWith is milestoneProject over the plan writePlan lays out.
+func milestoneProjectWith(t *testing.T, mode string, writePlan func(*testing.T, string, string) string) (gitFixture, string) {
+	t.Helper()
 	fx := gitProject(t, mode)
 	dataDir := filepath.Join(fx.root, config.ProjectConfigDirName)
-	planPath := writeTwoMilestonePlan(t, dataDir, milestoneSpecName)
+	planPath := writePlan(t, dataDir, milestoneSpecName)
 
 	changelog := filepath.Join(dataDir, config.DefaultChangelogDir, milestoneSpecName+".md")
 	require.NoError(t, os.MkdirAll(filepath.Dir(changelog), 0o755))
@@ -196,6 +238,31 @@ func TestMilestoneCommit_CommitsEachChangedRepoPerMilestone(t *testing.T) {
 	require.Equal(t, []any{float64(1), float64(2)}, stateData(t, fx)["committed_milestones"])
 }
 
+// A task-format plan makes milestone commits exactly as a phase plan does:
+// ticking the only task of a milestone completes it.
+func TestMilestoneCommit_TaskPlanCommitsEachMilestone(t *testing.T) {
+	fx, planPath := milestoneProjectWith(t, config.AutoCommitFull, writeTwoMilestoneTaskPlan)
+
+	walkPhase(t, "")
+	tickPhase(t, planPath, "Task: a")
+	dirtyOtherRepoFile(t, fx, "task-a.txt")
+	stageCommitMessage(t, fx, "Implement billing Milestone 1\n\nThe first milestone's tasks are all built.\n")
+
+	_, _, code := runRootCmd(t, "implement", "goto", "--data", gotoWithStagedMessage("analyze"))
+	require.Equal(t, 0, code)
+	requireMilestoneCommitted(t, fx, "2", "Implement billing Milestone 1")
+
+	walkPhase(t, "analyze")
+	tickPhase(t, planPath, "Task: b")
+	dirtyOtherRepoFile(t, fx, "task-b.txt")
+	stageCommitMessage(t, fx, "Implement billing Milestone 2\n\nThe second milestone's tasks are all built.\n")
+
+	_, _, code = runRootCmd(t, "implement", "goto", "--data", gotoWithStagedMessage("test_plan"))
+	require.Equal(t, 0, code)
+	requireMilestoneCommitted(t, fx, "3", "Implement billing Milestone 2")
+	require.Equal(t, []any{float64(1), float64(2)}, stateData(t, fx)["committed_milestones"])
+}
+
 // Phase 3.1 criterion 2: the completion commit after the milestone commits
 // picks up only what changed since the last one. The project's own repo has
 // moved on — the workflow keeps writing its state file — so it gains a
@@ -278,7 +345,7 @@ func TestMilestoneCommit_RefusesAMessageThatDoesNotNameTheMilestone(t *testing.T
 		stdout, _, code := runRootCmd(t, "implement", "goto", "--data", gotoWithStagedMessage("analyze"))
 
 		requireRefused(t, fx, stdout, code, "commit_message_invalid",
-			`the git commit message does not name "Milestone 1", whose phases are now all complete`)
+			`the git commit message does not name "Milestone 1", whose tasks are now all complete`)
 	})
 }
 

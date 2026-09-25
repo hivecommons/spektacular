@@ -32,7 +32,7 @@ func ValidateMessage(message, specName string, milestones []int) error {
 	for _, m := range milestones {
 		if !strings.Contains(strings.ToLower(trimmed), strings.ToLower(fmt.Sprintf("Milestone %d", m))) {
 			return output.NewError("commit_message_invalid",
-				fmt.Sprintf("the git commit message does not name %q, whose phases are now all complete", fmt.Sprintf("Milestone %d", m)))
+				fmt.Sprintf("the git commit message does not name %q, whose tasks are now all complete", fmt.Sprintf("Milestone %d", m)))
 		}
 	}
 	return nil

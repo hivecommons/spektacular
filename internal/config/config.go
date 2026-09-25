@@ -55,6 +55,10 @@ const (
 	DefaultPlanDir      = "plans"
 	DefaultChangelogDir = "changelog"
 
+	// DefaultTaskIDProvider issues plan task identifiers when
+	// plan.task_id.provider is not set.
+	DefaultTaskIDProvider = "uuid"
+
 	// DefaultRepoKnowledgeLocation and DefaultRepoChangelogDir are the
 	// repo-scoped defaults written into a repo.yaml. Every relative path in
 	// that file is resolved from the folder holding it, so these are bare
@@ -96,6 +100,14 @@ type PlanConfig struct {
 	Provider          string         `yaml:"provider"`
 	StrictSpecChanges bool           `yaml:"strict_spec_changes"`
 	Config            FilePlanConfig `yaml:"config"`
+	TaskID            TaskIDConfig   `yaml:"task_id,omitempty"`
+}
+
+// TaskIDConfig selects where plan task identifiers come from. The provider is
+// resolved only when an id is requested (identifier.TaskIDProviderFor), never
+// at load, so a bad name fails that request alone rather than every command.
+type TaskIDConfig struct {
+	Provider string `yaml:"provider"`
 }
 
 // FilePlanConfig is the file-provider configuration for the plan section.
@@ -326,6 +338,7 @@ func NewDefault() Config {
 			Config: FilePlanConfig{
 				Directory: filepath.Join(ProjectConfigDirName, DefaultPlanDir),
 			},
+			TaskID: TaskIDConfig{Provider: DefaultTaskIDProvider},
 		},
 		Changelog: ChangelogConfig{
 			Provider: ProviderFile,
