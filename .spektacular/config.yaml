@@ -5,6 +5,7 @@ name: spektacular
 command: go run .
 agent: claude
 spec_trigger_threshold: moderate
+auto_commit: full
 debug:
     enabled: true
 spec:
