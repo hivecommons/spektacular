@@ -45,7 +45,7 @@ func TestSpecPlanGatheringStepsReferenceWorkDir(t *testing.T) {
 		"steps/plan/07-dependencies.md",
 		"steps/plan/08-testing_approach.md",
 		"steps/plan/09-milestones.md",
-		"steps/plan/10-phases.md",
+		"steps/plan/10-tasks.md",
 		"steps/plan/11-open_questions.md",
 		"steps/plan/12-out_of_scope.md",
 	}
@@ -133,7 +133,7 @@ func TestAssemblyStepsMapSectionFiles(t *testing.T) {
 	for _, f := range []string{
 		"architecture.md", "components.md", "data_structures.md", "implementation_detail.md",
 		"dependencies.md", "testing_approach.md", "milestones.md", "open_questions.md",
-		"out_of_scope.md", "research.md", "phases_plan.md", "phases_context.md",
+		"out_of_scope.md", "research.md", "tasks_plan.md", "tasks_context.md",
 		"assumptions.md",
 	} {
 		require.Containsf(t, planAssemble, f, "plan assembly step must read section file %s", f)

@@ -26,7 +26,7 @@ spektacular plan goto --data '{"step":"implementation_detail"}'
 spektacular plan goto --data '{"step":"dependencies"}'
 spektacular plan goto --data '{"step":"testing_approach"}'
 spektacular plan goto --data '{"step":"milestones"}'
-spektacular plan goto --data '{"step":"phases"}'
+spektacular plan goto --data '{"step":"tasks"}'
 spektacular plan goto --data '{"step":"open_questions"}'
 spektacular plan goto --data '{"step":"out_of_scope"}'
 spektacular plan goto --data '{"step":"assemble"}'
@@ -35,6 +35,12 @@ spektacular plan goto --data '{"step":"verification"}'
 # The plan documents are owned by spektacular. Stage each filled document to a
 # scratch file, then commit it into the plan store with `plan file write` —
 # never write the plan documents with built-in file tools.
+
+# Every task id is issued by spektacular, never invented, and every task names
+# the one registered repo it is carried out in.
+TASK_1_ID=$(spektacular plan task-id | jq -r .id)
+TASK_2_ID=$(spektacular plan task-id | jq -r .id)
+REPO=$(spektacular repo list | jq -r '.repos[0].name')
 
 cat > /tmp/plan.md <<'PLAN_EOF'
 # Plan: 20260101000000-user-auth
@@ -105,7 +111,7 @@ and revoke flows against a real PostgreSQL and Redis. Cross-instance
 validation test that issues a token from one instance and verifies it
 from another. Load test to confirm the 5ms p99 latency target.
 
-## Milestones & Phases
+## Milestones & Tasks
 
 ### Milestone 1: Token issuance and verification
 
@@ -113,13 +119,17 @@ from another. Load test to confirm the 5ms p99 latency target.
 RS256-signed JWTs. Backend developers can call it directly in tests and see
 correct accept/reject behaviour across valid, expired, and tampered tokens.
 
-#### - [ ] Phase 1.1: Implement RS256 issuance and verification
+#### - [ ] Task: Implement RS256 issuance and verification
+**Id:** __TASK_1_ID__
+**Repo:** __REPO__
+**Depends on:** none
+**Execution:** agent
 
 Implement the `auth/tokens` package with `Issue()` and `Verify()`. Load
 RS256 keys from env config at startup. Cover valid, expired, and tampered
 token cases with unit tests.
 
-*Technical detail:* [context.md#phase-11](./context.md#phase-11-implement-rs256-issuance-and-verification)
+*Technical detail:* [context.md#task-implement-rs256-issuance-and-verification](./context.md#task-implement-rs256-issuance-and-verification)
 
 **Acceptance criteria**:
 
@@ -133,12 +143,17 @@ token cases with unit tests.
 HTTP endpoints. The middleware rejects expired and revoked tokens on
 protected routes. End users see a working login flow.
 
-#### - [ ] Phase 2.1: Login, refresh, revoke endpoints
+#### - [ ] Task: Login, refresh, revoke endpoints
+**Id:** __TASK_2_ID__
+**Repo:** __REPO__
+**Depends on:**
+- __TASK_1_ID__ — Implement RS256 issuance and verification
+**Execution:** agent
 
 Add the three HTTP handlers, backed by the `auth/tokens` package and the
 new `refresh_tokens` table. Wire the middleware into the router.
 
-*Technical detail:* [context.md#phase-21](./context.md#phase-21-login-refresh-revoke-endpoints)
+*Technical detail:* [context.md#task-login-refresh-revoke-endpoints](./context.md#task-login-refresh-revoke-endpoints)
 
 **Acceptance criteria**:
 
@@ -157,7 +172,8 @@ None — every implementation uncertainty was resolved during planning.
 - Social login
 - Fine-grained permission scoping beyond role
 PLAN_EOF
-cat /tmp/plan.md | spektacular plan file write 20260101000000-user-auth/plan.md
+sed -i -e "s/__TASK_1_ID__/${TASK_1_ID}/g" -e "s/__TASK_2_ID__/${TASK_2_ID}/g" -e "s/__REPO__/${REPO}/g" /tmp/plan.md
+spektacular plan file write 20260101000000-user-auth/plan.md --from /tmp/plan.md
 
 cat > /tmp/context.md <<'CONTEXT_EOF'
 # Context: 20260101000000-user-auth
@@ -170,9 +186,9 @@ table via a shared DB connection. This does not scale horizontally because
 session state is centralised. The JWT rewrite replaces that with stateless
 token verification that every instance can perform independently.
 
-## Per-Phase Technical Notes
+## Per-Task Technical Notes
 
-### Phase 1.1: Implement RS256 issuance and verification
+### Task: Implement RS256 issuance and verification
 
 - `auth/tokens/tokens.go` — new file implementing `Issue()` and `Verify()`
 - `auth/tokens/tokens_test.go` — new unit test file covering the three cases
@@ -182,7 +198,7 @@ token verification that every instance can perform independently.
 **Token estimate**: ~8k
 **Agent strategy**: Single agent, sequential
 
-### Phase 2.1: Login, refresh, revoke endpoints
+### Task: Login, refresh, revoke endpoints
 
 - `auth/handlers/login.go` — new handler, calls `auth/tokens.Issue()`
 - `auth/handlers/refresh.go` — new handler, validates refresh token, issues new access
@@ -225,7 +241,7 @@ Token verification must add less than 5ms p99 latency. RS256 verification
 is CPU-bound; benchmarks show ~0.3ms per verification on the production
 hardware profile.
 CONTEXT_EOF
-cat /tmp/context.md | spektacular plan file write 20260101000000-user-auth/context.md
+spektacular plan file write 20260101000000-user-auth/context.md --from /tmp/context.md
 
 cat > /tmp/research.md <<'RESEARCH_EOF'
 # Research: 20260101000000-user-auth
@@ -292,7 +308,7 @@ negligible latency to the refresh flow.
 - `auth/session/session.go` shows the current auth path
 - `router/router.go:42` is where the new middleware slots in
 RESEARCH_EOF
-cat /tmp/research.md | spektacular plan file write 20260101000000-user-auth/research.md
+spektacular plan file write 20260101000000-user-auth/research.md --from /tmp/research.md
 
 # Advance through the write steps — each verifies its document was committed —
 # then through the mandatory walkthrough review (sign-off) to the finished step.

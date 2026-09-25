@@ -4,7 +4,7 @@ Draft the **Testing Approach** section of `plan.md`.
 
 ### This section is high-level only
 
-Describe the overall testing strategy and test types. This section is **high-level only**. Per-phase testing detail — which specific tests live in which specific files — stays in the plan's `context.md`.
+Describe the overall testing strategy and test types. This section is **high-level only**. Per-task testing detail — which specific tests live in which specific files — stays in the plan's `context.md`.
 
 If you find yourself writing "a test in file X asserts Y on line Z", stop and move that content to the plan's `context.md`.
 
@@ -28,7 +28,7 @@ If the spec has no success metrics, note that there are none to verify. This met
 ### What NOT to include
 
 - Specific test file paths
-- Per-phase test lists
+- Per-task test lists
 - Shell commands to run the tests
 
 ### What to produce

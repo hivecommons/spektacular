@@ -5,7 +5,7 @@ Decide the shape of the solution and lock in the chosen direction. This step pro
 **The repos this project spans.** The architecture must place every part of the work in the repo it belongs to. `{{config.command}} repo list` reports each registered repo with its metadata and the `root` its code lives at.
 
 
-For every requirement, the drafted architecture must name **which repo (and which files within it)** the requirement is carried out against, using the repos' metadata from that section and the discovery findings; look inside a repo at the source listed there (or run `{{config.command}} repo list` when a source is not on disk yet). Record the requirement-to-repo-and-files resolution in the plan's context document as part of the per-phase technical detail — no separate document.
+For every requirement, the drafted architecture must name **which repo (and which files within it)** the requirement is carried out against, using the repos' metadata from that section and the discovery findings; look inside a repo at the source listed there (or run `{{config.command}} repo list` when a source is not on disk yet). Record the requirement-to-repo-and-files resolution in the plan's context document as part of the per-task technical detail — no separate document.
 
 ### Step 1: Weigh Options
 
@@ -45,7 +45,7 @@ Draft 2-4 short paragraphs describing:
 - Why this direction beats the alternatives
 - A cross-reference to `research.md#alternatives-considered-and-rejected` so plan.md readers can drill into the evidence
 
-Keep this section self-contained. Do NOT write `see context.md for …` (pointing at the plan's `context.md`) — plan.md must stand on its own for readers outside the Milestones & Phases block.
+Keep this section self-contained. Do NOT write `see context.md for …` (pointing at the plan's `context.md`) — plan.md must stand on its own for readers outside the Milestones & Tasks block.
 
 Before advancing, save this section to its working file. Using your own `Write` tool, write the drafted **Architecture & Design Decisions** content (body only — no `## ` heading line) to `.spektacular/work/{{plan_name}}/architecture.md`. This working file is git-tracked and is read back on resume and when the plan documents are assembled, so it must hold the final content. It is **not** a plan store document — write it directly with your file tools and do **not** route it through `{{config.command}} plan file write` (that command is only for the final plan documents).
 

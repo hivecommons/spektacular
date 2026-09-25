@@ -5,11 +5,11 @@
 <!-- What exists today? What's the starting point? Include file:line references where useful. -->
 
 
-## Per-Phase Technical Notes
+## Per-Task Technical Notes
 
-<!-- One section per phase from plan.md, with a heading that matches the phase name so plan.md's *Technical detail:* link resolves. Include concrete file:line changes, code shape, and gotchas. -->
+<!-- One section per task from plan.md, with a heading that matches the task title so plan.md's *Technical detail:* link resolves. Include concrete file:line changes, code shape, and gotchas. -->
 
-### Phase 1.1: <title matching plan.md>
+### Task: <title matching plan.md>
 
 <!-- File changes with file:line references, function signatures, code shape. -->
 
@@ -23,6 +23,11 @@
 ## Testing Strategy
 
 <!-- How testing is approached across the plan. -->
+
+
+## Project References
+
+<!-- The specs, designs, knowledge entries and repo roots this plan builds on. -->
 
 
 ## Token Management Strategy

@@ -8,6 +8,7 @@ import (
 
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/plantask"
+	"github.com/hivecommons/spektacular/internal/stepkit"
 	"github.com/hivecommons/spektacular/internal/testutil/gittest"
 	"github.com/stretchr/testify/require"
 )
@@ -224,4 +225,27 @@ func TestPlanExport_EverySavedPlanExports(t *testing.T) {
 			require.Equal(t, 0, code, stdout)
 		}
 	}
+}
+
+// The plan scaffold's task block, with its placeholders filled in, is a plan
+// that saves and exports: the format the plan workflow authors is the format
+// write validation and export read.
+func TestPlanScaffoldTaskFormatSavesAndExports(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, "")
+
+	scaffold, err := stepkit.RenderTemplate("scaffold/plan.md", map[string]any{"name": taskPlanName})
+	require.NoError(t, err)
+	filled := strings.NewReplacer(
+		"<id from plan task-id>", idA,
+		"<one registered repo name>", "testproj",
+	).Replace(scaffold)
+
+	stdout, code := writePlanDoc(t, taskPlanName, "plan.md", filled)
+	require.Equal(t, 0, code, stdout)
+
+	tasks := exportJSON(t)["tasks"].([]any)
+	require.Len(t, tasks, 1)
+	require.Equal(t, idA, tasks[0].(map[string]any)["id"])
 }

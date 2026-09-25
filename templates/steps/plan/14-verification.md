@@ -22,14 +22,14 @@ A common failure mode is silently dropping a section when assembling. Check each
 6. `## Implementation Detail`
 7. `## Dependencies`
 8. `## Testing Approach`
-9. `## Milestones & Phases`
+9. `## Milestones & Tasks`
 10. `## Open Questions`
 11. `## Out of Scope`
 
 **The plan's context.md — required `##` sections** (in order):
 
 1. `## Current State Analysis`
-2. `## Per-Phase Technical Notes`
+2. `## Per-Task Technical Notes`
 3. `## Testing Strategy`
 4. `## Project References`
 5. `## Token Management Strategy`
@@ -49,8 +49,15 @@ A common failure mode is silently dropping a section when assembling. Check each
 
 ### Step 2: Quality
 
-- **plan.md** — readable in under a minute; every phase has a `**Repo:**` line, a summary paragraph, a `*Technical detail:*` link, and outcome-based acceptance criteria; no shell commands anywhere. In a project with more than one registered repo, confirm the `**Repo:**` line is actually present on every single phase, not just the phases that read as obviously cross-repo — this is the check most likely to be skipped.
-- **The plan's context.md** — per-phase technical notes under headings matching plan.md's `*Technical detail:*` anchors.
+- **plan.md** — readable in under a minute; no shell commands anywhere. Every task has:
+  - an `**Id:**` line holding an id issued by `{{config.command}} plan task-id`, unique in the plan;
+  - a `**Repo:**` line naming exactly one registered repo. In a project with more than one registered repo, confirm the line is actually present on every single task, not just the tasks that read as obviously cross-repo — this is the check most likely to be skipped;
+  - a `**Depends on:**` line, either `none` or one `- <id> — <title>` entry per dependency, each id belonging to a task in this plan, with no dependency cycle;
+  - an `**Execution:**` line, `agent` or `human — <reason>`, decided against the criteria in the tasks step, with any work that needs both an agent and a person split into two tasks;
+  - a summary paragraph, a `*Technical detail:*` link, and outcome-based acceptance criteria.
+
+  `{{config.command}} plan file write` enforces the structural rules above and refuses a plan.md that breaks them, naming the task. If a write step is refused, fix the named task in `tasks_plan.md`, re-assemble and retry.
+- **The plan's context.md** — per-task technical notes under headings matching plan.md's `*Technical detail:*` anchors.
 - **research.md** — alternatives considered and rejected with citations. Dense enough to rehydrate a cold session.
 
 ### Step 3: Fix and re-stage

@@ -40,8 +40,8 @@ func Steps() []workflow.StepConfig {
 		{Name: "dependencies", Src: []string{"implementation_detail"}, Dst: "dependencies", Callback: dependencies()},
 		{Name: "testing_approach", Src: []string{"dependencies"}, Dst: "testing_approach", Callback: testingApproach()},
 		{Name: "milestones", Src: []string{"testing_approach"}, Dst: "milestones", Callback: milestones()},
-		{Name: "phases", Src: []string{"milestones"}, Dst: "phases", Callback: phases()},
-		{Name: "open_questions", Src: []string{"phases"}, Dst: "open_questions", Callback: openQuestions()},
+		{Name: "tasks", Src: []string{"milestones"}, Dst: "tasks", Callback: tasks()},
+		{Name: "open_questions", Src: []string{"tasks"}, Dst: "open_questions", Callback: openQuestions()},
 		{Name: "out_of_scope", Src: []string{"open_questions"}, Dst: "out_of_scope", Callback: outOfScope()},
 		{Name: "assemble", Src: []string{"out_of_scope"}, Dst: "assemble", Callback: assemble()},
 		{Name: "verification", Src: []string{"assemble"}, Dst: "verification", Callback: verification()},
@@ -136,13 +136,13 @@ func testingApproach() workflow.StepCallback {
 
 func milestones() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
-		return "", writeStep("milestones", "phases", "steps/plan/09-milestones.md", data, out, st, cfg, nil)
+		return "", writeStep("milestones", "tasks", "steps/plan/09-milestones.md", data, out, st, cfg, nil)
 	}
 }
 
-func phases() workflow.StepCallback {
+func tasks() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
-		return "", writeStep("phases", "open_questions", "steps/plan/10-phases.md", data, out, st, cfg, nil)
+		return "", writeStep("tasks", "open_questions", "steps/plan/10-tasks.md", data, out, st, cfg, nil)
 	}
 }
 

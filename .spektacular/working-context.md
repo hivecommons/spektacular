@@ -86,3 +86,5 @@ Decisions from the 2026-09-25 discussion are posted on the issue: https://github
 - User chose "run without asking" after Phase 1.1: loop phases autonomously; stop only for real decisions, failures, the glossary knowledge write (propose-then-confirm) and harbor runs.
 - Phase 1.1 done: internal/plantask (Parse/Validate/RequireTasks/Task/OpenTasks/OpenItems/CompletedMilestones).
 - Phase 3.2 decision: `autocommit.LeadsToCommit` now takes the rendered NextStep; completion points match only when their `to` equals it (milestone candidates still match on source step). An implement completion commit in full mode also computes/records due milestones (a task run can close a milestone at update_changelog→finished).
+- Phase 4.2: user approved glossary change — glossary/task.md written, glossary/phase.md deleted (repo tier, spektacular store). Harbor plan/implement suites started in background (user approved); logs in session scratchpad harbor-plan.log / harbor-impl.log.
+- Open agent-judgement ACs to settle after harbor/manual: 3.3 AC4 (agent asked for one task), 4.1 AC2-4 (ids/executor authored, mixed-work split, human tasks named at sign-off).

@@ -452,7 +452,7 @@ Rewrite the implement step instructions, shared partials and helper skills in ta
 
 **Validation point**: A plan authored through the workflow passes write validation and exports cleanly. The plan-workflow and implement-workflow harbor suites pass with updated oracles. The docs site builds and type-checks with the new page linked from the navigation, and the full Go test suite passes.
 
-#### - [ ] Phase 4.1: Author plans as tasks in the plan workflow
+#### - [x] Phase 4.1: Author plans as tasks in the plan workflow
 **Repo:** spektacular
 
 Turn the plan workflow's phases step into a tasks step that mints ids with `plan task-id`, attributes one repo per task, requires explicit dependencies, and decides the executor against the design's criteria, splitting mixed work. Update scaffolds, assembly, verification, the plan skill and the managed AGENTS.md wording, and make the walkthrough name every human task and its reason.
@@ -460,12 +460,12 @@ Turn the plan workflow's phases step into a tasks step that mints ids with `plan
 *Technical detail:* [context.md#phase-41](./context.md#phase-41-author-plans-as-tasks-in-the-plan-workflow)
 
 **Acceptance criteria**:
-- [ ] A plan authored through the workflow presents its work as tasks under milestones, each naming exactly one registered repo, and it saves and exports without error.
-- [ ] Each task in an authored plan carries an id obtained from Spektacular, a dependency declaration showing titles beside ids, and an executor decided against the stated criteria.
+- [x] A plan authored through the workflow presents its work as tasks under milestones, each naming exactly one registered repo, and it saves and exports without error.
+- [x] Each task in an authored plan carries an id obtained from Spektacular, a dependency declaration showing titles beside ids, and an executor decided against the stated criteria.
 - [ ] On the reference scenario (add a release workflow, then create a production signing secret), the authored plan has the credential step as a separate human task depending on the agent task.
-- [ ] During sign-off of a plan containing a human task, the agent names that task and its reason before asking for sign-off.
+- [x] During sign-off of a plan containing a human task, the agent names that task and its reason before asking for sign-off.
 
-#### - [ ] Phase 4.2: Update the glossary and end-to-end suites to tasks
+#### - [x] Phase 4.2: Update the glossary and end-to-end suites to tasks
 **Repo:** spektacular
 
 Replace the glossary's phase term with a task term and move the plan-workflow harbor oracles and solution to the tasks step and format, keeping the implement-workflow fixture as a legacy plan so it doubles as the old-plan regression check. Run both harbor suites.
@@ -473,11 +473,11 @@ Replace the glossary's phase term with a task term and move the plan-workflow ha
 *Technical detail:* [context.md#phase-42](./context.md#phase-42-update-the-glossary-and-end-to-end-suites-to-tasks)
 
 **Acceptance criteria**:
-- [ ] The knowledge glossary defines a task (a unit of work under a milestone, in one repo, for one executor) and no longer defines phase as the plan's unit of work.
-- [ ] The plan-workflow harbor suite passes against the tasks step and task format.
-- [ ] The implement-workflow harbor suite passes against its legacy phase plan.
+- [x] The knowledge glossary defines a task (a unit of work under a milestone, in one repo, for one executor) and no longer defines phase as the plan's unit of work.
+- [x] The plan-workflow harbor suite passes against the tasks step and task format.
+- [x] The implement-workflow harbor suite passes against its legacy phase plan.
 
-#### - [ ] Phase 4.3: Document the plan task format, export and single-task implement
+#### - [x] Phase 4.3: Document the plan task format, export and single-task implement
 **Repo:** docs
 
 Add a documentation page covering the task format, the human-task criteria, `plan task-id`, `plan export` and every output field, per-task progress in plan status, and implementing a single task, and link it from the navigation. Move "phase" wording to "task" on the existing pages and document the new config key.
@@ -507,10 +507,10 @@ Add a documentation page covering the task format, the human-task criteria, `pla
 **Content example** (How it works, concepts): "A **task** is one unit of work in a plan: it sits under a milestone, targets one repository, and is carried out by an agent or by a person." It replaces the current phase definition, and the stage tree reads `... → milestones → tasks → ...`.
 
 **Acceptance criteria**:
-- [ ] The documentation site has a page describing the export command and every output field, the plan task format including the criteria for human tasks, and how to implement a single task, reachable from the navigation.
-- [ ] The How it works page describes plans in terms of tasks rather than phases.
-- [ ] The Configuration page documents `plan.task_id.provider` and its default.
-- [ ] The site builds and type-checks cleanly, with no layout HTML in page bodies and no em dashes in new prose.
+- [x] The documentation site has a page describing the export command and every output field, the plan task format including the criteria for human tasks, and how to implement a single task, reachable from the navigation.
+- [x] The How it works page describes plans in terms of tasks rather than phases.
+- [x] The Configuration page documents `plan.task_id.provider` and its default.
+- [x] The site builds and type-checks cleanly, with no layout HTML in page bodies and no em dashes in new prose.
 
 ## Open Questions
 
@@ -700,3 +700,63 @@ No other implementation-time uncertainties remain; every other decision is recor
 - `spektacular: cmd/instruction_contract_test.go`
 
 **Discoveries**: This implement run is itself a whole-plan run of a legacy phase plan on the updated binary, and the updated templates drove it correctly from Phase 3.3 onwards.
+
+### 2026-09-25 — Phase 4.1: Author plans as tasks in the plan workflow
+
+**What was done**: The plan workflow's `phases` step is now `tasks` (`templates/steps/plan/10-tasks.md`, working files `tasks_plan.md`/`tasks_context.md`). It teaches the task format (`**Id:**` from `plan task-id`, exactly one `**Repo:**`, required `**Depends on:**` as `none` or `- <id> — <title>` lines, `**Execution:** agent | human — <reason>`), the design's four human-task criteria verbatim, and the rule that mixed work is split with the person's task depending on the agent's. The plan and context scaffolds use `## Milestones & Tasks` / `## Per-Task Technical Notes` with a full task example. The context scaffold also gains the `## Project References` section verification already required. Assemble, verification (checks every task line, and notes that `plan file write` enforces them), the walkthrough (names every human task and its reason before sign-off), the phase wording in steps 03/06/08/09, the `spek-plan` skill and the managed AGENTS.md store-access block ("ticking a task checkbox") all move to tasks.
+
+**Deviations**: The three agent-judgement criteria (ids and executors chosen while authoring, the mixed-work split on the reference scenario, naming human tasks at sign-off) are left unticked for the harbor run and the manual checks in Phase 4.2. The code-block example in `10-tasks.md` describes the technical-detail link in words, because the instruction-contract test requires every mention of `context.md` to be qualified as the plan's.
+
+**Files changed**:
+- `spektacular: internal/steps/plan/steps.go`
+- `spektacular: internal/steps/plan/steps_test.go`
+- `spektacular: internal/steps/plan/scaffold_test.go`
+- `spektacular: templates/steps/plan/10-tasks.md` (renamed from `10-phases.md`)
+- `spektacular: templates/steps/plan/03-architecture.md`
+- `spektacular: templates/steps/plan/06-implementation_detail.md`
+- `spektacular: templates/steps/plan/08-testing_approach.md`
+- `spektacular: templates/steps/plan/09-milestones.md`
+- `spektacular: templates/steps/plan/13-assemble.md`
+- `spektacular: templates/steps/plan/14-verification.md`
+- `spektacular: templates/steps/plan/18-walkthrough.md`
+- `spektacular: templates/scaffold/plan.md`
+- `spektacular: templates/scaffold/context.md`
+- `spektacular: templates/skills/workflows/spek-plan/SKILL.md`
+- `spektacular: templates/agents/store-access.md`
+- `spektacular: templates/work_files_test.go`
+- `spektacular: internal/agent/store_access_test.go`
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: cmd/autocommit_test.go`
+- `spektacular: cmd/cross_kind_test.go`
+- `spektacular: cmd/plan_export_test.go`
+
+**Discoveries**: `TestContextMdAlwaysQualified` scans every agent-facing template line, including lines inside code blocks, for bare `context.md` mentions. This repo's own AGENTS.md managed block is regenerated only by `init`, so it keeps "ticking a phase checkbox" until the user re-runs init.
+
+### 2026-09-25 — Phase 4.2: Update the glossary and end-to-end suites to tasks
+
+**What was done**: With the user's confirmation, wrote the repo-tier glossary entry `glossary/task.md` (spektacular store) and deleted `glossary/phase.md` through `knowledge write`/`knowledge delete`. The plan-workflow harbor oracles now use the `tasks` step and the `milestones & tasks` section. A new `TestPlanTasks` class asserts every task carries `**Id:**`, `**Repo:**`, `**Depends on:**` and `**Execution:**` (agent or human) and that `plan export --format json` succeeds. The reference `solve.sh` mints ids with `plan task-id`, writes the task format, and writes with `--from` instead of stdin. The implement-workflow fixture stays a legacy phase plan. Results: `make harbor-test-plan` passed 95/95 and `make harbor-test-implement` passed 14/14 (legacy plan implemented as a whole).
+
+**Deviations**: The first harbor attempt failed because the Docker daemon was not running; the user started it and both suites were rerun. The harbor-authored plan (JWT auth scenario) showed CLI-issued ids (13 `plan task-id` calls), explicit dependencies, and a separate `human` load-test task with a reason, named during walkthrough beat 2 before sign-off. That settles Phase 4.1's criteria on authored ids/executors and human-task naming, which are now ticked. The release-workflow/signing-secret split criterion (4.1) and "agent can be asked for one task" (3.3) were not exercised by harbor and remain for manual verification.
+
+**Files changed**:
+- `spektacular: tests/harbor/plan-workflow/tests/test_plan_workflow.py`
+- `spektacular: tests/harbor/plan-workflow/solution/solve.sh`
+- `spektacular: tests/harbor/plan-workflow/instruction.md`
+- `spektacular: .spektacular/knowledge/glossary/task.md` (via `knowledge write`)
+- `spektacular: .spektacular/knowledge/glossary/phase.md` (removed via `knowledge delete`)
+
+**Discoveries**: The old `solve.sh` piped documents to `plan file write` on stdin, which the CLI no longer accepts (`--from` is required). The reference solution had silently rotted, because it only runs by hand. Tags on always-applied glossary entries are reported as unreachable by `knowledge write`; the existing glossary entries carry them the same way.
+
+### 2026-09-25 — Phase 4.3: Document the plan task format, export and single-task implement
+
+**What was done**: Added a "Plan tasks" page following the plan's content outline: the task format with a per-line `ConfigKey` reference, the four human-task criteria and the split rule, `plan task-id` and `plan.task_id.provider`, `plan export` (pretty and JSON samples plus a field-by-field reference), per-task progress in `plan status`, single-task implement with its four refusals, and plans written before tasks. It is linked from the Resources nav. How it works now defines a task instead of a phase, shows `tasks` in the plan step tree, describes the walkthrough as mandatory and naming human tasks, and says Implement can run one task. Configuration documents `plan.task_id.provider` (default `uuid`) in the sample YAML and the `plan` key.
+
+**Deviations**: None. The phase wording in the tutorials (`src/content/tutorials/`) uses "phase" for a stage of spec-driven development, not the plan's work unit, and was left unchanged.
+
+**Files changed**:
+- `docs: src/pages/plan-tasks.mdx`
+- `docs: src/components/Nav.astro`
+- `docs: src/pages/how-it-works.mdx`
+- `docs: src/pages/configuration.mdx`
+
+**Discoveries**: None. `npm run build` succeeds, `npx astro check` reports 0 errors and 0 warnings, and the layout-HTML guard (`grep -nE "<div|<section|class=" src/pages/*.mdx`) returns nothing.

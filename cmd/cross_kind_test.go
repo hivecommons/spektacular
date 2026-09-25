@@ -120,7 +120,7 @@ func TestImplementStatus_AfterOtherKindFinishedReportsNoActiveWorkflow(t *testin
 		CompletedSteps: []string{
 			"new", "overview", "discovery", "architecture", "components",
 			"data_structures", "implementation_detail", "dependencies",
-			"testing_approach", "milestones", "phases", "open_questions",
+			"testing_approach", "milestones", "tasks", "open_questions",
 			"out_of_scope", "assemble", "verification", "write_plan",
 			"write_context", "write_research", "walkthrough", "finished",
 		},

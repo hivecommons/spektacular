@@ -173,7 +173,7 @@ func TestRenderedStoreAccessSectionBindsSubAgents(t *testing.T) {
 func TestRenderedStoreAccessSectionCoversInPlaceEdits(t *testing.T) {
 	rendered := renderStoreAccessSection(t)
 
-	require.Contains(t, rendered, "ticking a phase checkbox",
+	require.Contains(t, rendered, "ticking a task checkbox",
 		"the store-access section must name the in-place edit case explicitly")
 	require.Contains(t, rendered, "A store write is not a file copy",
 		"the store-access section must say why an in-place edit is not equivalent")

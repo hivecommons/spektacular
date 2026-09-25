@@ -24,7 +24,7 @@ func TestPlanScaffoldShape(t *testing.T) {
 		"## Implementation Detail",
 		"## Dependencies",
 		"## Testing Approach",
-		"## Milestones & Phases",
+		"## Milestones & Tasks",
 		"## Open Questions",
 		"## Out of Scope",
 	}
@@ -48,8 +48,11 @@ func TestPlanScaffoldShape(t *testing.T) {
 		require.Contains(t, between, "<!--", "section %q is missing a preceding HTML comment", h)
 	}
 
-	require.Contains(t, rendered, "#### - [ ] Phase", "Milestones & Phases must contain a checkbox phase heading")
-	require.Contains(t, rendered, "*Technical detail:*", "Milestones & Phases must contain a *Technical detail:* link")
+	require.Contains(t, rendered, "#### - [ ] Task:", "Milestones & Tasks must contain a checkbox task heading")
+	for _, line := range []string{"**Id:**", "**Repo:**", "**Depends on:**", "**Execution:**"} {
+		require.Contains(t, rendered, line, "the scaffold task must carry %s", line)
+	}
+	require.Contains(t, rendered, "*Technical detail:*", "Milestones & Tasks must contain a *Technical detail:* link")
 }
 
 // TestResearchScaffoldShape asserts the research scaffold's `##` headings are
