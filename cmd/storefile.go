@@ -21,6 +21,10 @@ import (
 // `file` subcommand group operates within.
 type storeDirFunc func(config.Config) string
 
+// writeValidator checks a document's body, stripped of front matter, before a
+// `file write` stores it. docPath is the store-relative path being written.
+type writeValidator func(cfg config.Config, docPath string, body []byte) error
+
 // stripLeadingFrontmatterBlocks removes zero or more leading YAML frontmatter
 // blocks from raw. Each `<kind> file write` is idempotent under repeated
 // invocation: the caller may pass source content that already carries a
@@ -170,7 +174,11 @@ func provenanceOpts(cfg config.Config, writePath string) metadata.UpdateOptions 
 // store (rooted at the resolved repo, namespaced by the project name) instead
 // of the central one, and writes are auto-stamped with provenance front
 // matter. Only the changelog group opts in.
-func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool) *cobra.Command {
+//
+// validate, when non-nil, checks a document's body before it is stored. A
+// refusal returns before anything is written, so the stored document is left
+// exactly as it was. Only the plan group sets one.
+func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool, validate writeValidator) *cobra.Command {
 	fileCmd := &cobra.Command{Use: "file", Short: short, RunE: runUnknownSubcommand}
 
 	// resolveStore picks the central store or, when repoRouted and the
@@ -226,6 +234,11 @@ func newStoreFileCmd(short string, dir storeDirFunc, requireID, repoRouted bool)
 				opts.Plan = prov.Plan
 			}
 			body := stripLeadingFrontmatterBlocks(content)
+			if validate != nil {
+				if err := validate(cfg, args[0], body); err != nil {
+					return err
+				}
+			}
 			merged, err := metadata.Merge(existing, body, opts)
 			if err != nil {
 				return output.NewError("metadata_merge_failed", err.Error()).WithResource(args[0])

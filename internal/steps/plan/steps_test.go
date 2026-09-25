@@ -102,7 +102,7 @@ func TestGatheringStepsProceedWithoutApprovalGates(t *testing.T) {
 		{"dependencies", dependencies()},
 		{"testing_approach", testingApproach()},
 		{"milestones", milestones()},
-		{"phases", phases()},
+		{"tasks", tasks()},
 		{"open_questions", openQuestions()},
 		{"out_of_scope", outOfScope()},
 	}
@@ -175,7 +175,7 @@ func TestStepsOrderMatchesExpected(t *testing.T) {
 		"dependencies",
 		"testing_approach",
 		"milestones",
-		"phases",
+		"tasks",
 		"open_questions",
 		"out_of_scope",
 		"assemble",
@@ -228,7 +228,7 @@ func TestFSMWalkFromNewToFinished(t *testing.T) {
 		"dependencies",
 		"testing_approach",
 		"milestones",
-		"phases",
+		"tasks",
 		"open_questions",
 		"out_of_scope",
 		"assemble",
@@ -638,21 +638,73 @@ func TestArchitectureStepRequiresRepoAttribution(t *testing.T) {
 		"architecture must record the attribution in the plan's context document")
 }
 
-// TestPhasesStepCarriesRepoAttributionIntoPlanAndContext asserts the phases
-// instruction carries attribution into both outputs: plan.md phases carry a
-// dedicated Repo line and context.md file changes carry the repo-name
-// prefix.
-func TestPhasesStepCarriesRepoAttributionIntoPlanAndContext(t *testing.T) {
-	out := renderStep(t, phases())
+// TestTasksStepCarriesRepoAttributionIntoPlanAndContext asserts the tasks
+// instruction carries attribution into both outputs: plan.md tasks carry a
+// dedicated Repo line naming exactly one repo, and context.md file changes
+// carry the repo-name prefix.
+func TestTasksStepCarriesRepoAttributionIntoPlanAndContext(t *testing.T) {
+	out := renderStep(t, tasks())
 
-	// Criterion 2: every phase carries a dedicated Repo line naming its
-	// target repo, always present regardless of repo count.
 	require.Contains(t, out, "**Repo:**",
-		"phases must direct plan.md to include a dedicated Repo line naming the phase's target repo")
-
-	// Criterion 2: context.md file changes carry the repo prefix.
+		"tasks must direct plan.md to include a dedicated Repo line naming the task's target repo")
+	require.Contains(t, out, "exactly one",
+		"a task is carried out in exactly one repo")
 	require.Contains(t, out, "<repo>:path:line",
-		"phases must direct context.md File-changes to carry the repo-name prefix")
+		"tasks must direct context.md File-changes to carry the repo-name prefix")
+}
+
+// TestTasksStepTeachesTheTaskFormat asserts the tasks step writes tasks in the
+// format plan file write validates: an id issued by the CLI, one repo, an
+// explicit dependency declaration and an executor decided against the
+// design's four human-task criteria, with mixed work split.
+func TestTasksStepTeachesTheTaskFormat(t *testing.T) {
+	out := renderStep(t, tasks())
+
+	for _, want := range []string{
+		"#### - [ ] Task:",
+		"**Id:**",
+		"spektacular plan task-id",
+		"**Depends on:** none",
+		"- <id> — <title>",
+		"**Execution:** agent",
+		"**Execution:** human — <reason>",
+		"### Task: <title matching plan.md>",
+		".spektacular/work/test/tasks_plan.md",
+		".spektacular/work/test/tasks_context.md",
+	} {
+		require.Contains(t, out, want)
+	}
+
+	// The four criteria for a human task, hand-copied from the design.
+	for _, criterion := range []string{
+		"secrets or access an agent will not have",
+		"action outside the repo",
+		"judgement that must be a person's",
+		"verification only a person can do",
+	} {
+		require.Contains(t, out, criterion)
+	}
+	require.Contains(t, out, "Split mixed work", "work needing both an agent and a person is split")
+	require.Contains(t, out, "depends on the agent's", "the person's task depends on the agent's")
+	require.Contains(t, out, "Never invent an id")
+}
+
+// TestVerificationChecksTaskLines asserts verification checks every task's
+// structured lines.
+func TestVerificationChecksTaskLines(t *testing.T) {
+	out := renderStep(t, verification())
+	for _, want := range []string{"## Milestones & Tasks", "## Per-Task Technical Notes", "**Id:**", "**Repo:**", "**Depends on:**", "**Execution:**"} {
+		require.Contains(t, out, want)
+	}
+}
+
+// TestWalkthroughNamesHumanTasks asserts the walkthrough names every human
+// task and its reason before sign-off.
+func TestWalkthroughNamesHumanTasks(t *testing.T) {
+	out := renderStep(t, walkthrough())
+	require.Contains(t, out, "name every task whose `**Execution:**` is `human`, with its reason")
+	require.Contains(t, out, "Before asking for sign-off")
+	require.Contains(t, out, "If there are none, say so")
 }
 
 // --- Phase 3.2: the plan workflow honours the designs a spec references ---

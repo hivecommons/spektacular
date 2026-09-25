@@ -24,7 +24,7 @@ import (
 // command is the CLI invocation prefix (workflow.Config.Command), rendered into
 // the template via {{config.command}} to match the convention used by every
 // other runtime-rendered step template, and as {{command}} for shared partials.
-func resumeInstruction(command, kind, name, currentStep string) (string, error) {
+func resumeInstruction(command, kind, name, currentStep, task string) (string, error) {
 	templatePath := "steps/resume.md"
 	if kind == "implement" {
 		templatePath = "steps/resume_implement.md"
@@ -35,6 +35,7 @@ func resumeInstruction(command, kind, name, currentStep string) (string, error) 
 		"kind":         kind,
 		"name":         name,
 		"current_step": currentStep,
+		"task":         task,
 	})
 }
 
@@ -79,12 +80,17 @@ func emitResumeReport(command, expectedKind string, state *workflow.State) error
 			WithNextAction(instruction)
 	}
 
-	instruction, err := resumeInstruction(command, state.Kind, name, state.CurrentStep)
+	task, _ := state.Data["task"].(string)
+	instruction, err := resumeInstruction(command, state.Kind, name, state.CurrentStep, task)
 	if err != nil {
 		return err
 	}
+	what := fmt.Sprintf("a %s workflow (%q)", state.Kind, name)
+	if task != "" {
+		what = fmt.Sprintf("a %s workflow (%q, task %s)", state.Kind, name, task)
+	}
 	return output.NewError("workflow_in_progress",
-		fmt.Sprintf("a %s workflow (%q) is already in progress at step %q", state.Kind, name, state.CurrentStep)).
+		fmt.Sprintf("%s is already in progress at step %q", what, state.CurrentStep)).
 		WithResource(name).
 		WithState(state.CurrentStep, nil).
 		WithNextAction(instruction)

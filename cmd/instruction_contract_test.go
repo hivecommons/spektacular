@@ -62,8 +62,8 @@ var stepTemplateTable = []stepTemplateRow{
 	{"plan", "implementation_detail", "steps/plan/06-implementation_detail.md", "dependencies"},
 	{"plan", "dependencies", "steps/plan/07-dependencies.md", "testing_approach"},
 	{"plan", "testing_approach", "steps/plan/08-testing_approach.md", "milestones"},
-	{"plan", "milestones", "steps/plan/09-milestones.md", "phases"},
-	{"plan", "phases", "steps/plan/10-phases.md", "open_questions"},
+	{"plan", "milestones", "steps/plan/09-milestones.md", "tasks"},
+	{"plan", "tasks", "steps/plan/10-tasks.md", "open_questions"},
 	{"plan", "open_questions", "steps/plan/11-open_questions.md", "out_of_scope"},
 	{"plan", "out_of_scope", "steps/plan/12-out_of_scope.md", "assemble"},
 	{"plan", "assemble", "steps/plan/13-assemble.md", "verification"},
@@ -279,7 +279,7 @@ func workflowInstructionCorpus(t *testing.T, command, installDir string) []instr
 	}
 
 	for _, kind := range contractWorkflows {
-		body, err := resumeInstruction(command, kind, "demo-feature", "some_step")
+		body, err := resumeInstruction(command, kind, "demo-feature", "some_step", "")
 		require.NoError(t, err)
 		corpus = append(corpus, instructionSource{"steps/resume.md (" + kind + ")", body})
 
@@ -514,7 +514,7 @@ func TestImplementStartListsPlanDocuments(t *testing.T) {
 			command + " plan file read <plan_name>/plan.md",
 			command + " plan file read <plan_name>/context.md",
 			command + " plan file read <plan_name>/research.md",
-			"the per-phase technical detail",
+			"the per-task technical detail",
 			"the decision log",
 			".spektacular/working-context.md",
 		} {

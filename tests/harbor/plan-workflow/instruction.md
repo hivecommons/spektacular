@@ -37,7 +37,7 @@ The skill will guide you through every plan step from `overview` through
   step template references (`spawn-planning-agents`). Also load the project's
   always-apply conventions in full with `spektacular knowledge always-applied`,
   as the step instructs.
-- At the `phases` step, retrieve the `spawn-implementation-agents` skill the
+- At the `tasks` step, retrieve the `spawn-implementation-agents` skill the
   template references.
 - At the `verification` step, retrieve the `gather-project-metadata` and
   `determine-feature-slug` skills the template references. Then follow the

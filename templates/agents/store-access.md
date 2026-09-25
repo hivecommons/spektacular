@@ -32,7 +32,7 @@ a stored artifact: a directory listing can show entries Spektacular does not
 consider valid, and omits the metadata the CLI reports alongside each one.
 
 This includes an edit that looks too small to be worth a command, such as
-ticking a phase checkbox in a plan or appending a line to a changelog record.
+ticking a task checkbox in a plan or appending a line to a changelog record.
 Read the document with the CLI, apply the change, and write it back with the
 CLI. A store write is not a file copy: it merges Spektacular's lifecycle
 metadata, preserving a created date and carrying forward fields such as a

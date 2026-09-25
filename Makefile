@@ -1,5 +1,5 @@
 BINARY := spektacular
-VERSION := 0.15.1
+VERSION := 0.23.0
 
 HARBOR_AUTH := CLAUDE_CODE_OAUTH_TOKEN=$$(python3 -c "import json; print(json.load(open('$$HOME/.claude/.credentials.json'))['claudeAiOauth']['accessToken'])")
 HARBOR_MODEL := claude-sonnet-4-6

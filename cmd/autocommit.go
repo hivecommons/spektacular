@@ -110,14 +110,20 @@ func gotoWithAutoCommit(
 	// a milestone, where nothing is due and the transition must behave
 	// exactly as it does with automatic commits off — no message asked for,
 	// and any message the agent staged anyway left untouched.
+	//
+	// An implement completion commit in full mode also covers any milestone
+	// its run just finished: a single-task run that ends early can tick the
+	// last task of a milestone, and that milestone is recorded here rather
+	// than asked for again by a later run.
 	var due []int
-	if point == autocommit.PointMilestone {
+	if point == autocommit.PointMilestone ||
+		(point == autocommit.PointCompletion && kind == "implement" && wfCfg.AutoCommit == config.AutoCommitFull) {
 		milestones, err := dueMilestones(cfg, root, wf, specName)
 		if err != nil {
 			return err
 		}
 		due = milestones
-		if len(due) == 0 {
+		if point == autocommit.PointMilestone && len(due) == 0 {
 			err := wf.Goto(stepVal)
 			flushBuffer(cmd, &buf)
 			return err
@@ -295,7 +301,7 @@ func targetNames(targets []autocommit.Target) string {
 // milestones have already been committed, so none is committed twice.
 const committedMilestonesKey = "committed_milestones"
 
-// dueMilestones reports the milestones whose phases are now all ticked and
+// dueMilestones reports the milestones whose work items are now all ticked and
 // that have not been committed yet. It reads the plan through the store, the
 // same way the implement steps reach it.
 func dueMilestones(cfg config.Config, root string, wf *workflow.Workflow, name string) ([]int, error) {

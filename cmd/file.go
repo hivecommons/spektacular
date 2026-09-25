@@ -10,5 +10,6 @@ func init() {
 		func(c config.Config) string { return c.Spec.Config.Directory },
 		false,
 		false,
+		nil,
 	))
 }

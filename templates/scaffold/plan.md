@@ -76,7 +76,7 @@
   IMPLEMENTATION DETAIL
   High-level only. Sketch new patterns being introduced, major code-shape
   changes, and code-structure UX — enough for a reviewer to spot missing
-  patterns or design gaps. This is NOT per-phase file:line work — that
+  patterns or design gaps. This is NOT per-task file:line work — that
   belongs in context.md. If you find yourself writing "in file X at line Y",
   stop and move it to context.md.
 -->
@@ -98,7 +98,7 @@
   TESTING APPROACH
   High-level overview of the testing strategy: what kinds of tests
   (unit, integration, contract, regression), which components get the most
-  coverage, and what the load-bearing assertions are. Per-phase testing
+  coverage, and what the load-bearing assertions are. Per-task testing
   detail — which specific tests live in which specific files — stays in
   context.md.
 -->
@@ -107,25 +107,33 @@
 
 
 <!--
-  MILESTONES & PHASES
+  MILESTONES & TASKS
   2-4 milestones. Each milestone leads with a "What changes" summary
   paragraph describing the user-visible difference when the milestone lands.
-  Each phase has a 2-4 sentence plain-language summary, a *Technical detail:*
+  Each task is one unit of work in exactly one registered repo, for one
+  executor, and carries **Id:** (from `plan task-id`), **Repo:**,
+  **Depends on:** (`none` or `- <id> — <title>` lines) and **Execution:**
+  (`agent`, or `human — <reason>`) lines. Each task has a 2-4 sentence
+  plain-language summary, a *Technical detail:*
   link to context.md, and an **Acceptance criteria**: checkbox list with
   outcome statements (not shell commands). No file:line references in
-  plan.md phase content — those live in context.md.
+  plan.md task content — those live in context.md.
 -->
-## Milestones & Phases
+## Milestones & Tasks
 
 ### Milestone 1: <user-facing title>
 
 **What changes**: <one-paragraph description of the user-visible difference when this milestone lands. Written in plain language, no file paths, no commands.>
 
-#### - [ ] Phase 1.1: <short title>
+#### - [ ] Task: <short title>
+**Id:** <id from plan task-id>
+**Repo:** <one registered repo name>
+**Depends on:** none
+**Execution:** agent
 
-<2-4 sentence summary of what this phase does and why. Plain language. No file:line references. No shell commands.>
+<2-4 sentence summary of what this task does and why. Plain language. No file:line references. No shell commands.>
 
-*Technical detail:* [context.md#phase-11](./context.md#phase-11-<slug>)
+*Technical detail:* [context.md#task-<slug>](./context.md#task-<slug>)
 
 **Acceptance criteria**:
 

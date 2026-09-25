@@ -1,6 +1,6 @@
 ## Step {{step}}: {{title}}
 
-Produce durable changelog records for this feature, grounded in what was actually built. This step runs last, after every phase is implemented and verified and the test plan is written, so the records reflect the real outcome — including anything that turned out differently than planned — not the original intent.
+Produce durable changelog records for this feature, grounded in what was actually built. This step runs last, after every task is implemented and verified and the test plan is written, so the records reflect the real outcome — including anything that turned out differently than planned — not the original intent.
 
 Two kinds of record are written every time:
 
@@ -16,7 +16,7 @@ Read the feature's spec and the plan's accumulated implementation history throug
 {{config.command}} plan file read {{plan_name}}/plan.md
 ```
 
-From the spec, take the Overview/Requirements — the "why it matters" framing for a reader who has not seen the spec. From the plan, take the `{{changelog_section_name}}` section — the phase-by-phase implementation audit log already written by the `update_changelog` step, including each phase's **What was done**, **Deviations**, **Files changed**, and **Discoveries** entries. This is where the actual-vs-planned divergence is captured; lean on it rather than re-deriving anything from the original plan text.
+From the spec, take the Overview/Requirements — the "why it matters" framing for a reader who has not seen the spec. From the plan, take the `{{changelog_section_name}}` section — the task-by-task implementation audit log already written by the `update_changelog` step (phase by phase in a plan written before tasks), including each entry's **What was done**, **Deviations**, **Files changed**, and **Discoveries** entries. This is where the actual-vs-planned divergence is captured; lean on it rather than re-deriving anything from the original plan text.
 
 ### Step 2: Identify affected repos
 
@@ -25,7 +25,7 @@ From the spec, take the Overview/Requirements — the "why it matters" framing f
 
 If a repo you changed is missing from that roster, or you need its materialization state, run `{{config.command}} repo list`.
 
-From the plan's `{{changelog_section_name}}` section, collect every path in the phase entries' **Files changed** lists and match each to a repo:
+From the plan's `{{changelog_section_name}}` section, collect every path in the entries' **Files changed** lists and match each to a repo:
 
 - Paths carrying a `<repo-name>: ` prefix belong to that named repo; a prefix is required whenever more than one repo is registered.
 - Paths with no prefix belong to the only registered repo.
@@ -38,7 +38,7 @@ Author a self-contained Markdown record covering the entire feature, understanda
 
 - **What was built** — a plain-language description grounded in the plan's `{{changelog_section_name}}` entries across all affected repos.
 - **Why it matters / what it enables** — drawn from the spec's framing.
-- **Deviations from the plan** — anything the phase entries recorded as different from what was originally planned. State "None" explicitly if there were none.
+- **Deviations from the plan** — anything the entries recorded as different from what was originally planned. State "None" explicitly if there were none.
 
 Stage it with the `Write` tool at `.spektacular/tmp/changelog_project.md`, then commit it and remove the scratch file:
 
@@ -54,7 +54,7 @@ Confirm the write with `{{config.command}} changelog file read {{plan_name}}.md`
 For **each** affected repo identified in Step 2, including the project's own repo, author a repo-scoped record covering only that repo's changes. This record is the repo's release note: it is the only changelog written into that repo, so it must open with something a user can read cold:
 
 - **User-facing summary first** — open the body with a 2-4 sentence summary of what this change delivers in this repo, written for a reader who has never seen the plan. No file paths, no internal package names, no implementation detail; describe the behaviour change users of this repo will experience.
-- **What changed in this repo** — grounded in the phase entries' Files-changed and What-was-done items that touched this repo. Include only that repo's changes.
+- **What changed in this repo** — grounded in the entries' Files-changed and What-was-done items that touched this repo. Include only that repo's changes.
 - **Why** — the same framing from the spec, tightened to why *this repo* got the change.
 - A human-readable reference line directly under the summary naming the project and the spec/plan identifier — e.g. `> Derived from project <project> (<source>), spec/plan {{plan_name}}. See the project-level record for the full feature.`
 

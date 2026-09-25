@@ -75,3 +75,18 @@ func TestImplementSkillResumeReadsPlanFirst(t *testing.T) {
 	require.Equal(t, 1, strings.Count(body, "{{> partials/implement-plan-documents}}"),
 		"the plan-documents partial must be included exactly once")
 }
+
+// TestImplementSkillDocumentsSingleTaskRuns verifies the implement playbook
+// tells the agent how to start a run for one task, and how to find a task's
+// id when the user names it by title.
+func TestImplementSkillDocumentsSingleTaskRuns(t *testing.T) {
+	content, err := FS.ReadFile("skills/workflows/spek-implement/SKILL.md")
+	require.NoError(t, err)
+	body := string(content)
+
+	require.Contains(t, body, `implement new --data '{"name": "<plan_name>", "task": "<task_id>"}'`)
+	require.Contains(t, body, "plan export <plan_name> --format json")
+	for _, code := range []string{"task_not_found", "task_completed", "task_dependencies_incomplete", "task_requires_human"} {
+		require.Contains(t, body, code)
+	}
+}

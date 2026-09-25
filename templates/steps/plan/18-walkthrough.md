@@ -13,7 +13,7 @@ Begin by reading all three committed documents back through the CLI — ground t
 Present the plan as a colleague would explain it aloud, not as a recitation of `{{plan_path}}`'s section text. Pace it as a small number of natural beats with a brief pause between each, rather than one uninterrupted monologue or a rigid sign-off gate after every point:
 
 1. The chosen approach and why it was picked over the alternatives.
-2. How the work breaks into stages/phases.
+2. How the work breaks into tasks under its milestones. Before asking for sign-off, name every task whose `**Execution:**` is `human`, with its reason, so the user knows which work needs a person. If there are none, say so.
 3. What was deliberately left out of scope, and why.
 4. The drafting assumptions — the judgement calls made while drafting. Read the `## Drafting assumptions` section of `{{research_path}}` (via `{{config.command}} plan file read {{plan_name}}/research.md`) and walk its entries one by one — decision, rationale, rejected alternatives — inviting the user to challenge each. This beat is first-class: raise the assumptions explicitly rather than leaving them as a section the user could read. A challenged assumption is a change request — handle it through the apply-immediately path below.
 

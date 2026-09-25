@@ -219,7 +219,7 @@ func runPlanGoto(cmd *cobra.Command, _ []string) error {
 func runPlanStatus(cmd *cobra.Command, args []string) error {
 	if schema, _ := cmd.Flags().GetBool("schema"); schema {
 		if len(args) == 1 {
-			s := commandSchema{Input: nil, Output: artifactStatusOutputSchema}
+			s := commandSchema{Input: nil, Output: planArtifactStatusOutputSchema}
 			return output.Write(cmd.OutOrStdout(), s, "")
 		}
 		s := commandSchema{Input: nil, Output: planStatusOutputSchema}
@@ -242,7 +242,7 @@ func runPlanStatus(cmd *cobra.Command, args []string) error {
 
 	if len(args) == 1 {
 		st := store.NewSourceStore(root, "project")
-		return runArtifactStatus(cmd, "plan", args[0], plan.PlanFilePath(cfg.Plan.Config.Directory, args[0]), stateFilePath(dataDir), cfg.Command, steps, st, strictPlanStatusHook(cfg, st, args[0]))
+		return runArtifactStatus(cmd, "plan", args[0], plan.PlanFilePath(cfg.Plan.Config.Directory, args[0]), stateFilePath(dataDir), cfg.Command, steps, st, strictPlanStatusHook(cfg, st, args[0]), planTaskProgress)
 	}
 
 	// Refuse to report on an in-progress workflow of a different kind — its

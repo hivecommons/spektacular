@@ -8,12 +8,12 @@ git, not a document written to Spektacular — the two are different things.
 
 Write the message yourself, from the work you just finished:
 
-- The subject line must name `{{commit.spec_name}}`.{{#commit.milestone}} It must also name the milestone it completes, spelled `Milestone N`.{{/commit.milestone}}
+- The subject line must name `{{commit.spec_name}}`.{{#commit.milestone}} It must also name the milestone it completes, spelled `Milestone N`.{{/commit.milestone}}{{#commit.may_close_milestone}} If the task you just ticked was the last open task of its milestone, it must also name that milestone, spelled `Milestone N`; the CLI refuses the transition until it does.{{/commit.may_close_milestone}}
 - The body says what was specified, planned or implemented — the substance of
   the work, not a generic label.
 
 {{#commit.milestone}}
-Include a message **only if** the phase you just ticked was the last open phase
+Include a message **only if** the task you just ticked was the last open task
 of its milestone. If it was not, advance with no `commit_message_from` at all
 and no commit is made. If a milestone did just finish, the CLI refuses the
 transition until you supply a message naming it.

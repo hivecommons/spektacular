@@ -41,6 +41,7 @@ same commit.
 
 import json
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -69,7 +70,7 @@ EXPECTED_STEP_ORDER = [
     "dependencies",
     "testing_approach",
     "milestones",
-    "phases",
+    "tasks",
     "open_questions",
     "out_of_scope",
     "assemble",
@@ -87,7 +88,7 @@ EXPECTED_STEP_ORDER = [
 # updated in the same commit.
 EXPECTED_SKILLS_PER_STEP = {
     "discovery": frozenset({"spawn-planning-agents"}),
-    "phases": frozenset({"spawn-implementation-agents"}),
+    "tasks": frozenset({"spawn-implementation-agents"}),
     "assemble": frozenset(
         {
             "gather-project-metadata",
@@ -196,7 +197,7 @@ EXPECTED_PLAN_SECTIONS = (
     "implementation detail",
     "dependencies",
     "testing approach",
-    "milestones & phases",
+    "milestones & tasks",
     "open questions",
     "out of scope",
 )
@@ -1029,6 +1030,55 @@ class TestPlanMdContent:
             f"Section '{section}' too short ({len(content)} chars, "
             f"need ≥ {MIN_SECTION_LENGTH})"
         )
+
+
+# Hand-maintained structured lines every task in plan.md must carry — the
+# independent oracle for the task format (design: plan-task-graph.md).
+TASK_HEADING_RE = re.compile(r"^####\s+-\s+\[[ xX]\]\s+Task:\s*(.+)$", re.MULTILINE)
+REQUIRED_TASK_LINES = ("**Id:**", "**Repo:**", "**Depends on:**", "**Execution:**")
+
+
+def _task_blocks(text: str) -> list:
+    """Return (title, block) for every task heading in the plan."""
+    matches = list(TASK_HEADING_RE.finditer(text))
+    blocks = []
+    for i, m in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        block = text[m.end():end]
+        nxt = re.search(r"^#{2,3}\s", block, re.MULTILINE)
+        if nxt:
+            block = block[: nxt.start()]
+        blocks.append((m.group(1).strip(), block))
+    return blocks
+
+
+class TestPlanTasks:
+    """plan.md describes its work as tasks in the validated task format."""
+
+    def test_plan_has_tasks(self):
+        plan_path, _, _ = plan_artefact_paths()
+        assert _task_blocks(plan_path.read_text()), "plan.md has no '#### - [ ] Task:' headings"
+
+    def test_every_task_carries_its_structured_lines(self):
+        plan_path, _, _ = plan_artefact_paths()
+        for title, block in _task_blocks(plan_path.read_text()):
+            for line in REQUIRED_TASK_LINES:
+                assert line in block, f"task {title!r} has no {line} line"
+            execution = re.search(r"^\*\*Execution:\*\*\s*(\S+)", block, re.MULTILINE)
+            assert execution and execution.group(1) in ("agent", "human"), (
+                f"task {title!r} has an Execution line that is neither agent nor human"
+            )
+
+    def test_plan_exports(self):
+        name = find_plan_name()
+        result = subprocess.run(
+            ["spektacular", "plan", "export", name, "--format", "json"],
+            cwd=PROJECT_DIR, capture_output=True, text=True,
+        )
+        assert result.returncode == 0, f"plan export failed: {result.stdout}{result.stderr}"
+        exported = json.loads(result.stdout)
+        assert exported["kind"] == "plan"
+        assert exported["tasks"], "plan export returned no tasks"
 
 
 class TestContextAndResearch:
