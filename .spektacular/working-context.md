@@ -38,3 +38,29 @@ plan and implementation together, but that bare name cannot address any phase's 
 - Docs site repo (`docs` = spektacular-website) in scope: command ref, config ref, migration note.
 - Design doc offer for issue's command formats: declined. User: "I am not 100% wed to the solution, the main thing is consistency." → issue's command shapes and no-synonym rule are Technical Approach direction, not constraints. Hard break remains a constraint (explicit user choice).
 - Spec approved by user ("This is great, commit") and written to the store 2026-09-25. Dev-version fix was committed separately by the user (1dfab1f).
+
+---
+# Plan workflow — 000059_normalise-artifact-addressing (started 2026-09-25)
+- Plan workflow started from spec 000059 (user chose it). Spec context above still applies.
+- Discovery done: research.md + assumptions.md in .spektacular/work/000059_normalise-artifact-addressing/.
+- Key learnings: one builder `newStoreFileCmd` (cmd/storefile.go:181) serves all 3 stores → put a per-kind address resolver there. Feature names are ^[a-z0-9_-]+$ so any '.' = extension, any '/' = joined path. Central list paths are project-root-relative today; --repo changelog already config(repo.yaml)-relative. No design refs on spec. Docs site has no command ref / error-code list / migration page (new content needed); docs repo on branch f-normalize-commands. Installed skills regenerate via `go run . init claude|bob` (picks up unrelated drift). Harbor suites hold old spellings (hand-maintained oracles).
+- Architecture chosen: new `internal/artifact` address package + address-driven `newStoreFileCmd`; refusals built in cmd with next_action = same command correctly spelled; list path relative to config folder (.spektacular/ or repo.yaml folder); workflow-status forms get plan_document + relative plan_path; new docs page src/pages/documents.mdx. Details in work/ assumptions.md.
+- Components drafted (components.md).
+- Data structures drafted.
+- Implementation detail drafted.
+- Dependencies drafted.
+- Testing approach drafted.
+- Milestones: M1 addressing+callers+harbor, M2 locations+status, M3 docs.
+- Tasks drafted (10 tasks, ids from plan task-id; harbor run is a human task).
+- Open questions: only self-hosting window (dev build refuses old spellings before templates move) — follow next_action.
+- Out of scope drafted.
+- Assembled and staged plan/context/research templates in .spektacular/tmp/.
+- Verification done: removed shell commands from plan.md prose; CLI command names kept as product surface; docs content examples kept per docs convention.
+- plan.md written to store.
+- context.md written.
+- All three docs written; now in walkthrough.
+- User: 000058 has been released (plan deps updated).
+- User: skip harbor runs, they'll test manually → task 7558648e is now 'Manually test a full run' (human); harbor update task kept (knowledge testing-architecture requires oracles updated).
+- User: files may not be on disk; all store reads via CLI → new M2 task 32733cb9 removes absolute path template vars and makes new/goto/status results config-relative + address.
+- Knowledge updated (user-approved): working-with-files-from-steps.md + workflow-steps.md now forbid store paths in agent-facing output.
+- User signed off plan walkthrough (2026-09-25); advancing to finished.

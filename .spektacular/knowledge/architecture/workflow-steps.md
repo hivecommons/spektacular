@@ -1,5 +1,5 @@
 ---
-tags: [workflow, fsm, step, template]
+tags: [workflow, fsm, step, template, addressing]
 ---
 
 # Workflow Step Architecture
@@ -78,12 +78,11 @@ order (e.g. `01-overview.md`). The template receives the bundle constructed in
 {{step}}          — step name (snake_case)
 {{title}}         — step name formatted as title case
 {{next_step}}     — the step this one advances to
-{{spec_path}}     — absolute path to the spec file
-{{spec_name}}     — the spec's name
+{{spec_name}}     — the spec's name (its address; plan and implement steps get {{plan_name}})
 {{config.command}} — the CLI binary name (e.g. "spektacular")
 ```
 
-Templates should instruct the agent what to do, where to read/write, and what to call next.
+Templates should instruct the agent what to do, where to read/write, and what to call next. A template reaches a store document only through a CLI read by address (`{{config.command}} spec file read {{spec_name}}`, `{{config.command}} plan file read {{plan_name}} plan`), never through a file path. The store may not be on disk. See `architecture/working-with-files-from-steps.md`.
 
 ### 4. Add a template for the spec scaffold if needed
 

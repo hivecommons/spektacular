@@ -1,0 +1,10 @@
+- **Error messages must describe the problem and suggest remediation** (spektacular) — both new refusals (`unexpected_extension`, `document_required`) and the upgraded `not_found` must carry a runnable `next_action` that restates the same command correctly spelled; tests assert the next_action content, not just that it is non-empty.
+- **Spektacular's own files are written through Spektacular** (spektacular) — this feature changes the very CLI spellings that convention's instructions and every template use, so every template and the knowledge entry's examples must use the new addressing, and plan/spec/changelog reads during implementation go through the CLI.
+- **Tests must not depend on order** (spektacular) — the many rewritten `cmd` tests execute the shared cobra tree; they must go through `runRootCmd`/`resetRootCmd`, especially now plan verbs change arity.
+- **Passing tests are required before calling work done** (spektacular) — ~80 CLI test invocations and ~20 template assertions change spelling; the full shuffled test suite must be green before any milestone is reported done.
+- **MDX authoring conventions** (docs) — the new document-command reference page and configuration.mdx edits must use named-block components and fenced code blocks, with no layout HTML in page bodies.
+- **Site layout conventions** (docs) — the new page is composed from existing `src/components/sections/` components (`Hero`, `Section`, `Prose`, `ConfigurationKeys`) and added to the Resources nav.
+- **Alternate section background shading** (docs) — sections on the new page alternate `surface` explicitly.
+- **Label before filename in file-scoped reference headings** (docs) — the command reference headings lead with a plain-language label (for example "Specs: spec file"), not a bare command name.
+- **Plans must sketch content structure** (docs) — the docs tasks carry a Content outline/example with the exact commands, fields and error codes verified here.
+- **No em dashes** (docs) — all authored docs prose, README/CHANGELOG entries and commit messages avoid em dashes.
