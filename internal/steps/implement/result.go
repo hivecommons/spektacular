@@ -15,8 +15,9 @@ type StepEntry struct {
 }
 
 // StatusResult is returned by the status subcommand. UncheckedPhases is the
-// count of `#### - [ ] Phase` checkbox headings still open in the plan file;
-// zero if the plan file cannot be read.
+// count of open work items in the plan file — tasks, or `#### - [ ] Phase`
+// headings in a plan written before tasks; zero if the plan file cannot be
+// read. The field keeps its name so existing readers keep working.
 type StatusResult struct {
 	PlanName        string      `json:"plan_name"`
 	PlanPath        string      `json:"plan_path"`
@@ -26,6 +27,9 @@ type StatusResult struct {
 	Progress        string      `json:"progress"`
 	Steps           []StepEntry `json:"steps"`
 	UncheckedPhases int         `json:"unchecked_phases"`
+	// Task is the id of the one task a single-task run implements; absent
+	// for a whole-plan run.
+	Task string `json:"task,omitempty"`
 }
 
 // StepsResult is returned by the steps subcommand.

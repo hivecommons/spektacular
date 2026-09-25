@@ -13,6 +13,7 @@ import (
 
 	"github.com/cbroglie/mustache"
 	"github.com/hivecommons/spektacular/internal/autocommit"
+	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/hivecommons/spektacular/templates"
@@ -114,11 +115,14 @@ func WriteStepResult(
 	}
 	// The git-commit instruction goes before the working-context footer, so
 	// the footer stays last on every continuing step exactly as before.
-	if point := autocommit.LeadsToCommit(cfg.AutoCommit, cfg.Kind, req.StepName); point != autocommit.PointNone {
+	if point := autocommit.LeadsToCommit(cfg.AutoCommit, cfg.Kind, req.StepName, req.NextStep); point != autocommit.PointNone {
 		commitVars := maps.Clone(vars)
 		commitVars["commit"] = map[string]any{
 			"point":     string(point),
 			"milestone": point == autocommit.PointMilestone,
+			// A completion commit that ends a single-task run early can also
+			// close a milestone in full mode, and must then name it.
+			"may_close_milestone": point == autocommit.PointCompletion && cfg.AutoCommit == config.AutoCommitFull && req.StepName == "update_changelog",
 			"kind":      cfg.Kind,
 			"spec_name": instanceName,
 			"tmp_path":  commitMessageTmpPath,

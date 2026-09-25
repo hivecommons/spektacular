@@ -407,7 +407,7 @@ Add task totals and a per-task list (completion plus acceptance criteria met out
 
 **Validation point**: On a two-task fixture plan, the first single-task run ticks only its task and ends without wrap-up. The second run ticks the other task and performs the wrap-up. Each refusal case returns its structured error without starting a workflow. `implement status` shows the task id, a whole-plan run on a legacy plan still completes, and the full Go test suite passes.
 
-#### - [ ] Phase 3.1: Select a task when starting implement
+#### - [x] Phase 3.1: Select a task when starting implement
 **Repo:** spektacular
 
 Let `implement new` take a task id, refuse tasks that cannot start before any workflow state is created, and record the chosen task so status and resume report it. Without a task, implement starts exactly as today.
@@ -415,12 +415,12 @@ Let `implement new` take a task id, refuse tasks that cannot start before any wo
 *Technical detail:* [context.md#phase-31](./context.md#phase-31-select-a-task-when-starting-implement)
 
 **Acceptance criteria**:
-- [ ] Starting a run for an unknown task, a completed task, a task with an incomplete dependency (the error lists it), or a human task (the error gives its reason) is refused with a structured, actionable error and no workflow is started.
-- [ ] Starting a run for a legacy plan with a task id fails with an error saying the plan has no task ids.
-- [ ] A valid task starts a run; implement status and the resume report include the selected task's id.
-- [ ] Starting a run without a task behaves as before this feature.
+- [x] Starting a run for an unknown task, a completed task, a task with an incomplete dependency (the error lists it), or a human task (the error gives its reason) is refused with a structured, actionable error and no workflow is started.
+- [x] Starting a run for a legacy plan with a task id fails with an error saying the plan has no task ids.
+- [x] A valid task starts a run; implement status and the resume report include the selected task's id.
+- [x] Starting a run without a task behaves as before this feature.
 
-#### - [ ] Phase 3.2: Route feature wrap-up to the run that completes the last open task
+#### - [x] Phase 3.2: Route feature wrap-up to the run that completes the last open task
 **Repo:** spektacular
 
 After a single-task run records its changelog entry, decide in code whether any tasks remain open: if so the run finishes directly, otherwise it continues into the test plan, feature changelog and spec reconciliation. Auto-commits and the finishing checks follow the new route.
@@ -428,12 +428,12 @@ After a single-task run records its changelog entry, decide in code whether any 
 *Technical detail:* [context.md#phase-32](./context.md#phase-32-route-feature-wrap-up-to-the-run-that-completes-the-last-open-task)
 
 **Acceptance criteria**:
-- [ ] In a two-task plan, the run completing the first task ends without producing a test plan, feature changelog or spec reconciliation.
-- [ ] The run completing the second task produces the test plan, the feature changelog and the spec reconciliation.
-- [ ] A whole-plan run follows exactly the route it does today.
-- [ ] The work of a run that finishes early is committed under the configured auto-commit mode.
+- [x] In a two-task plan, the run completing the first task ends without producing a test plan, feature changelog or spec reconciliation.
+- [x] The run completing the second task produces the test plan, the feature changelog and the spec reconciliation.
+- [x] A whole-plan run follows exactly the route it does today.
+- [x] The work of a run that finishes early is committed under the configured auto-commit mode.
 
-#### - [ ] Phase 3.3: Scope the implement instructions and skill to the selected task
+#### - [x] Phase 3.3: Scope the implement instructions and skill to the selected task
 **Repo:** spektacular
 
 Rewrite the implement step instructions, shared partials and helper skills in task vocabulary, with a fallback for legacy phase plans, and make analyze, implement, test, verify and update-plan work only on the selected task during a single-task run. Document in the implement skill how to ask for one task.
@@ -441,9 +441,9 @@ Rewrite the implement step instructions, shared partials and helper skills in ta
 *Technical detail:* [context.md#phase-33](./context.md#phase-33-scope-the-implement-instructions-and-skill-to-the-selected-task)
 
 **Acceptance criteria**:
-- [ ] During a single-task run, every implement instruction names the selected task and limits work, tests, verification and ticking to it, while read-plan still reads the full plan, context, research and referenced designs.
-- [ ] At the end of a single-task run on a multi-task plan, only that task and its criteria are ticked.
-- [ ] A whole-plan run on a legacy phase plan still completes with milestone commits made, without editing the plan.
+- [x] During a single-task run, every implement instruction names the selected task and limits work, tests, verification and ticking to it, while read-plan still reads the full plan, context, research and referenced designs.
+- [x] At the end of a single-task run on a multi-task plan, only that task and its criteria are ticked.
+- [x] A whole-plan run on a legacy phase plan still completes with milestone commits made, without editing the plan.
 - [ ] Asking the agent to implement a specific task of a plan starts a single-task run for it.
 
 ### Milestone 4: The plan workflow authors tasks, and the feature is documented
@@ -629,3 +629,74 @@ No other implementation-time uncertainties remain; every other decision is recor
 - `spektacular: cmd/plan_status_progress_test.go`
 
 **Discoveries**: None.
+
+### 2026-09-25 — Phase 3.1: Select a task when starting implement
+
+**What was done**: `implement new --data '{"name":…,"task":"<id>"}'` now runs `refuseUnstartableTask` after the stale-plan check and before the start gate and state reset. It refuses with `plan_structure_invalid`, `task_not_found`, `task_completed`, `task_dependencies_incomplete` (listing the open dependencies and naming the run to start first) or `task_requires_human` (with the reason), so no state is written. A valid task is stored in workflow data as `task`. `implement status` reports it as `task` (omitted for whole-plan runs), and the resume report's message and instruction carry it.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/resume.go`
+- `spektacular: cmd/resume_test.go`
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: cmd/implement_task_test.go`
+- `spektacular: internal/steps/implement/result.go`
+- `spektacular: templates/steps/resume_implement.md`
+
+**Discoveries**: None.
+
+### 2026-09-25 — Phase 3.2: Route feature wrap-up to the run that completes the last open task
+
+**What was done**: The implement FSM gained a `update_changelog → finished` edge. In a single-task run the `update_changelog` callback reads the plan and passes `task` and `last_task` to the template, which names one exit: `test_plan` when no open task remains, `finished` otherwise. `finished()` skips the feature-changelog requirement and test-plan close only for a task run that leaves tasks open; a whole-plan run, or the task run that completes the last task, still requires the feature changelog. `update_changelog → finished` is a new completion commit point.
+
+**Deviations**: Wiring decision (left to the implementer by the plan): `autocommit.LeadsToCommit` now takes the step's rendered next step, and a completion point counts only when it is that exit. Without this, adding the new completion point would have told every whole-plan run to make a completion commit at `update_changelog`. In full mode an implement completion commit also computes the due milestones, requires the message to name them and records them in `committed_milestones`, and the commit partial says so (`commit.may_close_milestone`).
+
+**Files changed**:
+- `spektacular: internal/steps/implement/steps.go`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: internal/autocommit/points.go`
+- `spektacular: internal/autocommit/points_test.go`
+- `spektacular: internal/stepkit/stepkit.go`
+- `spektacular: cmd/autocommit.go`
+- `spektacular: templates/partials/git-commit-message.md`
+- `spektacular: templates/steps/implement/07-update_changelog.md`
+- `spektacular: templates/steps/implement/12-finished.md`
+- `spektacular: cmd/implement_task_run_test.go`
+
+**Discoveries**: The FSM allows `update_changelog → finished` for every run, but `finished()` still refuses with `changelog_missing` unless the run is a task run with tasks left open, so neither a whole-plan run nor the last task's run can skip the wrap-up.
+
+### 2026-09-25 — Phase 3.3: Scope the implement instructions and skill to the selected task
+
+**What was done**: Added `partials/implement-current-task.md`, which defines "the current task": the selected task (title and id) in a single-task run, or otherwise the first unchecked `Task:` heading, falling back to the first unchecked `Phase N.M:` heading in a plan written before tasks. read_plan, analyze, implement, test, verify and update_plan now get `task {id,title}` from their callbacks (`taskExtra`), and their templates use the partial and limit the work, tests, verification and ticking to that task. read_plan accepts `## Milestones & Tasks` or `## Milestones & Phases`, and in a task run says the whole plan, context, research and referenced designs are still read. The remaining implement templates, the plan-documents partial, the commit partial, the resume template, the `spek-implement` skill (new "Implementing one task" section with the `task` input, id lookup via `plan export --format json` and the four refusals) and the four helper skills now use task wording.
+
+**Deviations**: The criterion "asking the agent to implement a specific task starts a single-task run" is agent behaviour. It is left unticked until it is checked manually; the skill text is covered by `TestImplementSkillDocumentsSingleTaskRuns`. This repo's own installed skills (`.claude/skills/…`) are not re-rendered: installed files are refreshed only by the user's `init`/`migrate`.
+
+**Files changed**:
+- `spektacular: templates/partials/implement-current-task.md`
+- `spektacular: templates/partials/implement-plan-documents.md`
+- `spektacular: templates/partials/git-commit-message.md`
+- `spektacular: templates/steps/implement/01-read_plan.md`
+- `spektacular: templates/steps/implement/02-analyze.md`
+- `spektacular: templates/steps/implement/03-implement.md`
+- `spektacular: templates/steps/implement/04-test.md`
+- `spektacular: templates/steps/implement/05-verify.md`
+- `spektacular: templates/steps/implement/06-update_plan.md`
+- `spektacular: templates/steps/implement/07-update_changelog.md`
+- `spektacular: templates/steps/implement/09-test_plan.md`
+- `spektacular: templates/steps/implement/10-update_feature_changelog.md`
+- `spektacular: templates/steps/implement/11-reconcile_spec.md`
+- `spektacular: templates/steps/implement/12-finished.md`
+- `spektacular: templates/steps/resume_implement.md`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: templates/skills/skill_update-changelog.md`
+- `spektacular: templates/skills/skill_verify-implementation.md`
+- `spektacular: templates/skills/skill_follow-test-patterns.md`
+- `spektacular: templates/skills/skill_spawn-implementation-agents.md`
+- `spektacular: templates/skill_resume_test.go`
+- `spektacular: internal/steps/implement/steps.go`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: cmd/instruction_contract_test.go`
+
+**Discoveries**: This implement run is itself a whole-plan run of a legacy phase plan on the updated binary, and the updated templates drove it correctly from Phase 3.3 onwards.

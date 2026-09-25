@@ -4,7 +4,7 @@ Guide for writing tests that match the project's existing conventions. Use this 
 
 ## Instructions
 
-Write tests for the code the main agent just implemented in the current phase. Do **not** invent new conventions — match the shape of the tests that already exist in the project.
+Write tests for the code the main agent just implemented in the current task. Do **not** invent new conventions — match the shape of the tests that already exist in the project.
 
 ### Step 1: Discover the project's test conventions
 
@@ -20,13 +20,13 @@ If the project has a `thoughts/notes/testing.md` or equivalent documentation, re
 
 ### Step 2: Identify what to test
 
-Re-read the current phase in `plan.md` and extract every acceptance criterion. Each criterion should map 1:1 to at least one test assertion. If a criterion cannot be directly asserted in a unit test (e.g. it's a manual-verification criterion), note it and skip — do not invent a test to cover it.
+Re-read the current task in `plan.md` and extract every acceptance criterion. Each criterion should map 1:1 to at least one test assertion. If a criterion cannot be directly asserted in a unit test (e.g. it's a manual-verification criterion), note it and skip — do not invent a test to cover it.
 
 ### Step 3: Write the tests
 
 Rules:
 
-- **Match existing file locations.** If the package's tests live in `internal/foo/foo_test.go`, put new tests there — don't create a new `internal/foo/phase1_test.go` unless the project already groups tests that way.
+- **Match existing file locations.** If the package's tests live in `internal/foo/foo_test.go`, put new tests there — don't create a new `internal/foo/task1_test.go` unless the project already groups tests that way.
 - **Use the existing helpers.** If the package has a `renderStep` helper, use it. If it doesn't, write tests directly rather than introducing a new helper.
 - **Don't mock internal code.** Use in-test fakes and real dependencies where possible. Only mock at system boundaries.
 - **Hand-maintain expected values.** Never derive expected values at runtime from the subject under test — that defeats the test's purpose.

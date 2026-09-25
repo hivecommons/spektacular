@@ -1,14 +1,16 @@
 ## Step {{step}}: {{title}}
 
-Mark the current phase's acceptance criteria as complete in plan.md.
+Mark the current task and its acceptance criteria as complete in plan.md.
 
 ### What to edit
 
-For the current phase (the one you just implemented, tested, and verified):
+For the current task (the one you just implemented, tested, and verified):
 
-1. Change the phase heading from `#### - [ ] Phase N.M: <title>` to `#### - [x] Phase N.M: <title>`.
-2. Change each `- [ ]` acceptance-criterion checkbox in the phase's `**Acceptance criteria**:` block to `- [x]` **only if** that criterion actually passed verification in the previous step.
-3. Leave criteria that did not pass as `- [ ]`. Do not mark them complete just because the phase is "mostly done".
+{{> partials/implement-current-task}}
+
+1. Change its heading from `#### - [ ] Task: <title>` to `#### - [x] Task: <title>` (in a plan written before tasks, from `#### - [ ] Phase N.M: <title>` to `#### - [x] Phase N.M: <title>`).
+2. Change each `- [ ]` acceptance-criterion checkbox in that task's `**Acceptance criteria**:` block to `- [x]` **only if** that criterion actually passed verification in the previous step.
+3. Leave criteria that did not pass as `- [ ]`. Do not mark them complete just because the task is "mostly done".{{#task}} Tick nothing belonging to any other task.{{/task}}
 
 ### How to apply the edit
 

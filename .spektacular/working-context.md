@@ -85,3 +85,4 @@ Decisions from the 2026-09-25 discussion are posted on the issue: https://github
 - Internal packages name commands without the binary prefix in next_action (e.g. 'plan task-id'), like internal/design/errors.go. plantask.Validate(p, repos) therefore takes no command param.
 - User chose "run without asking" after Phase 1.1: loop phases autonomously; stop only for real decisions, failures, the glossary knowledge write (propose-then-confirm) and harbor runs.
 - Phase 1.1 done: internal/plantask (Parse/Validate/RequireTasks/Task/OpenTasks/OpenItems/CompletedMilestones).
+- Phase 3.2 decision: `autocommit.LeadsToCommit` now takes the rendered NextStep; completion points match only when their `to` equals it (milestone candidates still match on source step). An implement completion commit in full mode also computes/records due milestones (a task run can close a milestone at update_changelog→finished).

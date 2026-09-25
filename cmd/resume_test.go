@@ -19,7 +19,7 @@ import (
 // NextAction) and that this shape round-trips through JSON, since it flows
 // all the way to stdout via that encoding in production.
 func TestEmitResumeReport_JSONCarriesWorkflowIdentityAndInstruction(t *testing.T) {
-	instruction, err := resumeInstruction("spektacular", "spec", "000024_resume", "overview")
+	instruction, err := resumeInstruction("spektacular", "spec", "000024_resume", "overview", "")
 	require.NoError(t, err)
 	require.NotEmpty(t, instruction)
 
@@ -57,7 +57,7 @@ func TestEmitResumeReport_JSONCarriesWorkflowIdentityAndInstruction(t *testing.T
 }
 
 func TestResumeInstruction_AsksResumeVsNewWithBothCommands(t *testing.T) {
-	out, err := resumeInstruction("spektacular", "spec", "000024_resume", "overview")
+	out, err := resumeInstruction("spektacular", "spec", "000024_resume", "overview", "")
 	require.NoError(t, err)
 
 	require.NotContains(t, out, "{{")
@@ -115,7 +115,7 @@ func TestResumeInstruction_InterpolatesAcrossKinds(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			out, err := resumeInstruction(tt.command, tt.kind, tt.instance, tt.currentStep)
+			out, err := resumeInstruction(tt.command, tt.kind, tt.instance, tt.currentStep, "")
 			require.NoError(t, err)
 
 			require.NotContains(t, out, "{{")
@@ -158,7 +158,7 @@ func TestResumeImplement_ReadsPlanFirstAtEveryStep(t *testing.T) {
 
 	for _, step := range implementResumeSteps {
 		t.Run(step, func(t *testing.T) {
-			out, err := resumeInstruction(command, "implement", "demo-feature", step)
+			out, err := resumeInstruction(command, "implement", "demo-feature", step, "")
 			require.NoError(t, err)
 
 			require.Contains(t, normalizeIndent(out), block,
@@ -201,7 +201,7 @@ func TestResumeImplement_ReadsPlanFirstAtEveryStep(t *testing.T) {
 func TestResumeNonImplementUsesSharedTemplate(t *testing.T) {
 	for _, kind := range []string{"spec", "plan", "repo"} {
 		t.Run(kind, func(t *testing.T) {
-			out, err := resumeInstruction("spekx", kind, "demo-feature", "overview")
+			out, err := resumeInstruction("spekx", kind, "demo-feature", "overview", "")
 			require.NoError(t, err)
 
 			require.Contains(t, out, "spekx repo list")

@@ -30,6 +30,9 @@ var completionPoints = map[transition]bool{
 	{kind: "spec", from: "verification", to: "finished"}:        true,
 	{kind: "plan", from: "walkthrough", to: "finished"}:         true,
 	{kind: "implement", from: "reconcile_spec", to: "finished"}: true,
+	// A single-task run that leaves tasks open for later runs finishes
+	// straight from update_changelog, and its work is committed there.
+	{kind: "implement", from: "update_changelog", to: "finished"}: true,
 }
 
 // milestonePoints are the transitions that wrap up an implementation phase
@@ -90,14 +93,18 @@ func PointFor(mode, kind, fromStep, toStep string) Point {
 
 // LeadsToCommit classifies the step currently being rendered by where it can
 // go next, so the step renderer can tell an agent to prepare a commit
-// message before it runs the transition. Where a step leads to both kinds of
-// point, completion wins, since that is the stronger requirement.
-func LeadsToCommit(mode, kind, fromStep string) Point {
+// message before it runs the transition. nextStep is the exit the step's
+// instruction names: a completion point counts only when it is that exit,
+// because a step such as update_changelog finishes a single-task run but
+// loops or continues in a whole-plan run. Milestone points count for any
+// exit, since the agent picks between them. Where a step leads to both kinds
+// of point, completion wins, since that is the stronger requirement.
+func LeadsToCommit(mode, kind, fromStep, nextStep string) Point {
 	if mode == "" || mode == config.AutoCommitOff {
 		return PointNone
 	}
 	for t := range completionPoints {
-		if t.kind == kind && t.from == fromStep {
+		if t.kind == kind && t.from == fromStep && t.to == nextStep {
 			return PointCompletion
 		}
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/plantask"
 	"github.com/hivecommons/spektacular/internal/stepkit"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
@@ -19,6 +20,11 @@ import (
 // directly in the FSM declaration — when `update_changelog` detects remaining
 // unchecked phases in the plan, it advances back to `analyze`; otherwise it
 // advances to `test_plan`.
+//
+// A single-task run (workflow data "task") never loops. `update_changelog`
+// either continues into the feature wrap-up, when the run completed the
+// plan's last open task, or goes straight to `finished`, leaving the wrap-up
+// to the run that completes the last one.
 func Steps() []workflow.StepConfig {
 	return []workflow.StepConfig{
 		{Name: "new", Src: []string{"start"}, Dst: "new", Callback: newStep()},
@@ -32,7 +38,7 @@ func Steps() []workflow.StepConfig {
 		{Name: "test_plan", Src: []string{"update_changelog"}, Dst: "test_plan", Callback: testPlan()},
 		{Name: "update_feature_changelog", Src: []string{"test_plan"}, Dst: "update_feature_changelog", Callback: updateFeatureChangelog()},
 		{Name: "reconcile_spec", Src: []string{"update_feature_changelog"}, Dst: "reconcile_spec", Callback: reconcileSpec()},
-		{Name: "finished", Src: []string{"reconcile_spec"}, Dst: "finished", Callback: finished()},
+		{Name: "finished", Src: []string{"reconcile_spec", "update_changelog"}, Dst: "finished", Callback: finished()},
 	}
 }
 
@@ -72,49 +78,93 @@ func newStep() workflow.StepCallback {
 
 func readPlan() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
-		return "", writeStep("read_plan", "analyze", "steps/implement/01-read_plan.md", data, out, st, cfg, nil)
+		extra, err := taskExtra(data, st, cfg)
+		if err != nil {
+			return "", err
+		}
+		return "", writeStep("read_plan", "analyze", "steps/implement/01-read_plan.md", data, out, st, cfg, extra)
 	}
 }
 
 func analyze() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
-		return "", writeStep("analyze", "implement", "steps/implement/02-analyze.md", data, out, st, cfg, nil)
+		extra, err := taskExtra(data, st, cfg)
+		if err != nil {
+			return "", err
+		}
+		return "", writeStep("analyze", "implement", "steps/implement/02-analyze.md", data, out, st, cfg, extra)
 	}
 }
 
 func implementStep() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
-		return "", writeStep("implement", "test", "steps/implement/03-implement.md", data, out, st, cfg, nil)
+		extra, err := taskExtra(data, st, cfg)
+		if err != nil {
+			return "", err
+		}
+		return "", writeStep("implement", "test", "steps/implement/03-implement.md", data, out, st, cfg, extra)
 	}
 }
 
 func testStep() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
-		return "", writeStep("test", "verify", "steps/implement/04-test.md", data, out, st, cfg, nil)
+		extra, err := taskExtra(data, st, cfg)
+		if err != nil {
+			return "", err
+		}
+		return "", writeStep("test", "verify", "steps/implement/04-test.md", data, out, st, cfg, extra)
 	}
 }
 
 func verify() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
-		return "", writeStep("verify", "update_plan", "steps/implement/05-verify.md", data, out, st, cfg, nil)
+		extra, err := taskExtra(data, st, cfg)
+		if err != nil {
+			return "", err
+		}
+		return "", writeStep("verify", "update_plan", "steps/implement/05-verify.md", data, out, st, cfg, extra)
 	}
 }
 
 func updatePlan() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
-		return "", writeStep("update_plan", "update_changelog", "steps/implement/06-update_plan.md", data, out, st, cfg, nil)
+		extra, err := taskExtra(data, st, cfg)
+		if err != nil {
+			return "", err
+		}
+		return "", writeStep("update_plan", "update_changelog", "steps/implement/06-update_plan.md", data, out, st, cfg, extra)
 	}
 }
 
-// updateChangelog has two legal exits encoded in the template:
+// updateChangelog has two legal exits in a whole-plan run, encoded in the
+// template:
 //   - goto analyze (loop back) when unchecked phases remain
 //   - goto test_plan when no unchecked phases remain
 //
 // NextStep is set to "test_plan" for the default advance path; the template
 // instructs the agent to branch based on plan-file state.
+//
+// In a single-task run the decision is made here, from the plan, and the
+// template names the one exit: test_plan when no open task remains, so this
+// run does the feature wrap-up, and finished otherwise.
 func updateChangelog() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
-		return "", writeStep("update_changelog", "test_plan", "steps/implement/07-update_changelog.md", data, out, st, cfg, nil)
+		task, p, ok, err := taskRun(data, st, cfg)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			return "", writeStep("update_changelog", "test_plan", "steps/implement/07-update_changelog.md", data, out, st, cfg, nil)
+		}
+		last := len(p.OpenTasks()) == 0
+		next := "finished"
+		if last {
+			next = "test_plan"
+		}
+		return "", writeStep("update_changelog", next, "steps/implement/07-update_changelog.md", data, out, st, cfg, map[string]any{
+			"task":      taskVars(task),
+			"last_task": last,
+		})
 	}
 }
 
@@ -151,6 +201,24 @@ func reconcileSpec() workflow.StepCallback {
 
 func finished() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
+		// A single-task run that left tasks open ends here without the
+		// feature wrap-up: there is no test plan or feature changelog to
+		// close, and none is required. The run that completes the last open
+		// task produces them.
+		task, p, ok, err := taskRun(data, st, cfg)
+		if err != nil {
+			return "", err
+		}
+		if ok {
+			if open := len(p.OpenTasks()); open > 0 {
+				return "", writeStep("finished", "", "steps/implement/12-finished.md", data, out, st, cfg, map[string]any{
+					"task":       taskVars(task),
+					"task_run":   true,
+					"open_tasks": open,
+				})
+			}
+		}
+
 		if !cfg.DryRun && st != nil {
 			planName := stepkit.GetString(data, "name")
 
@@ -178,4 +246,46 @@ func finished() workflow.StepCallback {
 		}
 		return "", writeStep("finished", "", "steps/implement/12-finished.md", data, out, st, cfg, nil)
 	}
+}
+
+// taskRun reads the plan for a single-task run. ok is false for a whole-plan
+// run, which has no "task" in its workflow data. The task comes back with
+// only its id when the plan cannot be read (no store, as in a dry run).
+func taskRun(data workflow.Data, st store.Store, cfg workflow.Config) (plantask.Task, plantask.Plan, bool, error) {
+	id := stepkit.GetString(data, "task")
+	if id == "" {
+		return plantask.Task{}, plantask.Plan{}, false, nil
+	}
+	if st == nil {
+		return plantask.Task{ID: id, Title: id}, plantask.Plan{}, true, nil
+	}
+	raw, err := st.Read(PlanFilePath(cfg.PlanDir, stepkit.GetString(data, "name")))
+	if err != nil {
+		return plantask.Task{}, plantask.Plan{}, false, err
+	}
+	_, body, err := metadata.Split(raw)
+	if err != nil {
+		return plantask.Task{}, plantask.Plan{}, false, err
+	}
+	p := plantask.Parse(body)
+	task, found := p.Task(id)
+	if !found {
+		task = plantask.Task{ID: id, Title: id}
+	}
+	return task, p, true, nil
+}
+
+// taskExtra is the template data scoping a step to the selected task in a
+// single-task run, and nil in a whole-plan run.
+func taskExtra(data workflow.Data, st store.Store, cfg workflow.Config) (map[string]any, error) {
+	task, _, ok, err := taskRun(data, st, cfg)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return map[string]any{"task": taskVars(task)}, nil
+}
+
+// taskVars is the template value for the selected task.
+func taskVars(t plantask.Task) map[string]any {
+	return map[string]any{"id": t.ID, "title": t.Title}
 }

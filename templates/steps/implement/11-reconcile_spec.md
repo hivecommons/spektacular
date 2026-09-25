@@ -11,13 +11,13 @@ Read the feature's spec and the plan's accumulated implementation history throug
 {{config.command}} plan file read {{plan_name}}/plan.md
 ```
 
-From the spec, take every `- [ ]`/`- [x]` checkbox under `## Requirements` and `## Acceptance Criteria`. From the plan, take the `{{changelog_section_name}}` section — the phase-by-phase implementation audit log, including each phase's **What was done**, **Deviations**, **Files changed**, and **Discoveries** entries. This is the record of what was actually built; judge against it rather than re-deriving anything from the original plan text.
+From the spec, take every `- [ ]`/`- [x]` checkbox under `## Requirements` and `## Acceptance Criteria`. From the plan, take the `{{changelog_section_name}}` section — the task-by-task implementation audit log (phase by phase in a plan written before tasks), including each entry's **What was done**, **Deviations**, **Files changed**, and **Discoveries** entries. This is the record of what was actually built; judge against it rather than re-deriving anything from the original plan text.
 
 ### Step 2: Judge each checkbox
 
 For every spec checkbox still unchecked, decide whether the plan's `{{changelog_section_name}}` entries show it is genuinely satisfied:
 
-- **Satisfied** — a phase entry's "What was done" (or a combination of entries) directly delivers what the checkbox describes. Mark it `[x]`.
+- **Satisfied** — an entry's "What was done" (or a combination of entries) directly delivers what the checkbox describes. Mark it `[x]`.
 - **Unsatisfied** — nothing in the changelog record addresses it, or a "Deviations" entry explicitly says it was dropped, deferred, or descoped. Leave it `[ ]`.
 
 Do not mark a checkbox satisfied on a partial or speculative match — if in doubt, leave it unchecked. A checkbox already `[x]` in the spec stays `[x]`.

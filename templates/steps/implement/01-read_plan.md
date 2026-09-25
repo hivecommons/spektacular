@@ -12,6 +12,10 @@ Read the three plan documents **in full** through the plan store. The plan docum
 {{> partials/implement-plan-documents}}
 
 Here `<plan_name>` is `{{plan_name}}`. Read all three now, before any check below.
+{{#task}}
+
+This run implements **only task `{{task.title}}`** (id `{{task.id}}`). Still read the whole plan, its `context.md`, its `research.md` and every design document the plan references: a fact the task depends on may be stated only there. Only the implementing, testing, verifying and ticking that follow are limited to this one task.
+{{/task}}
 
 These are the source of truth for every downstream step.
 
@@ -26,15 +30,15 @@ Verify `{{plan_path}}` has the complete plan-scaffold shape. Every one of these 
 5. `## Implementation Detail`
 6. `## Dependencies`
 7. `## Testing Approach`
-8. `## Milestones & Phases`
+8. `## Milestones & Tasks` (`## Milestones & Phases` in a plan written before tasks)
 9. `## Open Questions`
 10. `## Out of Scope`
 
-Then verify the phase structure:
+Then verify the task structure:
 
-- At least one `#### - [ ] Phase N.M:` checkbox heading exists under `## Milestones & Phases`.
-- In the plan's `plan.md`, every phase has a `*Technical detail:*` link into the plan's `context.md`, in the form `[context.md#phase-NM](./context.md#...)`.
-- Every `*Technical detail:*` link target resolves to a matching `### Phase N.M:` heading inside `{{context_path}}`.
+- At least one unchecked work item exists under the milestones section: a `#### - [ ] Task: <title>` heading, or a `#### - [ ] Phase N.M:` heading in a plan written before tasks.
+- In the plan's `plan.md`, every task (or phase) has a `*Technical detail:*` link into the plan's `context.md`, in the form `[context.md#task-<slug>](./context.md#...)` (`[context.md#phase-NM](./context.md#...)` for a phase).
+- Every `*Technical detail:*` link target resolves to a matching `### Task: <title>` (or `### Phase N.M:`) heading inside `{{context_path}}`.
 
 If any structural check fails, STOP and report the failures to the user.
 
@@ -67,9 +71,9 @@ Read the specification the plan was created from:
 {{config.command}} spec file read {{plan_name}}.md
 ```
 
-Enumerate every `- [ ]`/`- [x]` checkbox under the spec's `## Requirements` and `## Acceptance Criteria` headings. For each one, confirm it has corresponding coverage somewhere in `{{plan_path}}`'s `## Milestones & Phases` section — a phase summary, an acceptance criterion, or a technical-detail note that addresses it (paraphrase or explicit mention both count; it does not need to be a verbatim match).
+Enumerate every `- [ ]`/`- [x]` checkbox under the spec's `## Requirements` and `## Acceptance Criteria` headings. For each one, confirm it has corresponding coverage somewhere in `{{plan_path}}`'s milestones section — a task summary, an acceptance criterion, or a technical-detail note that addresses it (paraphrase or explicit mention both count; it does not need to be a verbatim match).
 
-Before flagging any gap, check whether it is already recorded as accepted: look for a `**Descoped requirements**:` list under `## Milestones & Phases` in `{{plan_path}}` (see the marker format below). A requirement or acceptance criterion listed there is already resolved — do not re-flag it.
+Before flagging any gap, check whether it is already recorded as accepted: look for a `**Descoped requirements**:` list under the milestones section in `{{plan_path}}` (see the marker format below). A requirement or acceptance criterion listed there is already resolved — do not re-flag it.
 
 If every remaining spec item has coverage (or is already marked descoped), proceed to Step 4 without interruption.
 
@@ -78,7 +82,7 @@ If one or more spec items have no coverage and are not already marked descoped, 
 1. **Fix the plan first.** Update `{{plan_path}}` to add the missing coverage, then restart this step.
 2. **Accept the gap as descoped.** Record it using the marker format below, then continue to Step 4.
 
-**Descoped marker format** — when the user accepts a gap, append (or add to an existing) `**Descoped requirements**:` list near the end of `{{plan_path}}`'s `## Milestones & Phases` section, one bullet per accepted gap:
+**Descoped marker format** — when the user accepts a gap, append (or add to an existing) `**Descoped requirements**:` list near the end of `{{plan_path}}`'s milestones section, one bullet per accepted gap:
 
 ```
 **Descoped requirements**:
@@ -98,8 +102,8 @@ Do **not** continue to Step 4 until every gap is either fixed in the plan or rec
 
 Check whether a `{{changelog_section_name}}` section already exists inside `{{plan_path}}`.
 
-- **Present** → this is a **subsequent-phase** invocation. Later steps will append new phase entries under the existing section. During `analyze`, pick up at the first unchecked `#### - [ ]` phase in the plan.
-- **Absent** → this is a **first-phase** invocation. The `update_changelog` step will create the section on first use. During `analyze`, pick up at the first `#### - [ ]` phase (which will be the first one, unless the user has partially checked off phases manually).
+- **Present** → this is a **subsequent-task** invocation. Later steps will append new task entries under the existing section. During `analyze`, pick up at {{#task}}the selected task{{/task}}{{^task}}the first unchecked `#### - [ ]` task in the plan{{/task}}.
+- **Absent** → this is a **first-task** invocation. The `update_changelog` step will create the section on first use. During `analyze`, pick up at {{#task}}the selected task{{/task}}{{^task}}the first `#### - [ ]` task (which will be the first one, unless the user has partially checked off tasks manually){{/task}}.
 
 ### Advance
 

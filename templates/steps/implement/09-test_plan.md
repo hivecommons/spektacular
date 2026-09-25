@@ -1,6 +1,6 @@
 ## Step {{step}}: {{title}}
 
-Produce the **test plan** artifact for the success metrics that could not be covered by an automated behavioural test. This step runs last, after every phase is implemented and verified, so the procedures you write reference the **real** implementation — actual endpoints, commands, file paths, and thresholds — not guesses from planning time.
+Produce the **test plan** artifact for the success metrics that could not be covered by an automated behavioural test. This step runs last, after every task is implemented and verified, so the procedures you write reference the **real** implementation — actual endpoints, commands, file paths, and thresholds — not guesses from planning time.
 
 ### Step 1: Find the metrics that need manual verification
 

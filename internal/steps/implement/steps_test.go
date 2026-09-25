@@ -133,8 +133,8 @@ func TestReconcileSpecStepWiring(t *testing.T) {
 
 	require.Equal(t, []string{"update_feature_changelog"}, reconcileSpecStep.Src,
 		"reconcile_spec must only be reachable from update_feature_changelog")
-	require.Equal(t, []string{"reconcile_spec"}, finishedStep.Src,
-		"finished must only be reachable from reconcile_spec")
+	require.Equal(t, []string{"reconcile_spec", "update_changelog"}, finishedStep.Src,
+		"finished is reachable from reconcile_spec, and from update_changelog for a single-task run that leaves tasks open")
 }
 
 func TestFSMWalkFromNewToFinished(t *testing.T) {
@@ -252,8 +252,8 @@ func TestReadPlanStepContainsFullReadDirective(t *testing.T) {
 func TestReadPlanStepMentionsChangelog(t *testing.T) {
 	out := renderStep(t, readPlan())
 	require.Contains(t, out, "## Changelog")
-	require.Contains(t, strings.ToLower(out), "first-phase")
-	require.Contains(t, strings.ToLower(out), "subsequent-phase")
+	require.Contains(t, strings.ToLower(out), "first-task")
+	require.Contains(t, strings.ToLower(out), "subsequent-task")
 }
 
 func TestReadPlanTemplateDirectsStructuralValidation(t *testing.T) {
@@ -409,7 +409,7 @@ func TestUpdateChangelogStepOffersKnowledgeCaptureForDurableDiscoveries(t *testi
 	require.Contains(t, lower, "name what you would capture and why it is worth keeping", "update_changelog must require the offer to name what and why")
 
 	// Selectivity bar: change-local discoveries produce no offer.
-	require.Contains(t, lower, "most phases produce none", "update_changelog must state that most phases produce no qualifying discovery")
+	require.Contains(t, lower, "most tasks produce none", "update_changelog must state that most tasks produce no qualifying discovery")
 
 	// Confirm gate: capture only on explicit acceptance.
 	require.Contains(t, lower, "explicit acceptance", "update_changelog must gate capture on the user's explicit acceptance")
@@ -773,4 +773,56 @@ func TestWhereTheCodeLivesPreambleRenderedOnceByReadPlan(t *testing.T) {
 			require.NotContains(t, out, "repo list", "%s must not repeat the repo list direction", name)
 		})
 	}
+}
+
+// renderTaskStep renders a step for a single-task run over a plan holding
+// two tasks, the selected one and another.
+func renderTaskStep(t *testing.T, cb workflow.StepCallback) string {
+	t.Helper()
+	root := t.TempDir()
+	st := store.NewFileStore(root, "project")
+	plan := "# Plan: test\n\n## Milestones & Tasks\n\n### Milestone 1: M\n\n" +
+		"#### - [ ] Task: The selected task\n**Id:** sel-1\n**Repo:** r\n**Depends on:** none\n**Execution:** agent\n\n" +
+		"#### - [ ] Task: Another task\n**Id:** other-2\n**Repo:** r\n**Depends on:** none\n**Execution:** agent\n"
+	require.NoError(t, st.Write(filepath.Join("plans", "test", "plan.md"), []byte(plan)))
+
+	data := &testData{values: map[string]any{"name": "test", "task": "sel-1"}}
+	writer := &captureWriter{}
+	_, err := cb(data, writer, st, workflow.Config{Command: "spektacular", PlanDir: "plans"})
+	require.NoError(t, err)
+	return writer.result.Instruction
+}
+
+// A single-task run names the selected task in every step that works on it,
+// and limits that work to it; a whole-plan run carries no task scoping.
+func TestTaskScopedStepsNameTheSelectedTask(t *testing.T) {
+	for name, cb := range map[string]workflow.StepCallback{
+		"analyze":     analyze(),
+		"implement":   implementStep(),
+		"test":        testStep(),
+		"verify":      verify(),
+		"update_plan": updatePlan(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			out := renderTaskStep(t, cb)
+			require.Contains(t, out, "only task `The selected task`")
+			require.Contains(t, out, "`sel-1`")
+			require.Contains(t, out, "do not start, test, verify or tick any other task")
+			require.NotContains(t, out, "Another task")
+
+			whole := renderStep(t, cb)
+			require.NotContains(t, whole, "only task")
+			require.Contains(t, whole, "#### - [ ] Task: <title>", "a whole-plan run works from the first unchecked task")
+			require.Contains(t, whole, "#### - [ ] Phase N.M:", "a plan written before tasks still implements")
+		})
+	}
+}
+
+func TestReadPlanInTaskRunStillReadsTheWholePlan(t *testing.T) {
+	out := renderTaskStep(t, readPlan())
+	require.Contains(t, out, "only task `The selected task`")
+	for _, doc := range []string{"<plan_name>/plan.md", "<plan_name>/context.md", "<plan_name>/research.md"} {
+		require.Contains(t, out, doc)
+	}
+	require.Contains(t, out, "design document the plan references")
 }

@@ -279,7 +279,7 @@ func workflowInstructionCorpus(t *testing.T, command, installDir string) []instr
 	}
 
 	for _, kind := range contractWorkflows {
-		body, err := resumeInstruction(command, kind, "demo-feature", "some_step")
+		body, err := resumeInstruction(command, kind, "demo-feature", "some_step", "")
 		require.NoError(t, err)
 		corpus = append(corpus, instructionSource{"steps/resume.md (" + kind + ")", body})
 
@@ -514,7 +514,7 @@ func TestImplementStartListsPlanDocuments(t *testing.T) {
 			command + " plan file read <plan_name>/plan.md",
 			command + " plan file read <plan_name>/context.md",
 			command + " plan file read <plan_name>/research.md",
-			"the per-phase technical detail",
+			"the per-task technical detail",
 			"the decision log",
 			".spektacular/working-context.md",
 		} {

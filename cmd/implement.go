@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/metadata"
@@ -36,6 +37,7 @@ var implementStatusOutputSchema = &schemaObj{
 		"progress":         {Type: "string"},
 		"steps":            {Type: "array"},
 		"unchecked_phases": {Type: "integer"},
+		"task":             {Type: "string"},
 	},
 }
 
@@ -76,6 +78,7 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 				Type: "object",
 				Properties: map[string]*schemaProp{
 					"name": {Type: "string", Pattern: "^[a-z0-9_-]+$", MaxLen: 64},
+					"task": {Type: "string"},
 				},
 				Required: []string{"name"},
 			},
@@ -124,6 +127,7 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	}
 	var input struct {
 		Name string `json:"name"`
+		Task string `json:"task"`
 	}
 	if err := json.Unmarshal([]byte(dataStr), &input); err != nil {
 		return fmt.Errorf("parsing --data: %w", err)
@@ -144,6 +148,11 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	if err := refuseStalePlan(cfg, projectStore, input.Name); err != nil {
 		return err
 	}
+	if input.Task != "" {
+		if err := refuseUnstartableTask(cfg, projectStore, input.Name, input.Task); err != nil {
+			return err
+		}
+	}
 
 	// The uncommitted-changes gate runs once the plan is known to exist, so a
 	// refusal here never precedes a plan-not-found error, and before
@@ -160,6 +169,9 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, projectStore, out)
 	wf.SetData("name", input.Name)
+	if input.Task != "" {
+		wf.SetData("task", input.Task)
+	}
 
 	if err := readInputIntoWorkflow(cmd, wf); err != nil {
 		return err
@@ -257,6 +269,62 @@ func refuseStalePlan(cfg config.Config, st store.Store, planName string) error {
 		WithNextAction("re-run the plan workflow against the updated spek and approve the fresh plan before implementing")
 }
 
+// refuseUnstartableTask refuses a single-task run whose task cannot start:
+// the plan has no task structure, the task is not in it, it is already
+// complete, a dependency is still open, or a person must do it. It runs
+// before any workflow state is written, so a refusal starts nothing.
+func refuseUnstartableTask(cfg config.Config, st store.Store, planName, taskID string) error {
+	raw, err := st.Read(implement.PlanFilePath(cfg.Plan.Config.Directory, planName))
+	if err != nil {
+		return err
+	}
+	_, body, err := metadata.Split(raw)
+	if err != nil {
+		return err
+	}
+	p := plantask.Parse(body)
+	if err := p.RequireTasks(); err != nil {
+		return err
+	}
+
+	listTasks := fmt.Sprintf("run `%s plan export %s` to see the plan's tasks and their ids", cfg.Command, planName)
+	task, ok := p.Task(taskID)
+	if !ok {
+		return output.NewError("task_not_found", fmt.Sprintf("plan %q has no task with id %s", planName, taskID)).
+			WithResource(taskID).
+			WithNextAction(listTasks)
+	}
+	if task.Completed {
+		return output.NewError("task_completed", fmt.Sprintf("task %q (%s) is already completed", task.Title, taskID)).
+			WithResource(taskID).
+			WithNextAction("choose a task that is not yet completed; " + listTasks)
+	}
+
+	var open []plantask.Task
+	for _, id := range task.DependsOn {
+		if dep, ok := p.Task(id); ok && !dep.Completed {
+			open = append(open, dep)
+		}
+	}
+	if len(open) > 0 {
+		names := make([]string, len(open))
+		for i, dep := range open {
+			names[i] = fmt.Sprintf("%s (%q)", dep.ID, dep.Title)
+		}
+		return output.NewError("task_dependencies_incomplete",
+			fmt.Sprintf("task %q (%s) depends on tasks that are not completed: %s", task.Title, taskID, strings.Join(names, ", "))).
+			WithResource(taskID).
+			WithNextAction(fmt.Sprintf(`implement these first, starting with: %s implement new --data '{"name":"%s","task":"%s"}'`, cfg.Command, planName, open[0].ID))
+	}
+	if task.Execution.Type == "human" {
+		return output.NewError("task_requires_human",
+			fmt.Sprintf("task %q (%s) must be carried out by a person: %s", task.Title, taskID, task.Execution.Reason)).
+			WithResource(taskID).
+			WithNextAction("have a person carry the task out and tick it in plan.md; " + listTasks + " to find work an agent can do")
+	}
+	return nil
+}
+
 func runImplementStatus(cmd *cobra.Command, _ []string) error {
 	if schema, _ := cmd.Flags().GetBool("schema"); schema {
 		s := commandSchema{Input: nil, Output: implementStatusOutputSchema}
@@ -295,6 +363,10 @@ func runImplementStatus(cmd *cobra.Command, _ []string) error {
 	planName := fmt.Sprintf("%v", nameVal)
 	planRel := implement.PlanFilePath(cfg.Plan.Config.Directory, planName)
 	planPath := filepath.Join(root, planRel)
+	task := ""
+	if v, ok := wf.GetData("task"); ok {
+		task = fmt.Sprintf("%v", v)
+	}
 
 	stepInfos := wf.StepStatus()
 	entries := make([]implement.StepEntry, len(stepInfos))
@@ -319,6 +391,7 @@ func runImplementStatus(cmd *cobra.Command, _ []string) error {
 		Progress:        fmt.Sprintf("%d/%d", len(st.CompletedSteps), len(steps)),
 		Steps:           entries,
 		UncheckedPhases: uncheckedPhases,
+		Task:            task,
 	})
 }
 
