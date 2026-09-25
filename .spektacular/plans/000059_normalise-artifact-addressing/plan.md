@@ -306,7 +306,7 @@ The harbor suites carry hand-maintained copies of CLI spellings in their task in
 - [x] No harbor suite instruction, scripted solution or verifier oracle uses an extension or joined-path address.
 - [x] The implement suite's verifier looks for the bare-name changelog writes the updated step instructions now produce.
 
-#### - [ ] Task: Manually test a full run with the new addressing
+#### - [x] Task: Manually test a full run with the new addressing
 **Id:** 7558648e-d65e-409e-a125-b6d84c6e8bf4
 **Repo:** spektacular
 **Depends on:**
@@ -318,8 +318,8 @@ Drive a real spec → plan → implement run by hand, using only the shipped ski
 *Technical detail:* [context.md#task-manually-test-a-full-run-with-the-new-addressing](./context.md#task-manually-test-a-full-run-with-the-new-addressing)
 
 **Acceptance criteria**:
-- [ ] A full spec → plan → implement run driven by the shipped instructions completes.
-- [ ] No step in that run hits an `unexpected_extension` or `document_required` refusal.
+- [x] A full spec → plan → implement run driven by the shipped instructions completes.
+- [x] No step in that run hits an `unexpected_extension` or `document_required` refusal.
 
 ### Milestone 2: Reported locations are relative to the configuration that declares the store
 
@@ -730,3 +730,14 @@ No other implementation-time uncertainties remain. Every other decision is recor
 - `docs: src/pages/plan-tasks.mdx`
 
 **Discoveries**: An unregistered `--repo` name on `changelog file` commands returns `internal_error` with an empty next action. This is pre-existing and outside this change, but worth its own issue.
+
+### 2026-09-25 — Task: Manually test a full run with the new addressing
+
+**What was done**: The user tested the new commands by hand and confirmed the result, in place of running the harbor suites. The implement run for this plan also exercised the new addressing itself: from the command-builder task on, the workflow's rendered instructions used the bare-name and `<feature> <document>` forms, and none was refused.
+
+**Deviations**: None.
+
+**Files changed**:
+- None (verification only).
+
+**Discoveries**: None.
