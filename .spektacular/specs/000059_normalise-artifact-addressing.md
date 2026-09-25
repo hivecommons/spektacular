@@ -30,33 +30,33 @@ Today a feature's single name — the one every Spektacular workflow already rec
 -->
 ## Requirements
 
-- [ ] **One name addresses a feature's spec**
+- [x] **One name addresses a feature's spec**
   Every spec document command (list, read, write, delete, set document status) addresses a spec by the feature's bare name — exactly the name the workflow records — and listing specs reports that same bare name.
-- [ ] **One name addresses a feature's changelog record**
+- [x] **One name addresses a feature's changelog record**
   Every changelog document command addresses a record by the feature's bare name, both for the project-level changelog and for a named repo's changelog, and listing records reports that same bare name.
-- [ ] **A plan is addressed by feature and document**
+- [x] **A plan is addressed by feature and document**
   Listing plans reports each feature's bare name; listing one feature's plan reports the bare name of each document it holds (for example `plan`, `context`, `research`, `test-plan`); every plan document command (read, write, delete, set document status) addresses a document by the feature name together with a document name the listing reported, without the caller joining them into a path.
-- [ ] **Names never carry a file extension**
+- [x] **Names never carry a file extension**
   No artifact name — feature or document — carries a file extension, in any command's input or output. This covers names only: a reported storage location may still show how the store persists the document.
-- [ ] **Listed names are exactly the accepted names**
+- [x] **Listed names are exactly the accepted names**
   Every name a list command prints is accepted unchanged by the matching read and write commands; a caller never has to join segments or append anything to build an address.
-- [ ] **An extension is refused with the correct form**
+- [x] **An extension is refused with the correct form**
   Passing a name that carries a file extension, or a plan address written as a single joined path, is refused with a distinct, documented error code whose message and next action name the correct spelling of the same command.
-- [ ] **Reading a plan without a document is an actionable refusal**
+- [x] **Reading a plan without a document is an actionable refusal**
   Reading a plan with a feature name but no document name is refused with a distinct, documented error code whose next action tells the caller how to list that plan's documents and gives an example read; the refusal never reports an internal error and never reveals a host path.
-- [ ] **Locations are reported relative to the declaring configuration**
+- [x] **Locations are reported relative to the declaring configuration**
   Every storage location reported by the spec, plan and changelog list commands is relative to the configuration file that declares that store, matching how the knowledge commands already report locations.
-- [ ] **Changelog locations do not depend on how the record was selected**
+- [x] **Changelog locations do not depend on how the record was selected**
   The changelog list command reports locations in the same convention whether or not a repo is named.
-- [ ] **Status reports the plan by address as well as location**
+- [x] **Status reports the plan by address as well as location**
   Plan status and implement status report the plan's bare feature name and its document name as addresses, and its storage location relative to the declaring configuration — never as an absolute host path.
-- [ ] **Callers shipped with Spektacular use the new addressing**
+- [x] **Callers shipped with Spektacular use the new addressing**
   Every skill, workflow step instruction and in-repo document that tells an agent how to address a spec, plan or changelog record uses the new form, so no shipped instruction produces a refused command.
-- [ ] **The convention is documented**
+- [x] **The convention is documented**
   The configuration reference documents that reported locations are relative to the configuration file that declares the store, and the command reference documents the addressing rules and both new error codes.
-- [ ] **External callers get a migration note**
+- [x] **External callers get a migration note**
   A migration note tells external callers exactly how each old spelling maps to the new one and that the old spellings are now refused.
-- [ ] **The documentation site is updated**
+- [x] **The documentation site is updated**
   The project's documentation site reflects the new addressing, the location convention and the migration note.
 
 <!--
@@ -85,29 +85,29 @@ Today a feature's single name — the one every Spektacular workflow already rec
 -->
 ## Acceptance Criteria
 
-- [ ] **Bare feature name reads each phase**
+- [x] **Bare feature name reads each phase**
   For a completed feature, reading its spec, its plan's `plan` document and its changelog record each succeeds using only the feature's bare name (plus `plan` as the document for the plan), with no extension or path joining.
-- [ ] **Spec list names round-trip**
+- [x] **Spec list names round-trip**
   Every name printed by listing specs, passed unchanged to a spec read, returns that spec's content; no listed name ends in an extension.
-- [ ] **Plan list names round-trip**
+- [x] **Plan list names round-trip**
   Listing a feature's plan prints document names with no extension, and each one, passed with the feature name to a plan read, returns that document's content.
-- [ ] **Changelog list names round-trip, with and without a repo**
+- [x] **Changelog list names round-trip, with and without a repo**
   Every name printed by listing changelog records — project-level and for a named repo — passed unchanged to a changelog read with the same repo selection, returns that record; no listed name ends in an extension.
-- [ ] **Writes, deletes and status changes use the same address**
+- [x] **Writes, deletes and status changes use the same address**
   Writing, deleting and changing the document status of a spec, a plan document and a changelog record each succeed when given the bare names a list printed, and act on the same document a read with those names returns.
-- [ ] **Extension is refused, naming the fix**
+- [x] **Extension is refused, naming the fix**
   Reading, writing, deleting or changing the document status of a spec, plan document or changelog record with a name ending in `.md`, or with a plan addressed as a joined `feature/plan.md`, fails with the documented extension error code, changes nothing on disk, and the next action shows the same command with the correct spelling.
-- [ ] **Plan read without document is actionable**
+- [x] **Plan read without document is actionable**
   Reading a plan with only a feature name fails with the documented document-required error code (not an internal error), the message and output contain no absolute host path, and the next action names the command that lists that plan's documents plus an example read.
-- [ ] **List locations are config-relative**
+- [x] **List locations are config-relative**
   The locations printed by listing specs, plans, a plan's documents and changelog records start with the store's configured directory and contain neither the project's hidden settings directory prefix nor an absolute path.
-- [ ] **Changelog location is the same shape with and without a repo**
+- [x] **Changelog location is the same shape with and without a repo**
   The locations printed by listing changelog records with and without a named repo follow the same relative-to-declaring-configuration convention.
-- [ ] **Status reports addresses and a relative location**
+- [x] **Status reports addresses and a relative location**
   Plan status and implement status for a feature report its bare plan name, a plan document name of `plan`, and a plan location relative to the declaring configuration; no absolute host path appears in either.
-- [ ] **Shipped instructions produce no refused command**
+- [x] **Shipped instructions produce no refused command**
   Searching the shipped skills, workflow step instructions and in-repo docs finds no instruction that addresses a spec, plan or changelog record with an extension or a joined path, and a full spec → plan → implement run driven by those instructions completes without any addressing refusal.
-- [ ] **Docs describe the convention and the migration**
+- [x] **Docs describe the convention and the migration**
   The configuration reference, the command reference (both new error codes included), the migration note and the documentation site each describe the new addressing and location convention.
 
 <!--
