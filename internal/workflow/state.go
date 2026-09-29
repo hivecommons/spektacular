@@ -12,9 +12,11 @@ import (
 // State is the persisted progress of a workflow.
 // Name, ArtifactPath and other domain-specific values live in Data.
 type State struct {
-	Kind           string         `json:"kind,omitempty"` // "spec" | "plan" | "implement"
+	Kind           string         `json:"kind,omitempty"` // "spec" | "plan" | "implement" | "workflow:<name>"
 	CurrentStep    string         `json:"current_step"`
 	CompletedSteps []string       `json:"completed_steps"`
+	TerminalStep   string         `json:"terminal_step,omitempty"`
+	TerminalSteps  []string       `json:"terminal_steps,omitempty"`
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	Data           map[string]any `json:"data"`
@@ -23,7 +25,16 @@ type State struct {
 // InProgress reports whether the workflow has started but not yet finished.
 // It is the single definition of "resumable" used across the resume feature.
 func (s *State) InProgress() bool {
-	return s.CurrentStep != "" && s.CurrentStep != "finished"
+	if s.CurrentStep == "" || s.CurrentStep == "done" {
+		return false
+	}
+	if len(s.TerminalSteps) > 0 {
+		return !slices.Contains(s.TerminalSteps, s.CurrentStep)
+	}
+	if s.TerminalStep != "" {
+		return s.CurrentStep != s.TerminalStep
+	}
+	return s.CurrentStep != "finished"
 }
 
 func (s *State) markCompleted(step string) {

@@ -147,8 +147,8 @@ func runRoot() int {
 }
 
 // isWorkflowStart reports whether this invocation is the command that just
-// began a brand-new workflow session — a `<kind> new` call (kind ∈
-// spec/plan/implement) that actually succeeded in creating fresh state,
+// began a brand-new workflow session — a built-in `<kind> new` call or a
+// user-defined `workflow new` call — that actually succeeded in creating fresh state,
 // rather than bouncing off an in-progress workflow (a workflow_in_progress
 // error, which returns a non-nil error and so exitCode != 0) or running as
 // --dry-run (which never touches the real state.json). It deliberately does
@@ -170,7 +170,7 @@ func isWorkflowStart(executedCmd *cobra.Command, exitCode int) bool {
 		return false
 	}
 	switch executedCmd.Parent().Name() {
-	case "spec", "plan", "implement":
+	case "spec", "plan", "implement", "workflow":
 	default:
 		return false
 	}
@@ -361,6 +361,7 @@ func init() {
 	rootCmd.AddCommand(skillCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(artifactsCmd)
+	rootCmd.AddCommand(customWorkflowCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(migrateCmd)
 }

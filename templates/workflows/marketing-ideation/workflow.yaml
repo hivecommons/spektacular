@@ -1,0 +1,20 @@
+name: marketing-ideation
+description: Shape an open source project marketing idea into a publishable campaign brief.
+steps:
+  - name: brief
+    prompt: steps/01-brief.md
+    transitions:
+      - to: audience
+  - name: audience
+    prompt: steps/02-audience.md
+    transitions:
+      - to: brief
+      - to: ideas
+  - name: ideas
+    prompt: steps/03-ideas.md
+    transitions:
+      - to: audience
+      - to: publish
+  - name: publish
+    prompt: steps/04-publish.md
+    transitions: []

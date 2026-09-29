@@ -35,6 +35,17 @@ func (d *mapData) Set(key string, value any) {
 	d.base[key] = value
 }
 
+func (d *mapData) Snapshot() map[string]any {
+	snapshot := make(map[string]any, len(d.base)+len(d.overlay))
+	for k, v := range d.base {
+		snapshot[k] = v
+	}
+	for k, v := range d.overlay {
+		snapshot[k] = v
+	}
+	return snapshot
+}
+
 func (d *mapData) setOverlay(key string, value any) {
 	d.overlay[key] = value
 }

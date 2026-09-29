@@ -44,14 +44,22 @@ type ResultWriter interface {
 // after the current FSM event completes.
 type StepCallback func(data Data, out ResultWriter, st store.Store, cfg Config) (string, error)
 
+// ConditionFunc decides whether a transition is currently usable. The src
+// argument is the FSM state the transition would leave, which lets generated
+// workflows attach different conditions to different incoming edges of the
+// same step. A nil condition means the transition is always available.
+type ConditionFunc func(src string, data Data) bool
+
 // StepConfig defines a single step in a workflow.
 // Name is the event name (and step identifier).
 // Src lists valid source states. Dst is the destination state.
 type StepConfig struct {
-	Name     string
-	Src      []string
-	Dst      string
-	Callback StepCallback
+	Name      string
+	Src       []string
+	Dst       string
+	Callback  StepCallback
+	Condition ConditionFunc
+	Terminal  bool
 }
 
 // Workflow is a linear state machine with persistence.
@@ -81,9 +89,16 @@ func New(steps []StepConfig, statePath string, cfg Config, st store.Store, out R
 	// Load existing state or create new.
 	var state *State
 	var initialState string
+	terminalSteps := terminalStepNames(steps)
+	terminalStep := ""
+	if len(terminalSteps) == 1 {
+		terminalStep = terminalSteps[0]
+	}
 	if s, err := loadState(statePath); err == nil {
 		state = s
 		initialState = s.CurrentStep
+		state.TerminalStep = terminalStep
+		state.TerminalSteps = terminalSteps
 	} else {
 		initialState = steps[0].Src[0]
 		now := time.Now().UTC()
@@ -91,6 +106,8 @@ func New(steps []StepConfig, statePath string, cfg Config, st store.Store, out R
 			Kind:           cfg.Kind,
 			CurrentStep:    initialState,
 			CompletedSteps: []string{},
+			TerminalStep:   terminalStep,
+			TerminalSteps:  terminalSteps,
 			CreatedAt:      now,
 			UpdatedAt:      now,
 		}
@@ -137,12 +154,11 @@ func New(steps []StepConfig, statePath string, cfg Config, st store.Store, out R
 		}
 	}
 
-	// Implicit final transition to "done".
-	if len(steps) > 0 {
-		last := steps[len(steps)-1]
+	// Implicit final transition to "done" from every terminal step.
+	if len(terminalSteps) > 0 {
 		events = append(events, fsm.EventDesc{
 			Name: "done",
-			Src:  []string{last.Dst},
+			Src:  terminalSteps,
 			Dst:  "done",
 		})
 	}
@@ -167,9 +183,12 @@ func New(steps []StepConfig, statePath string, cfg Config, st store.Store, out R
 // If the step callback returns a next step name, Next delegates to Goto to
 // advance the workflow further.
 func (w *Workflow) Next() error {
-	transitions := w.FSM.AvailableTransitions()
+	transitions := w.availableTransitions()
 	if len(transitions) == 0 {
-		return fmt.Errorf("workflow is already complete")
+		if len(w.FSM.AvailableTransitions()) == 0 {
+			return fmt.Errorf("workflow is already complete")
+		}
+		return w.invalidTransitionError("next")
 	}
 	w.pendingGoto = ""
 	if err := w.FSM.Event(context.Background(), transitions[0]); err != nil {
@@ -188,6 +207,10 @@ func (w *Workflow) Next() error {
 func (w *Workflow) Goto(name string) error {
 	if w.Current() == name {
 		return w.renderStep(name)
+	}
+
+	if !w.transitionAllowed(name) {
+		return w.invalidTransitionError(name)
 	}
 
 	w.pendingGoto = ""
@@ -213,8 +236,12 @@ func (w *Workflow) translateTransitionError(event string, err error) error {
 		return err
 	}
 
+	return w.invalidTransitionError(event)
+}
+
+func (w *Workflow) invalidTransitionError(event string) error {
 	current := w.Current()
-	valid := w.FSM.AvailableTransitions()
+	valid := w.availableTransitions()
 	nextAction := w.nextActionForSteps(valid)
 	if current == "walkthrough" {
 		nextAction = w.walkthroughRevisionHint() + " " + nextAction
@@ -249,6 +276,10 @@ func (w *Workflow) nextActionForSteps(valid []string) string {
 	}
 	commands := make([]string, len(valid))
 	for i, step := range valid {
+		if strings.HasPrefix(w.cfg.Kind, "workflow:") {
+			commands[i] = fmt.Sprintf(`%s workflow goto %s --data '{"step":"%s"}'`, w.cfg.Command, strings.TrimPrefix(w.cfg.Kind, "workflow:"), step)
+			continue
+		}
 		commands[i] = fmt.Sprintf(`%s %s goto --data '{"step":"%s"}'`, w.cfg.Command, w.cfg.Kind, step)
 	}
 	if len(commands) == 1 {
@@ -284,18 +315,15 @@ func (w *Workflow) renderStep(name string) error {
 	return nil
 }
 
-// commitTerminal marks the terminal step as completed and persists state
-// when the workflow has landed on the last step. enter_state only marks
-// src on each transition, so without this the terminal step would never be
-// recorded in completed_steps (nothing ever transitions away from it).
+// commitTerminal marks a terminal step as completed and persists state when
+// the workflow has landed on any terminal state. enter_state only marks src on
+// each transition, so without this a terminal step would never be recorded in
+// completed_steps when nothing transitions away from it.
 func (w *Workflow) commitTerminal() {
-	if len(w.steps) == 0 {
+	if len(w.steps) == 0 || !slices.Contains(w.state.TerminalSteps, w.Current()) {
 		return
 	}
-	last := w.steps[len(w.steps)-1].Dst
-	if w.Current() != last {
-		return
-	}
+	last := w.Current()
 	if slices.Contains(w.state.CompletedSteps, last) {
 		return
 	}
@@ -379,6 +407,52 @@ func (w *Workflow) StepStatus() []StepInfo {
 type StepInfo struct {
 	Name   string
 	Status string // "pending", "current", "completed"
+}
+
+func (w *Workflow) availableTransitions() []string {
+	transitions := w.FSM.AvailableTransitions()
+	if len(transitions) == 0 {
+		return transitions
+	}
+	filtered := transitions[:0]
+	for _, transition := range transitions {
+		if w.transitionAllowed(transition) {
+			filtered = append(filtered, transition)
+		}
+	}
+	return filtered
+}
+
+func (w *Workflow) transitionAllowed(name string) bool {
+	if name == "done" {
+		return slices.Contains(w.state.TerminalSteps, w.Current())
+	}
+	for _, step := range w.steps {
+		if step.Name != name {
+			continue
+		}
+		if !slices.Contains(step.Src, w.Current()) {
+			return false
+		}
+		if step.Condition == nil {
+			return true
+		}
+		return step.Condition(w.Current(), w.data)
+	}
+	return false
+}
+
+func terminalStepNames(steps []StepConfig) []string {
+	terminals := []string{}
+	for _, step := range steps {
+		if step.Terminal {
+			terminals = append(terminals, step.Dst)
+		}
+	}
+	if len(terminals) > 0 || len(steps) == 0 {
+		return terminals
+	}
+	return []string{steps[len(steps)-1].Dst}
 }
 
 func (w *Workflow) validStep(name string) bool {

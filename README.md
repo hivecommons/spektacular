@@ -54,6 +54,48 @@ A name with an extension, or a plan written as one path (`<name>/plan.md`), is r
 
 For the full pipeline, see the [how-it-works documentation](https://spektacular.dev/how-it-works/).
 
+### User-defined workflows
+
+The same state-machine engine can run non-code workflows defined without Go code. A workflow is a directory containing `workflow.yaml` plus markdown prompts. Project workflows live under `.spektacular/workflows/<workflow-name>/`; user workflows live under `${XDG_CONFIG_HOME:-$HOME/.config}/spektacular/workflows/<workflow-name>/`. Built-in examples ship under the same contract.
+
+`workflow.yaml` declares a slug-safe workflow name, a description, and ordered steps. Unknown YAML keys are rejected so typoed fields cannot silently change the graph. Each step names a markdown prompt and optional transitions. If `transitions` is omitted, the step advances to the next listed step. `transitions: []` makes the step terminal. A transition can point backward, so review/revision loops are explicit. A transition can also carry `when` with `key` plus `equals`, `not_equals`, or `exists` to make conditional skips explicit; only transitions whose condition matches the workflow data are valid from that step.
+
+```yaml
+name: release-announcement
+description: Draft an announcement for a release.
+steps:
+  - name: brief
+    prompt: steps/01-brief.md
+  - name: draft
+    prompt: steps/02-draft.md
+    transitions:
+      - to: brief
+      - to: publish
+        when:
+          key: approved
+          equals: true
+  - name: publish
+    prompt: steps/03-publish.md
+    transitions: []
+```
+
+The `when` condition reads from the persisted `data` map. `exists: true` requires the key to be present; `exists: false` requires it to be absent. `equals` and `not_equals` use typed equality, with JSON/YAML numeric values compared by numeric value.
+
+Prompts are Mustache templates. They receive `workflow`, `run_name`, `name`, `step`, `title`, `next_steps`, `command`, `config.command`, and every key stored in the workflow's `data`. Start and drive a workflow with:
+
+```bash
+spektacular workflow new release-announcement --data '{"name":"v1-launch"}'
+spektacular workflow goto release-announcement --data '{"step":"draft"}'
+spektacular workflow status release-announcement
+spektacular workflow steps release-announcement
+```
+
+State is persisted in `.spektacular/state.json` with the same `kind`, `current_step`, `completed_steps`, timestamps, and `data` shape used by the built-in workflows. Terminal steps are persisted too, so workflows whose terminal step is not named `finished` — or whose graph has multiple terminal sinks — still resume and restart correctly. The bundled `marketing-ideation` workflow is a non-code example with a backward review step:
+
+```bash
+spektacular workflow new marketing-ideation --data '{"name":"community-launch"}'
+```
+
 ## Install & getting started
 
 Spek is a single self-contained Go binary.
