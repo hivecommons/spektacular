@@ -405,6 +405,43 @@ bringing a store back into line stays something you run deliberately. An entry y
 agree to remove is removed with `spektacular knowledge delete`, and only after you
 agree to that entry specifically.
 
+## Seeding spec research
+
+Knowledge is not only a planning-time input. A spec's interview step starts from
+it too, so a spec opens from the project's prior decisions, conventions and domain
+documentation instead of from a blank page. `spektacular knowledge research
+<query>` searches every **research source** in one pass and reports each one
+separately:
+
+| Source | What it searches | When it runs | Citation |
+|--------|------------------|--------------|----------|
+| `knowledge` | The configured knowledge stores, exactly as `knowledge search` does | Always | `knowledge:<tier>/<name>/<path>` |
+| `adr` | Markdown decision records in each registered repo's `adr/`, `adrs/`, `doc/adr/`, `docs/adr/`, `docs/adrs/`, `docs/decisions/`, `docs/architecture/decisions/` or `architecture/decisions/` | When any registered repo has one of those folders | `adr:<repo>/<path>` |
+| `hive` | The Hive knowledge export the Hive contributor launcher writes to `~/agent.md` | Under Hive (`HIVE_HUB` set) | `hive:<section>/<title>` |
+| `context7` | Context7 library documentation for the query | Under Hive, or when `CONTEXT7_API_KEY` is set | `context7:<library id>` |
+
+Each source reports a status: **used** (searched, possibly with nothing to show),
+**skipped** (not configured in this environment) or **unavailable** (configured but
+could not be searched), with the reason for the last two. A skipped or unavailable
+source never fails the command. Outside Hive the research therefore degrades to the
+local knowledge stores with no error.
+
+The sources rank differently where they have to. Knowledge entries, ADRs and Hive
+export entries are all scored with the formula above, so they sit on one scale.
+Context7 returns libraries in its own relevance order, and each finding's excerpts
+are the strongest matching lines of that library's documentation for the query.
+Each finding also carries a `read` field saying how to fetch it in full: a
+`knowledge read` command, a file path, or a documentation URL.
+
+Spektacular only ever reads the Hive export: it never fetches the export itself and
+never handles the launcher's credentials. The Context7 key, when set, is sent only
+to `https://context7.com`, and redirects are never followed.
+
+The interview step records every finding it drew on, by its citation, in the
+spec's `## Research Sources` section, along with which sources were skipped or
+unavailable and why. That section is how a spec's reader traces a requirement back
+to the decision it came from.
+
 ## Command reference
 
 Agents (and you) reach knowledge through the `spektacular knowledge` commands
@@ -414,6 +451,7 @@ Each command has a `--schema` mode that prints its input/output schema.
 | Command | Purpose |
 |---------|---------|
 | `spektacular knowledge search <query> [--tier T] [--filter N] [--tag G]` | Keyword-search the stores the request covers (always-applied categories excluded); ranked, one tier-, store- and category-tagged result per matching document, each with title, score, excerpts, tags, and a content checksum. A document need not contain every query word. Repeatable `--tag` restricts results to entries carrying every tag listed |
+| `spektacular knowledge research <query> [--limit N]` | Seed spec research: search the knowledge stores, repo ADR folders, the Hive knowledge export and Context7 in one pass, reporting each source as used, skipped or unavailable with up to `N` cited findings (default 5) |
 | `spektacular knowledge read --data '{"tier":"repo","name":"docs","path":"architecture/x.md"}'` | Read one entry's full body from one addressed store |
 | `spektacular knowledge list [--tier T] [--filter N]` | List every entry across the stores the request covers |
 | `spektacular knowledge write --data '{"tier":"repo","name":"docs","path":"gotchas/x.md"}' --file <path>` | Write an entry into one addressed store (content from `--file`, or stdin) |

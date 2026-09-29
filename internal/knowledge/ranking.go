@@ -4,6 +4,8 @@ import (
 	"math"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/hivecommons/spektacular/internal/store"
 )
 
 // Ranking lives here, one layer above the store interface, and deliberately not
@@ -190,4 +192,24 @@ func score(e Evidence) float64 {
 	}
 	coverage := float64(covered) / float64(len(e.BodyCounts))
 	return total * math.Pow(coverage, coverageExponent)
+}
+
+// ScoreHit scores one reported hit against the query terms it was searched
+// with: the tag affinity of each term against the hit's declared tags, plus
+// the damped body counts the reporter observed. It is the one entry point to
+// the formula for anything ranking documents outside a Set — research seeding
+// ranks ADR files and Hive knowledge entries with it — so every ranked source
+// shares one scale and the constants above stay the single source of truth.
+func ScoreHit(terms []string, hit store.Hit) float64 {
+	affinity := make([]float64, len(terms))
+	for i, term := range terms {
+		affinity[i] = tagAffinity(term, hit.Tags)
+	}
+	return score(Evidence{BodyCounts: hit.BodyCounts, TagAffinity: affinity})
+}
+
+// CutoffFloor is the lowest score a hit may carry and still be shown, given
+// the best score in the same result set.
+func CutoffFloor(best float64) float64 {
+	return best * cutoffFraction
 }

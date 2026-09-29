@@ -13,6 +13,7 @@ Each section's HTML comment in the scaffold below also states that section's req
 - `.spektacular/work/{{spec_name}}/technical_approach.md` → `## Technical Approach`
 - `.spektacular/work/{{spec_name}}/success_metrics.md` → `## Success Metrics`
 - `.spektacular/work/{{spec_name}}/non_goals.md` → `## Non-Goals`
+- `.spektacular/work/{{spec_name}}/research_sources.md` → `## Research Sources`
 
 If a working file is missing, that section was never completed — STOP and gather it (re-run the matching step) before assembling.
 

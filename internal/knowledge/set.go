@@ -190,11 +190,7 @@ func (s *Set) Search(query string, sel Selector) ([]store.Hit, error) {
 			// Affinity is computed here, not in the store, so a provider only
 			// ever has to report the tags it read and never has to know they
 			// affect rank.
-			affinity := make([]float64, len(terms))
-			for ti, term := range terms {
-				affinity[ti] = tagAffinity(term, hit.Tags)
-			}
-			hit.Score = score(Evidence{BodyCounts: hit.BodyCounts, TagAffinity: affinity})
+			hit.Score = ScoreHit(terms, hit)
 			if hit.Score == 0 {
 				continue
 			}
@@ -265,7 +261,7 @@ func (s *Set) Search(query string, sel Selector) ([]store.Hit, error) {
 	// point: the strongest hit may live in a different store from the weak one
 	// being judged, and a per-store cutoff would keep a weak hit alive purely
 	// because its own store held nothing better.
-	floor := eligible[0].Score * cutoffFraction
+	floor := CutoffFloor(eligible[0].Score)
 	hits := eligible[:0]
 	for _, hit := range eligible {
 		if hit.Score < floor {

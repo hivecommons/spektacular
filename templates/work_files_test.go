@@ -124,7 +124,7 @@ func TestAssemblyStepsMapSectionFiles(t *testing.T) {
 	spec08 := mustReadTemplate(t, "steps/spec/08-verification.md")
 	for _, f := range []string{
 		"overview.md", "requirements.md", "constraints.md", "acceptance_criteria.md",
-		"technical_approach.md", "success_metrics.md", "non_goals.md",
+		"technical_approach.md", "success_metrics.md", "non_goals.md", "research_sources.md",
 	} {
 		require.Containsf(t, spec08, f, "spec assembly step must read section file %s", f)
 	}

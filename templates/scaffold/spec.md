@@ -87,3 +87,16 @@
   Leave blank if there are no explicit exclusions to call out.
 -->
 ## Non-Goals
+
+
+<!--
+  RESEARCH SOURCES
+  The prior knowledge this spec was drafted from, so a reader can trace
+  where a decision or constraint came from. Filled from the interview's
+  `knowledge research` seed.
+  Format: one bullet per source drawn on, giving its citation verbatim
+  (e.g. `knowledge:repo/app/decisions/retries.md`, `adr:app/docs/adr/0003-queue.md`,
+  `hive:Decisions/Use NATS`, `context7:/nats-io/nats.go`) and what it contributed;
+  then one bullet per research source that was skipped or unavailable, with its reason.
+-->
+## Research Sources

@@ -238,25 +238,7 @@ func scanFile(path string, terms []string) (fileAggregate, error) {
 	scanner := bufio.NewScanner(io.MultiReader(bytes.NewReader(body), tee))
 	scanner.Buffer(make([]byte, 0, 64*1024), scanBufferBytes)
 	for scanner.Scan() {
-		line := scanner.Text()
-		if !agg.titleSet {
-			if text, ok := headingText(line); ok {
-				agg.title = text
-				agg.titleSet = true
-			}
-		}
-		lowered := strings.ToLower(line)
-		cand := candidateLine{text: line}
-		for i, term := range terms {
-			if count := strings.Count(lowered, term); count > 0 {
-				agg.counts[i] += count
-				cand.distinct++
-				cand.total += count
-			}
-		}
-		if cand.total > 0 {
-			agg.addCandidate(cand)
-		}
+		agg.scanLine(scanner.Text(), terms)
 	}
 	if err := scanner.Err(); err != nil {
 		// A scanner is unrecoverable after an over-long line, so skip the
@@ -273,6 +255,77 @@ func scanFile(path string, terms []string) (fileAggregate, error) {
 	}
 	agg.checksum = hex.EncodeToString(hasher.Sum(nil))
 	return agg, nil
+}
+
+// scanLine folds one body line into the aggregate: the first heading becomes
+// the title, each term's occurrences are counted, and a matching line is
+// ranked as an excerpt candidate. It is the one per-line rule shared by a file
+// scan and DescribeBytes, so a document reports the same evidence whether it
+// was read off disk or handed over in memory.
+func (a *fileAggregate) scanLine(line string, terms []string) {
+	if !a.titleSet {
+		if text, ok := headingText(line); ok {
+			a.title = text
+			a.titleSet = true
+		}
+	}
+	lowered := strings.ToLower(line)
+	cand := candidateLine{text: line}
+	for i, term := range terms {
+		if count := strings.Count(lowered, term); count > 0 {
+			a.counts[i] += count
+			cand.distinct++
+			cand.total += count
+		}
+	}
+	if cand.total > 0 {
+		a.addCandidate(cand)
+	}
+}
+
+// DescribeBytes describes an in-memory document exactly as Search describes a
+// file: per-term body counts, the first heading as title (falling back to
+// locator), the strongest matching lines as excerpts, and a checksum over the
+// exact bytes. tags are the document's declared tags, supplied by the caller
+// because a document that did not come from a file declares them in its own
+// format. ok is false when the document offers no evidence for any term and
+// carries no tags, the same rejection Search applies. Terms must already be
+// lower-cased.
+func DescribeBytes(locator string, content []byte, tags []string, terms []string) (Hit, bool) {
+	agg := fileAggregate{counts: make([]int, len(terms)), tags: tags}
+	for _, line := range strings.Split(string(content), "\n") {
+		agg.scanLine(line, terms)
+	}
+	evidence := len(tags) > 0
+	for _, count := range agg.counts {
+		if count > 0 {
+			evidence = true
+			break
+		}
+	}
+	if !evidence {
+		return Hit{}, false
+	}
+	title := agg.title
+	if title == "" {
+		title = locator
+	}
+	excerpts := make([]string, 0, len(agg.best))
+	for _, c := range agg.best {
+		excerpts = append(excerpts, trimExcerpt(c.text))
+	}
+	if tags == nil {
+		tags = []string{}
+	}
+	sum := sha256.Sum256(content)
+	return Hit{
+		Path:       locator,
+		Title:      title,
+		Excerpts:   excerpts,
+		Checksum:   hex.EncodeToString(sum[:]),
+		Tags:       tags,
+		BodyCounts: agg.counts,
+	}, true
 }
 
 // headingText reports whether line is an ATX heading — its trimmed form is
