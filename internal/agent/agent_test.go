@@ -136,6 +136,27 @@ func TestInstallWorkflowSkills_WritesEveryRegisteredSkill(t *testing.T) {
 	require.Len(t, skillFiles, 6, "expected exactly six SKILL.md files, got %v", skillFiles)
 }
 
+func TestRegistrySkillsMatchRenderedWorkflowTemplates(t *testing.T) {
+	tmp := t.TempDir()
+	require.NoError(t, installWorkflowSkills(tmp, "skills", config.Config{Command: "spektacular"}, io.Discard))
+
+	for _, s := range workflowSkills {
+		wantPath := filepath.Join(tmp, "skills", s.Name, "SKILL.md")
+		gotPath := filepath.Join("..", "..", "skills", s.Name, "SKILL.md")
+
+		want, err := os.ReadFile(wantPath)
+		require.NoError(t, err, "reading rendered %s", s.Name)
+		got, err := os.ReadFile(gotPath)
+		require.NoError(t, err, "reading registry %s", s.Name)
+
+		require.Equal(t, string(want), string(got), "registry skill %s must be the rendered workflow template with the public spektacular command", s.Name)
+		require.Contains(t, string(got), "# Use with Hive", "registry skill %s must link users back to Hive", s.Name)
+		require.Contains(t, string(got), "https://docs.hivecommons.dev/docs/hive/spektacular-runs", "registry skill %s must link to the verified Hive integration page", s.Name)
+		require.NotContains(t, string(got), "/docs/hive/overview/introduction", "registry skill %s must not link to the nonexistent Hive overview URL", s.Name)
+		validateSkillFrontmatter(t, gotPath)
+	}
+}
+
 // skillFixtureWithImplement returns a source FS holding every workflow skill
 // template, with spek-implement's body set to implementBody, plus any extra
 // files given.

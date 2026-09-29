@@ -3,16 +3,22 @@ name: spek-new
 description: Create a new Specification for a feature.
 ---
 
-{{> partials/version-check}}
+> **Version check first.** Before running any other command, run `spektacular version check`.
+> - On `status: "match"`, continue with the skill and produce no version-related output.
+> - On `"mismatch"`, `"missing"` or `"upgrade_needed"`, the project's settings or installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to run `spektacular migrate` (they can preview it with `spektacular migrate --dry-run`), and wait for their decision before continuing.
+> - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
+> - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
-{{> partials/hive-integration}}
+# Use with Hive
+
+This skill works standalone with the `spektacular` CLI. To run Spek as part of governed agent fleets, use the Hive integration documented in [Using Spektacular with Hive](https://docs.hivecommons.dev/docs/hive/spektacular-runs) and the [Hive Commons docs](https://docs.hivecommons.dev/).
 
 > **STOP. Read this before running any command below.**
 > A single successful CLI call — including the very first `spec new` — is **NOT** task completion. It is not a milestone to report back to the user. It is one step out of many in a workflow that you must keep driving, turn after turn, without stopping, until the CLI itself tells you the workflow is *finished*. If you find yourself about to say "successfully completed" or summarize results after calling `spec new` or `spec goto` even once, you are wrong — go back and read the `instruction` field you just received, do what it says, and call `goto` again.
 
 # What this skill does
 
-This skill drives a **multi-step interactive workflow** that produces a complete specification file at the `spec_path` returned by the CLI. The workflow is owned by the `{{command}}` CLI, not by you — the CLI is the state machine and you are the executor.
+This skill drives a **multi-step interactive workflow** that produces a complete specification file at the `spec_path` returned by the CLI. The workflow is owned by the `spektacular` CLI, not by you — the CLI is the state machine and you are the executor.
 
 On each turn, the CLI returns JSON containing an `instruction` field. That instruction describes exactly one step (e.g. overview, requirements, acceptance criteria, …). You must:
 
@@ -31,11 +37,11 @@ Before any section is drafted, the workflow opens with an `interview` step: a si
 
 # Reading and writing the spec file
 
-The CLI owns the spec file. All spec file access goes through `{{command}} spec file`:
+The CLI owns the spec file. All spec file access goes through `spektacular spec file`:
 
-- `{{command}} spec file read <name>` — read a spec file from the spec store.
-- `{{command}} spec file write <name> --from <source-path>` — write a spec file into the spec store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
-- `{{command}} spec file list` — list spec files in the spec store.
+- `spektacular spec file read <name>` — read a spec file from the spec store.
+- `spektacular spec file write <name> --from <source-path>` — write a spec file into the spec store from a source file on disk. Stage the body under `.spektacular/tmp/` first, then `rm` the scratch file after a successful write.
+- `spektacular spec file list` — list spec files in the spec store.
 
 Path arguments are spec file names; `spec file` resolves them against the configured spec directory itself.
 
@@ -54,23 +60,23 @@ the document from it; where the user already has the document, it is stored exac
 
 Design documents are reached through the CLI, never by reading files directly:
 
-- `{{command}} design sources` — the design sources this project declares, with their locations.
-- `{{command}} design list` — the design documents in them.
-- `{{command}} design write --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
+- `spektacular design sources` — the design sources this project declares, with their locations.
+- `spektacular design list` — the design documents in them.
+- `spektacular design write --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
   design document Spektacular did not author, byte for byte, adding no frontmatter to it and
   reformatting nothing.
-- `{{command}} design author --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
+- `spektacular design author --data '{"source":"<name>","path":"<path>"}' --from <file>` — store a
   design Spektacular wrote with the user, stamping the same lifecycle record every spec and plan
   carries. Optionally `--spec <spec>` to record which spec's conversation produced it, and
   `--document-status <draft|final|superseded|archived>`. Rewriting an authored design this way
   keeps its original capture date and the specs already referencing it.
-- `{{command}} design ref add --data '{"spec":"<spec>","source":"<name>","path":"<path>"}'` —
+- `spektacular design ref add --data '{"spec":"<spec>","source":"<name>","path":"<path>"}'` —
   record the reference on the spec. A reference naming a source the project has not declared is
   refused and nothing is recorded.
 
 # Working files vs. the store document
 
-While you gather each section, write that section's agreed content directly to its own git-tracked working file under `.spektacular/work/<spec_name>/<section>.md` using your own `Write` tool. These working files are **not** store documents — writing them directly with `Write` is correct and expected, and is the one deliberate exception to the "never use `Write`/`Edit`" rule above. That rule protects only the **final assembled** spec, which is written solely through `{{command}} spec file write`. The per-section working files are scratch-but-durable: the verification step reads them back to assemble the final spec, and then the working directory is removed once the store write succeeds.
+While you gather each section, write that section's agreed content directly to its own git-tracked working file under `.spektacular/work/<spec_name>/<section>.md` using your own `Write` tool. These working files are **not** store documents — writing them directly with `Write` is correct and expected, and is the one deliberate exception to the "never use `Write`/`Edit`" rule above. That rule protects only the **final assembled** spec, which is written solely through `spektacular spec file write`. The per-section working files are scratch-but-durable: the verification step reads them back to assemble the final spec, and then the working directory is removed once the store write succeeds.
 
 `.spektacular/working-context.md` has a narrower role: it holds only your cross-cutting learnings and the answers the user gave to your questions — never a copy of section content (that lives in the per-section working files). On resume, read back **both** the section working files in `.spektacular/work/<spec_name>/` and `.spektacular/working-context.md`, so you continue from the interrupted step without re-asking for sections already completed.
 
@@ -79,7 +85,7 @@ While you gather each section, write that section's agreed content directly to i
 **First, check whether a workflow is already in progress — before asking the user for a spec name.** Run the new command with no `--data`:
 
 ```
-{{command}} spec new
+spektacular spec new
 ```
 
 This reads the project's single workflow state and changes nothing on disk. One of two things comes back:
@@ -91,23 +97,23 @@ This reads the project's single workflow state and changes nothing on disk. One 
 
 Only once you know there is no workflow to resume:
 
-Ask the user for a spec name now. If the user needs to see what names already exist to avoid collisions, run `{{command}} spec file list` — **do not** use `ls`, `find`, or the `Read` tool against `.spektacular/specs/`; the CLI's list is the source of truth for what counts as a spec. Then run:
+Ask the user for a spec name now. If the user needs to see what names already exist to avoid collisions, run `spektacular spec file list` — **do not** use `ls`, `find`, or the `Read` tool against `.spektacular/specs/`; the CLI's list is the source of truth for what counts as a spec. Then run:
 
 ```
-{{command}} spec new --data '{"name": "<spec_name>"}'
+spektacular spec new --data '{"name": "<spec_name>"}'
 ```
 
 **Only when `spec.id_method` is `external`** (check `.spektacular/config.yaml`), an external system's identifier must be supplied with:
 
 ```
-{{command}} spec new --data '{"name": "<spec_name>", "id": "<external_id>"}'
+spektacular spec new --data '{"name": "<spec_name>", "id": "<external_id>"}'
 ```
 
 Under `timestamp` or `counter` (the default is `timestamp`), **never pass `id`** — not even when the spec comes from a GitHub issue or ticket with its own number. The CLI mints the ID itself and rejects an explicit one, because a name without the configured ID prefix would be refused by every later plan and changelog write.
 
 The CLI may normalize and prefix the requested name. Always use the returned `spec_name` and `spec_path` as the source of truth for follow-up workflows.
 
-The command creates the spec file and state file automatically and returns the first `instruction`. From that point on, follow the loop above: do what the instruction says, then call `{{command}} spec goto --data '{"step":"<next_step>"}'` to get the next one. Do not invent step names — every instruction tells you the exact `goto` command to run next.
+The command creates the spec file and state file automatically and returns the first `instruction`. From that point on, follow the loop above: do what the instruction says, then call `spektacular spec goto --data '{"step":"<next_step>"}'` to get the next one. Do not invent step names — every instruction tells you the exact `goto` command to run next.
 
 ### If the project has uncommitted changes
 
@@ -118,13 +124,13 @@ This is a question for the user, not a decision for you. Tell them which reposit
 To commit the existing changes first:
 
 ```
-{{command}} spec new --data '{"name": "<spec_name>", "commit_existing": true}'
+spektacular spec new --data '{"name": "<spec_name>", "commit_existing": true}'
 ```
 
 To start without committing them:
 
 ```
-{{command}} spec new --data '{"name": "<spec_name>", "commit_existing": false}'
+spektacular spec new --data '{"name": "<spec_name>", "commit_existing": false}'
 ```
 
 - `true` commits the existing changes first, in their own commit whose message says they are the user's work from before the workflow. The workflow then starts on a clean tree.
@@ -136,16 +142,16 @@ Never choose for the user, and never guess from context which they would want �
 
 When the in-progress check above returns a resume report:
 
-**First check the report's `kind`.** If it is **not** `spec`, a *different* workflow (a plan or implement run) is in progress — you cannot resume it from the spec skill, and the CLI will refuse to. Do **not** run a `spec goto`. Instead follow the report's `instruction`: tell the user a `<kind>` workflow is in progress and let them choose — continue it with that workflow's skill (`{{command}} <kind> goto`), or discard it and start the spec with `{{command}} spec new --force`. Only proceed with the steps below when the report's `kind` is `spec`.
+**First check the report's `kind`.** If it is **not** `spec`, a *different* workflow (a plan or implement run) is in progress — you cannot resume it from the spec skill, and the CLI will refuse to. Do **not** run a `spec goto`. Instead follow the report's `instruction`: tell the user a `<kind>` workflow is in progress and let them choose — continue it with that workflow's skill (`spektacular <kind> goto`), or discard it and start the spec with `spektacular spec new --force`. Only proceed with the steps below when the report's `kind` is `spec`.
 
 1. Ask the user whether to **resume** the in-progress spec or **start a new one**. (The report's `instruction` field restates both options.)
 2. **To resume**, first read back the previous session's work with your own file tools: the per-section working files under `.spektacular/work/<name>/` (sections already completed) **and** `.spektacular/working-context.md` (learnings + the user's answers). Then run the resume command using the report's `current_step`:
 
    ```
-   {{command}} spec goto --data '{"step":"<current_step>"}'
+   spektacular spec goto --data '{"step":"<current_step>"}'
    ```
 3. **To start fresh instead** (discarding the in-progress workflow — it remains recoverable via git), re-run with `--force` and a name:
 
    ```
-   {{command}} spec new --force --data '{"name": "<spec_name>"}'
+   spektacular spec new --force --data '{"name": "<spec_name>"}'
    ```

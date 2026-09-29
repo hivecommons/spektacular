@@ -9,6 +9,10 @@ description: Search, contribute to, or update the project's knowledge base.
 > - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
 > - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
+# Use with Hive
+
+This skill works standalone with the `go run .` CLI. To run Spek as part of governed agent fleets, use the Hive integration documented in [Using Spektacular with Hive](https://docs.hivecommons.dev/docs/hive/spektacular-runs) and the [Hive Commons docs](https://docs.hivecommons.dev/).
+
 # What this skill does
 
 This skill orchestrates the existing `go run . knowledge` CRUD surface for ad-hoc read, contribute, update, audit, and maintenance operations on the project's knowledge store, without starting a spec/plan/implement flow. Unlike `spek-new`, `spek-plan`, and `spek-implement`, it does not drive an interactive CLI state machine — it is a static playbook. The agent recognises the user's natural-language intent, picks one of five branches (lookup / contribute / update / audit / maintenance), and calls the matching `go run . knowledge` command directly.
