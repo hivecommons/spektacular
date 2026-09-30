@@ -75,7 +75,7 @@ sections after this one detail each part.
                  └────────────────────┬───────────────────────┘
                                       ▼
                  ┌───────────────── 4. IMPLEMENT ─────────────┐
-                 │ implement new <plan>                       │
+                 │ implement new <spec>                       │
                  │   dependency check (warn / refuse)         │
                  │   tasks → complete                         │
                  └────────────────────┬───────────────────────┘
@@ -105,8 +105,10 @@ If the work is too big, the agent offers a split; the user decides.
 **3. Plan.** Unchanged. Each spec gets its own plan with `plan new <spec>`, in any order. Planning a
 spec whose dependencies are not implemented yet is normal and never checked.
 
-**4. Implement.** `implement new <plan>` runs the dependency check before the first task: every
-spec the plan's spec depends on must be implemented, meaning its plan has every task complete.
+**4. Implement.** What gets implemented is a spec, not a plan: the user implements a spec, and the
+plan is how the implement workflow carries it out. `implement new <spec>` finds the spec's plan (it
+shares the spec's name) and runs the dependency check before the first task: every spec it depends
+on must be implemented, meaning that spec's plan has every task complete.
 Unmet dependencies warn and let the user continue, or refuse under `epic.strict_dependencies`.
 Implementation then runs as today.
 
@@ -659,5 +661,8 @@ implement this design:
   snapshot of the source with the spec.
 - **Posting back to the source:** whether the agent, with the user's permission, comments on the
   issue naming the spec created from it.
+- **Implement wording:** `implement new` takes the spec's name. The plan shares it, so behaviour
+  does not change, but the help text ("against an existing plan"), its input field and the
+  `spek-implement` skill are reworded to say a spec is being implemented.
 - **PR #65:** whether research seeding from Hive knowledge, ADRs and Context7 shares the seeding
   stage or stays separate.
