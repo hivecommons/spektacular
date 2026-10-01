@@ -71,3 +71,35 @@
 - Overview, requirements, ACs, constraints, technical approach all confirmed by the user ("ok") as drafted.
 - Tech approach defaults confirmed: no source snapshot, no post-back, PR #65 separate.
 - Non-goals to include: AGENTS.md spec-trigger unchanged; plans stay 1:1 with specs.
+
+---
+
+# Plan workflow: 000060_epics-and-seeded-specs (started 2026-10-01)
+
+- Spec chosen by the user: 000060_epics-and-seeded-specs. User committed pending changes themselves
+  before `plan new` (no commit_existing flag needed).
+- Spec references design `design` / `epics-and-seeded-specs.md` — binding; architecture builds on it.
+- Success metrics to carry into Testing Approach: (1) seeded spec asks only gap questions,
+  (2) code+docs/tests/config never gets a split offer, (3) one status command shows whole epic.
+
+## Plan discovery learnings (2026-10-01)
+
+- Repos: spektacular (Go CLI) and docs (website). Research saved to .spektacular/work/000060_epics-and-seeded-specs/research.md.
+- Key calls: separate `internal/epic` frontmatter type (shared Metadata.Specs clashes); hand-written
+  `epic` verbs like `cmd/design.go`; schema bump 3->4 with `project3to4` (spec AC demands migration);
+  `split` step on the linear path verification -> split -> finished, also reachable from section
+  steps; split text in partials shared with spek-new skill; implement dependency check refuses with
+  `dependencies_unmet`, override by re-run with `override_dependencies: true`; stub = unclosed
+  draft not in active workflow; epic named after its first spec.
+- Self-hosting trap: after schema bump, this repo needs `go run . migrate` (ask user first).
+- Drafted sections saved in work dir: research, architecture, conventions, components, data_structures,
+  implementation_detail, dependencies, testing_approach, milestones, tasks_plan, tasks_context, assumptions.
+- 19 tasks / 4 milestones; ids from `plan task-id` are in tasks_plan.md (do not regenerate).
+- 2026-10-01: plan.md, context.md, research.md committed to the plan store; work dir removed. Now in walkthrough.
+- Walkthrough (2026-10-01), user decisions applied to spec, design and plan:
+  - splits always act on a complete spec (a mid-workflow request waits for completion) and write complete `final` specs via `epic split` (all sections in the JSON); no stubs, no continuing stubs;
+  - work that starts as items goes epic-first: `epic write` with no specs, then `spec new` with `epic` + `sources` per child; chaining = offer the next source item with no spec;
+  - when starting a spec and epics exist, ask about joining one, then read the epic and its specs;
+  - adding to a completed epic needs confirmation (`epic_complete`, `confirm_completed_epic`); completion stays derived;
+  - the user wants `epic split` kept as one command (reliability over agent-composed steps).
+- New task 9cdca194 "Guard additions to a completed epic"; task 31c5ced7 retitled "Start a spec with sources or in an epic".

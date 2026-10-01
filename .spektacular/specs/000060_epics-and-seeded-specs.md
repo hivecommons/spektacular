@@ -50,27 +50,31 @@ them get complete criteria instead of filling gaps with guesses.
   The system must refuse to place a specification in more than one epic, or an epic inside another epic.
 - [ ] **Epics are optional, their store is always configured**
   Projects that never split a specification see no change in behaviour. Every project, new or existing, has an epic store configured: new projects get it when they are set up, and existing projects get it when they are brought up to date. The store's folder is created the first time an epic is written, if it does not already exist.
+- [ ] **Start a spec in an epic**
+  When a user starts a new specification in a project that has epics, the agent asks whether it belongs to one of them, unless the request already makes that clear. If it does, the agent reads the epic and the specifications already in it before the interview, so the new specification builds on what they cover instead of repeating it, and its dependencies on them can be recorded. An epic can begin with no specifications.
+- [ ] **Adding to a completed epic**
+  Adding a specification to an epic whose specifications are all implemented produces a warning that the epic is complete. If the user goes ahead, the specification is added and the epic is reported as in progress again until every specification, including the new one, is implemented.
 
 ### Splitting
 
 - [ ] **Split offered when a spec is complete**
   When a specification is complete, the agent checks whether it describes more than one independently useful piece of work and, if so, offers a split.
 - [ ] **Split on request**
-  Users can ask for a split at any point, on any specification, including one already written.
+  Users can ask for a split at any point, on any specification, including one already written. A request made while a specification is still being written is acted on once it is complete.
 - [ ] **Concrete offers only**
   The agent offers a split only when it can name at least two specifications, each with an acceptance criterion that can be verified without the others.
 - [ ] **Supporting work never triggers a split**
   Docs, tests, migrations, config and other work that supports the same change must never count towards a split.
 - [ ] **Never automatic**
   The system must never create an epic or split a specification without the user's explicit agreement. After a decline, the offer returns only if a new independent requirement group appears.
-- [ ] **Every resulting spec has its own criteria**
-  A split must produce specifications that each carry their own overview and testable acceptance criteria.
+- [ ] **Every resulting spec is complete**
+  A split must produce complete specifications, each with every section filled, including its own overview and testable acceptance criteria. No resulting specification needs a further interview.
 - [ ] **Split preserves work done**
   Splitting keeps content already written. Content belonging to the narrowed specification stays with it, the rest moves to the new specifications, and shared constraints and non-goals are copied to each specification they apply to.
 - [ ] **Splitting a spec already in an epic**
   Splitting a specification that already belongs to an epic adds the new specifications to that same epic.
 - [ ] **Chaining**
-  When a specification from a split finishes, the agent offers to continue with the next one that hasn't been specified yet, preferring one whose dependencies are met.
+  When a specification in an epic finishes, the agent offers to start a specification for the next item in the epic's source that does not have one yet.
 - [ ] **Adjustable sensitivity**
   Users can configure how readily split offers are made, independently of how readily new specifications are offered.
 
@@ -107,7 +111,7 @@ them get complete criteria instead of filling gaps with guesses.
 - [ ] **Ask only about gaps**
   The source's content pre-fills the specification. The interview lists what the source doesn't cover and asks only about that, and every later section is confirmed rather than asked from scratch.
 - [ ] **Sources with child items**
-  A source that already has child items leads to an offer to set up an epic with one specification per child. A child item that appears after the epic exists leads to an offer to add a specification for it.
+  A source that already has child items leads to an offer to set up an epic, after which each child item is specified as its own specification in that epic, started from that item. A child item that appears after the epic exists leads to an offer to start a specification for it in that epic.
 
 ### Provenance
 
@@ -171,27 +175,33 @@ them get complete criteria instead of filling gaps with guesses.
   A newly initialised project, and an existing project after migration, both have an epic store configured with the default settings; migrating twice changes nothing further.
 - [ ] **Folder created on first epic**
   Writing the first epic in a project whose epics folder does not exist creates the folder and succeeds.
+- [ ] **Start in an epic**
+  In a project with at least one epic, starting a new specification asks whether it belongs to an epic; in a project with none, no question is asked. A specification started as a member of an epic is listed by that epic from the start, and the specification names the epic. Starting one for an epic that does not exist is refused, and nothing is written.
+- [ ] **Epic context read**
+  When a new specification joins an epic, the agent reads the epic and each of its specifications before the interview. The interview does not ask again about scope those specifications already cover, and the agent offers to record any dependency on them.
+- [ ] **Completed epic warning**
+  Adding a specification to a completed epic, whether by starting a new specification in it, writing the epic or splitting a member, is refused with a warning naming the epic as complete, and nothing is written. Repeating the addition with explicit confirmation adds the specification, after which the epic's status is no longer done.
 
 ### Splitting
 
 - [ ] **Offer at completion**
   Completing a specification that has two independently shippable requirement groups produces a split offer naming at least two specifications. Completing one with a single coupled requirement set produces no offer.
 - [ ] **Split on request**
-  Asking for a split mid-workflow, and on an already-written specification, each produces a split offer or a stated reason why it cannot be split.
+  Asking for a split mid-workflow produces the split offer once the specification is complete. Asking on an already-written specification produces a split offer, or a stated reason why it cannot be split.
 - [ ] **Offers name their specs**
   Every split offer names each proposed specification with its scope. No offer is made when fewer than two specifications with independently verifiable criteria can be named.
 - [ ] **Code plus docs is one spec**
   Completing a specification whose only extra work is documentation, tests or config for the same change produces no split offer.
 - [ ] **Nothing without agreement**
   Declining a split leaves no epic and no new specifications stored, and the same offer isn't repeated unless a new independent requirement group appears.
-- [ ] **Resulting specs carry criteria**
-  After a split, every new specification has a non-empty overview and at least one acceptance criterion.
+- [ ] **Resulting specs are complete**
+  After a split, every resulting specification has every section filled, including a non-empty overview and at least one acceptance criterion, and is complete without a further workflow run.
 - [ ] **Work preserved on split**
   After splitting a written specification, every requirement and acceptance criterion it held appears in exactly one of the resulting specifications. A constraint shared by several appears in each of them.
 - [ ] **Split within an epic**
   Splitting a specification that already belongs to an epic leaves a single epic listing both the original and the new specifications.
 - [ ] **Chaining offer**
-  When a specification from a split finishes and another in the epic hasn't been specified yet, the agent offers to start it, naming a ready one first if one exists.
+  When a specification in an epic finishes and the epic's source has a child item with no specification yet, the agent offers to start one for it.
 - [ ] **Sensitivity setting**
   A specification showing only weak split signals receives a split offer with the most lenient sensitivity and none with the strictest, and changing the setting leaves the offer behaviour for new specifications unchanged.
 
@@ -228,9 +238,9 @@ them get complete criteria instead of filling gaps with guesses.
 - [ ] **Only gaps asked**
   For a source covering some sections, the interview presents a list of uncovered sections and asks questions only about those. The covered sections are presented as drafts to confirm.
 - [ ] **Child items**
-  Starting from a source with child items produces an offer to create an epic with one specification per child, not a single specification.
+  Starting from a source with child items produces an offer to create an epic rather than a single specification. Accepting creates the epic and starts the first child item's specification in it.
 - [ ] **Late child item**
-  When a child item is raised for a source whose epic already exists, the agent offers to add a specification for it to that epic.
+  When a child item is raised for a source whose epic already exists, the agent offers to start a specification for it in that epic.
 - [ ] **Source content collected**
   A specification seeded from an issue has drafts reflecting the issue's title, body and discussion, and records the issue's link.
 

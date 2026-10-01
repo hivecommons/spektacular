@@ -27,23 +27,31 @@ epic) and #56 (start a spec from existing material). The decisions taken are lis
 | **Epic** | A parent document grouping several specs that together deliver one oversized request. It holds only the overall overview, the list of its specs with their dependencies. Everything else, including constraints, non-goals and every acceptance criterion, lives in its specs. An epic is never planned or implemented itself; its specs are. It lives in the optional epics store. |
 | **Epic's specs** | The specs belonging to an epic. Each is a normal spec with one extra frontmatter field, `epic: <name>`, and is planned and implemented on its own. A spec belongs to at most one epic. |
 | **Standalone spec** | A spec with no epic, which is every spec today. |
-| **Split** | Turning a request that is too big for one spec into an epic plus its specs. It is always offered to the user, never done automatically. The spec in progress becomes the epic's first spec. |
-| **Stub** | A draft spec written by a split. Its Overview and Acceptance Criteria are filled in, plus any constraints or non-goals carried over from the split, and it has not been through its own workflow run yet. Starting `spec new` on a stub's name continues it from what is already there. A stub is a draft, but not every draft is a stub. |
+| **Split** | Turning a complete spec that is too big into an epic plus several complete specs. It is always offered to the user, never done automatically, and always acts on a complete spec: a split asked for mid-workflow is acted on once the spec is complete. The spec being split becomes the epic's first spec. |
 | **Dependency** | Spec B depends on spec A, both in the same epic, when B cannot be implemented until A has been. It does not constrain writing or planning B. Recorded in the epic. |
 | **Implemented** | A spec whose plan exists and has every task complete. A spec that is `final` is only written; a spec with a plan is only planned. Neither counts as implemented. |
 | **Ready** | A spec in an epic whose dependencies are all implemented. Derived on read, never stored. |
-| **Chaining** | When one of an epic's specs finishes, offering to start the next ready spec that has not yet been through its own workflow run. |
+| **Chaining** | When one of an epic's specs finishes, offering to start a spec for the next item in the epic's source that has no spec yet. |
 | **Source** | Existing material a spec or epic is started from: an issue or epic from any tracker (with its child items and task lists), a design document, a file, a web page, or pasted text. The agent fetches it with its own tools; the CLI never does. |
-| **Seeding** | Pre-filling a spec's work files from a source (or from a stub) before its interview, so each step confirms a draft instead of asking from scratch. Done by the agent, following the `spek-new` skill and the interview step. The CLI only records provenance. |
+| **Seeding** | Pre-filling a spec's work files from a source before its interview, so each step confirms a draft instead of asking from scratch. Done by the agent, following the `spek-new` skill and the interview step. The CLI only records provenance. |
 | **Gap** | A spec section the source doesn't cover, or covers too thinly to build from. After seeding, the interview asks only about gaps. |
 | **Provenance** | The record of where a document's content came from: the `sources` frontmatter field, a list of `{uri, retrieved_date}`, on the document the source directly seeded. Never inherited or replicated: a spec in an epic reaches its epic's sources through `epic`. |
 
 ## Approach
 
-Split (#55) and seeding (#56) share one mechanism: **pre-filled work files**. A spec step that
-finds its work file under `.spektacular/work/<name>/` already filled presents it as a draft to
-confirm rather than asking cold. Continuing a stub is seeding from that stub. This makes the
-existing spec-trigger carry-forward behaviour systematic instead of conversational.
+There are two ways into an epic, and only one of them splits:
+
+- **Split (#55).** A spec is complete and turns out to be more than one piece of work. Its content
+  is already written and agreed, so the split redistributes it into several complete specs in one
+  operation (`epic split`). Nothing needs a second interview.
+- **Epic first (#55, #56).** The work starts as a set of items, such as a tracker epic with
+  sub-issues. An epic is created first, and each spec is then built from new with the normal spec
+  workflow, seeded from its own item, joining the epic as it starts.
+
+Seeding (#56) uses **pre-filled work files**: a spec step that finds its work file under
+`.spektacular/work/<name>/` already filled presents it as a draft to confirm rather than asking
+cold. This makes the existing spec-trigger carry-forward behaviour systematic instead of
+conversational.
 
 ## Process
 
@@ -59,16 +67,16 @@ sections after this one detail each part.
             spec new ──────────▶ seed work files, list gaps
                                        │
                  ┌───────────────── 2. SPECIFY ───────────────┐
+                 │ in an epic? read the epic and its specs    │
                  │ interview (gaps only) → sections → verify  │
                  │         │ check when spec complete         │
                  │         ▼ too big? offer split             │
-                 │   split: agree specs, deps, overview + AC  │
-                 │   epic split → epic + stubs                │
-                 │   narrow current spec, carry on            │
+                 │   split: agree specs, deps, redistribute   │
+                 │   review all, epic split → epic + specs    │
                  │         │                                  │
-                 │   finished → chain to next stub ──┐        │
-                 │         ▲                         │        │
-                 │         └──── spec new <stub> ◀───┘        │
+                 │   finished → offer next source item ──┐    │
+                 │         ▲                             │    │
+                 │         └── spec new <item> in epic ◀─┘    │
                  └────────────────────┬───────────────────────┘
                                       ▼
                  ┌───────────────── 3. PLAN ──────────────────┐
@@ -92,18 +100,20 @@ sections after this one detail each part.
 gaps.
 
 **2. Specify.** The spec workflow runs as today, but the interview asks only about gaps, and every
-section step confirms a pre-filled draft where one exists. When the spec is complete, the split
-check runs once; if the work is too big, the agent offers a split and the user decides. The user
-can also ask for a split at any point, on any spec.
+section step confirms a pre-filled draft where one exists. In a project that has epics, the agent
+asks whether a new spec belongs to one; if so, it reads the epic and its specs before the
+interview. When the spec is complete, the split check runs once; if the work is too big, the agent
+offers a split and the user decides. The user can also ask for a split at any point, on any spec;
+a request made mid-workflow is acted on once the spec is complete.
 
-- On a split, the user and agent agree the specs, their dependencies, and each one's overview and
-  acceptance criteria. `epic split` writes the epic and a stub per new spec. The spec in progress
-  is narrowed to the first spec and carries on from where it was.
-- When a spec finishes, chaining offers the next stub. Accepting starts `spec new` on it, which
-  seeds from the stub, so its interview again asks only about gaps. The user can stop at any point
-  and pick up any stub later.
-- A source that already lists child items goes straight to the split, with one spec per child.
-- Without a split, the result is one standalone spec, exactly as today.
+- On a split, the user and agent agree the specs and their dependencies, and redistribute the
+  complete spec's content between them. One review covers every resulting spec, then `epic split`
+  writes the epic and every new spec, complete and `final`. The spec being split is narrowed to
+  its own part in the same operation.
+- A source that already lists child items leads to an offer to create an epic first. Each child is
+  then specified as its own spec in that epic, seeded from the child. When one finishes, chaining
+  offers the next child that has no spec yet. The user can stop at any point and continue later.
+- Without a split or an epic, the result is one standalone spec, exactly as today.
 
 **3. Plan.** Unchanged. Each spec gets its own plan with `plan new <spec>`, in any order. Planning a
 spec whose dependencies are not implemented yet is normal and never checked.
@@ -120,9 +130,10 @@ whole epic: each spec's state, what blocks it, and every plan's tasks. With no n
 workflow in progress.
 
 **Who decides what.** The user decides every fork: whether to split, the list of specs and their
-dependencies, each drafted section, whether to chain to the next stub, and whether to continue past
-an unmet dependency. The agent proposes; the CLI allocates IDs, writes the epic and stubs, keeps
-the links both ways, validates the graph, and derives status.
+dependencies, each drafted section, whether a new spec joins an epic, whether to add to a completed
+epic, whether to start the next item, and whether to continue past an unmet dependency. The agent
+proposes; the CLI allocates IDs, writes the epic and its specs, keeps the links both ways,
+validates the graph, and derives status.
 
 **Order of work.** The process does not force an order. A user can specify every spec in the epic
 before planning any (breadth first), or take one spec from spec through implement before starting
@@ -148,7 +159,21 @@ epic:
 specs*): `false`, the default, warns and lets the user continue; `true` refuses. It follows the
 precedent of `plan.strict_spec_changes`.
 
-CLI verbs `epic read / write / list / delete`, under the same store-access rules as specs and plans.
+CLI verbs `epic read / write / list / delete / split`, under the same store-access rules as specs
+and plans. An epic can be written with no specs yet, for the epic-first route.
+
+**Joining an epic.** A spec joins an epic when it is started in one
+(`spec new --data '{"name":"…","epic":"<epic>"}'`), when `epic write` lists it, or through
+`epic split`. In a project that has epics, starting a new spec has the agent ask whether it belongs
+to one, unless the request already says. A spec joining an epic has the agent read the epic and
+every spec in it first, so the interview builds on what they cover and offers to record
+dependencies on them.
+
+**Adding to a completed epic.** An epic whose specs are all implemented is complete. Any addition
+to it (`spec new` into it, `epic write` or `epic split`) is refused with `epic_complete`, naming the
+epic, and nothing is written. Repeating it with explicit confirmation adds the spec, and the epic
+is reported as in progress again until the new spec is implemented. Completion is derived, so no
+status has to be reset.
 
 **Links.** An epic lists its specs in `specs`, each entry carrying its dependencies. Each of those specs names its epic in
 `epic`. Both sides are always written together, following the design-ref pattern
@@ -217,21 +242,23 @@ records where its content came from.
 | 3 | 000062_spec-seeding | `spec new` with a source, seeding at interview, gap list, effective provenance on read |
 ```
 
-The spec in progress kept its name and became the epic's first spec, narrowed to the epic store and
+The spec being split kept its name and became the epic's first spec, narrowed to the epic store and
 links. Its two sources moved to the epic, because they described the whole request. Frontmatter of
-the epic's second spec, a stub written by the split:
+the epic's second spec, written complete by the split:
 
 ```yaml
 ---
 created_date: "2026-09-28"
-document_status: draft
+document_status: final
+closed_date: "2026-09-28"
 epic: 000060_epics-and-seeded-specs
 ---
 ```
 
-It has no `sources`: it was seeded from its epic, and reaches #55 and #56 through `epic`. Had the
-request been a GitHub epic with sub-issues instead, each stub would carry its own sub-issue's URI.
-Its body is the normal spec scaffold with Overview and Acceptance Criteria filled in, plus any Constraints and Non-Goals the split copied into it.
+It has no `sources`: its content came from the spec that was split, and it reaches #55 and #56
+through `epic`. Had the work started from a GitHub epic with sub-issues instead, each spec would
+carry its own sub-issue's URI. Its body is a complete spec: every section filled with the content
+the split moved to it, plus a copy of each constraint and non-goal shared with the others.
 
 | Field | On | Rule |
 |---|---|---|
@@ -295,36 +322,38 @@ How readily the check fires is configurable (see *Deferred to the spec*).
 
 ### Split flow
 
-**Flow.** A new `split` step, reached from the end of the spec workflow or on the user's explicit
-request.
+**Flow.** A new `split` step between `verification` and `finished`. It always acts on a complete
+spec. A split the user asks for mid-workflow is noted, the workflow carries on gathering every
+section, and the request is acted on here. A spec already written, with no workflow running, is
+split through the same instructions from the `spek-new` skill.
 
-1. **Breadth-first pass.** With the user, agree the list of specs and the dependencies between
-   them, and give each a short overview and real, testable acceptance criteria. This is what fixes the thin-criteria problem: no spec
-   leaves the split without its own criteria.
-2. **`epic split` (CLI).** From one staged description, in a single operation: allocate the new
-   specs' IDs with the configured ID method, write the epic with its dependency graph, write one
-   stub per remaining spec, and link the epic and its specs both ways.
-3. **Narrow the spec being split** to the epic's first spec. Work already done that belongs to it
-   stays; the overall overview moves to the epic; what belongs to other specs moves to their stubs,
-   and a constraint or non-goal that applies to several specs is copied into each. A spec split
-   mid-workflow continues from the step it was at. A spec already written is rewritten in place,
-   and if it has a plan, that plan goes stale like it would after any other spec change.
-4. **Chaining.** When the spec reaches `finished`, it offers the next spec in the epic that is
-   still a stub, preferring one that is ready.
-   Accepting starts `spec new` on that stub, which seeds from it. Only one workflow is ever active,
-   which fits the single `.spektacular/state.json`. The user can also stop and continue any stub
-   later.
+1. **Agree the split.** With the user, agree the list of specs and the dependencies between them,
+   and which content goes where. Every requirement and acceptance criterion goes to exactly one
+   spec; a constraint or non-goal that applies to several specs is copied into each; the overall
+   overview moves to the epic. Each spec must leave with its own testable acceptance criteria;
+   where one is thin, fill it in with the user now. This is what fixes the thin-criteria problem.
+2. **Review.** One fresh-eyes review covers every resulting spec, as verification does for a single
+   spec.
+3. **`epic split` (CLI).** From one staged description carrying every section of every spec, in a
+   single operation: allocate the new specs' IDs with the configured ID method, write each new spec
+   complete and `final`, rewrite the spec being split as its narrowed self, write or extend the
+   epic with its dependency graph, and link the epic and its specs both ways. A failure part-way
+   restores everything. If the split spec has a plan, that plan goes stale like it would after any
+   other spec change.
+
+No resulting spec needs a further workflow run. Only one workflow is ever active, which fits the
+single `.spektacular/state.json`.
 
 **Splitting a spec already in an epic.** The new specs join the same epic, since epics do not
 nest. The epic's dependency graph is extended to include them.
 
 **Sources with child items.** A source that already has child items when work starts, such as a
-tracker epic with sub-issues, does not produce a single spec. The agent offers to set up an epic
-with one spec per child item straight away, each stub seeded from its child, with the parent
-recorded as the epic's source. A child item that appears after the epic exists, because the user
-brings it up or the agent sees it when revisiting the source, leads the agent to offer a new spec
-in the epic for it. Either way, the CLI can add stubs to an existing epic, under the same
-validation as `epic split`.
+tracker epic with sub-issues, does not produce a single spec, and does not use `epic split`. The
+agent offers to create an epic first (`epic write`, with the parent as the epic's source and no
+specs yet), then starts the first child's spec in it with `spec new`, seeded from the child. When a
+spec in the epic finishes, chaining offers the next child with no spec yet. A child item that
+appears after the epic exists, because the user brings it up or the agent sees it when revisiting
+the source, leads the agent to offer a new spec for it in that epic.
 
 ## Dependencies between specs
 
@@ -491,9 +520,9 @@ a `specs` list (one entry for a standalone spec). Callers never branch on kind.
     },
     {
       "name": "000062_spec-seeding",
-      "state": "stub",
-      "document_status": "draft",
-      "current_step": "",
+      "state": "specified",
+      "document_status": "final",
+      "current_step": "finished",
       "depends_on": ["000060_epics-and-seeded-specs"],
       "ready": true,
       "blocked_by": [],
@@ -528,7 +557,7 @@ epic 000060_epics-and-seeded-specs  (draft)  1/3 specs implemented, 7/11 tasks
         [ ] Add the split step                 spektacular   agent
             depends on: Add detection partial
         ...
-  000062_spec-seeding             stub          no plan
+  000062_spec-seeding             specified     no plan
       depends on: 000060_epics-and-seeded-specs
 ```
 
@@ -541,7 +570,6 @@ always carries everything.
 |---|---|
 | `missing` | The spec is named in the epic but cannot be read. Reported, not fatal, so one broken link does not hide the rest of the epic. |
 | `stale` | The plan is stale under `plan.strict_spec_changes`: the spec changed after it. |
-| `stub` | The spec is a draft that has not been through its own workflow run. |
 | `specified` | The spec has been written, and no plan exists. |
 | `planned` | A plan exists with 0 of N tasks complete. |
 | `in_progress` | A plan exists with k of N tasks complete, 0 < k < N. |
@@ -721,8 +749,10 @@ records only where content came from.
 2. **Naming after a split.** No renaming. The epic and its first spec share the spec's name.
 3. **`status` for one spec.** No `--spec-only` flag; callers pick the spec out of `specs` using
    `requested`.
-4. **Splitting late.** Allowed at any point, including on a spec already written.
-5. **Chaining.** Only between stubs while specifying.
+4. **Splitting late.** Allowed at any point, including on a spec already written. A split always
+   acts on a complete spec: a request made mid-workflow is acted on once the spec is complete.
+5. **Chaining.** Only while specifying, and only to items of the epic's source that have no spec
+   yet. A split produces complete specs, so there is nothing to chain to after one.
 6. **Detection before a spec exists.** None. The spec-trigger behaviour is unchanged.
 7. **Detection timing.** Once when a spec is complete, plus on explicit request.
 
@@ -734,7 +764,6 @@ implement this design:
 - **Detection sensitivity:** a new `epic_split_threshold` (strict / moderate / lenient, default
   `moderate`), separate from `spec_trigger_threshold`. It moves the gate and signal counts, never
   the supporting-work rule or the counter-signals.
-- **`epic split` input:** JSON through `--data`, or a staged markdown epic draft the CLI parses.
 - **Source text:** keep only URI and date, add a content hash to detect changes, or store a
   snapshot of the source with the spec.
 - **Posting back to the source:** whether the agent, with the user's permission, comments on the
