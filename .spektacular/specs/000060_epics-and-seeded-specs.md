@@ -48,8 +48,8 @@ them get complete criteria instead of filling gaps with guesses.
   The system must keep an epic's list of specifications and each specification's record of its epic in agreement whenever either changes.
 - [ ] **One epic per spec, no nesting**
   The system must refuse to place a specification in more than one epic, or an epic inside another epic.
-- [ ] **Epics are optional**
-  Projects that never split a specification must see no change in behaviour or configuration.
+- [ ] **Epics are optional, their store is always configured**
+  Projects that never split a specification see no change in behaviour. Every project, new or existing, has an epic store configured: new projects get it when they are set up, and existing projects get it when they are brought up to date. The store's folder is created the first time an epic is written, if it does not already exist.
 
 ### Splitting
 
@@ -166,7 +166,11 @@ them get complete criteria instead of filling gaps with guesses.
 - [ ] **No second epic, no nesting**
   Attempting to add a specification that already belongs to one epic to another, or to list an epic as a member of an epic, is refused with an error, and nothing is written.
 - [ ] **No change without epics**
-  In a project with no epic configuration, every existing spec, plan and implement workflow completes as before, and no epic configuration or files are created.
+  In a project that never splits, every existing spec, plan and implement workflow completes as before.
+- [ ] **Store configured for new and existing projects**
+  A newly initialised project, and an existing project after migration, both have an epic store configured with the default settings; migrating twice changes nothing further.
+- [ ] **Folder created on first epic**
+  Writing the first epic in a project whose epics folder does not exist creates the folder and succeeds.
 
 ### Splitting
 

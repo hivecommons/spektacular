@@ -130,7 +130,11 @@ the next (depth first). Dependencies only constrain implementation.
 
 ## Epics
 
-**Store.** An optional `epic` location in `config.yaml`, file provider only:
+**Store.** An `epic` location in `config.yaml`, file provider only. `init` writes it for new
+projects and `migrate` adds it, with the defaults below, to existing ones, so every project has an
+epic store configured before its first split. The `epics` directory is created the first time an
+epic is written. Using epics stays optional: a project that never splits sees no change in
+behaviour.
 
 ```yaml
 epic:
@@ -145,7 +149,6 @@ specs*): `false`, the default, warns and lets the user continue; `true` refuses.
 precedent of `plan.strict_spec_changes`.
 
 CLI verbs `epic read / write / list / delete`, under the same store-access rules as specs and plans.
-Nothing changes in a project until its first split.
 
 **Links.** An epic lists its specs in `specs`, each entry carrying its dependencies. Each of those specs names its epic in
 `epic`. Both sides are always written together, following the design-ref pattern
