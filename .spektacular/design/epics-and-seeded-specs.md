@@ -14,7 +14,7 @@ the end.
 - **Oversized requests (#55).** When a request is too big for one spec, the interview ends with
   acceptance criteria too thin to build from, and the implementing agent fills the gaps with its
   own assumptions.
-- **Existing write-ups (#56).** Teams already write work up as GitHub issues, epics and design
+- **Existing write-ups (#56).** Teams already write work up as GitHub issues, epics and desikn
   docs. Starting a spec from one depends on how carefully the request is worded, and nothing
   records where the content came from.
 
@@ -32,8 +32,8 @@ the end.
 | **Implemented** | A spec whose plan exists and has every task complete. A spec that is `final` is only written; a spec with a plan is only planned. Neither counts as implemented. |
 | **Ready** | A spec in an epic whose dependencies are all implemented. Derived on read, never stored. |
 | **Chaining** | When one of an epic's specs finishes, offering to start the next ready spec that has not yet been through its own workflow run. |
-| **Source** | Existing material a spec or epic is started from: a GitHub issue or epic (with its sub-issues and task lists), a design document, or a markdown file. The agent fetches it; the CLI never does. |
-| **Seeding** | Pre-filling a spec's work files from a source (or from a stub) before its interview, so each step confirms a draft instead of asking from scratch. |
+| **Source** | Existing material a spec or epic is started from: an issue or epic from any tracker (with its child items and task lists), a design document, a file, a web page, or pasted text. The agent fetches it with its own tools; the CLI never does. |
+| **Seeding** | Pre-filling a spec's work files from a source (or from a stub) before its interview, so each step confirms a draft instead of asking from scratch. Done by the agent, following the `spek-new` skill and the interview step. The CLI only records provenance. |
 | **Gap** | A spec section the source doesn't cover, or covers too thinly to build from. After seeding, the interview asks only about gaps. |
 | **Provenance** | The record of where a document's content came from: the `sources` frontmatter field, a list of `{uri, retrieved_date}`, on the document the source directly seeded. Never inherited or replicated: a spec in an epic reaches its epic's sources through `epic`. |
 
@@ -52,7 +52,7 @@ sections after this one detail each part.
 ```
                  ┌───────────────── 1. START ─────────────────┐
                  │ conversation     issue / design doc / file │
-                 │      │           agent fetches + stages    │
+                 │      │           agent fetches             │
                  │      └──────────────┬──────────────────────┘
                  ▼                     ▼
             spec new ──────────▶ seed work files, list gaps
@@ -85,9 +85,10 @@ sections after this one detail each part.
           5. STATUS at any point: spektacular status <epic | spec | plan>
 ```
 
-**1. Start.** Work starts from a conversation, as today, or from a source. With a source, the agent
-fetches it (for example `gh issue view`), stages it, and runs `spec new` with the source URI. The
-CLI never fetches. Seeding pre-fills the spec's work files and lists the gaps.
+**1. Start.** Work starts from a conversation, as today, or from a source. With a source, the
+`spek-new` skill has the agent fetch it with its own tools and run `spec new` with the source in
+`sources`. The CLI never fetches. The interview step seeds the spec's work files and lists the
+gaps.
 
 **2. Specify.** The spec workflow runs as today, but the interview asks only about gaps, and every
 section step confirms a pre-filled draft where one exists. The standing check runs in every step.
@@ -244,18 +245,48 @@ their own frontmatter type: the shared lifecycle fields (`created_date`, `docume
 
 ## Split (#55)
 
-**Detection.** A standing check in every spec step, interview through verification, written once
-as a shared partial in the step templates. The agent watches for:
+### Split triggers
 
-- requirements that don't depend on each other
-- more than one user-facing surface
-- acceptance criteria that can't all be verified by one change
-- a source that lists child items
+**Detection.** A standing check in every spec step, interview through verification, written once
+as a shared partial in the step templates. It asks one question: *is this more than one
+independently useful piece of work?* Size alone is not the test.
+
+**The gate.** The agent offers a split only if it can name at least two specs, each with its own
+overview and at least one acceptance criterion verifiable without the others. If it cannot name
+them, it does not offer, however many signals have fired. This keeps every offer concrete.
+
+**Strong signals.** Any one is enough, provided the gate passes:
+
+- the source lists child items (sub-issues, a task list);
+- the requirements fall into groups that could each ship and be useful alone;
+- the acceptance criteria cannot all be verified by one change;
+- the user's own wording phases the work ("phase 1", "first … then later", "v1 is just …").
+
+**Weak signals.** At least two together are needed:
+
+- more than about seven requirements;
+- more than one design document needed;
+- an interview that is not converging, where each answer opens new areas;
+- a section draft that keeps growing content belonging to a different concern.
+
+**Supporting work never counts.** Docs, tests, migrations, config, changelog entries, and skill or
+template updates that describe or support the same change belong in the same spec. Touching
+several repos or several surfaces is not a signal in itself; it matters only when a part would be
+useful on its own, such as a new tutorial unrelated to the code change. Code plus its docs is one
+spec.
+
+**Counter-signals.** These suppress the offer even when signals have fired:
+
+- the requirements are tightly coupled, so neither part is useful or testable alone;
+- several surfaces or repos serve one capability, or one atomic change.
 
 **Offer, never act.** "This sounds like more than one spec. Split it into an epic with these N
-specs?", naming them. On decline, today's behaviour continues unchanged, and the offer is not
-repeated unless the scope visibly grows. How readily the check fires is configurable (see open
-decisions).
+specs?", naming each with its one-line scope. On decline, today's behaviour continues unchanged.
+The offer is repeated only if the scope visibly grows: a new strong signal, or a new independent
+requirement group, appears after the decline. Re-wording what was already there does not count.
+How readily the check fires is configurable (see *Deferred to the spec*).
+
+### Split flow
 
 **Flow.** A new `split` step that every spec step can jump to.
 
@@ -551,37 +582,75 @@ The release notes say so, and name the field that replaces each old one.
 
 ## Seeding (#56)
 
-- **The agent fetches, the CLI stays network-free.** The `spek-new` skill documents the path:
-  fetch the source (`gh issue view` including sub-issues and task lists, WebFetch, `design read`,
-  or a local file), stage it under `.spektacular/tmp/`, then:
-  ```
-  spec new --data '{"name":"…","source":"<uri>"}' --file <staged file>
-  ```
-  `source` is kept in workflow state and written to `sources` when the spec is written.
-- **The interview step seeds first.** It maps the source onto the spec sections, writes the
-  pre-filled work files, and lists the gaps. The interview asks only about gaps; every later step
-  confirms its pre-filled draft.
-- **A source with child items** trips detection straight away. The breadth-first pass then works
-  from the children: one spec per child item, each seeded from that child.
+Seeding is agent behaviour, not a CLI feature. Instructions carry it in two places: the `spek-new`
+skill (recognising a source, fetching it, starting the workflow) and the interview step (mapping
+the source onto the spec and finding the gaps). The CLI's only part is recording provenance.
+
+**Recognising a source.** The skill's description and trigger wording pick up a source however the
+request is phrased: "spec from issue 45", "#45", "start from LIN-123", a pasted link to any
+tracker, a design document's name, a file path, or pasted text the user says to start from. Being
+understood should not depend on careful wording.
+
+**What the skill tells the agent to do:**
+
+1. **Identify the source.** An issue or epic from any tracker (GitHub, Linear, Jira, …), a design
+   document, a file, a web page, or pasted text. If it is ambiguous, such as a bare issue number
+   with no tracker or repo, ask the user rather than guess.
+2. **Fetch it with the agent's own tools.** Spektacular prescribes no tool: a CLI, an MCP server,
+   a web fetch or a file read are all fine. Whatever the tool, collect:
+   - the title and body;
+   - the discussion (comments, since decisions are often made there);
+   - child items: sub-issues, linked children, task-list entries;
+   - a stable URI for the source, to record as provenance.
+
+   If the agent has no tool that can reach the source, or fetching fails, it says so and asks the
+   user to paste the content. It never falls back to a cold interview without saying so.
+3. **Check for child items.** A source listing sub-issues, or a task list of separate pieces of
+   work, is a strong split signal (see *Split triggers*). Offer the split before seeding; on a
+   split, each spec is seeded from its own child item.
+4. **Propose a name** from the source's title, and let the user confirm it.
+5. **Start the workflow with provenance:**
+   `spec new --data '{"name":"…","sources":[{"uri":"…"}]}'`.
+
+**What the interview step tells the agent to do.** This lives in the step, not the skill, so it
+also applies on resume:
+
+1. **Seed first.** Map the source onto the spec sections and write the pre-filled work files under
+   `.spektacular/work/<name>/`:
+   - title and body → overview and requirements;
+   - checklist or task-list items → acceptance criteria;
+   - "must / must not" remarks → constraints;
+   - "out of scope" remarks → non-goals.
+
+   `interview.md` records what came from the source.
+2. **List the gaps** to the user: sections the source does not cover, or covers too thinly to
+   build from. The interview asks only about those. A thin source simply leaves more gaps.
+3. **Every later section step** presents its pre-filled work file as a draft to confirm or refine,
+   never asking from scratch.
+
+**The CLI records provenance and nothing else.** `spec new` accepts `sources` in `--data` as a list
+of `{uri}`. The CLI stamps each entry's `retrieved_date`, holds the list in workflow state, and
+writes it to the spec's frontmatter when the spec is written. `sources` is added to the closed
+`yamlShape` and to `UpdateOptions`. There is no fetching, no staged source file and no new flag.
 
 ### Walk-through: a small issue
 
 A small issue produces one standalone spec, and from the outside the only difference from today is
 its `sources`. For a hypothetical issue #70, "Add a `--json` flag to `spec list`":
 
-1. The agent fetches the issue, including its comments, since decisions are often made there, and
-   stages it:
-   `gh issue view 70 --json title,body,comments,labels,url` → `.spektacular/tmp/issue-70.md`.
-2. It proposes a name from the title, the user confirms, and it starts the spec:
-   `spec new --data '{"name":"spec-list-json","source":"https://github.com/hivecommons/spektacular/issues/70"}' --file .spektacular/tmp/issue-70.md`.
-   The CLI keeps the URI in workflow state and records nothing else yet.
-3. The interview step seeds the work files: the title and body map to the overview and
+1. The user asks: "use the spek-new skill to start a new specification from GitHub issue 70", or
+   just "spec from #70".
+2. The agent fetches the issue and its comments with whatever tool it has; in this project that
+   happens to be `gh`. Nothing is staged, because the agent already holds the content.
+3. It proposes a name from the title, the user confirms, and it starts the spec:
+   `spec new --data '{"name":"spec-list-json","sources":[{"uri":"https://github.com/hivecommons/spektacular/issues/70"}]}'`.
+4. The interview step seeds the work files: the title and body map to the overview and
    requirements, checklist items to acceptance criteria, "must / must not" remarks to constraints.
    It then lists the gaps, for example "no success metrics; the issue doesn't say what the output
    looks like when there are no specs", and asks only about those. A thin issue simply leaves more
    gaps, and the result is close to a normal interview that starts from a drafted overview.
-4. Each section step confirms its pre-filled draft. Detection runs as usual and does not fire.
-5. At verification the spec is written with
+5. Each section step confirms its pre-filled draft. Detection runs as usual and does not fire.
+6. At verification the spec is written with
    `sources: [{uri: https://github.com/hivecommons/spektacular/issues/70, retrieved_date: "2026-09-28"}]`.
 
 ## Provenance
@@ -601,7 +670,7 @@ through its `epic` field, so it carries no copy of the epic's `sources`.
 |---|---|---|
 | Small issue → one standalone spec | none (no epic) | the issue |
 | Oversized single issue → split | the issue | none; provenance runs through `epic` |
-| GitHub epic with sub-issues | the parent issue | its own sub-issue |
+| Tracker epic with child items | the parent issue | its own child item |
 | Split mid-interview, nothing fetched | none | none |
 | Spec seeded from an issue plus a design doc | — | both URIs |
 
@@ -619,7 +688,8 @@ records only where content came from.
 
 ## Non-goals
 
-- No fetching or GitHub client in the CLI.
+- No fetching or tracker client in the CLI.
+- No CLI surface for seeding beyond accepting `sources` on `spec new`.
 - No sync back to, or from, the source.
 - No concurrent workflows for an epic's specs (that belongs with #62).
 - No nested epics.
@@ -649,13 +719,22 @@ Questions for review, grouped by the three areas this design most needs feedback
 5. **Chaining beyond specify.** As drafted, chaining only moves between stubs during specify. It
    could also offer planning once every spec in the epic is written, and offer the next ready
    spec's implementation when one finishes.
+6. **Detection before a spec exists.** As drafted, detection runs only inside the spec workflow.
+   The spec-trigger section of AGENTS.md could apply the same signals in open discussion, or on
+   reading an issue, and offer an epic rather than a spec.
+7. **Detection late in the workflow.** Whether the signals behave differently after requirements,
+   following decision 4: past that point, a fired signal might be noted rather than offered as a
+   split.
 
 ### Deferred to the spec
 
 Detail that does not change the format, the command or the process, left for the specs that
 implement this design:
 
-- **Detection sensitivity:** a new `epic_split_threshold`, or reuse `spec_trigger_threshold`.
+- **Detection sensitivity:** a new `epic_split_threshold` (strict / moderate / lenient), or reuse
+  `spec_trigger_threshold`. A separate setting is favoured, since a team may want specs offered
+  readily but splits rarely. The threshold moves the gate and signal counts, never the
+  supporting-work rule or the counter-signals.
 - **`epic split` input:** JSON through `--data`, or a staged markdown epic draft the CLI parses.
 - **Source text:** keep only URI and date, add a content hash to detect changes, or store a
   snapshot of the source with the spec.
