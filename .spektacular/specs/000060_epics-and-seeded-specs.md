@@ -42,92 +42,92 @@ them get complete criteria instead of filling gaps with guesses.
 
 ### Epics
 
-- [ ] **Group specs into an epic**
+- [x] **Group specs into an epic**
   Users can have several specifications grouped under one epic that holds the overall overview and the list of its specifications, and nothing else.
-- [ ] **Two-way membership**
+- [x] **Two-way membership**
   The system must keep an epic's list of specifications and each specification's record of its epic in agreement whenever either changes.
-- [ ] **One epic per spec, no nesting**
+- [x] **One epic per spec, no nesting**
   The system must refuse to place a specification in more than one epic, or an epic inside another epic.
-- [ ] **Epics are optional, their store is always configured**
+- [x] **Epics are optional, their store is always configured**
   Projects that never split a specification see no change in behaviour. Every project, new or existing, has an epic store configured: new projects get it when they are set up, and existing projects get it when they are brought up to date. The store's folder is created the first time an epic is written, if it does not already exist.
-- [ ] **Start a spec in an epic**
+- [x] **Start a spec in an epic**
   When a user starts a new specification in a project that has epics, the agent asks whether it belongs to one of them, unless the request already makes that clear. If it does, the agent reads the epic and the specifications already in it before the interview, so the new specification builds on what they cover instead of repeating it, and its dependencies on them can be recorded. An epic can begin with no specifications.
-- [ ] **Adding to a completed epic**
+- [x] **Adding to a completed epic**
   Adding a specification to an epic whose specifications are all implemented produces a warning that the epic is complete. If the user goes ahead, the specification is added and the epic is reported as in progress again until every specification, including the new one, is implemented.
 
 ### Splitting
 
-- [ ] **Split offered when a spec is complete**
+- [x] **Split offered when a spec is complete**
   When a specification is complete, the agent checks whether it describes more than one independently useful piece of work and, if so, offers a split.
-- [ ] **Split on request**
+- [x] **Split on request**
   Users can ask for a split at any point, on any specification, including one already written. A request made while a specification is still being written is acted on once it is complete.
-- [ ] **Concrete offers only**
+- [x] **Concrete offers only**
   The agent offers a split only when it can name at least two specifications, each with an acceptance criterion that can be verified without the others.
-- [ ] **Supporting work never triggers a split**
+- [x] **Supporting work never triggers a split**
   Docs, tests, migrations, config and other work that supports the same change must never count towards a split.
-- [ ] **Never automatic**
+- [x] **Never automatic**
   The system must never create an epic or split a specification without the user's explicit agreement. After a decline, the offer returns only if a new independent requirement group appears.
-- [ ] **Every resulting spec is complete**
+- [x] **Every resulting spec is complete**
   A split must produce complete specifications, each with every section filled, including its own overview and testable acceptance criteria. No resulting specification needs a further interview.
-- [ ] **Split preserves work done**
+- [x] **Split preserves work done**
   Splitting keeps content already written. Content belonging to the narrowed specification stays with it, the rest moves to the new specifications, and shared constraints and non-goals are copied to each specification they apply to.
-- [ ] **Splitting a spec already in an epic**
+- [x] **Splitting a spec already in an epic**
   Splitting a specification that already belongs to an epic adds the new specifications to that same epic.
-- [ ] **Chaining**
+- [x] **Chaining**
   When a specification in an epic finishes, the agent offers to start a specification for the next item in the epic's source that does not have one yet.
-- [ ] **Adjustable sensitivity**
+- [x] **Adjustable sensitivity**
   Users can configure how readily split offers are made, independently of how readily new specifications are offered.
 
 ### Dependencies
 
-- [ ] **Declare order**
+- [x] **Declare order**
   Users can record which specifications in an epic depend on which others.
-- [ ] **Invalid graphs refused**
+- [x] **Invalid graphs refused**
   The system must refuse an epic whose dependencies name unknown specifications, list a specification twice, or form a cycle.
-- [ ] **Checked only when implementing**
+- [x] **Checked only when implementing**
   Writing and planning a specification are never blocked by its dependencies. Before implementation starts, the system reports each dependency that isn't yet implemented, along with its state.
-- [ ] **Warn or refuse**
+- [x] **Warn or refuse**
   By default, users can continue past an unmet dependency after a warning, and the override is recorded. Projects can configure this to refuse instead.
 
 ### Status
 
-- [ ] **One view of progress**
+- [x] **One view of progress**
   Users can ask for the status of an epic, specification or plan by name and get the whole epic, every specification's state and what blocks it, plus every plan's tasks, in one result.
-- [ ] **Same shape every time**
+- [x] **Same shape every time**
   The result has the same shape whether the name belongs to an epic, a specification in an epic, or a standalone specification.
-- [ ] **Workflow in progress**
+- [x] **Workflow in progress**
   Without a name, users get the status of whichever workflow is currently in progress.
-- [ ] **Epic completion is derived**
+- [x] **Epic completion is derived**
   An epic counts as done once every one of its specifications has a plan and every task in every plan is complete. This is never set by hand.
-- [ ] **Human and machine output**
+- [x] **Human and machine output**
   Status is available both as readable text and as structured data.
 
 ### Starting from existing material
 
-- [ ] **Start from a source**
+- [x] **Start from a source**
   Users can start a specification from an existing issue, epic, design document, file, web page or pasted text, whether they refer to it by number, by link, or as "spec from …".
-- [ ] **Any tracker**
+- [x] **Any tracker**
   The system collects the source's title, body, discussion, child items and a stable link from any tracker. If the source can't be reached, the user is told and asked for the content.
-- [ ] **Ask only about gaps**
+- [x] **Ask only about gaps**
   The source's content pre-fills the specification. The interview lists what the source doesn't cover and asks only about that, and every later section is confirmed rather than asked from scratch.
-- [ ] **Sources with child items**
+- [x] **Sources with child items**
   A source that already has child items leads to an offer to set up an epic, after which each child item is specified as its own specification in that epic, started from that item. A child item that appears after the epic exists leads to an offer to start a specification for it in that epic.
 
 ### Provenance
 
-- [ ] **Record where content came from**
+- [x] **Record where content came from**
   Specifications and epics record the sources that directly seeded them, with the date each was retrieved.
-- [ ] **Full trail on read**
+- [x] **Full trail on read**
   Viewing a specification shows its own sources followed by its epic's, without copying the epic's sources onto it.
 
 ### Implementation
 
-- [ ] **Implementation names the specification**
+- [x] **Implementation names the specification**
   Implementation is described to users as implementing a specification, not a plan, with no change in behaviour.
 
 ### Documentation
 
-- [ ] **Docs site updated**
+- [x] **Docs site updated**
   The documentation site covers epics, splitting and split sensitivity; starting a specification from existing material; dependencies; and the single status view and the commands it replaces.
 
 <!--
@@ -163,23 +163,23 @@ them get complete criteria instead of filling gaps with guesses.
 
 ### Epics
 
-- [ ] **Epic holds only overview and specs**
+- [x] **Epic holds only overview and specs**
   After a split, the stored epic contains an overview and a list of its specifications, and no requirements, acceptance criteria, constraints, non-goals, technical approach or success metrics.
-- [ ] **Membership stays in agreement**
+- [x] **Membership stays in agreement**
   After a split, or after a specification is added to an epic, every specification listed by the epic names that epic, and every specification naming the epic is listed by it. After an epic is deleted, no specification still names it.
-- [ ] **No second epic, no nesting**
+- [x] **No second epic, no nesting**
   Attempting to add a specification that already belongs to one epic to another, or to list an epic as a member of an epic, is refused with an error, and nothing is written.
-- [ ] **No change without epics**
+- [x] **No change without epics**
   In a project that never splits, every existing spec, plan and implement workflow completes as before.
-- [ ] **Store configured for new and existing projects**
+- [x] **Store configured for new and existing projects**
   A newly initialised project, and an existing project after migration, both have an epic store configured with the default settings; migrating twice changes nothing further.
-- [ ] **Folder created on first epic**
+- [x] **Folder created on first epic**
   Writing the first epic in a project whose epics folder does not exist creates the folder and succeeds.
 - [ ] **Start in an epic**
   In a project with at least one epic, starting a new specification asks whether it belongs to an epic; in a project with none, no question is asked. A specification started as a member of an epic is listed by that epic from the start, and the specification names the epic. Starting one for an epic that does not exist is refused, and nothing is written.
 - [ ] **Epic context read**
   When a new specification joins an epic, the agent reads the epic and each of its specifications before the interview. The interview does not ask again about scope those specifications already cover, and the agent offers to record any dependency on them.
-- [ ] **Completed epic warning**
+- [x] **Completed epic warning**
   Adding a specification to a completed epic, whether by starting a new specification in it, writing the epic or splitting a member, is refused with a warning naming the epic as complete, and nothing is written. Repeating the addition with explicit confirmation adds the specification, after which the epic's status is no longer done.
 
 ### Splitting
@@ -194,11 +194,11 @@ them get complete criteria instead of filling gaps with guesses.
   Completing a specification whose only extra work is documentation, tests or config for the same change produces no split offer.
 - [ ] **Nothing without agreement**
   Declining a split leaves no epic and no new specifications stored, and the same offer isn't repeated unless a new independent requirement group appears.
-- [ ] **Resulting specs are complete**
+- [x] **Resulting specs are complete**
   After a split, every resulting specification has every section filled, including a non-empty overview and at least one acceptance criterion, and is complete without a further workflow run.
-- [ ] **Work preserved on split**
+- [x] **Work preserved on split**
   After splitting a written specification, every requirement and acceptance criterion it held appears in exactly one of the resulting specifications. A constraint shared by several appears in each of them.
-- [ ] **Split within an epic**
+- [x] **Split within an epic**
   Splitting a specification that already belongs to an epic leaves a single epic listing both the original and the new specifications.
 - [ ] **Chaining offer**
   When a specification in an epic finishes and the epic's source has a child item with no specification yet, the agent offers to start one for it.
@@ -207,26 +207,26 @@ them get complete criteria instead of filling gaps with guesses.
 
 ### Dependencies
 
-- [ ] **Dependencies recorded**
+- [x] **Dependencies recorded**
   An epic written with dependencies between its specifications reads back with the same dependencies.
-- [ ] **Invalid graphs refused**
+- [x] **Invalid graphs refused**
   Writing an epic with a dependency on an unknown specification, a duplicated specification, or a cycle (including a specification depending on itself) fails with an error naming the problem, and nothing is written.
-- [ ] **Only implementation is checked**
+- [x] **Only implementation is checked**
   Specifying and planning a specification whose dependencies aren't implemented succeed with no warning. Starting its implementation names each unmet dependency and its state, for example "in progress (2/5 tasks complete)".
-- [ ] **Warn or refuse**
+- [x] **Warn or refuse**
   With default settings, starting implementation past an unmet dependency warns, allows continuing, and records the override in the changelog. With refusal configured, it is refused.
 
 ### Status
 
-- [ ] **Whole epic from any name**
+- [x] **Whole epic from any name**
   Asking for the status of an epic, of any of its specifications, or of any of their plans returns the same epic with every specification's state, blockers and plan tasks. The name asked for is identified.
-- [ ] **Consistent shape**
+- [x] **Consistent shape**
   The status result for a standalone specification has the same top-level fields as for an epic, with an empty epic and a single specification.
-- [ ] **No name**
+- [x] **No name**
   With a workflow in progress, status with no name reports that workflow. With none in progress, it reports that nothing is in progress.
-- [ ] **Epic completion**
+- [x] **Epic completion**
   An epic is reported as done exactly when every task in every one of its specifications' plans is complete, and as not done while any task is incomplete or any specification has no plan.
-- [ ] **Text and structured output**
+- [x] **Text and structured output**
   Status can be produced as readable text and as structured data containing the same information.
 
 ### Starting from existing material
@@ -246,19 +246,19 @@ them get complete criteria instead of filling gaps with guesses.
 
 ### Provenance
 
-- [ ] **Sources recorded**
+- [x] **Sources recorded**
   A specification or epic started from a source records that source's link and retrieval date, and a specification started without one records none.
-- [ ] **Full trail shown**
+- [x] **Full trail shown**
   The status of a specification in an epic shows its own sources followed by its epic's, while the specification's stored record contains only its own.
 
 ### Implementation
 
-- [ ] **Implement wording**
+- [x] **Implement wording**
   The implement command's help and the implement skill describe implementing a specification; implementing an existing specification behaves as before.
 
 ### Documentation
 
-- [ ] **Docs published**
+- [x] **Docs published**
   The documentation site has pages, or sections, covering epics and splitting (including split sensitivity), starting a specification from existing material, dependencies between specifications, and the status view. No page still documents the removed status commands as current.
 
 <!--

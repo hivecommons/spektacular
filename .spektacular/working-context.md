@@ -175,3 +175,7 @@ User asked to create this spec (2026-10-02). Settled in conversation; seed every
   config.yaml (ToYAMLFile drops comments/reformats); skills install regardless of version when init runs.
 - Related convention now in knowledge: conventions/plans-never-change-the-active-install.md (this spec's plan must not
   migrate/re-init this repo; verify with go test + throwaway projects).
+- 2026-10-02: user migrated + init'd, set command: spektacular (installed via make install-local); spec-workflow harbor
+  passed (48/48); plan/implement harbor suites not run (in test plan). Milestone commits made via the FSM.
+  Test plan, project + spektacular + docs changelog records written; spec reconciled (56 ticked; 15 live-agent ACs left
+  unticked pending the manual runs in the test plan). Run finished next; then start the version-check spec (see above).
