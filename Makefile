@@ -4,7 +4,7 @@ VERSION := dev
 HARBOR_AUTH := CLAUDE_CODE_OAUTH_TOKEN=$$(python3 -c "import json; print(json.load(open('$$HOME/.claude/.credentials.json'))['claudeAiOauth']['accessToken'])")
 HARBOR_MODEL := claude-sonnet-4-6
 
-.PHONY: build test lint clean install install-local cross harbor-test plan-harbor-test harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo
+.PHONY: build test lint clean install install-local cross harbor-install harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo
 
 build:
 	go build -ldflags "-X github.com/hivecommons/spektacular/cmd.version=$(VERSION)" -o ./bin/$(BINARY) .
@@ -39,6 +39,12 @@ cross:
 	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -o ./bin/$(BINARY)-linux-amd64   .
 	CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -o ./bin/$(BINARY)-linux-arm64   .
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ./bin/$(BINARY)-windows-amd64.exe .
+
+# Installs the harbor CLI the harbor-test-* targets run, or upgrades it when
+# already installed. Needs uv.
+harbor-install:
+	@command -v uv >/dev/null 2>&1 || (echo "uv is required to install harbor: https://docs.astral.sh/uv/getting-started/installation/" && exit 1)
+	uv tool install --upgrade harbor
 
 harbor-test-spec: harbor-test-spec-claude
 

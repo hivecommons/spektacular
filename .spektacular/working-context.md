@@ -145,3 +145,33 @@
 - Still for the user: `go run . init` to regenerate .claude/.bob skill copies and AGENTS.md managed sections (restore
   agent/written_by/skills_version in config.yaml afterwards); knowledge entry architecture/working-with-files-from-steps.md:183
   mentions retired `spec status` (offered via spek-knowledge).
+
+---
+
+# Next spec (to start after 000060 finishes): version check upgrades the install
+
+User asked to create this spec (2026-10-02). Settled in conversation; seed every spec step from this and ask the user to confirm:
+
+- Problem: today `version check` only reports (`upgrade_needed` / `mismatch` / `missing` / `unsupported_format`) and every skill
+  hands the user "run `migrate`". If it's the user's job it will never be done. The upgrade code (`migrate.Apply` + agent
+  reinstall) is already safe to run unattended (idempotent, `.vN.old` backup, refuses newer format).
+- Decisions (user):
+  1. Version check asks one question: were this project's settings, agent files and skills written by the current binary?
+     `upgrade_needed`/`mismatch`/`missing` collapse into one "out of date" result. A `dev` build always matches
+     ("a developer problem, not the user's").
+  2. When out of date the agent asks the user ONE question ("update your settings and skills?"); on yes it runs
+     `init <recorded agent>` and carries on with the skill; on no the skill stops. No skill tells the user to run a command;
+     remove all migrate/init instructions from skills.
+  3. The CLI keeps refusing every command except the version check and `init` until updated (`upgrade_required`), with a
+     next_action naming them, not `migrate`.
+  4. `migrate` command is removed; `init` does everything migrate did (it already calls migrate.Apply). `init` keeps
+     requiring an agent; the agent passes the one recorded in config.yaml; a person names it.
+  5. Upgrades happen only at a version check (skill start, including resume), never inside a step. Upgrading on resume is
+     required: a user who installs a new binary mid-workflow and resumes needs skills matching the binary.
+  6. A paused workflow's state.json is validated against the new version's steps; a missing/renamed step is refused with a
+     clear next action.
+  7. A project written by a newer Spektacular is still refused (install the newer version) — assumed, user did not object.
+- Plan-level notes (not spec): init should use migrate's targeted settings edits + backup rather than rewriting the whole
+  config.yaml (ToYAMLFile drops comments/reformats); skills install regardless of version when init runs.
+- Related convention now in knowledge: conventions/plans-never-change-the-active-install.md (this spec's plan must not
+  migrate/re-init this repo; verify with go test + throwaway projects).

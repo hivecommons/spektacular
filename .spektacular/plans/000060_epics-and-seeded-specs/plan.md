@@ -987,7 +987,7 @@ order, the solve script's step sequence, and an assertion that a single coupled 
 - [x] The suite expects `split` between verification and finished
 - [x] The suite asserts that its single-feature scenario finishes with no epic stored
 
-#### - [ ] Task: Run the harbor suites
+#### - [x] Task: Run the harbor suites
 **Id:** e4194c32-a882-4edf-bc42-3d12469d82c4
 **Repo:** spektacular
 **Depends on:**
@@ -1470,3 +1470,15 @@ There are no other open questions. Every other decision is recorded in the assum
 - `spektacular: Makefile`
 
 **Discoveries**: This task should never have existed: a plan must not change the install driving its own workflows. Recorded as the convention `conventions/plans-never-change-the-active-install.md` in the spektacular knowledge store.
+
+### 2026-10-02 — Task: Run the harbor suites
+
+**What was done**: The user ran the spec-workflow harbor suite against the finished CLI: 48 tests passed (reward 1.0, job `2026-10-02__08-28-49`), including the new `split` step in the step order, the agent's `spec goto split` call, and the single-feature scenario finishing with no epic stored. Added a `make harbor-install` target (`uv tool install --upgrade harbor`) and corrected the Makefile `.PHONY` list and the README's harbor section.
+
+**Deviations**: Only the spec-workflow suite was run. The plan-workflow and implement-workflow suites were not run before the user marked the task done, so the task's acceptance criterion (all three suites pass) stays unticked. A first spec-workflow attempt failed in harbor's agent setup, before Spektacular ran, because Podman's Docker-emulation notices polluted harbor's package-manager detection. It passed once those notices were silenced (`/etc/containers/nodocker`, `compose_warning_logs = false`).
+
+**Files changed**:
+- `spektacular: Makefile`
+- `spektacular: README.md`
+
+**Discoveries**: On a machine where `docker` is Podman's emulation, harbor's agent install fails with `KeyError: 'Emulate Docker CLI using podman…apt-get'` until both Podman notices are silenced.

@@ -305,7 +305,7 @@ go test ./...   # or: make test
 #### Install Harbor
 
 ```bash
-uv tool install harbor
+make harbor-install    # runs: uv tool install --upgrade harbor
 ```
 
 #### Run the oracle (scripted) tests
@@ -344,6 +344,7 @@ Makefile wrappers run the suites for you, building the binary and wiring up the 
 make harbor-test-spec            # spec workflow (claude)
 make harbor-test-spec-codex      # spec workflow (codex)
 make harbor-test-plan            # plan workflow (claude)
+make harbor-test-implement       # implement workflow (claude)
 make harbor-test-repo            # guided repo add, answering each question (claude)
 make harbor-test-repo-delegated  # guided repo add, handing the whole set over (claude)
 ```
@@ -404,6 +405,7 @@ make cross
 | `make lint` | Run `go vet ./...` |
 | `make clean` | Remove build artefacts |
 | `make install-local` | Build and copy the binary to `/usr/local/bin` |
+| `make harbor-install` | Install (or upgrade) the harbor CLI with uv |
 | `make cross` | Cross-compile for darwin/linux/windows (amd64 + arm64) |
 
 ## Contributing
