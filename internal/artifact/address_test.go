@@ -16,6 +16,7 @@ func TestParseAcceptsBareAddresses(t *testing.T) {
 	}{
 		{"spec", KindSpec, []string{"f"}, Address{Kind: KindSpec, Feature: "f"}},
 		{"changelog", KindChangelog, []string{"f"}, Address{Kind: KindChangelog, Feature: "f"}},
+		{"epic", KindEpic, []string{"f"}, Address{Kind: KindEpic, Feature: "f"}},
 		{"plan document", KindPlan, []string{"f", "plan"}, Address{Kind: KindPlan, Feature: "f", Document: "plan"}},
 	}
 	for _, tc := range cases {
@@ -36,6 +37,7 @@ func TestStorePathMatchesWorkflowLayout(t *testing.T) {
 	}{
 		{"spec", Address{KindSpec, "f", ""}, ".spektacular/specs", ".spektacular/specs/f.md"},
 		{"changelog", Address{KindChangelog, "f", ""}, ".spektacular/changelog", ".spektacular/changelog/f.md"},
+		{"epic", Address{KindEpic, "f", ""}, ".spektacular/epics", ".spektacular/epics/f.md"},
 		{"plan", Address{KindPlan, "f", "plan"}, ".spektacular/plans", ".spektacular/plans/f/plan.md"},
 		{"test plan", Address{KindPlan, "f", "test-plan"}, ".spektacular/plans", ".spektacular/plans/f/test-plan.md"},
 	}
@@ -61,6 +63,8 @@ func TestParseRefusesExtensionsWithCorrection(t *testing.T) {
 		{"spec markdown", KindSpec, []string{"x.markdown"}, Address{Kind: KindSpec, Feature: "x"}},
 		{"spec path", KindSpec, []string{"specs/x.md"}, Address{Kind: KindSpec, Feature: "x"}},
 		{"changelog md", KindChangelog, []string{"x.md"}, Address{Kind: KindChangelog, Feature: "x"}},
+		{"epic md", KindEpic, []string{"x.md"}, Address{Kind: KindEpic, Feature: "x"}},
+		{"epic path", KindEpic, []string{"epics/x.md"}, Address{Kind: KindEpic, Feature: "x"}},
 		{"plan joined path with ext", KindPlan, []string{"x/plan.md"}, Address{Kind: KindPlan, Feature: "x", Document: "plan"}},
 		{"plan joined path", KindPlan, []string{"x/plan"}, Address{Kind: KindPlan, Feature: "x", Document: "plan"}},
 		{"plan single ext", KindPlan, []string{"x.md"}, Address{Kind: KindPlan, Feature: "x"}},
@@ -99,6 +103,7 @@ func TestParseRefusesEmptySegment(t *testing.T) {
 	}{
 		{"spec", KindSpec, []string{""}},
 		{"changelog", KindChangelog, []string{""}},
+		{"epic", KindEpic, []string{""}},
 		{"plan single", KindPlan, []string{""}},
 		{"plan feature", KindPlan, []string{"", "plan"}},
 		{"plan document", KindPlan, []string{"x", ""}},
@@ -122,6 +127,7 @@ func TestParseRefusesWrongArity(t *testing.T) {
 		{"spec none", KindSpec, nil},
 		{"spec two", KindSpec, []string{"a", "b"}},
 		{"changelog two", KindChangelog, []string{"a", "b"}},
+		{"epic two", KindEpic, []string{"a", "b"}},
 		{"plan none", KindPlan, nil},
 		{"plan three", KindPlan, []string{"a", "b", "c"}},
 	}

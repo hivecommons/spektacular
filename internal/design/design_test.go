@@ -244,7 +244,7 @@ func TestNewSet_EnvVarLocationInConfigFileExpandsAndResolves(t *testing.T) {
 	settings := filepath.Join(root, ".spektacular")
 	require.NoError(t, os.MkdirAll(settings, 0755))
 	configPath := filepath.Join(settings, "config.yaml")
-	require.NoError(t, os.WriteFile(configPath, []byte(`schema: 3
+	require.NoError(t, os.WriteFile(configPath, []byte(`schema: 4
 name: designproj
 command: "go run ."
 design:

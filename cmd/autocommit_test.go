@@ -202,23 +202,22 @@ func walkSteps(t *testing.T, kind string, steps ...string) {
 // and so the name every spec-workflow commit message must carry.
 const fixtureSpecName = "000001_billing"
 
-// startSpecWorkflow founds a spec workflow and walks it to verification, the
-// last step before the completion commit.
+// startSpecWorkflow founds a spec workflow and walks it to split, the last
+// step before the completion commit.
 func startSpecWorkflow(t *testing.T) {
 	t.Helper()
 	_, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 	require.Equal(t, 0, code)
-	walkSpecToVerification(t)
+	walkSpecToSplit(t)
 }
 
-// walkSpecToVerification drives a spec workflow that `new` has already
-// founded through every step up to verification, the last one before the
-// completion commit.
-func walkSpecToVerification(t *testing.T) {
+// walkSpecToSplit drives a spec workflow that `new` has already founded
+// through every step up to split, the last one before the completion commit.
+func walkSpecToSplit(t *testing.T) {
 	t.Helper()
 	walkSteps(t, "spec",
 		"interview", "overview", "requirements", "acceptance_criteria", "constraints",
-		"technical_approach", "success_metrics", "non_goals", "verification")
+		"technical_approach", "success_metrics", "non_goals", "verification", "split")
 }
 
 // requireNothingCommittedYet is the "no commits appear while the workflow is
@@ -346,7 +345,7 @@ func TestAutoCommit_RefusesCompletionWithoutAUsableMessage(t *testing.T) {
 		require.Equal(t, "finished", er.Resource)
 		require.Equal(t, wantNextAction, er.NextAction)
 
-		require.Equal(t, "verification", currentStep(t, fx), "the workflow must stay where it was")
+		require.Equal(t, "split", currentStep(t, fx), "the workflow must stay where it was")
 		require.Equal(t, "1", commitCount(t, fx.root), "a refused completion must commit nothing")
 	}
 
@@ -403,7 +402,7 @@ func TestAutoCommit_HookRejectionLeavesWorkflowOnPreviousStep(t *testing.T) {
 	// than printed alongside it.
 	require.Equal(t, 1, jsonDocuments(t, stdout))
 
-	require.Equal(t, "verification", currentStep(t, fx), "the workflow must be put back on its previous step")
+	require.Equal(t, "split", currentStep(t, fx), "the workflow must be put back on its previous step")
 	require.Equal(t, "1", commitCount(t, fx.root))
 
 	// Fix the cause, re-stage the message as the remediation says, and re-run

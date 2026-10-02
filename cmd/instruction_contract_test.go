@@ -51,7 +51,8 @@ var stepTemplateTable = []stepTemplateRow{
 	{"spec", "technical_approach", "steps/spec/05-technical_approach.md", "success_metrics"},
 	{"spec", "success_metrics", "steps/spec/06-success_metrics.md", "non_goals"},
 	{"spec", "non_goals", "steps/spec/07-non_goals.md", "verification"},
-	{"spec", "verification", "steps/spec/08-verification.md", "finished"},
+	{"spec", "verification", "steps/spec/08-verification.md", "split"},
+	{"spec", "split", "steps/spec/08b-split.md", "finished"},
 	{"spec", "finished", "steps/spec/09-finished.md", ""},
 
 	{"plan", "overview", "steps/plan/01-overview.md", "discovery"},
@@ -585,7 +586,7 @@ const autoCommitHeading = "## Automatic git commit"
 // requireStepTableComplete walks only steps/<workflow>/, and the partial
 // lives under partials/, so it is out of that check's scope by construction.
 var autoCommitLeadingTemplates = map[string]bool{
-	"steps/spec/08-verification.md":        true,
+	"steps/spec/08b-split.md":              true,
 	"steps/plan/18-walkthrough.md":         true,
 	"steps/implement/11-reconcile_spec.md": true,
 }
@@ -661,7 +662,7 @@ func TestAutoCommitWorkflow_AddsCommitInstructionOnlyToCommitLeadingSteps(t *tes
 // straddle a line break; whitespace is flattened before matching for that
 // reason alone.
 func TestAutoCommitInstruction_SaysGitCommitNotASpektacularDocument(t *testing.T) {
-	flat := strings.Join(strings.Fields(commitLeadingInstruction(t, "spec", "verification")), " ")
+	flat := strings.Join(strings.Fields(commitLeadingInstruction(t, "spec", "split")), " ")
 
 	require.Contains(t, flat, "makes a **git commit** in every registered repository that has changes")
 	require.Contains(t, flat, "This is a commit to git, not a document written to Spektacular")
@@ -672,7 +673,7 @@ func TestAutoCommitInstruction_SaysGitCommitNotASpektacularDocument(t *testing.T
 // the other half — the instruction tells the agent, in as many words, not to
 // ask on its behalf.
 func TestAutoCommitInstruction_TellsAgentNotToAskForConfirmation(t *testing.T) {
-	flat := strings.Join(strings.Fields(commitLeadingInstruction(t, "spec", "verification")), " ")
+	flat := strings.Join(strings.Fields(commitLeadingInstruction(t, "spec", "split")), " ")
 
 	require.Contains(t, flat, "Do not ask the user to confirm the commit — it happens without asking.")
 }
@@ -682,9 +683,9 @@ func TestAutoCommitInstruction_TellsAgentNotToAskForConfirmation(t *testing.T) {
 // and the agent still refreshes its context last, exactly as
 // TestContinuingStepsEndWithIdenticalFooter requires off a commit point.
 func TestAutoCommitInstruction_PrecedesWorkingContextFooter(t *testing.T) {
-	// spec/verification is the one row that is both commit-leading and has a
-	// next step (finished), so both blocks are present at once.
-	body := commitLeadingInstruction(t, "spec", "verification")
+	// spec/split is commit-leading and has a next step (finished), so both
+	// blocks are present at once.
+	body := commitLeadingInstruction(t, "spec", "split")
 
 	commitAt := strings.Index(body, autoCommitHeading)
 	footerAt := strings.Index(body, contractWorkingContextFooter)

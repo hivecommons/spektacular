@@ -601,7 +601,7 @@ never uses epics behaves exactly as before.
 migration, and the epic commands pass. Migrating an existing project twice adds the `epic` block
 once. `go test ./...` is green.
 
-#### - [ ] Task: Extract the dependency graph helper
+#### - [x] Task: Extract the dependency graph helper
 **Id:** bfb8db69-17ea-43f3-9437-d16001d0e03c
 **Repo:** spektacular
 **Depends on:** none
@@ -614,10 +614,10 @@ epic validation can use the same algorithm later instead of a second copy.
 *Technical detail:* [context.md#task-extract-the-dependency-graph-helper](./context.md#task-extract-the-dependency-graph-helper)
 
 **Acceptance criteria**:
-- [ ] Plans with dependency cycles are still refused with the same error and cycle path as before
-- [ ] The helper reports a cycle (including a node depending on itself) for any set of named nodes, and reports none for an acyclic set
+- [x] Plans with dependency cycles are still refused with the same error and cycle path as before
+- [x] The helper reports a cycle (including a node depending on itself) for any set of named nodes, and reports none for an acyclic set
 
-#### - [ ] Task: Record epic and sources on specs
+#### - [x] Task: Record epic and sources on specs
 **Id:** e8829ac7-4927-4149-a563-f6130257b7c3
 **Repo:** spektacular
 **Depends on:** none
@@ -631,12 +631,12 @@ neither field is written exactly as it is today.
 *Technical detail:* [context.md#task-record-epic-and-sources-on-specs](./context.md#task-record-epic-and-sources-on-specs)
 
 **Acceptance criteria**:
-- [ ] A spec's `epic` and `sources` survive a body-only rewrite of the spec
-- [ ] An update can set, replace or clear each field explicitly
-- [ ] A spec with no epic and no sources renders byte-identically to today, with neither key present
-- [ ] Malformed `sources` entries read as absent rather than failing the read
+- [x] A spec's `epic` and `sources` survive a body-only rewrite of the spec
+- [x] An update can set, replace or clear each field explicitly
+- [x] A spec with no epic and no sources renders byte-identically to today, with neither key present
+- [x] Malformed `sources` entries read as absent rather than failing the read
 
-#### - [ ] Task: Add the epic store settings
+#### - [x] Task: Add the epic store settings
 **Id:** b22b59e2-9b53-4c4c-98cf-1733664c2f03
 **Repo:** spektacular
 **Depends on:** none
@@ -650,12 +650,12 @@ validation. It also adds `epic` as a document kind for addressing. New projects 
 *Technical detail:* [context.md#task-add-the-epic-store-settings](./context.md#task-add-the-epic-store-settings)
 
 **Acceptance criteria**:
-- [ ] A newly initialised project's configuration contains the `epic` section with `provider: file`, `strict_dependencies: false` and directory `epics`, plus `epic_split_threshold: moderate`
-- [ ] An invalid provider or threshold value is refused with a message saying what is allowed
-- [ ] `init` does not create an epics folder
-- [ ] The epic folder setting is resolved relative to the configuration file like other store folders
+- [x] A newly initialised project's configuration contains the `epic` section with `provider: file`, `strict_dependencies: false` and directory `epics`, plus `epic_split_threshold: moderate`
+- [x] An invalid provider or threshold value is refused with a message saying what is allowed
+- [x] `init` does not create an epics folder
+- [x] The epic folder setting is resolved relative to the configuration file like other store folders
 
-#### - [ ] Task: Add the epic document and its graph validation
+#### - [x] Task: Add the epic document and its graph validation
 **Id:** 23f76514-3bbb-46a7-90c1-30ee64778941
 **Repo:** spektacular
 **Depends on:**
@@ -671,12 +671,12 @@ lost by a spec-style rewrite.
 *Technical detail:* [context.md#task-add-the-epic-document-and-its-graph-validation](./context.md#task-add-the-epic-document-and-its-graph-validation)
 
 **Acceptance criteria**:
-- [ ] An epic with dependencies reads back with exactly the same specs, order and dependencies it was written with
-- [ ] `depends_on` is always written, as an empty list when a spec has no dependencies
-- [ ] A graph with a missing name or dependency list, a duplicate spec, an unknown dependency, or a cycle (including self-dependency) is refused with an error naming the problem
-- [ ] Created and closed dates are stamped and preserved the same way as for other documents
+- [x] An epic with dependencies reads back with exactly the same specs, order and dependencies it was written with
+- [x] `depends_on` is always written, as an empty list when a spec has no dependencies
+- [x] A graph with a missing name or dependency list, a duplicate spec, an unknown dependency, or a cycle (including self-dependency) is refused with an error naming the problem
+- [x] Created and closed dates are stamped and preserved the same way as for other documents
 
-#### - [ ] Task: Add the epic commands and membership links
+#### - [x] Task: Add the epic commands and membership links
 **Id:** 2746958b-631c-409d-8772-c14ca33612d9
 **Repo:** spektacular
 **Depends on:**
@@ -693,15 +693,15 @@ rules name the new commands.
 *Technical detail:* [context.md#task-add-the-epic-commands-and-membership-links](./context.md#task-add-the-epic-commands-and-membership-links)
 
 **Acceptance criteria**:
-- [ ] After an epic is written, every spec it lists names it, and every spec that names it is listed
-- [ ] Removing a spec from an epic's list clears that spec's `epic`. Deleting an epic leaves no spec naming it
-- [ ] Adding a spec that already belongs to another epic, or listing an epic as a member, is refused with an error and nothing is written
-- [ ] If a write fails part-way, the epic and every spec involved are restored to their previous content
-- [ ] Writing the first epic in a project with no epics folder creates the folder and succeeds
-- [ ] Deleting a spec that belongs to an epic is refused, naming the epic and how to remove the spec from it first
-- [ ] Every refusal states the problem and gives a runnable next step
+- [x] After an epic is written, every spec it lists names it, and every spec that names it is listed
+- [x] Removing a spec from an epic's list clears that spec's `epic`. Deleting an epic leaves no spec naming it
+- [x] Adding a spec that already belongs to another epic, or listing an epic as a member, is refused with an error and nothing is written
+- [x] If a write fails part-way, the epic and every spec involved are restored to their previous content
+- [x] Writing the first epic in a project with no epics folder creates the folder and succeeds
+- [x] Deleting a spec that belongs to an epic is refused, naming the epic and how to remove the spec from it first
+- [x] Every refusal states the problem and gives a runnable next step
 
-#### - [ ] Task: Split into an epic from the command line
+#### - [x] Task: Split into an epic from the command line
 **Id:** 41e74e4b-76c3-4e3e-81f9-d764041509e9
 **Repo:** spektacular
 **Depends on:**
@@ -717,15 +717,15 @@ if anything fails part-way.
 *Technical detail:* [context.md#task-split-into-an-epic-from-the-command-line](./context.md#task-split-into-an-epic-from-the-command-line)
 
 **Acceptance criteria**:
-- [ ] Splitting a standalone spec produces one epic, named after that spec, listing it and the new specs with their dependencies
-- [ ] The stored epic contains only an overview and its specs list, with no requirements, criteria, constraints, non-goals, technical approach or metrics
-- [ ] Every resulting spec is complete and final, with every section it was given, a non-empty overview and at least one acceptance criterion
-- [ ] Every requirement and acceptance criterion in the description appears in exactly one resulting spec, and a constraint shared by several appears in each of them
-- [ ] Splitting a spec that already belongs to an epic adds the new specs to that same epic
-- [ ] A description with fewer than two specs, a spec with no acceptance criteria, or an invalid graph is refused and nothing is written
-- [ ] With counter IDs, the new specs get distinct, sequential names
+- [x] Splitting a standalone spec produces one epic, named after that spec, listing it and the new specs with their dependencies
+- [x] The stored epic contains only an overview and its specs list, with no requirements, criteria, constraints, non-goals, technical approach or metrics
+- [x] Every resulting spec is complete and final, with every section it was given, a non-empty overview and at least one acceptance criterion
+- [x] Every requirement and acceptance criterion in the description appears in exactly one resulting spec, and a constraint shared by several appears in each of them
+- [x] Splitting a spec that already belongs to an epic adds the new specs to that same epic
+- [x] A description with fewer than two specs, a spec with no acceptance criteria, or an invalid graph is refused and nothing is written
+- [x] With counter IDs, the new specs get distinct, sequential names
 
-#### - [ ] Task: Migrate existing projects to the epic store
+#### - [x] Task: Migrate existing projects to the epic store
 **Id:** 5238912a-7633-4f3a-bf68-92eec733677a
 **Repo:** spektacular
 **Depends on:**
@@ -742,10 +742,10 @@ the CLI runs here again.
 *Technical detail:* [context.md#task-migrate-existing-projects-to-the-epic-store](./context.md#task-migrate-existing-projects-to-the-epic-store)
 
 **Acceptance criteria**:
-- [ ] Migrating an existing project adds the `epic` section and `epic_split_threshold` with their defaults and keeps every existing setting
-- [ ] Migrating a second time changes nothing
-- [ ] A project still on the previous schema is told to run `migrate`
-- [ ] The full test suite passes
+- [x] Migrating an existing project adds the `epic` section and `epic_split_threshold` with their defaults and keeps every existing setting
+- [x] Migrating a second time changes nothing
+- [x] A project still on the previous schema is told to run `migrate`
+- [x] The full test suite passes
 
 #### - [ ] Task: Migrate this repository's own configuration
 **Id:** 99ad63fd-21f0-42ef-9ec5-6c2e55f9f22c
@@ -778,7 +778,7 @@ implementing a spec.
 **Validation point**: Status, implement and retired-command tests pass. The plan-workflow harbor
 suite passes with its export check moved to `status`. `go test ./...` is green.
 
-#### - [ ] Task: Build the status report
+#### - [x] Task: Build the status report
 **Id:** e343da99-f4f8-4da1-adf7-38c4a9984f77
 **Repo:** spektacular
 **Depends on:**
@@ -796,14 +796,14 @@ they always agree.
 *Technical detail:* [context.md#task-build-the-status-report](./context.md#task-build-the-status-report)
 
 **Acceptance criteria**:
-- [ ] An epic name, any of its specs' names and any of their plans' names all resolve to the same epic, with the requested name identified
-- [ ] A standalone spec reports the same top-level shape with no epic and a single spec
-- [ ] Each spec is classified as missing, stale, specified, planned, in progress or implemented, and a missing spec does not hide the rest of the epic
-- [ ] An epic is reported done exactly when every spec has a plan whose tasks are all complete
-- [ ] A spec in an epic shows its own sources followed by its epic's, while its stored record holds only its own
-- [ ] The readable tree expands the requested spec down to its tasks and shows its siblings on one line each
+- [x] An epic name, any of its specs' names and any of their plans' names all resolve to the same epic, with the requested name identified
+- [x] A standalone spec reports the same top-level shape with no epic and a single spec
+- [x] Each spec is classified as missing, stale, specified, planned, in progress or implemented, and a missing spec does not hide the rest of the epic
+- [x] An epic is reported done exactly when every spec has a plan whose tasks are all complete
+- [x] A spec in an epic shows its own sources followed by its epic's, while its stored record holds only its own
+- [x] The readable tree expands the requested spec down to its tasks and shows its siblings on one line each
 
-#### - [ ] Task: Replace the status and export commands with status
+#### - [x] Task: Replace the status and export commands with status
 **Id:** 6960c99f-4530-40a6-b9a1-18f79862ef80
 **Repo:** spektacular
 **Depends on:**
@@ -818,13 +818,13 @@ plan-workflow harbor suite. Templates and skills are guarded against the old spe
 *Technical detail:* [context.md#task-replace-the-status-and-export-commands-with-status](./context.md#task-replace-the-status-and-export-commands-with-status)
 
 **Acceptance criteria**:
-- [ ] `status <name>` returns the report as readable text by default and as structured data with `--format json`, with the same information in both
-- [ ] `status` with no name reports the workflow in progress, or reports that nothing is in progress
-- [ ] An unknown name or an unsupported format is refused with a runnable next step
-- [ ] `spec status`, `plan status`, `implement status` and `plan export` no longer exist, and no template, skill or README presents them
-- [ ] The implement skill and task-refusal hints point at `status` for task ids
+- [x] `status <name>` returns the report as readable text by default and as structured data with `--format json`, with the same information in both
+- [x] `status` with no name reports the workflow in progress, or reports that nothing is in progress
+- [x] An unknown name or an unsupported format is refused with a runnable next step
+- [x] `spec status`, `plan status`, `implement status` and `plan export` no longer exist, and no template, skill or README presents them
+- [x] The implement skill and task-refusal hints point at `status` for task ids
 
-#### - [ ] Task: Check spec dependencies when implementation starts
+#### - [x] Task: Check spec dependencies when implementation starts
 **Id:** 0a3c2970-1993-42c1-bc2a-c298b88e2e94
 **Repo:** spektacular
 **Depends on:**
@@ -841,12 +841,12 @@ behaviour.
 *Technical detail:* [context.md#task-check-spec-dependencies-when-implementation-starts](./context.md#task-check-spec-dependencies-when-implementation-starts)
 
 **Acceptance criteria**:
-- [ ] Implementing a standalone spec, or one whose dependencies are all implemented, starts with no warning
-- [ ] Starting a spec with an unmet dependency names each one and its state, for example "in progress (2/5 tasks complete)", and starts nothing
-- [ ] With default settings, choosing to continue starts implementation and the override is recorded in the changelog
-- [ ] With strict dependencies, starting is refused even when continuing is requested
-- [ ] Specifying and planning a spec whose dependencies are unimplemented are never warned or blocked
-- [ ] The implement command's help, input description and skill say a spec is being implemented
+- [x] Implementing a standalone spec, or one whose dependencies are all implemented, starts with no warning
+- [x] Starting a spec with an unmet dependency names each one and its state, for example "in progress (2/5 tasks complete)", and starts nothing
+- [x] With default settings, choosing to continue starts implementation and the override is recorded in the changelog
+- [x] With strict dependencies, starting is refused even when continuing is requested
+- [x] Specifying and planning a spec whose dependencies are unimplemented are never warned or blocked
+- [x] The implement command's help, input description and skill say a spec is being implemented
 
 ### Milestone 3: Specs can be split, grouped from the start, and started from existing material
 
@@ -866,7 +866,7 @@ walk through `split`. The spec-workflow harbor suite passes with the new step. T
 for the seeding and split-offer metrics are listed in the implementation test plan. `go test ./...`
 is green.
 
-#### - [ ] Task: Start a spec with sources or in an epic
+#### - [x] Task: Start a spec with sources or in an epic
 **Id:** 31c5ced7-fb2d-4af9-982a-f52f33e08318
 **Repo:** spektacular
 **Depends on:**
@@ -883,13 +883,13 @@ passed to the interview step so it knows to seed and to read the epic first.
 *Technical detail:* [context.md#task-start-a-spec-with-sources-or-in-an-epic](./context.md#task-start-a-spec-with-sources-or-in-an-epic)
 
 **Acceptance criteria**:
-- [ ] A spec started with sources records each source's link and retrieval date, and a spec started without any records none
-- [ ] A source entry with no link is refused with the correct shape in its next step
-- [ ] A spec started in an epic is listed by that epic from the start and names it
-- [ ] Starting a spec in an epic that does not exist is refused and nothing is written
-- [ ] Starting a spec without sources or an epic behaves exactly as before
+- [x] A spec started with sources records each source's link and retrieval date, and a spec started without any records none
+- [x] A source entry with no link is refused with the correct shape in its next step
+- [x] A spec started in an epic is listed by that epic from the start and names it
+- [x] Starting a spec in an epic that does not exist is refused and nothing is written
+- [x] Starting a spec without sources or an epic behaves exactly as before
 
-#### - [ ] Task: Guard additions to a completed epic
+#### - [x] Task: Guard additions to a completed epic
 **Id:** 9cdca194-2428-4e62-8c2c-3fb99a6c8efb
 **Repo:** spektacular
 **Depends on:**
@@ -906,11 +906,11 @@ the epic is reported as in progress again until the new spec is implemented.
 *Technical detail:* [context.md#task-guard-additions-to-a-completed-epic](./context.md#task-guard-additions-to-a-completed-epic)
 
 **Acceptance criteria**:
-- [ ] Adding a spec to a completed epic by any of the three routes is refused with a warning naming the epic, and nothing is written
-- [ ] Repeating the addition with confirmation adds the spec, and the epic's status is no longer done
-- [ ] Adding to an epic that is not complete needs no confirmation
+- [x] Adding a spec to a completed epic by any of the three routes is refused with a warning naming the epic, and nothing is written
+- [x] Repeating the addition with confirmation adds the spec, and the epic's status is no longer done
+- [x] Adding to an epic that is not complete needs no confirmation
 
-#### - [ ] Task: Add the split step and chaining to the spec workflow
+#### - [x] Task: Add the split step and chaining to the spec workflow
 **Id:** bf23f8d2-1eb3-47af-9472-4485cdc984a1
 **Repo:** spektacular
 **Depends on:**
@@ -929,15 +929,15 @@ that has none yet.
 *Technical detail:* [context.md#task-add-the-split-step-and-chaining-to-the-spec-workflow](./context.md#task-add-the-split-step-and-chaining-to-the-spec-workflow)
 
 **Acceptance criteria**:
-- [ ] Every spec workflow passes through the split check before finishing, and a split requested earlier is acted on there
-- [ ] The split instructions offer a split only when at least two specs, each with independently verifiable criteria, can be named, and say that docs, tests, migrations and config never count towards one
-- [ ] The instructions never split without the user's agreement, and repeat an offer after a decline only when a new independent requirement group appears
-- [ ] The split sensitivity is read from `epic_split_threshold`, separately from the spec-trigger setting, and never overrides the supporting-work rule or counter-signals
-- [ ] An accepted split reviews every resulting spec once and writes them complete, with no further interview
-- [ ] When a spec in an epic finishes and the epic's source has an item with no spec yet, the agent offers to start one for it
-- [ ] The completed spec, and any epic and specs a split wrote, are committed together when auto-commit is on
+- [x] Every spec workflow passes through the split check before finishing, and a split requested earlier is acted on there
+- [x] The split instructions offer a split only when at least two specs, each with independently verifiable criteria, can be named, and say that docs, tests, migrations and config never count towards one
+- [x] The instructions never split without the user's agreement, and repeat an offer after a decline only when a new independent requirement group appears
+- [x] The split sensitivity is read from `epic_split_threshold`, separately from the spec-trigger setting, and never overrides the supporting-work rule or counter-signals
+- [x] An accepted split reviews every resulting spec once and writes them complete, with no further interview
+- [x] When a spec in an epic finishes and the epic's source has an item with no spec yet, the agent offers to start one for it
+- [x] The completed spec, and any epic and specs a split wrote, are committed together when auto-commit is on
 
-#### - [ ] Task: Seed specs from existing material
+#### - [x] Task: Seed specs from existing material
 **Id:** cbdc1ee8-c3fd-4b7b-9ffe-e9697afe9f2a
 **Repo:** spektacular
 **Depends on:**
@@ -962,15 +962,15 @@ draft.
 *Technical detail:* [context.md#task-seed-specs-from-existing-material](./context.md#task-seed-specs-from-existing-material)
 
 **Acceptance criteria**:
-- [ ] The skill recognises a source given as a number, a link or "spec from …", and names no specific fetching tool or tracker
-- [ ] An unreachable source leads the agent to say so and ask for the content, not to start a blank interview
-- [ ] A source with child items leads to an offer to create an epic and specify each child in it, and a child item added later leads to an offer of a spec for it in that epic
-- [ ] In a project with epics, starting a spec asks whether it belongs to one, and in a project without epics it does not
-- [ ] A spec joining an epic has the agent read the epic and its specs before the interview, and offer to record dependencies on them
-- [ ] A seeded interview lists the uncovered sections and asks only about those, and later steps present their pre-filled drafts to confirm
-- [ ] Seeding instructions survive a resumed session because they live in the interview step
+- [x] The skill recognises a source given as a number, a link or "spec from …", and names no specific fetching tool or tracker
+- [x] An unreachable source leads the agent to say so and ask for the content, not to start a blank interview
+- [x] A source with child items leads to an offer to create an epic and specify each child in it, and a child item added later leads to an offer of a spec for it in that epic
+- [x] In a project with epics, starting a spec asks whether it belongs to one, and in a project without epics it does not
+- [x] A spec joining an epic has the agent read the epic and its specs before the interview, and offer to record dependencies on them
+- [x] A seeded interview lists the uncovered sections and asks only about those, and later steps present their pre-filled drafts to confirm
+- [x] Seeding instructions survive a resumed session because they live in the interview step
 
-#### - [ ] Task: Update the spec-workflow harbor suite
+#### - [x] Task: Update the spec-workflow harbor suite
 **Id:** 182ad440-4a84-4f4d-bb32-713d91c08754
 **Repo:** spektacular
 **Depends on:**
@@ -984,8 +984,8 @@ order, the solve script's step sequence, and an assertion that a single coupled 
 *Technical detail:* [context.md#task-update-the-spec-workflow-harbor-suite](./context.md#task-update-the-spec-workflow-harbor-suite)
 
 **Acceptance criteria**:
-- [ ] The suite expects `split` between verification and finished
-- [ ] The suite asserts that its single-feature scenario finishes with no epic stored
+- [x] The suite expects `split` between verification and finished
+- [x] The suite asserts that its single-feature scenario finishes with no epic stored
 
 #### - [ ] Task: Run the harbor suites
 **Id:** e4194c32-a882-4edf-bc42-3d12469d82c4
@@ -1016,7 +1016,7 @@ presents the removed commands as current.
 guard finds nothing, and searching the site for the removed commands finds only historical
 references.
 
-#### - [ ] Task: Document epics, splitting and dependencies
+#### - [x] Task: Document epics, splitting and dependencies
 **Id:** 56ba7ec3-46b1-454a-9089-51b0c24b4d86
 **Repo:** docs
 **Depends on:**
@@ -1034,11 +1034,11 @@ dependencies between specs and how implementation treats an unmet one, and the `
 *Technical detail:* [context.md#task-document-epics-splitting-and-dependencies](./context.md#task-document-epics-splitting-and-dependencies)
 
 **Acceptance criteria**:
-- [ ] The site has an epics page, reachable from the navigation, covering epics, splitting, the epic-first route, split sensitivity, joining an epic, chaining and dependencies
-- [ ] The page's examples use the real frontmatter fields, settings and commands
-- [ ] The page follows the site's layout and authoring rules and contains no em dashes
+- [x] The site has an epics page, reachable from the navigation, covering epics, splitting, the epic-first route, split sensitivity, joining an epic, chaining and dependencies
+- [x] The page's examples use the real frontmatter fields, settings and commands
+- [x] The page follows the site's layout and authoring rules and contains no em dashes
 
-#### - [ ] Task: Document the status view
+#### - [x] Task: Document the status view
 **Id:** 5034726e-22fc-4895-8897-96849f9d7134
 **Repo:** docs
 **Depends on:**
@@ -1053,11 +1053,11 @@ mentions the removed commands is updated, including a migration table from each 
 *Technical detail:* [context.md#task-document-the-status-view](./context.md#task-document-the-status-view)
 
 **Acceptance criteria**:
-- [ ] The site documents `status` with a readable and a structured example and its output fields
-- [ ] No page presents `spec status`, `plan status`, `implement status` or `plan export` as current
-- [ ] A table maps each removed command to its `status` replacement
+- [x] The site documents `status` with a readable and a structured example and its output fields
+- [x] No page presents `spec status`, `plan status`, `implement status` or `plan export` as current
+- [x] A table maps each removed command to its `status` replacement
 
-#### - [ ] Task: Document seeding, implementing a spec and the new settings
+#### - [x] Task: Document seeding, implementing a spec and the new settings
 **Id:** b949fe14-171a-4ab6-a929-a62b750138a1
 **Repo:** docs
 **Depends on:**
@@ -1074,10 +1074,10 @@ changelog entry for the release.
 *Technical detail:* [context.md#task-document-seeding-implementing-a-spec-and-the-new-settings](./context.md#task-document-seeding-implementing-a-spec-and-the-new-settings)
 
 **Acceptance criteria**:
-- [ ] The site explains starting a spec from existing material, the gap-only interview, and the `sources` it records
-- [ ] The configuration reference documents `epic.provider`, `epic.strict_dependencies`, `epic.config.directory` and `epic_split_threshold`, and its key count is correct
-- [ ] The site describes implementation as implementing a spec
-- [ ] The site builds, type-checks with no errors or warnings, and passes the layout guard
+- [x] The site explains starting a spec from existing material, the gap-only interview, and the `sources` it records
+- [x] The configuration reference documents `epic.provider`, `epic.strict_dependencies`, `epic.config.directory` and `epic_split_threshold`, and its key count is correct
+- [x] The site describes implementation as implementing a spec
+- [x] The site builds, type-checks with no errors or warnings, and passes the layout guard
 
 ## Open Questions
 
@@ -1107,3 +1107,352 @@ There are no other open questions. Every other decision is recorded in the assum
 - No compatibility aliases or deprecation period for `spec status`, `plan status`, `implement status` or `plan export` (spec constraint).
 - The guided repo-add workflow's separate state is not reported by `status`.
 - A glossary entry for "epic" in the knowledge base is not part of the implementation tasks. It is offered to the user separately through the knowledge workflow.
+
+## Changelog
+
+
+### 2026-10-01 — Task: Extract the dependency graph helper
+
+**What was done**: Moved cycle detection out of the plan-task validator into a new `internal/depgraph` package (`FindCycle(order, deps)`), which works on any named nodes and returns the cycle path with its first node repeated. `plantask.Validate` now builds the id order and dependency map and maps the returned ids back to task titles, so its errors are unchanged.
+
+**Deviations**: None
+
+**Files changed**:
+- `spektacular: internal/depgraph/depgraph.go`
+- `spektacular: internal/depgraph/depgraph_test.go`
+- `spektacular: internal/plantask/validate.go`
+
+**Discoveries**: `FindCycle` ignores dependencies on names outside `order`, so callers must report unknown dependencies before calling it (both plantask and the coming epic validator do).
+
+### 2026-10-01 — Task: Record epic and sources on specs
+
+**What was done**: Added `Epic` and `Sources []SourceRef` (`{uri, retrieved_date}`) to the shared frontmatter metadata at every closed-schema site, with lenient decoding of `sources`. `UpdateOptions` gained tri-state `Epic *string` and `Sources *[]SourceRef`, which `Merge` applies on fresh writes and carries forward on existing ones, so a body-only spec rewrite keeps both.
+
+**Deviations**: None
+
+**Files changed**:
+- `spektacular: internal/metadata/metadata.go`
+- `spektacular: internal/metadata/merge.go`
+- `spektacular: internal/metadata/metadata_test.go`
+- `spektacular: internal/metadata/merge_test.go`
+
+**Discoveries**: `epic` decodes as a plain string like `spec` and `plan`, so a hand-edited non-scalar `epic:` value fails the read rather than reading as empty; only `sources` (like `designs`) is lenient.
+
+### 2026-10-01 — Task: Add the epic store settings
+
+**What was done**: Added the `epic` store section (`provider`, `strict_dependencies`, `config.directory`, default `epics`) and `epic_split_threshold` (strict / moderate / lenient, default moderate) to the project configuration, with defaults in `NewDefault`, load-time prefill, validation that names the allowed values, and the epic directory in `storeDirs` so it resolves relative to `config.yaml` and is refused outside the project. Added `artifact.KindEpic`. `init` writes both settings and creates no epics folder.
+
+**Deviations**: None
+
+**Files changed**:
+- `spektacular: internal/config/config.go`
+- `spektacular: internal/config/config_test.go`
+- `spektacular: internal/config/storedir_test.go`
+- `spektacular: internal/artifact/address.go`
+- `spektacular: internal/artifact/address_test.go`
+- `spektacular: cmd/init_test.go`
+
+**Discoveries**: Without a schema bump, an existing schema-3 project already loads the epic defaults (the loader prefills them), so the CLI keeps working here until the migration task bumps the schema.
+
+### 2026-10-01 — Task: Add the epic document and its graph validation
+
+**What was done**: Added the `internal/epic` package: the epic's own frontmatter type (`created_date`, `document_status`, `closed_date`, `spec`, `specs[{name, depends_on}]`, `sources`), `Parse`, `Render` (always writing `depends_on`, as `[]` when empty, and `specs`), `Stamp` for lifecycle dates with the same rules as `metadata.Merge`, and `Validate`, which refuses a missing name or `depends_on`, a duplicate, an unknown dependency or a cycle with `epic_invalid` naming the spec. Cycle detection uses `depgraph.FindCycle`.
+
+**Deviations**: To avoid duplicating fence handling and lifecycle rules, `internal/metadata` now exports `SplitRaw` (which `Split` delegates to), `IsClosed`, `ValidateDocumentStatus` and `DateFormat`.
+
+**Files changed**:
+- `spektacular: internal/epic/epic.go`
+- `spektacular: internal/epic/validate.go`
+- `spektacular: internal/epic/epic_test.go`
+- `spektacular: internal/epic/validate_test.go`
+- `spektacular: internal/metadata/frontmatter.go`
+- `spektacular: internal/metadata/metadata.go`
+- `spektacular: internal/metadata/metadata_test.go`
+
+**Discoveries**: yaml.v3 decodes an absent `depends_on` to a nil slice and `depends_on: []` to a non-nil empty one, which is how Validate tells "missing" from "none". Callers building an `EpicSpec` by hand must pass `[]string{}`, not nil.
+
+### 2026-10-01 — Task: Add the epic commands and membership links
+
+**What was done**: Added the hand-written `epic read / write / list / delete` command family (`cmd/epic.go`) and the membership link writer (`cmd/epic_link.go`). `epic write` takes the body via `--from` and `specs` / `sources` / `spec` via `--data` (omitted fields keep their value), names a bare new epic with the configured ID method run against the epic directory, validates the graph, refuses an unknown spec, a spec in another epic or a nested epic before writing anything, then writes the epic and sets or clears each spec's `epic`. Every write goes through a small `docTxn` that restores all touched documents on failure (`epic_link_failed` / `epic_link_rollback_failed`). `epic delete` unlinks every member, and `spec file delete` refuses while the spec is in an epic (`spec_in_epic_delete`) through a new `preDelete` hook on the store-file factory. The store-access agent section names `epic` and `epic delete`.
+
+**Deviations**: The link writer's rollback is a reusable `docTxn` rather than inline originals, so `epic split` can put its new and narrowed specs in the same transaction. `epic write` also accepts `--document-status`, like the other writes.
+
+**Files changed**:
+- `spektacular: cmd/epic.go`
+- `spektacular: cmd/epic_link.go`
+- `spektacular: cmd/epic_test.go`
+- `spektacular: cmd/storefile.go`
+- `spektacular: cmd/file.go`
+- `spektacular: cmd/file_test.go`
+- `spektacular: cmd/root.go`
+- `spektacular: cmd/root_test.go`
+- `spektacular: templates/agents/store-access.md`
+- `spektacular: internal/agent/store_access_test.go`
+
+**Discoveries**: After a split the epic and its first spec share a name, so "is this member an epic?" cannot be decided by the name existing in the epic store. A member is treated as a nested epic only when no spec of that name exists. This repo's own AGENTS.md store-access section is regenerated only by `init`, which is deferred to the skills regeneration in the status-command task.
+
+### 2026-10-01 — Task: Split into an epic from the command line
+
+**What was done**: Added `epic split --from <staged json>` (`cmd/epic_split.go`). It validates the description (at least two specs, the split spec named exactly once, every new spec titled, a non-empty overview and at least one acceptance criterion each, an overview when creating the epic) and the graph before writing. It allocates new spec IDs one at a time and writes each spec from the spec scaffold, complete and `final`, then rewrites the split spec as its narrowed self (keeping dates, designs and status). It creates an epic named after the split spec, or extends the one it already belongs to, with an Overview and a Specs table, moves the description's sources to the epic, and links everything both ways inside one transaction that restores all documents on failure.
+
+**Deviations**: Added `docTxn.abort` so a refusal raised mid-transaction (before the link writer) still reports a failed restore as `epic_link_rollback_failed`. A new spec may carry an `id` (for `spec.id_method: external`) and a `scope` for the epic's table; the epic body starts with a `# Epic: <name>` title.
+
+**Files changed**:
+- `spektacular: cmd/epic_split.go`
+- `spektacular: cmd/epic_split_test.go`
+- `spektacular: cmd/epic_link.go`
+- `spektacular: cmd/epic_test.go`
+- `spektacular: cmd/root_test.go`
+
+**Discoveries**: When an epic is extended, the scopes of existing members are read back from the epic body's Specs table, so a hand-edited table keeps its wording across later splits.
+
+### 2026-10-01 — Task: Migrate existing projects to the epic store
+
+**What was done**: Raised `CurrentProjectSchema` to 4 and registered a `project3to4` migration step that writes `epic_split_threshold: moderate` and the `epic` block (`provider: file`, `strict_dependencies: false`, `config.directory: epics`) into an existing project when each key is absent, keeping existing values; a second migrate changes nothing. A project still on format 3 is refused with `upgrade_required` naming `migrate`. Swept every test fixture that pinned format 3 as current, updated expectations for older-format fixtures that now migrate through to 4, and regenerated the migrate goldens.
+
+**Deviations**: None. The fixture sweep was wider than context.md listed, as found in read_plan (version, config, repo, design, project init and engine tests).
+
+**Files changed**:
+- `spektacular: internal/config/schema.go`
+- `spektacular: internal/migrate/steps_project.go`
+- `spektacular: internal/migrate/registry.go`
+- `spektacular: internal/migrate/steps_project_test.go`
+- `spektacular: internal/migrate/engine_test.go`
+- `spektacular: internal/migrate/testdata/current/config.yaml`
+- `spektacular: internal/migrate/testdata/golden/legacy_single/config.yaml.golden`
+- `spektacular: internal/migrate/testdata/golden/split_unversioned/config.yaml.golden`
+- `spektacular: internal/config/config_test.go`
+- `spektacular: internal/config/repo_test.go`
+- `spektacular: internal/config/schema_test.go`
+- `spektacular: internal/design/design_test.go`
+- `spektacular: internal/project/init_test.go`
+- `spektacular: cmd/gate_test.go`
+- `spektacular: cmd/format_refusal_test.go`
+- `spektacular: cmd/version_test.go`
+- `spektacular: cmd/migrate_test.go`
+- `spektacular: cmd/init_test.go`
+
+**Discoveries**: Current-format fixtures are hand-maintained literals by convention (not derived from `CurrentProjectSchema`), so every schema bump needs the same sweep. Apply always runs to the current format, so the older step tests (2->3) also see the 3->4 actions.
+
+### 2026-10-01 — Task: Start a spec with sources or in an epic
+
+**What was done**: `spec new` accepts `sources` (a list of `{uri}`, each stamped with today's date; a missing uri is refused with `sources_invalid` showing the shape) and `epic` (which must exist, else `epic_not_found`), both checked before the start gate so a refusal writes nothing. The `new` step writes the sources to the spec's frontmatter. When an epic is named, `runSpecNew` joins the spec to it right after the `new` step through the existing link writer (`joinSpecToEpic` in `cmd/epic_link.go`), so the epic lists it with `depends_on: []` from the start. A failed join rolls back the spec and the epic and clears the workflow state. The `interview` step passes `sources` (URIs) and `epic` to its template.
+
+**Deviations**: The join runs in `cmd` after the `new` step rather than inside the step callback, because the step package cannot import the link writer and the plan forbids a second copy. The `new` step's output is buffered until the join succeeds. A failed join does not undo the `new` step's reset of the working context.
+
+**Files changed**:
+- `spektacular: cmd/spec.go`
+- `spektacular: cmd/epic_link.go`
+- `spektacular: cmd/spec_test.go`
+- `spektacular: internal/steps/spec/steps.go`
+- `spektacular: internal/steps/spec/steps_test.go`
+
+**Discoveries**: Workflow data survives a round trip through `state.json` as `[]any` of maps, so a typed value set in `spec new` (the stamped sources) must be decoded leniently by the step that reads it on a later turn (`sourcesFrom`).
+
+### 2026-10-01 — Task: Build the status report
+
+**What was done**: Added the `internal/status` package. It resolves a name (epic, then spec, then plan, else `artifact_not_found`) and builds the single report shape: the workflow block, `requested`, the epic with its roll-up, `done` and sources, and every spec with its state, readiness, blockers, effective sources (own, then the epic's) and plan with tasks and acceptance-criteria counts. It owns the one classifier (`missing`, `stale`, `specified`, `planned`, `in_progress`, `implemented`) with `Describe` wording, plus `DependenciesOf` for the implement check, `EpicComplete` for the completed-epic guard, and the pretty tree renderer.
+
+**Deviations**: `plantask` gained `Plan.Items()` (total work items, so a legacy plan's phase count is available) and exported `WriteTasks` (the task-list half of `RenderPretty`, whose output is unchanged). `cmd/plan.go`'s stale check and `cmd/plan_export.go`'s repo locations now delegate to `internal/status`. An epic with no specs is never done, so the completed-epic guard does not block its first spec. Legacy (phase) plans count towards a spec's state but stay out of the epic's task roll-up, and the JSON omits their `progress` and `tasks`.
+
+**Files changed**:
+- `spektacular: internal/status/classify.go`
+- `spektacular: internal/status/resolve.go`
+- `spektacular: internal/status/report.go`
+- `spektacular: internal/status/pretty.go`
+- `spektacular: internal/status/status_test.go`
+- `spektacular: internal/plantask/plantask.go`
+- `spektacular: internal/plantask/export.go`
+- `spektacular: cmd/plan.go`
+- `spektacular: cmd/plan_export.go`
+
+**Discoveries**: A plan's live `current_step` is taken from the workflow state only when the workflow's kind matches (spec or plan). An implement run appears only in the report's `workflow` block, and the plan's step reads "finished".
+
+### 2026-10-01 — Task: Add the split step and chaining to the spec workflow
+
+**What was done**: The spec workflow gained a `split` step on the linear path `verification -> split -> finished`, rendered from `08b-split.md`. That template includes two new shared partials, `split-check` (the gate, strong and weak signals, the supporting-work rule, counter-signals, and a live `epic_split_threshold` read with what strict, moderate and lenient change) and `split-flow` (agreement, redistributing content, one fresh-eyes review over every resulting spec, provenance, staging and `epic split --from`). It honours a split request recorded earlier in the working context. The interview and section steps say to record a mid-workflow split request and continue. `finished` offers a spec for the next source item with no spec yet when the spec is in an epic. The spec completion commit point moved to `split -> finished`, so a split's epic and specs are committed with the spec.
+
+**Deviations**: `workflow.Config` gained `EpicDir` so the spec steps can read the spec's epic and its sources. The plan's open question is resolved: both step and skill rendering provide `{{command}}`, so the partials use it and no renderer changed. `08-verification.md` needed no edit because its goto uses `{{next_step}}`.
+
+**Files changed**:
+- `spektacular: internal/steps/spec/steps.go`
+- `spektacular: internal/steps/spec/steps_test.go`
+- `spektacular: internal/steps/spec/split_test.go`
+- `spektacular: internal/workflow/workflow.go`
+- `spektacular: internal/autocommit/points.go`
+- `spektacular: internal/autocommit/points_test.go`
+- `spektacular: cmd/spec.go`
+- `spektacular: cmd/autocommit_test.go`
+- `spektacular: cmd/startgate_test.go`
+- `spektacular: cmd/artifact_status_test.go`
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: templates/partials/split-check.md`
+- `spektacular: templates/partials/split-flow.md`
+- `spektacular: templates/steps/spec/08b-split.md`
+- `spektacular: templates/steps/spec/09-finished.md`
+- `spektacular: templates/steps/spec/00b-interview.md`
+- `spektacular: templates/steps/spec/01-overview.md`
+- `spektacular: templates/steps/spec/02-requirements.md`
+- `spektacular: templates/steps/spec/03-acceptance_criteria.md`
+- `spektacular: templates/steps/spec/04-constraints.md`
+- `spektacular: templates/steps/spec/05-technical_approach.md`
+- `spektacular: templates/steps/spec/06-success_metrics.md`
+- `spektacular: templates/steps/spec/07-non_goals.md`
+- `spektacular: templates/split_test.go`
+
+**Discoveries**: cbroglie/mustache has no index access (`list.0`), so a template that needs "is this list non-empty" gets an explicit boolean from the callback (`epic_has_sources`).
+
+### 2026-10-01 — Task: Replace the status and export commands with status
+
+**What was done**: Added the top-level `status [name] [--format pretty|json]` command (`cmd/status.go`), a thin renderer over `internal/status`: pretty by default, JSON with `--format json`, `{"workflow": null}` with no name and nothing in progress, `status_format_unsupported` and `artifact_not_found` refusals with runnable next actions. Removed `spec status`, `plan status`, `implement status` and `plan export` outright, along with `cmd/artifact_status.go`, `cmd/plan_export.go` and the per-kind `StatusResult` types. Moved every caller to `status`: the implement task hint, the `spek-implement` skill (tasks under `specs[].plan.tasks`), the README and the plan-workflow harbor check. Added the retired spellings to the instruction-surface deny-list, and re-pinned the old commands' tested behaviour in `cmd/status_test.go`.
+
+**Deviations**: `status.BuildCurrent` now returns a workflow-only report when the workflow in progress has not written its artifact yet, rather than refusing. A plan without task structure reports its lifecycle (no `progress` or `tasks`) instead of being refused as `plan export` did. With no name, a finished workflow reports `{"workflow": null}`.
+
+**Files changed**:
+- `spektacular: cmd/status.go`
+- `spektacular: cmd/status_test.go`
+- `spektacular: cmd/root.go`
+- `spektacular: cmd/spec.go`
+- `spektacular: cmd/plan.go`
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/artifact_status.go` (removed)
+- `spektacular: cmd/plan_export.go` (removed)
+- `spektacular: cmd/artifact_status_test.go` (removed)
+- `spektacular: cmd/plan_status_progress_test.go` (removed)
+- `spektacular: cmd/plan_export_test.go` (removed)
+- `spektacular: cmd/cross_kind_test.go`
+- `spektacular: cmd/implement_test.go`
+- `spektacular: cmd/implement_task_test.go`
+- `spektacular: cmd/status_address_test.go`
+- `spektacular: cmd/root_test.go`
+- `spektacular: internal/status/report.go`
+- `spektacular: internal/status/status_test.go`
+- `spektacular: internal/steps/spec/result.go`
+- `spektacular: internal/steps/plan/result.go`
+- `spektacular: internal/steps/implement/result.go`
+- `spektacular: internal/plantask/export.go`
+- `spektacular: internal/agent/instruction_surface_test.go`
+- `spektacular: internal/output/writer_test.go`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: templates/skill_resume_test.go`
+- `spektacular: README.md`
+- `spektacular: tests/harbor/plan-workflow/tests/test_plan_workflow.py`
+
+**Discoveries**: `plan export X --format json` now fails with `internal_error` rather than `unknown_subcommand`, because cobra rejects the unknown flag before the subcommand lookup (existing behaviour for unknown flags). The generated `.claude/skills` / `.bob/skills` copies and this repo's knowledge entry `architecture/working-with-files-from-steps.md` still mention the retired commands until `init` and a knowledge update.
+
+### 2026-10-01 — Task: Document the status view
+
+**What was done**: `plan-tasks.mdx` replaces "Exporting a plan", "Export fields" and "Tracking progress" with one "Seeing where work stands: status" section: a readable example matching the real pretty renderer, a `--format json` example with the real field names, the no-name and nothing-in-progress cases, and a "Status fields" reference covering all six spec states. `documents.mdx` points at `spektacular status` and gains a table mapping each removed command to its replacement. `how-it-works.mdx` says `spektacular status`. The site changelog entry notes the replacement.
+
+**Deviations**: The removed-command table is separate from the existing "Upgrading from earlier spellings" table, because that table's intro describes spellings refused with `unexpected_extension`, which the removed commands are not. The `workflow` block example shows no `task` field, because the design's (and the code's) workflow block has none.
+
+**Files changed**:
+- `docs: src/pages/plan-tasks.mdx`
+- `docs: src/pages/documents.mdx`
+- `docs: src/pages/how-it-works.mdx`
+- `docs: CHANGELOG.md`
+
+**Discoveries**: The retired `implement status` reported the selected task id from workflow data. `status` does not surface it, so a single-task run's task is visible only in `state.json` (`data.task`).
+
+### 2026-10-01 — Task: Check spec dependencies when implementation starts
+
+**What was done**: `implement new` checks a spec's direct dependencies in its epic after the stale-plan and task checks and before the start gate, using `status.DependenciesOf`, so a refusal writes no state. Unmet dependencies are refused with `dependencies_unmet`, naming each one and its state (for example "in progress (2/5 tasks complete)"). The next action offers the same command with `"override_dependencies": true` after the user agrees, or the first ready dependency. Under `epic.strict_dependencies` the override is refused with `dependency_override_refused`. An accepted override is stored as `dependency_override` in workflow data, and both changelog steps render it so the agent records it under Deviations. The implement help, input description and `spek-implement` skill now say a spec is implemented, and the skill handles both refusals.
+
+**Deviations**: Under strict dependencies with no override requested, the refusal is `dependencies_unmet` without the override option, and `dependency_override_refused` is used only when an override was asked for. The `spek-implement` description in `internal/agent/commands.go` and the README quick start were also reworded to "implement a spec".
+
+**Files changed**:
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/implement_dependencies_test.go`
+- `spektacular: cmd/implement_test.go`
+- `spektacular: internal/steps/implement/steps.go`
+- `spektacular: internal/steps/implement/dependency_override_test.go`
+- `spektacular: templates/steps/implement/07-update_changelog.md`
+- `spektacular: templates/steps/implement/10-update_feature_changelog.md`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: templates/skill_resume_test.go`
+- `spektacular: internal/agent/commands.go`
+- `spektacular: internal/agent/uncommitted_changes_test.go`
+- `spektacular: README.md`
+
+**Discoveries**: The re-run payload in the next action is rebuilt from the caller's `--data` with `override_dependencies` added, so a single-task run keeps its `task` field when it is re-run.
+
+### 2026-10-01 — Task: Guard additions to a completed epic
+
+**What was done**: Added `refuseCompletedEpic` (`cmd/epic_link.go`), built on `status.EpicComplete`. Adding a spec to an epic whose specs are all implemented, through `spec new` with `epic`, through `epic write` when its list gains a spec, or through `epic split` when it extends an epic, is refused with `epic_complete` naming the epic, and nothing is written. Re-running with `"confirm_completed_epic": true` (in `--data`, or in the staged split description) adds the spec, and the epic then reads as not done. Each route publishes the new field in its `--schema`. The split flow and `spek-new` skill tell the agent to ask the user before confirming.
+
+**Deviations**: An epic with no specs is never complete, so its first spec needs no confirmation.
+
+**Files changed**:
+- `spektacular: cmd/epic_link.go`
+- `spektacular: cmd/epic.go`
+- `spektacular: cmd/epic_split.go`
+- `spektacular: cmd/spec.go`
+- `spektacular: cmd/epic_complete_test.go`
+- `spektacular: cmd/epic_test.go`
+- `spektacular: cmd/epic_split_test.go`
+- `spektacular: templates/partials/split-flow.md`
+
+**Discoveries**: None
+
+### 2026-10-01 — Task: Seed specs from existing material
+
+**What was done**: The interview step gained an epic branch (read the epic and each member spec first, do not re-ask what they cover, offer to record dependencies) and a seeded branch, rendered from the recorded sources so it survives a resume. The seeded branch has the agent fetch with its own tools, ask for the content if a source is unreachable, seed the section work files (title and body to overview and requirements, checklists to acceptance criteria, must/must-not to constraints, out of scope to non-goals), list the gaps, ask only about them, and record provenance in `interview.md`. Each section step presents a pre-filled work file as a draft to confirm. The `spek-new` skill gained trigger wording for sources and asks about joining an epic only when `epic list` shows one. It also gained the "Starting from existing material" section (recognise any phrasing, tool-agnostic fetching, unreachable sources, child items, naming, `spec new` with `sources`), the epic-first route for sources with child items (including late child items), `epic_complete` handling, and "Splitting a spec that is already written" through the shared split partials.
+
+**Deviations**: The interview step is given a `seeded` boolean alongside the source list, because a mustache section over the list would repeat the branch once per source. Source links render unescaped (`{{{.}}}`) in the interview and the finished step's chaining offer, so a link containing `&` reaches the agent intact.
+
+**Files changed**:
+- `spektacular: templates/steps/spec/00b-interview.md`
+- `spektacular: templates/steps/spec/01-overview.md`
+- `spektacular: templates/steps/spec/02-requirements.md`
+- `spektacular: templates/steps/spec/03-acceptance_criteria.md`
+- `spektacular: templates/steps/spec/04-constraints.md`
+- `spektacular: templates/steps/spec/05-technical_approach.md`
+- `spektacular: templates/steps/spec/06-success_metrics.md`
+- `spektacular: templates/steps/spec/07-non_goals.md`
+- `spektacular: templates/steps/spec/09-finished.md`
+- `spektacular: templates/skills/workflows/spek-new/SKILL.md`
+- `spektacular: internal/steps/spec/steps.go`
+- `spektacular: internal/steps/spec/seeding_test.go`
+- `spektacular: templates/seeding_test.go`
+
+**Discoveries**: Mustache `{{.}}` HTML-escapes, so any URL rendered into an instruction must use the triple-brace form or the agent receives `&amp;` in query strings.
+
+### 2026-10-01 — Task: Update the spec-workflow harbor suite
+
+**What was done**: The spec-workflow suite's `EXPECTED_STEP_ORDER` now has `split` between `verification` and `finished`. A new `TestSplitStep` asserts the step was completed, that the agent called `spec goto split`, and that the single coupled feature finishes with no epic stored. The solve script runs `spec goto split` before `finished`. The plan-workflow and implement-workflow oracles have no spec step lists. Their only retired-command use (the plan-workflow export check) moved to `status` in the status-command task.
+
+**Deviations**: None
+
+**Files changed**:
+- `spektacular: tests/harbor/spec-workflow/tests/test_spec_workflow.py`
+- `spektacular: tests/harbor/spec-workflow/solution/solve.sh`
+
+**Discoveries**: None
+
+### 2026-10-01 — Task: Document epics, splitting and dependencies
+
+**What was done**: Added `src/pages/epics.mdx`, linked from the Resources menu after Design Documents. It covers what an epic is (real frontmatter), when a split is offered (gate, signals, supporting-work rule, counter-signals), split sensitivity (`epic_split_threshold`), what a split produces, starting with an epic (epic-first, chaining, joining, completed-epic confirmation), dependencies between specs and how implement treats an unmet one (with the real `dependencies_unmet` envelope and the strict-mode behaviour), and the `epic` commands, linking to the status docs.
+
+**Deviations**: The `dependencies_unmet` sample and the strict-mode wording were reconciled with the CLI's actual refusal text after the dependency check landed.
+
+**Files changed**:
+- `docs: src/pages/epics.mdx`
+- `docs: src/components/Nav.astro`
+- `docs: CHANGELOG.md`
+
+**Discoveries**: None
+
+### 2026-10-01 — Task: Document seeding, implementing a spec and the new settings
+
+**What was done**: `how-it-works.mdx` explains starting a spek from existing material (fetching with the agent's own tools, drafting what it can, asking only about gaps, the recorded `sources` example), says the spek is implemented, and notes `sources`/`epic` in the spek format. `index.mdx` and `getting-started.mdx` say a spek is implemented. `configuration.mdx` shows `epic_split_threshold` and the `epic` block in its example, counts sixteen top-level keys, adds `epic_split_threshold` and `epic` (`provider`, `strict_dependencies`, `config.directory`) references, and notes that migrate adds them. A `000060_epics-and-seeded-specs` site changelog entry covers the release.
+
+**Deviations**: The configuration example's `schema:` was raised to 4 to match the new settings format.
+
+**Files changed**:
+- `docs: src/pages/how-it-works.mdx`
+- `docs: src/pages/index.mdx`
+- `docs: src/content/tutorials/getting-started.mdx`
+- `docs: src/pages/configuration.mdx`
+- `docs: CHANGELOG.md`
+
+**Discoveries**: The configuration page said "Fourteen top-level keys" before this change; it now lists sixteen.

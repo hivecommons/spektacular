@@ -172,6 +172,29 @@ func TestSplit(t *testing.T) {
 	}
 }
 
+// TestSplitRaw asserts the undecoded split returns the YAML between the
+// fences and the body, reports ok=false for a bare document, and errors on a
+// malformed fence without trying to decode the YAML.
+func TestSplitRaw(t *testing.T) {
+	fm, body, ok, err := SplitRaw([]byte("---\nspecs:\n  - name: a\n---\n\nbody\n"))
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "specs:\n  - name: a", string(fm))
+	require.Equal(t, "body\n", string(body))
+
+	fm, body, ok, err = SplitRaw([]byte("# bare\n"))
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Nil(t, fm)
+	require.Equal(t, "# bare\n", string(body))
+
+	_, _, _, err = SplitRaw([]byte("---\nspecs: []\n"))
+	require.ErrorContains(t, err, "unterminated")
+
+	_, _, _, err = SplitRaw([]byte("---\nspecs: []\n---body\n"))
+	require.ErrorContains(t, err, "own line")
+}
+
 func TestRender_ShapeAndOptionalClosedDate(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -940,6 +963,227 @@ func TestSplit_MalformedSpecsReadAsNoReferences(t *testing.T) {
 			require.Equal(t, StatusDraft, meta.DocumentStatus,
 				"the rest of the block must still parse")
 			require.Equal(t, "body\n", string(body))
+		})
+	}
+}
+
+// testEpic is the epic name the epic-membership tests share.
+const testEpic = "000060_epics-and-seeded-specs"
+
+// twoSourceRefs is the ordered two-entry source list the seeded-spec tests
+// share. Order is significant: the list is rendered and read back as a
+// sequence, so a reordering is a regression.
+func twoSourceRefs() []SourceRef {
+	return []SourceRef{
+		{URI: "https://github.com/hivecommons/spektacular/issues/60", RetrievedDate: "2026-06-30"},
+		{URI: "https://example.com/design-notes", RetrievedDate: "2026-07-01"},
+	}
+}
+
+// twoSourceRefsYAML is the hand-written frontmatter fragment matching
+// twoSourceRefs, for fixtures that seed a spec carrying sources.
+const twoSourceRefsYAML = "sources:\n" +
+	"  - uri: https://github.com/hivecommons/spektacular/issues/60\n" +
+	"    retrieved_date: \"2026-06-30\"\n" +
+	"  - uri: https://example.com/design-notes\n" +
+	"    retrieved_date: \"2026-07-01\"\n"
+
+// TestRender_SplitRoundTripEpicAndSources asserts an epic and a two-entry
+// source list survive Render → Split intact, with each source's uri and
+// retrieved date kept together and in the same order.
+func TestRender_SplitRoundTripEpicAndSources(t *testing.T) {
+	meta := Metadata{
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
+		Epic:           testEpic,
+		Sources:        twoSourceRefs(),
+	}
+	body := []byte("# Spec body\n")
+
+	rendered, err := Render(meta, body)
+	require.NoError(t, err)
+
+	gotMeta, gotBody, err := Split(rendered)
+	require.NoError(t, err)
+	require.NotNil(t, gotMeta)
+	require.Equal(t, testEpic, gotMeta.Epic)
+	require.Equal(t, twoSourceRefs(), gotMeta.Sources)
+	require.Equal(t, string(body), string(gotBody))
+}
+
+// TestRender_EpicAndSourcesExactBytes pins the on-disk shape of a spec that
+// carries an epic and sources, written out by hand (including the renderer's
+// four-space sequence indent) so a change to key names, ordering, indent or
+// quoting shows up as a failure rather than a silent drift.
+func TestRender_EpicAndSourcesExactBytes(t *testing.T) {
+	rendered, err := Render(Metadata{
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
+		Epic:           testEpic,
+		Sources:        twoSourceRefs(),
+	}, []byte("# body\n"))
+	require.NoError(t, err)
+
+	require.Equal(t,
+		"---\n"+
+			"created_date: \"2026-07-01\"\n"+
+			"document_status: draft\n"+
+			"epic: 000060_epics-and-seeded-specs\n"+
+			"sources:\n"+
+			"    - uri: https://github.com/hivecommons/spektacular/issues/60\n"+
+			"      retrieved_date: \"2026-06-30\"\n"+
+			"    - uri: https://example.com/design-notes\n"+
+			"      retrieved_date: \"2026-07-01\"\n"+
+			"---\n\n# body\n",
+		string(rendered))
+}
+
+// TestRender_OmitsEpicKeyEntirelyWithNoEpic is the sibling of
+// TestRender_OmitsDesignsKeyEntirelyWithNoReferences for the epic field. The
+// expectation is the same hand-written byte sequence, so adding the epic
+// field must not perturb a single byte of a standalone spec.
+func TestRender_OmitsEpicKeyEntirelyWithNoEpic(t *testing.T) {
+	rendered, err := Render(Metadata{
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
+		Epic:           "",
+	}, []byte("# body\n"))
+	require.NoError(t, err)
+
+	require.Equal(t,
+		"---\ncreated_date: \"2026-07-01\"\ndocument_status: draft\n---\n\n# body\n",
+		string(rendered))
+}
+
+// TestRender_OmitsSourcesKeyEntirelyWithNoSources is the sibling of
+// TestRender_OmitsDesignsKeyEntirelyWithNoReferences for the sources field,
+// covering both a nil and an empty list: neither may leave a sources key
+// behind, and neither may perturb a single byte of an unseeded spec.
+func TestRender_OmitsSourcesKeyEntirelyWithNoSources(t *testing.T) {
+	tests := []struct {
+		name    string
+		sources []SourceRef
+	}{
+		{name: "nil", sources: nil},
+		{name: "empty", sources: []SourceRef{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rendered, err := Render(Metadata{
+				CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+				DocumentStatus: StatusDraft,
+				Sources:        tt.sources,
+			}, []byte("# body\n"))
+			require.NoError(t, err)
+
+			require.Equal(t,
+				"---\ncreated_date: \"2026-07-01\"\ndocument_status: draft\n---\n\n# body\n",
+				string(rendered))
+		})
+	}
+}
+
+// TestRender_OmitsAllReferenceKeysWithNoReferences names every optional
+// reference field at once — designs, specs, epic and sources — and pins the
+// same hand-written bytes: a spec carrying none of them renders exactly as it
+// did before any of them existed.
+func TestRender_OmitsAllReferenceKeysWithNoReferences(t *testing.T) {
+	rendered, err := Render(Metadata{
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
+		Designs:        nil,
+		Specs:          nil,
+		Epic:           "",
+		Sources:        nil,
+	}, []byte("# body\n"))
+	require.NoError(t, err)
+
+	require.Equal(t,
+		"---\ncreated_date: \"2026-07-01\"\ndocument_status: draft\n---\n\n# body\n",
+		string(rendered))
+}
+
+// TestSplit_MalformedSourcesReadAsNoSources asserts reads across the sources
+// key are lenient in the same way they are across designs: a missing, empty,
+// scalar, mapping or scalar-entry value reads as no sources and never fails
+// the parse, so a hand-edited spec stays readable.
+func TestSplit_MalformedSourcesReadAsNoSources(t *testing.T) {
+	tests := []struct {
+		name    string
+		sources string
+	}{
+		{name: "absent", sources: ""},
+		{name: "empty list", sources: "sources: []\n"},
+		{name: "scalar", sources: "sources: nonsense\n"},
+		{name: "mapping", sources: "sources:\n  uri: https://example.com\n"},
+		{name: "list of scalars", sources: "sources:\n  - https://example.com\n  - another\n"},
+		{name: "entry without uri", sources: "sources:\n  - retrieved_date: \"2026-07-01\"\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := "---\n" +
+				"created_date: 2026-07-01\n" +
+				"document_status: draft\n" +
+				"epic: " + testEpic + "\n" +
+				tt.sources +
+				"---\n\n" +
+				"body\n"
+
+			meta, body, err := Split([]byte(raw))
+			require.NoError(t, err, "a malformed sources value must not fail the parse")
+			require.NotNil(t, meta)
+			require.Empty(t, meta.Sources)
+			require.Equal(t, StatusDraft, meta.DocumentStatus,
+				"the rest of the block must still parse")
+			require.Equal(t, testEpic, meta.Epic,
+				"the epic must still parse alongside a malformed sources value")
+			require.Equal(t, "body\n", string(body))
+		})
+	}
+}
+
+// TestSplit_MalformedSourceEntryIsDropped asserts a scalar entry or an entry
+// with no uri is dropped on read while a well-formed sibling entry in the
+// same list is kept — a source that cannot be followed records nothing, but
+// it must not take the whole list with it.
+func TestSplit_MalformedSourceEntryIsDropped(t *testing.T) {
+	tests := []struct {
+		name    string
+		sources string
+	}{
+		{
+			name: "scalar entry",
+			sources: "sources:\n" +
+				"  - https://orphan.example.com\n" +
+				"  - uri: https://example.com/design-notes\n" +
+				"    retrieved_date: \"2026-07-01\"\n",
+		},
+		{
+			name: "entry without uri",
+			sources: "sources:\n" +
+				"  - retrieved_date: \"2026-06-30\"\n" +
+				"  - uri: https://example.com/design-notes\n" +
+				"    retrieved_date: \"2026-07-01\"\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := "---\n" +
+				"created_date: 2026-07-01\n" +
+				"document_status: draft\n" +
+				tt.sources +
+				"---\n\n" +
+				"body\n"
+
+			meta, _, err := Split([]byte(raw))
+			require.NoError(t, err)
+			require.NotNil(t, meta)
+			require.Equal(t,
+				[]SourceRef{{URI: "https://example.com/design-notes", RetrievedDate: "2026-07-01"}},
+				meta.Sources)
 		})
 	}
 }

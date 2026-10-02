@@ -40,6 +40,16 @@ Author a self-contained Markdown record covering the entire feature, understanda
 - **Why it matters / what it enables** — drawn from the spec's framing.
 - **Deviations from the plan** — anything the entries recorded as different from what was originally planned. State "None" explicitly if there were none.
 
+{{#has_dependency_override}}
+### Record the dependency override
+
+This run started past dependencies that were not implemented yet: the user chose to continue anyway. Record it in **Deviations from the plan** of the project-level record, stating that implementation started before these dependencies were implemented, naming each and the state it was in:
+
+{{#dependency_override}}
+- `{{name}}` — {{state}}
+{{/dependency_override}}
+
+{{/has_dependency_override}}
 Stage it with the `Write` tool at `.spektacular/tmp/changelog_project.md`, then commit it and remove the scratch file:
 
 ```

@@ -26,6 +26,9 @@ type Config struct {
 	SpecDir      string
 	PlanDir      string
 	ChangelogDir string
+	// EpicDir is the store-relative epic directory, which the spec workflow
+	// reads to tell a spec's steps about the epic it belongs to.
+	EpicDir string
 	// AutoCommit is the project's resolved auto_commit mode ("off",
 	// "workflow" or "full"). Like the rest of this config it is not
 	// persisted: it is read from the project settings on every invocation.

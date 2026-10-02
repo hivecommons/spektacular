@@ -75,7 +75,7 @@ func TestImplementNew_RejectsMissingPlan(t *testing.T) {
 
 	err := rootCmd.Execute()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "plan file not found")
+	require.Contains(t, err.Error(), "has no plan")
 }
 
 func TestImplementNew_RejectsInvalidName(t *testing.T) {
@@ -201,49 +201,6 @@ func TestImplementGoto_UpdateFeatureChangelogInstructsChangelogWrite(t *testing.
 	require.Contains(t, instruction, ".spektacular/tmp/changelog_project.md")
 }
 
-func TestImplementStatus_ReportsUncheckedPhases(t *testing.T) {
-	dir := t.TempDir()
-	t.Chdir(dir)
-	dataDir := filepath.Join(dir, ".spektacular")
-	writeSpecCommandConfig(t, dir, "")
-	writeFixturePlan(t, dataDir, "fixture")
-
-	setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"implement", "new", "--data", `{"name":"fixture"}`})
-	require.NoError(t, rootCmd.Execute())
-
-	stdout, _ := setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"implement", "status"})
-	require.NoError(t, rootCmd.Execute())
-
-	var status map[string]any
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &status))
-	// Fixture has 2 unchecked phases (1.1, 1.2) and 1 checked (1.3).
-	require.EqualValues(t, 2, status["unchecked_phases"])
-	require.Equal(t, "fixture", status["plan_name"])
-	require.EqualValues(t, 12, status["total_steps"])
-}
-
-func TestImplementStatus_CountsUncheckedTasksInTaskPlan(t *testing.T) {
-	dir := t.TempDir()
-	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "")
-	_, code := writePlanDoc(t, taskPlanName, "plan", taskPlanDoc(
-		taskBlock("Done", true, agentFields(idA)),
-		taskBlock("Open one", false, agentFields(idB))+taskBlock("Open two", false, agentFields(idC)),
-	))
-	require.Equal(t, 0, code)
-
-	_, _, code = runRootCmd(t, "implement", "new", "--data", `{"name":"`+taskPlanName+`"}`)
-	require.Equal(t, 0, code)
-	stdout, _, code := runRootCmd(t, "implement", "status")
-	require.Equal(t, 0, code)
-
-	var status map[string]any
-	require.NoError(t, json.Unmarshal([]byte(stdout), &status))
-	require.EqualValues(t, 2, status["unchecked_phases"], "the existing field counts open tasks")
-}
-
 func TestImplementSteps_ListsAllSteps(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -325,13 +282,6 @@ func TestImplementGoto_SchemaOutput(t *testing.T) {
 	require.Contains(t, stdout.String(), "read_plan")
 	require.Contains(t, stdout.String(), "test_plan")
 	require.NotContains(t, stdout.String(), "update_repo_changelog")
-}
-
-func TestImplementStatus_SchemaOutput(t *testing.T) {
-	stdout, _ := setupImplementCmd(t)
-	rootCmd.SetArgs([]string{"implement", "status", "--schema"})
-	require.NoError(t, rootCmd.Execute())
-	require.Contains(t, stdout.String(), `"unchecked_phases"`)
 }
 
 func TestImplementSteps_SchemaOutput(t *testing.T) {

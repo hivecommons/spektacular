@@ -27,9 +27,8 @@ const uncommittedChangesHeading = "If the project has uncommitted changes"
 // uncommittedChangesWorkflowSkills is the hand-maintained table of the three
 // workflow skills taught to relay the uncommitted-changes report, together with
 // the re-run command each one must give and the argument placeholder that
-// command is keyed on. spek-new and spek-plan are both started from a spec
-// name; spek-implement is started from a plan name, and handing an agent the
-// wrong one sends it back with an argument the CLI will reject.
+// command is keyed on. Every workflow is started from a spec name: an
+// implement run names the spec it implements, whose plan shares the name.
 var uncommittedChangesWorkflowSkills = []struct {
 	skill         string
 	restartTrue   string
@@ -53,10 +52,10 @@ var uncommittedChangesWorkflowSkills = []struct {
 	},
 	{
 		skill:         "spek-implement",
-		restartTrue:   `spektacular implement new --data '{"name": "<plan_name>", "commit_existing": true}'`,
-		restartFalse:  `spektacular implement new --data '{"name": "<plan_name>", "commit_existing": false}'`,
-		argument:      "<plan_name>",
-		otherArgument: "<spec_name>",
+		restartTrue:   `spektacular implement new --data '{"name": "<spec_name>", "commit_existing": true}'`,
+		restartFalse:  `spektacular implement new --data '{"name": "<spec_name>", "commit_existing": false}'`,
+		argument:      "<spec_name>",
+		otherArgument: "<plan_name>",
 	},
 }
 

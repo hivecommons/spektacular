@@ -31,6 +31,16 @@ For the task you just completed, append an entry with this shape (in a plan writ
 
 In the **Files changed** list, prefix every path with its repo's name (`<repo-name>: path`) whenever more than one repo is registered; an unprefixed path belongs to the only registered repo. The final feature-changelog step derives one entry per affected repo mechanically from these prefixes, so keep them accurate.
 
+{{#has_dependency_override}}
+### Record the dependency override
+
+This run started past dependencies that were not implemented yet: the user chose to continue anyway. Record it under **Deviations** in this entry, stating that implementation started before these dependencies were implemented, naming each and the state it was in:
+
+{{#dependency_override}}
+- `{{name}}` — {{state}}
+{{/dependency_override}}
+
+{{/has_dependency_override}}
 For the exact format and more examples, launch a sub-agent with:
 
 ```

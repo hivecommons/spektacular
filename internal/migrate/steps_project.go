@@ -132,3 +132,33 @@ func runProject2to3(sc *StepContext, doc *yaml.Node) ([]Action, error) {
 	}
 	return actions, nil
 }
+
+// project3to4 adds the epic store and the split sensitivity setting with
+// their defaults, so every existing project has an epic store configured
+// before its first split. A value already present is kept, and nothing is
+// written when every key is there, so a second apply changes nothing.
+var project3to4 = Step{
+	Kind:        KindProject,
+	From:        3,
+	Description: "add the epic store and epic_split_threshold",
+	Run:         runProject3to4,
+}
+
+func runProject3to4(sc *StepContext, doc *yaml.Node) ([]Action, error) {
+	root := docRoot(doc)
+	settings := filepath.Join(sc.FileDir, config.ProjectConfigFileName)
+	var actions []Action
+	setDefault := func(key string, value *yaml.Node) {
+		if getNode(root, key) != nil {
+			return
+		}
+		setNode(root, key, value)
+		actions = append(actions, Action{Op: "set", Path: settings, Key: key, To: value.Value})
+	}
+	str := func(v string) *yaml.Node { return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v} }
+	setDefault("epic_split_threshold", str(config.EpicSplitThresholdModerate))
+	setDefault("epic.provider", str(config.ProviderFile))
+	setDefault("epic.strict_dependencies", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "false"})
+	setDefault("epic.config.directory", str(config.DefaultEpicDir))
+	return actions, nil
+}

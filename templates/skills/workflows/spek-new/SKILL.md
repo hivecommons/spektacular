@@ -1,6 +1,6 @@
 ---
 name: spek-new
-description: Create a new Specification for a feature.
+description: Create a new Specification for a feature, from a conversation or from existing material such as an issue, a tracker epic, a design document, a file, a web page or pasted text ("spec from #45", "start a spec from LIN-123", a pasted link), or split an already-written spec into an epic.
 ---
 
 {{> partials/version-check}}
@@ -89,6 +89,10 @@ This reads the project's single workflow state and changes nothing on disk. One 
 
 Only once you know there is no workflow to resume:
 
+**Does the request point at existing material?** If the user refers to an issue, a tracker epic, a design document, a file, a web page or pasted text to start from, however they word it, follow "Starting from existing material" below before choosing a name.
+
+**Does the spec belong to an epic?** Run `{{command}} epic list`. If it lists any epics, ask the user whether this spec belongs to one of them, unless the request already says. If it does, pass that epic as `"epic"` on `spec new` below; the spec joins it from the start, and the interview reads the epic and its specs first. If the list is empty, the project has no epics: do not ask.
+
 Ask the user for a spec name now. If the user needs to see what names already exist to avoid collisions, run `{{command}} spec file list` — **do not** use `ls`, `find`, or the `Read` tool against `.spektacular/specs/`; the CLI's list is the source of truth for what counts as a spec. Then run:
 
 ```
@@ -102,6 +106,14 @@ Ask the user for a spec name now. If the user needs to see what names already ex
 ```
 
 Under `timestamp` or `counter` (the default is `timestamp`), **never pass `id`** — not even when the spec comes from a GitHub issue or ticket with its own number. The CLI mints the ID itself and rejects an explicit one, because a name without the configured ID prefix would be refused by every later plan and changelog write.
+
+Add `"sources"` and `"epic"` to the same `--data` when they apply (see the sections below), for example:
+
+```
+{{command}} spec new --data '{"name": "<spec_name>", "sources": [{"uri": "<stable link>"}], "epic": "<epic name>"}'
+```
+
+**If the epic is complete** (`code: epic_complete`), every spec in it is already implemented. Tell the user, and ask whether to add the spec anyway; adding it reopens the epic until the new spec is implemented. Only if they agree, re-run the same command with `"confirm_completed_epic": true` added to `--data`. Never add it without asking.
 
 The CLI may normalize and prefix the requested name. Always use the returned `spec_name` and `spec_path` as the source of truth for follow-up workflows.
 
@@ -129,6 +141,49 @@ To start without committing them:
 - `false` starts the workflow without committing, so the workflow's own automatic commits will include that work alongside the agent's.
 
 Never choose for the user, and never guess from context which they would want — the whole point of the report is that their uncommitted work is about to be swept into a commit they did not make. If the commit fails (`code: auto_commit_failed`), tell them which repository failed and the reason git gave; the workflow has not started.
+
+## Starting from existing material
+
+A spec can start from material the team has already written. Recognise a source however the request is phrased: "spec from issue 45", "#45", "start from LIN-123", a pasted link to any tracker, a design document's name, a file path, or pasted text the user says to start from. Being understood must not depend on careful wording.
+
+1. **Identify the source.** An issue or epic from any tracker, a design document, a file, a web page, or pasted text. If it is ambiguous, such as a bare issue number with no tracker or repository, ask the user rather than guess.
+2. **Fetch it with your own tools.** Spektacular prescribes no tool and no tracker: a CLI, an MCP server, a web fetch or a file read are all fine. Whatever the tool, collect the title and body, the discussion (comments, since decisions are often made there), its child items (sub-issues, linked children, task-list entries), and a stable link to record as provenance. For pasted text, the user's message is the content; record a link only if one exists.
+3. **If you cannot reach it,** because no tool you have can read it or fetching fails, say so plainly and ask the user to paste the content. Never fall back to a blank interview without saying so.
+4. **Check for child items.** A source that already has child items is a set of pieces of work, not one spec. Offer to set up an epic for it instead, with one spec per child (see "A source with child items" below). On decline, continue with a single spec.
+5. **Propose a name** from the source's title, and let the user confirm or change it.
+6. **Start the workflow with provenance:** `spec new` with `"sources": [{"uri": "<stable link>"}]` (several entries when the spec draws on several sources). The CLI stamps each source's retrieval date. The interview step then seeds every section it can from the material, lists the gaps, and asks only about those.
+
+A design document the spec must be built to is also recorded as a normal design reference; `sources` records only where content came from.
+
+### A source with child items
+
+When the user accepts an epic for a source with child items:
+
+1. **Create the epic first,** with the parent as its source and no specs yet. Stage its body (a `## Overview` drawn from the parent, and an empty `## Specs` section) under `.spektacular/tmp/`, then:
+
+   ```
+   {{command}} epic write <short-name> --from .spektacular/tmp/epic_body.md --data '{"specs": [], "sources": [{"uri": "<parent link>"}]}'
+   rm .spektacular/tmp/epic_body.md
+   ```
+
+   A bare name is given an ID; use the returned `name` from here on.
+2. **Specify the first child** as its own spec in that epic, seeded from the child:
+
+   ```
+   {{command}} spec new --data '{"name": "<child name>", "sources": [{"uri": "<child link>"}], "epic": "<epic name>"}'
+   ```
+
+3. When that spec finishes, the workflow offers the next child that has no spec yet. The user can stop at any point and continue later.
+
+**A child item that appears later.** When the user brings up a new child item for a source whose epic already exists, or you see one while revisiting the source, offer to start a spec for it in that epic with the same `spec new` command.
+
+## Splitting a spec that is already written
+
+The user can ask for a split at any time, on any spec, including one already written with no workflow running. Read it first with `{{command}} spec file read <name>`, and check whether it already belongs to an epic (its `epic` frontmatter field). Then apply the same check and flow the spec workflow uses at its `split` step:
+
+{{> partials/split-check}}
+
+{{> partials/split-flow}}
 
 ## Resuming an in-progress workflow
 

@@ -28,6 +28,7 @@ EXPECTED_STEP_ORDER = [
     "success_metrics",
     "non_goals",
     "verification",
+    "split",
     "finished",
 ]
 
@@ -566,6 +567,32 @@ class TestVerificationStep:
         calls = find_spektacular_calls(extract_tool_calls())
         assert "spec goto verification" in calls, (
             f"Agent did not call 'spektacular spec goto' for verification. Calls: {calls}"
+        )
+
+
+class TestSplitStep:
+    """The agent ran the split check on the complete spec.
+
+    The scenario is one coupled feature, so the check must not lead to a
+    split: the workflow passes through ``split`` and finishes with no epic
+    stored.
+    """
+
+    def test_step_completed(self):
+        state = load_state()
+        assert "split" in state.get("completed_steps", [])
+
+    def test_tool_called(self):
+        calls = find_spektacular_calls(extract_tool_calls())
+        assert "spec goto split" in calls, (
+            f"Agent did not call 'spektacular spec goto' for split. Calls: {calls}"
+        )
+
+    def test_single_feature_writes_no_epic(self):
+        epics_dir = SPEK_DIR / "epics"
+        stored = sorted(p.name for p in epics_dir.glob("*.md")) if epics_dir.exists() else []
+        assert not stored, (
+            f"A single coupled feature must finish without an epic, found: {stored}"
         )
 
 

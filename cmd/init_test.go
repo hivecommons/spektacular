@@ -147,7 +147,7 @@ knowledge:
 	require.NoError(t, rootCmd.Execute())
 
 	cfg := readSettingsMap(t, cfgPath)
-	require.Equal(t, 3, cfg["schema"])
+	require.Equal(t, 4, cfg["schema"])
 	require.Equal(t, "0.20.0", cfg["skills_version"])
 	require.Equal(t, "proj", cfg["name"])
 	require.Equal(t, 2, readSettingsMap(t, repoPath)["schema"])
@@ -577,8 +577,32 @@ func TestInit_FreshProjectWritesSettingsRelativeStoreDirectories(t *testing.T) {
 		require.Contains(t, string(raw), want)
 	}
 	require.NotContains(t, string(raw), ".spektacular/")
-	require.Equal(t, 3, readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["schema"])
+	require.Equal(t, 4, readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["schema"])
 	require.DirExists(t, filepath.Join(dir, ".spektacular", "specs"))
 	require.DirExists(t, filepath.Join(dir, ".spektacular", "plans"))
 	require.NoDirExists(t, filepath.Join(dir, ".spektacular", ".spektacular"))
+}
+
+// Epic settings: a fresh init writes the epic section and the epic split
+// threshold with their defaults, and creates no epics folder (the store
+// folder is made on the first epic write).
+func TestInit_FreshProjectWritesEpicSettingsWithoutEpicsFolder(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	resetRootCmd(t)
+	stdout, stderr, code := runRootCmd(t, "init", "claude")
+	require.Equal(t, 0, code, stdout+stderr)
+
+	settings := readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))
+	require.Equal(t, "moderate", settings["epic_split_threshold"])
+	epic, ok := settings["epic"].(map[string]any)
+	require.True(t, ok, "config.yaml must carry an epic section, got %v", settings["epic"])
+	require.Equal(t, "file", epic["provider"])
+	require.Equal(t, false, epic["strict_dependencies"])
+	epicConfig, ok := epic["config"].(map[string]any)
+	require.True(t, ok, "epic section must carry a config block, got %v", epic["config"])
+	require.Equal(t, "epics", epicConfig["directory"])
+
+	require.NoDirExists(t, filepath.Join(dir, ".spektacular", "epics"))
 }

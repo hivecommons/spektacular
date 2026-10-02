@@ -4,6 +4,31 @@
 
 **Stated goal:** understand this feature well enough to draft a credible first pass at every section of the spec — Overview, Requirements, Acceptance Criteria, Constraints, Technical Approach, Success Metrics, and Non-Goals.
 
+{{#epic}}
+**This spec joins the epic `{{epic}}`. Read it first.** Before asking anything, run `{{command}} epic read {{epic}}`, then read each spec it lists with `{{command}} spec file read <name>`. The new spec builds on what they already cover: do not ask again about scope those specs settle, and keep this spec to its own part. Note any spec this one cannot be implemented without, and before the interview ends offer to record that dependency in the epic (an `{{command}} epic write {{epic}}` with this spec's `depends_on` updated, its body unchanged); record it only if the user agrees.
+
+{{/epic}}
+{{#seeded}}
+**This spec was started from existing material. Seed it before you ask anything.** The spec records these sources:
+
+{{#sources}}
+- `{{{.}}}`
+{{/sources}}
+
+1. **Fetch each source again with your own tools** (Spektacular prescribes none) and collect its title, body, discussion and child items. If a source cannot be reached, say so and ask the user to paste its content; never fall back to a blank interview without saying so.
+2. **Seed the section working files** under `.spektacular/work/{{spec_name}}/` with your own `Write` tool, mapping the material onto the spec:
+   - title and body → `overview.md` and `requirements.md`;
+   - checklist or task-list items → `acceptance_criteria.md`;
+   - "must" / "must not" remarks → `constraints.md`;
+   - "out of scope" remarks → `non_goals.md`.
+
+   Write each file in its section's required shape (checklist items for requirements and acceptance criteria, one bullet per item otherwise). Leave a section's file absent when the material says nothing about it.
+3. **List the gaps to the user:** every section the material does not cover, or covers too thinly to build from. A thin source simply leaves more gaps.
+4. **Ask only about the gaps.** Do not re-ask what the material already answers; each later section step presents its seeded draft for the user to confirm.
+
+In `interview.md`, record what came from the source and what came from the user, so later steps and a resumed session can tell them apart.
+
+{{/seeded}}
 **Ask adaptive, open questions — not a fixed script.** Start from what the user has already said (in this conversation, or in `.spektacular/working-context.md` if `new` captured something). Ask about what's being built, who it's for, what problem it solves, what constraints apply, and what's explicitly out of scope. Each question should follow from the answer before it, pursuing what's still unclear rather than working through a predetermined checklist. You are not trying to enumerate every possible requirement — you are building a picture sufficient to draft a first pass that the user can then confirm or correct section by section.
 
 **Stop once more questions wouldn't change the draft.** End the interview when the user's answers have stopped introducing new information, or when you have enough to draft every section credibly — not when every conceivable detail has been individually asked about. This should take a small number of exchanges, not an exhaustive back-and-forth. If the user's initial description already answers most of these questions, a short interview (or none at all) is correct — do not manufacture questions for their own sake.
@@ -20,5 +45,7 @@ Before advancing, write your synthesized understanding (not a transcript of the 
 Once you are satisfied the interview has reached its stopping condition, move to the next step by running the command:
 
 {{config.command}} spec goto --data '{"step":"{{next_step}}"}'
+
+**A split asked for now.** If the user asks to split this spec into an epic before it is complete, do not split yet: a split always acts on a complete spec. Record the request in `.spektacular/working-context.md` (what they asked, and any specs they named) and carry on with this step. The request is acted on at the `split` step, once every section has been gathered.
 
 **If the user rejects this draft.** If the user indicates this draft is wrong, ask a follow-up question to understand why before changing anything, the issue may reveal a broader need you didn't surface, or may be a genuine miss on your part, and the follow-up conversation determines which. Apply any resulting changes directly to the working file(s) they belong to, which may include a different section's working file than the one under review; a section amended this way does not need a fresh confirmation step now, the end-of-workflow verification step is where everything, including this change, gets reviewed together. The follow-up conversation may surface edits to more than one section, or conclude that nothing needs to change after all — do not assume the fix is exactly one edit to exactly the section under review.

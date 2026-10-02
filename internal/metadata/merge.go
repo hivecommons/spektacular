@@ -31,6 +31,14 @@ type UpdateOptions struct {
 	// rewrite; a non-nil slice replaces the list; and a non-nil empty slice
 	// clears it.
 	Specs *[]string
+	// Epic sets or clears the spec's epic, with the same nil-means-no-change
+	// rule: nil keeps the current value so a body-only rewrite never drops
+	// the membership, a non-nil value replaces it, and a pointer to "" clears
+	// it. Only the epic link writer passes it.
+	Epic *string
+	// Sources replaces the spec's sources wholesale, with the same three
+	// states as Designs. Only spec new passes it.
+	Sources *[]SourceRef
 }
 
 // Merge computes the on-disk bytes for a write by combining an existing store
@@ -50,6 +58,8 @@ type UpdateOptions struct {
 //     only when opts.Designs is non-nil.
 //   - Back-links are preserved across a body-only rewrite, and replaced only
 //     when opts.Specs is non-nil.
+//   - A spec's epic and sources are preserved across a body-only rewrite, and
+//     replaced only when opts.Epic or opts.Sources is non-nil.
 //   - Malformed existing frontmatter propagates as an error rather than being
 //     silently replaced.
 func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) {
@@ -84,6 +94,12 @@ func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) 
 		if opts.Specs != nil {
 			result.Specs = *opts.Specs
 		}
+		if opts.Epic != nil {
+			result.Epic = *opts.Epic
+		}
+		if opts.Sources != nil {
+			result.Sources = *opts.Sources
+		}
 		result.CreatedDate = today
 		result.DocumentStatus = StatusDraft
 		if opts.DocumentStatus != nil {
@@ -117,6 +133,14 @@ func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) 
 		result.Specs = current.Specs
 		if opts.Specs != nil {
 			result.Specs = *opts.Specs
+		}
+		result.Epic = current.Epic
+		if opts.Epic != nil {
+			result.Epic = *opts.Epic
+		}
+		result.Sources = current.Sources
+		if opts.Sources != nil {
+			result.Sources = *opts.Sources
 		}
 		if opts.Project != "" {
 			result.Project = opts.Project

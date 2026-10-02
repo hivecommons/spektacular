@@ -531,7 +531,7 @@ func TestUnknownSubcommand_ReturnsStructuredErrorNamingValidSubcommands(t *testi
 		require.True(t, er.IsError)
 		require.Equal(t, "unknown_subcommand", er.Code)
 		require.Equal(t, `unknown subcommand "resume" for "spektacular plan"`, er.Message)
-		require.Equal(t, "run one of: export, file, goto, new, status, steps, task-id", er.NextAction)
+		require.Equal(t, "run one of: file, goto, new, steps, task-id", er.NextAction)
 	})
 
 	t.Run("missing subcommand reports no subcommand given", func(t *testing.T) {
@@ -542,7 +542,18 @@ func TestUnknownSubcommand_ReturnsStructuredErrorNamingValidSubcommands(t *testi
 		require.NoError(t, json.Unmarshal([]byte(stdout), &er))
 		require.Equal(t, "unknown_subcommand", er.Code)
 		require.Equal(t, `no subcommand given for "spektacular spec"`, er.Message)
-		require.Equal(t, "run one of: file, goto, new, status, steps", er.NextAction)
+		require.Equal(t, "run one of: file, goto, new, steps", er.NextAction)
+	})
+
+	t.Run("missing epic subcommand names the epic verbs", func(t *testing.T) {
+		stdout, _, code := runRootCmd(t, "epic")
+		require.Equal(t, 1, code)
+
+		var er output.ErrorResponse
+		require.NoError(t, json.Unmarshal([]byte(stdout), &er))
+		require.Equal(t, "unknown_subcommand", er.Code)
+		require.Equal(t, `no subcommand given for "spektacular epic"`, er.Message)
+		require.Equal(t, "run one of: delete, list, read, split, write", er.NextAction)
 	})
 
 	t.Run("--help still works and is unaffected", func(t *testing.T) {
@@ -1174,9 +1185,9 @@ func TestSchema_NonKnowledgeFamiliesPublishExactlyInputAndOutput(t *testing.T) {
 	writeSpecCommandConfig(t, dir, "")
 
 	for family, subcommands := range map[string][]string{
-		"spec":      {"new", "goto", "status", "steps"},
-		"plan":      {"new", "goto", "status", "steps"},
-		"implement": {"new", "goto", "status", "steps"},
+		"spec":      {"new", "goto", "steps"},
+		"plan":      {"new", "goto", "steps"},
+		"implement": {"new", "goto", "steps"},
 		"repo":      {"add", "list"},
 	} {
 		t.Run(family, func(t *testing.T) {

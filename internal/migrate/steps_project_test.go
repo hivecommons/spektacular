@@ -16,7 +16,8 @@ func writeCurrentRepo(t *testing.T, root string) {
 	require.NoError(t, os.WriteFile(cfgPath(root, "repo.yaml"), []byte("schema: 2\nwritten_by: 0.1.0\n"), 0644))
 }
 
-// A format-2 project upgrades through the 2→3 step alone, and each store
+// A format-2 project upgrades through the 2→3 step (then on through 3→4),
+// and each store
 // folder is re-expressed relative to the settings folder so it still names
 // the same place on disk: a custom `docs/specs` becomes `../docs/specs`, the
 // old default `.spektacular/plans` becomes `plans`, and an absent changelog
@@ -48,17 +49,21 @@ func TestApply_Format2ProjectReexpressesStoreFolders(t *testing.T) {
 		Path:   settings,
 		Kind:   KindProject,
 		From:   2,
-		To:     3,
+		To:     4,
 		Backup: cfgPath(root, "config.yaml.v2.old"),
-		Steps:  []string{project2to3Desc},
+		Steps:  []string{project2to3Desc, project3to4Desc},
 		Actions: []Action{
 			{Op: "set", Path: settings, Key: "spec.config.directory", From: "docs/specs", To: "../docs/specs"},
 			{Op: "set", Path: settings, Key: "plan.config.directory", From: ".spektacular/plans", To: "plans"},
 			{Op: "set", Path: settings, Key: "changelog.config.directory", To: "changelog"},
+			{Op: "set", Path: settings, Key: "epic_split_threshold", To: "moderate"},
+			{Op: "set", Path: settings, Key: "epic.provider", To: "file"},
+			{Op: "set", Path: settings, Key: "epic.strict_dependencies", To: "false"},
+			{Op: "set", Path: settings, Key: "epic.config.directory", To: "epics"},
 		},
 	}}, rep.Files)
 
-	want := "schema: 3\n" +
+	want := "schema: 4\n" +
 		"written_by: 0.1.0\n" +
 		"name: custom\n" +
 		"agent: claude\n" +
@@ -76,7 +81,13 @@ func TestApply_Format2ProjectReexpressesStoreFolders(t *testing.T) {
 		"      location: .\n" +
 		"changelog:\n" +
 		"    config:\n" +
-		"        directory: changelog\n"
+		"        directory: changelog\n" +
+		"epic_split_threshold: moderate\n" +
+		"epic:\n" +
+		"    provider: file\n" +
+		"    strict_dependencies: false\n" +
+		"    config:\n" +
+		"        directory: epics\n"
 	require.Equal(t, want, string(readFile(t, settings)))
 
 	// The upgraded file loads with every store where format 2 kept it.
@@ -85,10 +96,12 @@ func TestApply_Format2ProjectReexpressesStoreFolders(t *testing.T) {
 	require.Equal(t, "docs/specs", cfg.Spec.Config.Directory)
 	require.Equal(t, ".spektacular/plans", cfg.Plan.Config.Directory)
 	require.Equal(t, ".spektacular/changelog", cfg.Changelog.Config.Directory)
+	require.Equal(t, ".spektacular/epics", cfg.Epic.Config.Directory)
 }
 
 // An absolute store folder means the same place under either rule, so the
-// 2→3 step leaves it exactly as written and reports no change for it.
+// 2→3 step leaves it exactly as written and reports no change for it; the
+// only changes reported are the 3→4 step's epic defaults.
 func TestApply_Format2AbsoluteStoreFoldersAreUnchanged(t *testing.T) {
 	root := t.TempDir()
 	specs := filepath.Join(root, "docs", "specs")
@@ -116,10 +129,21 @@ func TestApply_Format2AbsoluteStoreFoldersAreUnchanged(t *testing.T) {
 	rep, err := Apply(applyOpts(root))
 	require.NoError(t, err)
 	require.Len(t, rep.Files, 1)
-	require.Equal(t, []string{project2to3Desc}, rep.Files[0].Steps)
-	require.Equal(t, []Action{}, rep.Files[0].Actions)
+	require.Equal(t, []string{project2to3Desc, project3to4Desc}, rep.Files[0].Steps)
+	require.Equal(t, []Action{
+		{Op: "set", Path: settings, Key: "epic_split_threshold", To: "moderate"},
+		{Op: "set", Path: settings, Key: "epic.provider", To: "file"},
+		{Op: "set", Path: settings, Key: "epic.strict_dependencies", To: "false"},
+		{Op: "set", Path: settings, Key: "epic.config.directory", To: "epics"},
+	}, rep.Files[0].Actions)
 
-	require.Equal(t, "schema: 3\nwritten_by: 0.1.0\n"+body, string(readFile(t, settings)))
+	require.Equal(t, "schema: 4\nwritten_by: 0.1.0\n"+body+
+		"epic_split_threshold: moderate\n"+
+		"epic:\n"+
+		"    provider: file\n"+
+		"    strict_dependencies: false\n"+
+		"    config:\n"+
+		"        directory: epics\n", string(readFile(t, settings)))
 }
 
 // A project two formats behind reaches the current format in one run, and
@@ -179,12 +203,12 @@ func TestApply_TwoFormatsBehindReachesCurrentWithSameSettings(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, "upgraded", rep.Status)
 			require.Equal(t, 1, rep.Files[0].From)
-			require.Equal(t, 3, rep.Files[0].To)
-			require.Equal(t, []string{project1to2Desc, project2to3Desc}, rep.Files[0].Steps)
+			require.Equal(t, 4, rep.Files[0].To)
+			require.Equal(t, []string{project1to2Desc, project2to3Desc, project3to4Desc}, rep.Files[0].Steps)
 
 			got, err := config.PeekSchema(settings)
 			require.NoError(t, err)
-			require.Equal(t, 3, got)
+			require.Equal(t, 4, got)
 
 			cfg, err := config.FromYAMLFile(settings)
 			require.NoError(t, err)
@@ -195,4 +219,68 @@ func TestApply_TwoFormatsBehindReachesCurrentWithSameSettings(t *testing.T) {
 			require.Equal(t, tc.wantAgent, cfg.Agent)
 		})
 	}
+}
+
+// A format-3 project upgrades through the 3→4 step alone: every absent epic
+// setting is written with its default, a value already present is kept and
+// not reported, and a second apply changes nothing.
+func TestApply_Format3ProjectGainsEpicDefaultsKeepingExistingValues(t *testing.T) {
+	body := "written_by: 0.0.9\n" +
+		"name: epics\n" +
+		"agent: claude\n" +
+		"skills_version: 0.1.0\n" +
+		"epic_split_threshold: strict\n" +
+		"epic:\n" +
+		"    config:\n" +
+		"        directory: ../docs/epics\n" +
+		"repos:\n" +
+		"    - name: epics\n" +
+		"      location: .\n"
+	root := writeProject(t, "schema: 3\n"+body)
+	writeCurrentRepo(t, root)
+	settings := cfgPath(root, "config.yaml")
+
+	rep, err := Apply(applyOpts(root))
+	require.NoError(t, err)
+	require.Equal(t, "upgraded", rep.Status)
+	require.Equal(t, []FileReport{{
+		Path:   settings,
+		Kind:   KindProject,
+		From:   3,
+		To:     4,
+		Backup: cfgPath(root, "config.yaml.v3.old"),
+		Steps:  []string{project3to4Desc},
+		Actions: []Action{
+			{Op: "set", Path: settings, Key: "epic.provider", To: "file"},
+			{Op: "set", Path: settings, Key: "epic.strict_dependencies", To: "false"},
+		},
+	}}, rep.Files)
+
+	want := "schema: 4\n" +
+		"written_by: 0.1.0\n" +
+		"name: epics\n" +
+		"agent: claude\n" +
+		"skills_version: 0.1.0\n" +
+		"epic_split_threshold: strict\n" +
+		"epic:\n" +
+		"    config:\n" +
+		"        directory: ../docs/epics\n" +
+		"    provider: file\n" +
+		"    strict_dependencies: false\n" +
+		"repos:\n" +
+		"    - name: epics\n" +
+		"      location: .\n"
+	require.Equal(t, want, string(readFile(t, settings)))
+
+	cfg, err := config.FromYAMLFile(settings)
+	require.NoError(t, err)
+	require.Equal(t, config.EpicSplitThresholdStrict, cfg.EpicSplitThreshold)
+	require.Equal(t, config.ProviderFile, cfg.Epic.Provider)
+	require.False(t, cfg.Epic.StrictDependencies)
+	require.Equal(t, "docs/epics", cfg.Epic.Config.Directory)
+
+	again, err := Apply(applyOpts(root))
+	require.NoError(t, err)
+	require.Equal(t, "up_to_date", again.Status)
+	require.Equal(t, want, string(readFile(t, settings)))
 }

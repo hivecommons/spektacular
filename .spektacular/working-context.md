@@ -103,3 +103,45 @@
   - adding to a completed epic needs confirmation (`epic_complete`, `confirm_completed_epic`); completion stays derived;
   - the user wants `epic split` kept as one command (reliability over agent-composed steps).
 - New task 9cdca194 "Guard additions to a completed epic"; task 31c5ced7 retitled "Start a spec with sources or in an epic".
+
+---
+
+# Implement workflow: 000060_epics-and-seeded-specs (started 2026-10-01)
+
+- read_plan: structure valid, spec fully covered, first-task run (no `## Changelog` yet).
+- Drift found; user chose "proceed, adapt during implementation":
+  - Extra hard-coded `schema: 3` fixtures to sweep in the migrate task: cmd/version_test.go:198,214,246;
+    internal/config/config_test.go:812,1081,1096,1142; internal/config/repo_test.go:35;
+    internal/design/design_test.go:247; internal/project/init_test.go:309,409;
+    internal/migrate/engine_test.go:190,273,406 (2->3 step tests may stay).
+  - docs configuration.mdx currently says "Fourteen top-level keys" -> becomes Sixteen.
+  - 08-verification.md uses `{{next_step}}`; only Go step order changes.
+  - Knowledge entry architecture/working-with-files-from-steps.md:183 mentions `spec status` — update via spek-knowledge (offer to user) in the status-command task.
+- auto_commit: full in this project; the CLI commits at workflow points. Never commit by hand.
+- User chose "run without asking": loop tasks automatically; still stop on failures, drift, human tasks, decisions.
+- Helper scripts (session scratch, recreate if lost): tick.py ticks a task + its ACs; addlog.py appends a changelog entry.
+- Task 1 (depgraph) done 2026-10-01.
+- Tasks 2-6 done 2026-10-01 (metadata epic/sources, epic config, internal/epic, epic commands + docTxn link writer, epic split).
+- Task 7 (schema bump to 4 + project3to4) in progress. Workflow is driven with a pre-bump binary:
+  /tmp/claude-1000/-home-nicj-code-github-com-hivecommons-spektacular/511e649f-2bdc-4441-8428-ca3119c7190d/scratchpad/spek-prebump
+  (session scratch; if lost, `git stash` is NOT acceptable — instead ask the user to run the human migrate task).
+  Next task 99ad63fd is human: user reviews `go run . migrate --dry-run` and approves `go run . migrate`.
+- 2026-10-01 user: "I will run everything myself, but please go ahead and complete the code."
+  -> Do NOT run `migrate`, `init`, harbor, or advance the workflow FSM past the human task (advancing triggers auto_commit).
+  -> Implement + test + verify each remaining agent task; tick it and append its changelog entry via
+     `plan file write` with the pre-bump binary (no FSM transition). Human tasks stay unticked for the user.
+  -> Workflow state is parked at update_changelog/analyze before task 99ad63fd (human migrate).
+  -> Skill copies (.claude/skills, .bob/skills) and this repo's AGENTS.md managed sections need `init` — user runs it.
+- Recorded (ticked + changelog): 31c5 spec new sources/epic, e343 status report, bf23 split step.
+- Docs tasks 56ba (epics page) and b949 (seeding/settings) written in docs repo (uncommitted, on main), build+astro check green;
+  NOT yet recorded: reconcile the `dependencies_unmet` JSON sample in docs epics.mdx with the real CLI message after 0a3c lands.
+- Guard 9cdc code written (refuseCompletedEpic in cmd/epic_link.go; wired into epic write / epic split / spec new); tests pending.
+- 2026-10-01: ALL agent tasks implemented, tested, verified (go test ./... green x2; docs build + astro check green) and recorded
+  (ticked + changelog entries) via plan file write. Remaining unchecked: 99ad63fd (human: migrate this repo's config) and
+  e4194c32 (human: run harbor suites). No git commits made; docs repo changes are uncommitted on its main branch.
+- To resume once the user has run `go run . migrate`: `go run . implement goto --data '{"step":"analyze"}'` picks up the
+  human migrate task (tick it), then harbor (tick after the user runs it), then test_plan, update_feature_changelog,
+  reconcile_spec, finished. Auto-commit fires at milestone boundaries when the FSM advances.
+- Still for the user: `go run . init` to regenerate .claude/.bob skill copies and AGENTS.md managed sections (restore
+  agent/written_by/skills_version in config.yaml afterwards); knowledge entry architecture/working-with-files-from-steps.md:183
+  mentions retired `spec status` (offered via spek-knowledge).

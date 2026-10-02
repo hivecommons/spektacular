@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/hivecommons/spektacular/internal/output"
-	"github.com/hivecommons/spektacular/internal/steps/spec"
 	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/stretchr/testify/require"
 )
@@ -97,55 +96,6 @@ func TestSpecGoto_CrossKindRefusesAndPreservesState(t *testing.T) {
 	require.Equal(t, before, after, "a refused cross-kind goto must not advance the plan's state")
 }
 
-// TestImplementStatus_AfterOtherKindFinishedReportsNoActiveWorkflow
-// reproduces a real incident: a plan workflow ran to completion, and before
-// any `implement new` was ever called, `implement status` was run. Because
-// guardKind previously only guarded against a different-kind workflow still
-// in progress (detectInProgress treats "finished" as "nothing to see"), the
-// finished plan's raw state.json slipped through unguarded and was loaded
-// into an implement-shaped FSM with no kind check of its own — completed
-// steps from the plan (20 of them) bled into the implement status report
-// against implement's own 13-step list, yielding a nonsensical
-// "progress": "20/13". This must instead be a clean, correctly-coded
-// "no active workflow" error naming what to run next.
-func TestImplementStatus_AfterOtherKindFinishedReportsNoActiveWorkflow(t *testing.T) {
-	dir := t.TempDir()
-	t.Chdir(dir)
-	dataDir := filepath.Join(dir, ".spektacular")
-	writeSpecCommandConfig(t, dir, "")
-
-	writeInProgressState(t, dataDir, workflow.State{
-		Kind:        "plan",
-		CurrentStep: "finished",
-		CompletedSteps: []string{
-			"new", "overview", "discovery", "architecture", "components",
-			"data_structures", "implementation_detail", "dependencies",
-			"testing_approach", "milestones", "tasks", "open_questions",
-			"out_of_scope", "assemble", "verification", "write_plan",
-			"write_context", "write_research", "walkthrough", "finished",
-		},
-		CreatedAt: fixedResumeTime,
-		UpdatedAt: fixedResumeTime,
-		Data:      map[string]any{"name": "000045_config-file-migration"},
-	})
-
-	stdout, _, code := runRootCmd(t, "implement", "status")
-	require.Equal(t, 1, code)
-
-	var er output.ErrorResponse
-	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
-	require.True(t, er.IsError)
-	require.Equal(t, "no_active_workflow", er.Code)
-	require.Contains(t, er.Message, "plan", "message must name the finished kind")
-	require.Contains(t, er.Message, "000045_config-file-migration", "message must name the finished workflow's instance")
-	require.Contains(t, er.NextAction, "implement new")
-
-	// The bug's fingerprint: no field on the response may carry the plan's
-	// step vocabulary or its impossible 20-completed-of-13-total progress.
-	require.NotContains(t, stdout, "architecture")
-	require.NotContains(t, stdout, "20/13")
-}
-
 // TestImplementGoto_AfterOtherKindFinishedReportsNoActiveWorkflow is the
 // `goto` counterpart: the same stale, finished cross-kind state must not be
 // silently loaded into an implement FSM to attempt a transition against.
@@ -172,35 +122,6 @@ func TestImplementGoto_AfterOtherKindFinishedReportsNoActiveWorkflow(t *testing.
 	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
 	require.Equal(t, "no_active_workflow", er.Code)
 	require.Contains(t, er.NextAction, "implement new")
-}
-
-// TestSpecStatus_AfterSameKindFinishedStillReportsStatus asserts guardKind's
-// fix is scoped to cross-kind mismatches only: a finished workflow of the
-// *same* kind (the normal, expected case right after a workflow completes)
-// must still report its real status, not be treated as "no active
-// workflow" — that would regress a working, legitimate case.
-func TestSpecStatus_AfterSameKindFinishedStillReportsStatus(t *testing.T) {
-	dir := t.TempDir()
-	t.Chdir(dir)
-	dataDir := filepath.Join(dir, ".spektacular")
-	writeSpecCommandConfig(t, dir, "")
-
-	writeInProgressState(t, dataDir, workflow.State{
-		Kind:           "spec",
-		CurrentStep:    "finished",
-		CompletedSteps: []string{"new", "interview", "overview", "finished"},
-		CreatedAt:      fixedResumeTime,
-		UpdatedAt:      fixedResumeTime,
-		Data:           map[string]any{"name": "000024_resume"},
-	})
-
-	stdout, _, code := runRootCmd(t, "spec", "status")
-	require.Equal(t, 0, code)
-
-	var st spec.StatusResult
-	require.NoError(t, json.Unmarshal([]byte(stdout), &st))
-	require.Equal(t, "000024_resume", st.SpecName)
-	require.Equal(t, "finished", st.CurrentStep)
 }
 
 // TestMismatchInstruction_RendersBothPathsAcrossKinds asserts the cross-kind
@@ -284,14 +205,23 @@ func TestSpecStatus_ResumesAtItsOwnStepAfterAGuidedAdd(t *testing.T) {
 		repoWorkflowStep(t, "goto", "--data", repoGotoData(t, step, nil))
 	}
 
-	stdout, _, code := runRootCmd(t, "spec", "status")
-	require.Equal(t, 0, code)
+	stdout, _, code := runRootCmd(t, "status", "--format", "json")
+	require.Equal(t, 0, code, stdout)
 
-	var st spec.StatusResult
+	var st struct {
+		Workflow *struct {
+			Kind           string   `json:"kind"`
+			Name           string   `json:"name"`
+			CurrentStep    string   `json:"current_step"`
+			CompletedSteps []string `json:"completed_steps"`
+		} `json:"workflow"`
+	}
 	require.NoError(t, json.Unmarshal([]byte(stdout), &st))
-	require.Equal(t, "000024_resume", st.SpecName)
-	require.Equal(t, "requirements", st.CurrentStep, "the spec resumes at the step it was on")
-	require.Equal(t, []string{"new", "interview", "overview"}, st.CompletedSteps)
+	require.NotNil(t, st.Workflow)
+	require.Equal(t, "spec", st.Workflow.Kind)
+	require.Equal(t, "000024_resume", st.Workflow.Name)
+	require.Equal(t, "requirements", st.Workflow.CurrentStep, "the spec resumes at the step it was on")
+	require.Equal(t, []string{"new", "interview", "overview"}, st.Workflow.CompletedSteps)
 }
 
 // TestSpecNew_NotRefusedWhileAGuidedAddIsInProgress asserts the isolation runs

@@ -4,11 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/hivecommons/spektacular/internal/config"
-	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/steps/plan"
-	specsteps "github.com/hivecommons/spektacular/internal/steps/spec"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/spf13/cobra"
@@ -22,20 +19,6 @@ var planResultOutputSchema = &schemaObj{
 		"plan_document": {Type: "string", Description: `the plan's document name, always "plan"`},
 		"plan_name":     {Type: "string"},
 		"instruction":   {Type: "string"},
-	},
-}
-
-var planStatusOutputSchema = &schemaObj{
-	Type: "object",
-	Properties: map[string]*schemaProp{
-		"plan_name":       {Type: "string"},
-		"plan_document":   {Type: "string", Description: `the plan's document name, always "plan"`},
-		"plan_path":       {Type: "string", Description: "the plan's location relative to the folder holding config.yaml"},
-		"current_step":    {Type: "string"},
-		"completed_steps": {Type: "array", Items: &schemaProp{Type: "string"}},
-		"total_steps":     {Type: "integer"},
-		"progress":        {Type: "string"},
-		"steps":           {Type: "array"},
 	},
 }
 
@@ -55,13 +38,6 @@ var planGotoCmd = &cobra.Command{
 	Use:   "goto",
 	Short: "Jump to a named step",
 	RunE:  runPlanGoto,
-}
-
-var planStatusCmd = &cobra.Command{
-	Use:   "status [name]",
-	Short: "Show current workflow progress",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runPlanStatus,
 }
 
 var planStepsCmd = &cobra.Command{
@@ -217,103 +193,6 @@ func runPlanGoto(cmd *cobra.Command, _ []string) error {
 		plan.Steps(), wfCfg, input, stepVal, "no active plan found — run 'plan new' first")
 }
 
-func runPlanStatus(cmd *cobra.Command, args []string) error {
-	if schema, _ := cmd.Flags().GetBool("schema"); schema {
-		if len(args) == 1 {
-			s := commandSchema{Input: nil, Output: planArtifactStatusOutputSchema}
-			return output.Write(cmd.OutOrStdout(), s, "")
-		}
-		s := commandSchema{Input: nil, Output: planStatusOutputSchema}
-		return output.Write(cmd.OutOrStdout(), s, "")
-	}
-
-	dataDir, err := dataDir()
-	if err != nil {
-		return err
-	}
-	root, err := projectRoot()
-	if err != nil {
-		return err
-	}
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
-	steps := plan.Steps()
-
-	if len(args) == 1 {
-		st := store.NewSourceStore(root, "project")
-		return runArtifactStatus(cmd, "plan", args[0], plan.PlanFilePath(cfg.Plan.Config.Directory, args[0]), stateFilePath(dataDir), cfg.Command, steps, st, strictPlanStatusHook(cfg, st, args[0]), planTaskProgress)
-	}
-
-	// Refuse to report on an in-progress workflow of a different kind — its
-	// steps and counts would be meaningless under the plan step list.
-	if handled, err := guardKind(stateFilePath(dataDir), cfg.Command, "plan"); err != nil {
-		return err
-	} else if handled {
-		return err
-	}
-
-	wf := workflow.New(steps, stateFilePath(dataDir), workflow.Config{}, nil, nil)
-	st := wf.State()
-
-	nameVal, ok := wf.GetData("name")
-	if !ok {
-		return fmt.Errorf("no active plan found — run 'plan new' first")
-	}
-	planName := fmt.Sprintf("%v", nameVal)
-	planPath := reportedLocation(centralLocationBase, plan.PlanFilePath(cfg.Plan.Config.Directory, planName))
-
-	stepInfos := wf.StepStatus()
-	entries := make([]plan.StepEntry, len(stepInfos))
-	for i, info := range stepInfos {
-		entries[i] = plan.StepEntry{Name: info.Name, Status: info.Status}
-	}
-
-	out := output.New(cmd.OutOrStdout(), globalFields)
-	return out.WriteResult(plan.StatusResult{
-		PlanName:       planName,
-		PlanDocument:   "plan",
-		PlanPath:       planPath,
-		CurrentStep:    wf.Current(),
-		CompletedSteps: st.CompletedSteps,
-		TotalSteps:     len(steps),
-		Progress:       fmt.Sprintf("%d/%d", len(st.CompletedSteps), len(steps)),
-		Steps:          entries,
-	})
-}
-
-func strictPlanStatusHook(cfg config.Config, st store.Store, planName string) artifactStatusHook {
-	if !cfg.Plan.StrictSpecChanges {
-		return nil
-	}
-	return func(fm *metadata.Metadata) metadata.DocumentStatus {
-		if strictPlanIsStale(cfg, st, planName, fm) {
-			return metadata.StatusStale
-		}
-		return fm.DocumentStatus
-	}
-}
-
-func strictPlanIsStale(cfg config.Config, st store.Store, planName string, fm *metadata.Metadata) bool {
-	if fm == nil || fm.DocumentStatus != metadata.StatusFinal {
-		return false
-	}
-	specName := fm.Spec
-	if specName == "" {
-		specName = planName
-	}
-	planInfo, err := st.Stat(plan.PlanFilePath(cfg.Plan.Config.Directory, planName))
-	if err != nil {
-		return false
-	}
-	specInfo, err := st.Stat(specsteps.SpecFilePath(cfg.Spec.Config.Directory, specName))
-	if err != nil {
-		return false
-	}
-	return specInfo.ModTime.After(planInfo.ModTime)
-}
-
 func runPlanSteps(cmd *cobra.Command, _ []string) error {
 	if schema, _ := cmd.Flags().GetBool("schema"); schema {
 		s := commandSchema{
@@ -345,5 +224,5 @@ func init() {
 	planGotoCmd.Flags().String("stdin", "", "Read stdin and store it in workflow data under this key")
 	planGotoCmd.Flags().String("file", "", "Read a file at <path> (relative to cwd) and store its contents under the filename's basename (without extension)")
 
-	planCmd.AddCommand(planNewCmd, planGotoCmd, planStatusCmd, planStepsCmd)
+	planCmd.AddCommand(planNewCmd, planGotoCmd, planStepsCmd)
 }

@@ -18,7 +18,7 @@ const wrapperTemplatePath = "commands/wrapper.md"
 var workflowDescriptions = map[string]string{
 	"spek-new":          "Create a new Specification for a feature.",
 	"spek-plan":         "Create a new Plan from an approved Specification.",
-	"spek-implement":    "Execute an approved Plan to implement the feature.",
+	"spek-implement":    "Implement an approved Spec by executing its Plan.",
 	"spek-knowledge":    "Search, contribute to, or update the project's knowledge base.",
 	"spek-manage-repos": "Add a repo to this project through a guided conversation, inspect the registry, and repair a repo's footprint.",
 	"spek-design":       "Author, bring in, revise or reference a design document.",

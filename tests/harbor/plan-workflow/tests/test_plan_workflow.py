@@ -1069,16 +1069,18 @@ class TestPlanTasks:
                 f"task {title!r} has an Execution line that is neither agent nor human"
             )
 
-    def test_plan_exports(self):
+    def test_status_reports_the_plan_tasks(self):
         name = find_plan_name()
         result = subprocess.run(
-            ["spektacular", "plan", "export", name, "--format", "json"],
+            ["spektacular", "status", name, "--format", "json"],
             cwd=PROJECT_DIR, capture_output=True, text=True,
         )
-        assert result.returncode == 0, f"plan export failed: {result.stdout}{result.stderr}"
-        exported = json.loads(result.stdout)
-        assert exported["kind"] == "plan"
-        assert exported["tasks"], "plan export returned no tasks"
+        assert result.returncode == 0, f"status failed: {result.stdout}{result.stderr}"
+        report = json.loads(result.stdout)
+        assert report["specs"], "status returned no specs"
+        plan = report["specs"][0]["plan"]
+        assert plan, "status reported no plan for the spec"
+        assert plan.get("tasks"), "status returned no plan tasks"
 
 
 class TestContextAndResearch:

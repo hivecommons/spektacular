@@ -32,7 +32,7 @@ func withSchema(body string) string {
 // current project format version (hand-maintained, not read from
 // CurrentProjectSchema).
 func withProjectSchema(body string) string {
-	return "schema: 3\n" + body
+	return "schema: 4\n" + body
 }
 
 // Criterion 2: the default repo config seeds exactly the repo's own knowledge
