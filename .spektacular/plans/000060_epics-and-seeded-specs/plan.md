@@ -747,7 +747,7 @@ the CLI runs here again.
 - [x] A project still on the previous schema is told to run `migrate`
 - [x] The full test suite passes
 
-#### - [ ] Task: Migrate this repository's own configuration
+#### - [x] Task: Migrate this repository's own configuration
 **Id:** 99ad63fd-21f0-42ef-9ec5-6c2e55f9f22c
 **Repo:** spektacular
 **Depends on:**
@@ -761,8 +761,8 @@ the implementation can keep driving the workflow with the CLI.
 *Technical detail:* [context.md#task-migrate-this-repositorys-own-configuration](./context.md#task-migrate-this-repositorys-own-configuration)
 
 **Acceptance criteria**:
-- [ ] This repository's configuration is on the new schema and contains the `epic` section
-- [ ] The CLI runs in this repository again
+- [x] This repository's configuration is on the new schema and contains the `epic` section
+- [x] The CLI runs in this repository again
 
 ### Milestone 2: One status command, and implementation checks dependencies
 
@@ -1456,3 +1456,17 @@ There are no other open questions. Every other decision is recorded in the assum
 - `docs: CHANGELOG.md`
 
 **Discoveries**: The configuration page said "Fourteen top-level keys" before this change; it now lists sixteen.
+
+### 2026-10-02 — Task: Migrate this repository's own configuration
+
+**What was done**: The user migrated this repository's `.spektacular/config.yaml` to settings format 4 (it now carries `epic_split_threshold: moderate` and the `epic` block), ran `init` to regenerate the installed skills and managed AGENTS.md sections, and switched `command` from `go run .` to the installed `spektacular` binary (`make install-local`). The CLI runs here again and `version check` reports `match`.
+
+**Deviations**: Beyond the migration, `command` now points at the installed binary rather than `go run .`, so workflows are no longer driven by the working tree being changed.
+
+**Files changed**:
+- `spektacular: .spektacular/config.yaml`
+- `spektacular: AGENTS.md`
+- `spektacular: .claude/skills/*/SKILL.md`
+- `spektacular: Makefile`
+
+**Discoveries**: This task should never have existed: a plan must not change the install driving its own workflows. Recorded as the convention `conventions/plans-never-change-the-active-install.md` in the spektacular knowledge store.
