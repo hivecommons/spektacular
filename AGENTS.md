@@ -6,7 +6,7 @@
 
 ## Where the Code Lives — Read This First
 
-> Managed by `go run . init` — edit `templates/agents/repo-sources.md`
+> Managed by `spektacular init` — edit `templates/agents/repo-sources.md`
 > in the Spektacular source, not this section in place. Hand edits will not
 > survive the next init.
 
@@ -24,7 +24,7 @@ running tests, verifying, or answering a question about how something
 works — run:**
 
 ```
-go run . repo list
+spektacular repo list
 ```
 
 Every registered repo comes back with a `root`: the absolute path where
@@ -34,7 +34,7 @@ under it. Run tests from it.
 These rules are not negotiable:
 
 - **Never assume the directory you started in holds a repo's code.** Check
-  with `go run . repo list` first, in every session, before you open the
+  with `spektacular repo list` first, in every session, before you open the
   first file.
 - **Never guess a path** from the project's name, a repo's name, or a
   directory that looks plausible. The registry is the only authority on
@@ -54,7 +54,7 @@ exploration. It is not limited to workflow steps.
 
 ## Memory & Context
 
-> Managed by `go run . init` — edit `templates/agents/memory-context.md`
+> Managed by `spektacular init` — edit `templates/agents/memory-context.md`
 > in the Spektacular source, not this section in place. Hand edits will not
 > survive the next init.
 
@@ -69,7 +69,7 @@ Outside this repository, continue using your per-user memory store as normal.
 
 ## Spec-Worthy Discussion Recognition
 
-> Managed by `go run . init` — edit `templates/agents/spec-trigger.md`
+> Managed by `spektacular init` — edit `templates/agents/spec-trigger.md`
 > in the Spektacular source, not this section in place. Hand edits will not
 > survive the next init.
 
@@ -94,7 +94,7 @@ The user's response falls into one of three outcomes:
 If the user accepts, start the spec workflow:
 
 ```
-go run . spec new --data '{"name":"..."}'
+spektacular spec new --data '{"name":"..."}'
 ```
 
 Then drive its existing steps — the "ask the user..." prompts in `templates/steps/spec/*.md` are unchanged and still apply — but answer each one from the conversation you already had instead of asking cold. For every step where the discussion already established an answer (e.g. the overview step's "describe this feature in 2-3 sentences"), propose a draft based on what was said and ask the user to confirm or refine it, rather than posing the question as if from scratch. Only ask a step's question directly when the conversation genuinely didn't cover it. The user's confirmation or correction is still the final word — never silently record your own draft as accepted without it.
@@ -103,7 +103,7 @@ This behavior is scoped to the current, single conversation: it does not persist
 
 ## Historical Artifacts: Specs and Plans as Archaeology
 
-> Managed by `go run . init` — edit `templates/agents/historical-artifacts.md`
+> Managed by `spektacular init` — edit `templates/agents/historical-artifacts.md`
 > in the Spektacular source, not this section in place. Hand edits will not
 > survive the next init.
 
@@ -119,8 +119,8 @@ configuration authoritatively describe current behavior.
 Because of that, when you are exploring the codebase, summarizing a
 feature, tracing how something works, or answering any question about
 current-state behavior, do not read files under `.spektacular/specs/` or
-`.spektacular/plans/` — through the `Read` tool, through `go run . spec
-file read`, through `go run . plan file read`, or through any other
+`.spektacular/plans/` — through the `Read` tool, through `spektacular spec
+file read`, through `spektacular plan file read`, or through any other
 channel. Ground your answer in source files, tests, and configuration
 instead, and cite paths under those directories rather than under the
 spec or plan stores.
@@ -136,8 +136,8 @@ files outside an active workflow.
 There is one further exception: while a spec, plan, or implement
 workflow is actively running, the workflow that owns its artifact may
 read and update that artifact freely. That is what the workflow is for,
-and it uses the dedicated CLI (`go run . spec file read/write`,
-`go run . plan file read/write`) to do so. Once the workflow closes —
+and it uses the dedicated CLI (`spektacular spec file read/write`,
+`spektacular plan file read/write`) to do so. Once the workflow closes —
 or for any agent that is not the workflow currently driving the
 artifact — the artifact is historical again and subject to the same
 rules as every other spec or plan on disk.
@@ -167,7 +167,7 @@ unless the task explicitly concerns them.
 
 ## Presenting Drafts and Confirmations
 
-> Managed by `go run . init` — edit `templates/agents/draft-presentation.md`
+> Managed by `spektacular init` — edit `templates/agents/draft-presentation.md`
 > in the Spektacular source, not this section in place. Hand edits will not
 > survive the next init.
 
@@ -179,7 +179,7 @@ This rule applies across every workflow step that follows a draft-then-confirm p
 
 ## Knowledge-Worthy Discovery Recognition
 
-> Managed by `go run . init` — edit `templates/agents/knowledge-trigger.md`
+> Managed by `spektacular init` — edit `templates/agents/knowledge-trigger.md`
 > in the Spektacular source, not this section in place. Hand edits will not
 > survive the next init.
 
@@ -217,26 +217,27 @@ entry gets written once you decide to write one — that is still entirely the
 
 ## Spektacular's Files Are Reached Through Spektacular
 
-> Managed by `go run . init` — edit `templates/agents/store-access.md`
+> Managed by `spektacular init` — edit `templates/agents/store-access.md`
 > in the Spektacular source, not this section in place. Hand edits will not
 > survive the next init.
 
 Every file Spektacular manages is reached through its CLI, never with your own
 file tools. This covers specs, plans, their context and research documents,
-test plans, changelog records, knowledge entries and design documents.
+test plans, changelog records, knowledge entries, design documents and epics.
 
 Never use the `Write` or `Edit` tool on a file under a store directory, and
-never build a store path by hand. Use `go run . spec file`,
-`go run . plan file`, `go run . changelog file`, `go run . knowledge`
-and `go run . design` instead. A write supplies its body with
+never build a store path by hand. Use `spektacular spec file`,
+`spektacular plan file`, `spektacular changelog file`, `spektacular knowledge`,
+`spektacular design` and `spektacular epic` instead. A write supplies its body with
 `--from <path>`, never on stdin and never as prose on the command line.
 
 Removal is a CLI verb too. Deleting a managed file with `rm`, or with any
 equivalent of your own, is never correct — not for a knowledge entry, not for
 a design document, and not for anything else a store holds. Use
-`go run . knowledge delete` and `go run . design delete`, alongside the
-`delete` each of `go run . spec file`, `go run . plan file` and
-`go run . changelog file` already offers. Going around the tool is how a
+`spektacular knowledge delete`, `spektacular design delete` and
+`spektacular epic delete`, alongside the
+`delete` each of `spektacular spec file`, `spektacular plan file` and
+`spektacular changelog file` already offers. Going around the tool is how a
 spec is left pointing at a design that is not there, and it stops working
 entirely the moment a store is backed by something other than a local
 directory. If a removal is refused, the refusal names what to do instead:
@@ -272,7 +273,7 @@ in its prompt.
 
 ## Design-Worthy Detail Recognition
 
-> Managed by `go run . init` — edit `templates/agents/design-trigger.md`
+> Managed by `spektacular init` — edit `templates/agents/design-trigger.md`
 > in the Spektacular source, not this section in place. Hand edits will not
 > survive the next init.
 
@@ -322,7 +323,7 @@ walk past:
 When you recognize the moment, offer — never write a design document
 unprompted. Say what you would capture, which declared source you would write
 it to, and why the spec is better off pointing at it than containing it. Run
-`go run . design sources` to see the declared sources if you do not
+`spektacular design sources` to see the declared sources if you do not
 already know them. Wait for the user's decision before doing anything else.
 
 The user's response falls into one of three outcomes:
@@ -330,12 +331,12 @@ The user's response falls into one of three outcomes:
 - **Accept** — invoke the `spek-design` skill, which owns the conversation
   from here: it runs the interview when the design still has to be worked out,
   stores a document the user already has exactly as supplied, and revises one
-  that already exists. It ends in `go run . design author --data
+  that already exists. It ends in `spektacular design author --data
   '{"source":"<name>","path":"<path>"}' --from <staged file>` for a design
-  Spektacular writes with the user, or `go run . design write --data
+  Spektacular writes with the user, or `spektacular design write --data
   '{"source":"<name>","path":"<path>"}' --from <staged file>` for one the user
   handed over, which is stored byte for byte with nothing added. Then, **only
-  if a spec exists**, record the reference with `go run . design ref add
+  if a spec exists**, record the reference with `spektacular design ref add
   --data '{"spec":"<spec name>","source":"<name>","path":"<path>"}'`, because a
   document nothing references is invisible to the plan workflow. When there is
   no spec yet, writing the document is the whole of the work.
