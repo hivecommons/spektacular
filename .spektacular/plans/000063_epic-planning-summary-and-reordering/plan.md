@@ -540,7 +540,7 @@ The site changelog records the change.
 
 **Validation point**: The site builds and type-checks cleanly, page bodies contain no layout markup and no em dashes, and the Epics page's section shading still alternates.
 
-#### - [ ] Task: Document the epic planning summary, automatic ordering and planning questions
+#### - [x] Task: Document the epic planning summary, automatic ordering and planning questions
 **Id:** d989203f-7328-47c8-a96a-d30530f137b5
 **Repo:** docs
 **Depends on:**
@@ -558,10 +558,10 @@ The site changelog records the change.
 *Technical detail:* [context.md#task-document-the-epic-planning-summary-automatic-ordering-and-planning-questions](./context.md#task-document-the-epic-planning-summary-automatic-ordering-and-planning-questions)
 
 **Acceptance criteria**:
-- [ ] The Epics page describes the summary document, the automatic ordering of overlapping specs and the questions raised while planning.
-- [ ] The command-line section shows how to read the summary and how to order or unorder specs.
-- [ ] The site changelog has an entry for this change.
-- [ ] The site builds and checks cleanly, and the page's section shading still alternates.
+- [x] The Epics page describes the summary document, the automatic ordering of overlapping specs and the questions raised while planning.
+- [x] The command-line section shows how to read the summary and how to order or unorder specs.
+- [x] The site changelog has an entry for this change.
+- [x] The site builds and checks cleanly, and the page's section shading still alternates.
 
 ## Open Questions
 
@@ -720,3 +720,15 @@ The site changelog records the change.
 - `spektacular: templates/plan_epic_skill_test.go`
 
 **Discoveries**: The skill's ask-word allowlist test flags any new sentence containing "ask". The new instructions say "put … to the user" instead, so the allowlist did not need extending. The plan-workflow harbor oracles pin none of the edited step wording, so they needed no change.
+
+### 2026-10-04 — Task: Document the epic planning summary, automatic ordering and planning questions
+
+**What was done**: The Epics page describes the planning summary kept with an epic, the automatic ordering of speks whose plans change the same files (including undoing an added order at the review, for good), and the new planning questions about contradicting a recorded decision or a knowledge entry, plus cross-plan disagreements with a proposed answer. "Dependencies between specs" links to the automatic ordering. The command-line section adds `epic summary read/write` and `epic order` (with unorder), and says deleting an epic deletes its summary. The frontmatter description and the site changelog are updated.
+
+**Deviations**: The cross-reference from "Dependencies between specs" points at `#plan-this-epic`, the id Astro gives the `### Plan this epic` heading. The plan's `#planning-and-implementing-an-epic` does not exist, because `Section` renders no id. The delete paragraph also notes that the summary is deleted.
+
+**Files changed**:
+- `docs: src/pages/epics.mdx`
+- `docs: CHANGELOG.md`
+
+**Discoveries**: `Section.astro` emits no `id` for its heading, so in-page links must target a markdown heading inside `Prose` (which Astro gives an id) rather than a section heading. `make check` reports 2 hints that predate this change.
