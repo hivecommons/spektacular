@@ -488,7 +488,7 @@ This replaces its line that planning is unchanged. The document keeps its captur
 
 **Validation point**: The rendered `spek-plan-epic` skill and orchestrated plan steps carry the summary writes, the ordering pass, the decisions-with-a-proposed-answer rule, the summary-driven review and the widened question definition, each pinned by tests. The full test suite passes. The live end-to-end behaviour is listed in the implementation test plan.
 
-#### - [ ] Task: Hand back the project-wide rules each plan follows
+#### - [x] Task: Hand back the project-wide rules each plan follows
 **Id:** 09097321-9971-4411-b1b1-ff1fbbd5f5ce
 **Repo:** spektacular
 **Depends on:**
@@ -500,11 +500,11 @@ When a plan is made for an epic, the summary it hands back gains one more point:
 *Technical detail:* [context.md#task-hand-back-the-project-wide-rules-each-plan-follows](./context.md#task-hand-back-the-project-wide-rules-each-plan-follows)
 
 **Acceptance criteria**:
-- [ ] A plan made for an epic hands back the project-wide rules it relies on or decides, one per line, alongside its approach, tasks, scope and assumptions.
-- [ ] The plan skill's section on running under an orchestrator mentions the extra point.
-- [ ] Planning one spec on its own still ends with the same sign-off walkthrough.
+- [x] A plan made for an epic hands back the project-wide rules it relies on or decides, one per line, alongside its approach, tasks, scope and assumptions.
+- [x] The plan skill's section on running under an orchestrator mentions the extra point.
+- [x] Planning one spec on its own still ends with the same sign-off walkthrough.
 
-#### - [ ] Task: Build and review the epic's planning summary in "plan this epic"
+#### - [x] Task: Build and review the epic's planning summary in "plan this epic"
 **Id:** 91495004-f25f-4fd6-8ab9-cf1376893901
 **Repo:** spektacular
 **Depends on:**
@@ -522,12 +522,12 @@ Teach the "plan this epic" skill to build the summary as it goes:
 *Technical detail:* [context.md#task-build-and-review-the-epics-planning-summary-in-plan-this-epic](./context.md#task-build-and-review-the-epics-planning-summary-in-plan-this-epic)
 
 **Acceptance criteria**:
-- [ ] Each spec planned in a run gets its own section in the epic's summary, and sections for specs planned before are kept.
-- [ ] When planning ends, overlapping specs are ordered and every dependency added is visible in the summary before the review.
-- [ ] Each disagreement between plans on a project-wide rule is listed under the decisions to settle, with the plans involved and one proposed answer.
-- [ ] The review presents the summary, decisions first. A change the user asks for is made to the plan and to its section in the summary.
-- [ ] Settling a disagreement, by accepting the proposal or choosing another answer, updates every plan involved and marks the decision settled.
-- [ ] The skill counts contradicting a recorded decision or a knowledge entry as a genuine question, and every other spec keeps planning while it waits.
+- [x] Each spec planned in a run gets its own section in the epic's summary, and sections for specs planned before are kept.
+- [x] When planning ends, overlapping specs are ordered and every dependency added is visible in the summary before the review.
+- [x] Each disagreement between plans on a project-wide rule is listed under the decisions to settle, with the plans involved and one proposed answer.
+- [x] The review presents the summary, decisions first. A change the user asks for is made to the plan and to its section in the summary.
+- [x] Settling a disagreement, by accepting the proposal or choosing another answer, updates every plan involved and marks the decision settled.
+- [x] The skill counts contradicting a recorded decision or a knowledge entry as a genuine question, and every other spec keeps planning while it waits.
 
 ### Milestone 4: The epics documentation describes the summary, the ordering and the questions
 
@@ -693,3 +693,30 @@ The site changelog records the change.
 - `spektacular: .spektacular/design/epics-and-seeded-specs.md`
 
 **Discoveries**: None.
+
+### 2026-10-04 — Task: Hand back the project-wide rules each plan follows
+
+**What was done**: The orchestrated walkthrough summary gains a fifth point: the project-wide rules the plan relies on or decides, one line each, or a statement that there are none. The orchestrator compares these across the epic's plans. The orchestrated finished step's `DONE:` contents name the new point, and the `spek-plan` skill's orchestrated section mentions it. The standalone walkthrough is unchanged.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: templates/steps/plan/18-walkthrough.md`
+- `spektacular: templates/steps/plan/19-finished.md`
+- `spektacular: templates/skills/workflows/spek-plan/SKILL.md`
+- `spektacular: internal/steps/plan/orchestrated_test.go`
+- `spektacular: templates/orchestrated_skill_section_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-04 — Task: Build and review the epic's planning summary in "plan this epic"
+
+**What was done**: The `spek-plan-epic` skill now builds the epic's planning summary as it goes. On each `DONE:` it writes that spec's section with `epic summary write`, using `###` sub-headings only, and keeps sections from earlier runs. A new Step 6 runs once the loop ends (finished or stopped) when this run produced a plan. It runs `epic order` without putting the added dependencies to the user, compares the project-wide rules the plans handed back, and writes each disagreement under the decisions to settle: the rule, the plans, one proposed answer with its reason, and status "Open". The review (now Step 7) reads the summary and walks it decisions first. Settling a decision applies the outcome to every plan involved, rewrites their sections and marks the entry "Settled: <outcome>". An added dependency is undone with `epic order --data unorder`, and every other change goes to both the plan and its section. The genuine-question definition now covers contradicting a recorded decision or a knowledge entry. The store rule names `epic summary`, and children never write it. The final report (now Step 8) counts the dependencies added.
+
+**Deviations**: Steps were renumbered (review 6→7, report 7→8), and the pinned section names in `templates/plan_epic_skill_test.go` moved with them. Stopping mode gained one sentence so Step 6 still runs before the final report.
+
+**Files changed**:
+- `spektacular: templates/skills/workflows/spek-plan-epic/SKILL.md`
+- `spektacular: templates/plan_epic_skill_test.go`
+
+**Discoveries**: The skill's ask-word allowlist test flags any new sentence containing "ask". The new instructions say "put … to the user" instead, so the allowlist did not need extending. The plan-workflow harbor oracles pin none of the edited step wording, so they needed no change.

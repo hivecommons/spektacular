@@ -39,6 +39,9 @@ func TestOrchestratedWalkthroughHasNoSignOff(t *testing.T) {
 		require.Contains(t, out, "spektacular plan file read 000007_billing "+doc)
 	}
 	require.Contains(t, out, "## Drafting assumptions")
+	require.Contains(t, out, "5. The project-wide rules this plan relies on or decides:")
+	require.Contains(t, out, "one line each with what this plan does, or say there are none.")
+	require.Contains(t, out, "Your orchestrator compares these across the epic's plans to find where they disagree.")
 	require.Contains(t, out, `spektacular plan goto --data '{"step":"finished","name":"000007_billing"}'`)
 	require.Contains(t, out, "## Running under an orchestrator")
 	require.Contains(t, out, "`QUESTION: 000007_billing`")
@@ -73,6 +76,7 @@ func TestStandaloneWalkthroughKeepsSignOff(t *testing.T) {
 	require.NotContains(t, out, "no sign-off here")
 	require.NotContains(t, out, "orchestrat")
 	require.NotContains(t, out, "QUESTION:")
+	require.NotContains(t, out, "project-wide rules")
 }
 
 // An orchestrated finished step closes all three documents final and hands
@@ -96,6 +100,7 @@ func TestOrchestratedFinishedClosesDocsAndHandsBackDone(t *testing.T) {
 
 	require.Contains(t, out, "first line is exactly `DONE: 000007_billing`")
 	require.Contains(t, out, "do not report to the user")
+	require.Contains(t, out, "(approach, milestones and tasks with any `human` tasks, out of scope, drafting assumptions, project-wide rules)")
 	require.NotContains(t, out, "The user signed off")
 	require.NotContains(t, out, "approved and ready for implementation")
 	require.Contains(t, out, "## Running under an orchestrator")

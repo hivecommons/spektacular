@@ -47,6 +47,7 @@ From them, prepare the summary you will hand back to your orchestrator at the en
 2. The milestones and their tasks. Name every task whose `**Execution:**` is `human`, with its reason, or say there are none.
 3. What was deliberately left out of scope.
 4. The drafting assumptions from the `## Drafting assumptions` section of the plan's `research` document: each decision in a line, so the user can challenge it at the review.
+5. The project-wide rules this plan relies on or decides: any convention governing files or practices that other specs may also touch (for example how the changelog is kept, or a shared interface's shape), one line each with what this plan does, or say there are none. Your orchestrator compares these across the epic's plans to find where they disagree.
 
 Then advance to the finished step, which marks the documents final:
 

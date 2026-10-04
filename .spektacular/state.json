@@ -12,11 +12,12 @@
     "update_changelog"
   ],
   "created_at": "2026-10-04T14:07:47.171696106Z",
-  "updated_at": "2026-10-04T14:35:13.066790067Z",
+  "updated_at": "2026-10-04T14:38:25.125452668Z",
   "data": {
     "committed_milestones": [
       1,
-      2
+      2,
+      3
     ],
     "name": "000063_epic-planning-summary-and-reordering"
   }

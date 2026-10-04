@@ -85,6 +85,11 @@ func TestPlanEpicSkillRendersLikeAnInstalledSkill(t *testing.T) {
 		"`spekx plan file write <spec> <doc> --from <path>`",
 		"`spekx epic list`",
 		"`spekx repo list`",
+		"`spekx epic summary read <epic>`",
+		"`spekx epic summary write <epic> --data '{\"section\":\"<spec>\"}' --from <path>`",
+		"`spekx epic summary write <epic> --data '{\"section\":\"decisions\"}' --from <path>`",
+		"`spekx epic order <epic>`",
+		"`spekx epic order <epic> --data '{\"unorder\":{\"spec\":\"<later>\",\"depends_on\":\"<earlier>\"}}'`",
 	)
 }
 
@@ -141,7 +146,7 @@ func TestPlanEpicSkillStopsOnlyForQuestionsAndTheReview(t *testing.T) {
 		"Send the user's answer back to the same child",
 	)
 
-	review := flat(section(t, skill, "# Step 6: The end-of-planning review"))
+	review := flat(section(t, skill, "# Step 7: The end-of-planning review"))
 	requirePhrases(t, "The end-of-planning review", review,
 		"one summary entry for **every plan produced in this run**",
 		"before anything is implemented",
@@ -260,9 +265,151 @@ func TestPlanEpicSkillCarriesNotesStoreAccessProgressAndReport(t *testing.T) {
 		"how many remain",
 	)
 
-	report := flat(section(t, skill, "# Step 7: The final report"))
+	report := flat(section(t, skill, "# Step 8: The final report"))
 	requirePhrases(t, "The final report", report,
 		"End every run, finished or stopped",
 		"**Completed in this run:**", "**Skipped:**", "**Still outstanding:**",
+	)
+}
+
+// The tests below pin the epic's planning summary and automatic ordering.
+// Their criteria describe what a live orchestrator does with the summary, so
+// they can only be held to the instruction text the skill gives it.
+
+// Summary criterion 1: each spec planned in a run gets its own section in the
+// epic's summary, written by the orchestrator alone, and sections for specs
+// planned before are kept.
+func TestPlanEpicSkillWritesOneSummarySectionPerPlannedSpec(t *testing.T) {
+	skill := installedPlanEpicSkill(t)
+
+	store := flat(section(t, skill, "# Spektacular's files are reached through Spektacular"))
+	requirePhrases(t, "the store-access rule", store,
+		"The epic's planning summary is read with `"+installedCommand+" epic summary read <epic>`",
+		"written one section at a time with `"+installedCommand+` epic summary write <epic> --data '{"section":"<section>"}' --from <path>`+"`",
+		"only the orchestrator writes it, never a child.",
+	)
+
+	child := flat(section(t, skill, "# Step 3: The child prompt"))
+	requirePhrases(t, "The child prompt", child,
+		"that only you write the epic's planning summary, so the child never runs `"+installedCommand+" epic summary write`;",
+	)
+
+	contract := flat(section(t, skill, "## The hand-back contract"))
+	requirePhrases(t, "The hand-back contract", contract,
+		"the drafting assumptions, and the project-wide rules it relies on or decides, one per line.",
+	)
+
+	handling := flat(section(t, skill, "# Step 4: Handling a hand-back"))
+	requirePhrases(t, "Handling a hand-back", handling,
+		"**`DONE:`** — write that spec's section of the epic's planning summary from its `DONE:` summary",
+		"stage the section under `.spektacular/tmp/`, run `"+installedCommand+` epic summary write <epic> --data '{"section":"<spec>"}' --from <path>`+"`, then remove the scratch file.",
+		"the drafting assumptions and the project-wide rules, under `###` sub-headings only",
+		"Sections for specs planned in earlier runs stay as they are.",
+	)
+}
+
+// Summary criterion 2: when planning ends, overlapping specs are ordered and
+// every dependency added is visible in the summary before the review.
+func TestPlanEpicSkillOrdersOverlappingSpecsBeforeTheReview(t *testing.T) {
+	skill := installedPlanEpicSkill(t)
+
+	order := flat(section(t, skill, "# Step 6: Order and gather decisions"))
+	requirePhrases(t, "Order and gather decisions", order,
+		"Once the loop ends, finished or stopped, and only if a plan was produced in this run",
+		"**Order overlapping specs.** Run `"+installedCommand+" epic order <epic>`.",
+		"when their plans change the same files and nothing orders them yet",
+		"logs each addition in the summary's \"Order added for shared files\" section",
+		"These dependencies are written without putting them to the user first",
+	)
+
+	handling := flat(section(t, skill, "# Step 4: Handling a hand-back"))
+	requirePhrases(t, "Stopping mode", handling,
+		"Before the final report, still run Step 6 when this run produced a plan.",
+	)
+
+	report := flat(section(t, skill, "# Step 8: The final report"))
+	requirePhrases(t, "The final report", report,
+		"**Dependencies added for shared files:** how many `epic order` added, each named in the summary.",
+	)
+
+	// Ordering runs after the loop and hand-backs, and before the review.
+	headings := []string{
+		"# Step 2: The loop\n", "# Step 4: Handling a hand-back\n", "# Step 5: Progress\n",
+		"# Step 6: Order and gather decisions\n", "# Step 7: The end-of-planning review\n",
+		"# Step 8: The final report\n",
+	}
+	prev := -1
+	for _, h := range headings {
+		i := strings.Index(skill, h)
+		require.Greaterf(t, i, prev, "%q must follow the step before it", strings.TrimSpace(h))
+		prev = i
+	}
+}
+
+// Summary criterion 3: each disagreement between plans on a project-wide rule
+// is listed under the decisions to settle, with the plans involved and one
+// proposed answer.
+func TestPlanEpicSkillListsCrossPlanDisagreementsAsDecisions(t *testing.T) {
+	order := flat(section(t, installedPlanEpicSkill(t), "# Step 6: Order and gather decisions"))
+	requirePhrases(t, "Order and gather decisions", order,
+		"**Gather cross-plan disagreements.** Compare the project-wide rules in this run's `DONE:` summaries with those in the summary's existing sections",
+		"For every rule on which plans disagree",
+		"write an entry under the decisions to settle with `"+installedCommand+` epic summary write <epic> --data '{"section":"decisions"}' --from <path>`+"`",
+		"Each entry names the rule, every plan involved and what each does, one proposed answer with a one-line reason, and the status \"Open\".",
+		"Keep the entries already there.",
+	)
+}
+
+// Summary criterion 4: the review presents the summary, decisions first, and
+// a change the user asks for is made to the plan and to its section in the
+// summary.
+func TestPlanEpicSkillReviewPresentsDecisionsFirstAndKeepsPlanAndSummaryInStep(t *testing.T) {
+	review := flat(section(t, installedPlanEpicSkill(t), "# Step 7: The end-of-planning review"))
+	requirePhrases(t, "The end-of-planning review", review,
+		"read the summary with `"+installedCommand+" epic summary read <epic>` and walk the user through it before anything is implemented",
+		"Present it as plain text, section by section, decisions first: the decisions to settle, then the order added for shared files, then each plan.",
+		"Apply each one both to the plan document it belongs to and to that spec's section of the summary, so the two never disagree.",
+		"`"+installedCommand+" plan file write <spec> <doc> --from <path>`",
+		"A change to the summary goes through `"+installedCommand+" epic summary write` the same way.",
+		"run `"+installedCommand+` epic order <epic> --data '{"unorder":{"spec":"<later>","depends_on":"<earlier>"}}'`+"`",
+		"planning never adds that dependency again",
+	)
+
+	// Within the presentation order, decisions come before the plans.
+	decisions := strings.Index(review, "the decisions to settle, then")
+	order := strings.Index(review, "then the order added for shared files")
+	plans := strings.Index(review, "then each plan.")
+	require.GreaterOrEqual(t, decisions, 0)
+	require.Less(t, decisions, order, "decisions are presented before the added order")
+	require.Less(t, order, plans, "the added order is presented before the plans")
+}
+
+// Summary criterion 5: settling a disagreement, by accepting the proposal or
+// choosing another answer, updates every plan involved and marks the decision
+// settled.
+func TestPlanEpicSkillSettlingADecisionUpdatesEveryPlanInvolved(t *testing.T) {
+	review := flat(section(t, installedPlanEpicSkill(t), "# Step 7: The end-of-planning review"))
+	requirePhrases(t, "The end-of-planning review", review,
+		"**Each open decision:** put its proposed answer to the user, who accepts it or gives another answer.",
+		"Apply the outcome to every plan involved, rewrite each involved spec's section of the summary to match, and rewrite the decision's entry as \"Settled: <outcome>\".",
+	)
+}
+
+// Summary criterion 6: contradicting a recorded decision or a knowledge entry
+// is a genuine question, never parked, and every other spec keeps planning
+// while it waits.
+func TestPlanEpicSkillCountsContradictionsAsGenuineQuestions(t *testing.T) {
+	skill := installedPlanEpicSkill(t)
+
+	questions := flat(section(t, skill, "## What counts as a genuine open question"))
+	requirePhrases(t, "What counts as a genuine open question", questions,
+		"a plan choice that would contradict a decision the user recorded for that spec (in the spec, a design it references, or its interview notes where they still exist) or a knowledge entry",
+		"A contradiction of a recorded decision or a knowledge entry is never parked as a drafting assumption, a task for a person or a note for the review.",
+		"While one child waits on its question, every other child keeps planning.",
+	)
+
+	handling := flat(section(t, skill, "# Step 4: Handling a hand-back"))
+	requirePhrases(t, "Handling a hand-back", handling,
+		"While the user considers it, the other children keep going.",
 	)
 }

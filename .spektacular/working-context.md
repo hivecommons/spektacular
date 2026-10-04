@@ -24,3 +24,7 @@
 - Task 5 implemented: EpicSpec.ParallelWith (+Render, Validate non-member/self, schema), cmd/epic_order.go (orderEpic/unorderEpic/writeOrderedEpic/planFiles/sharedFiles). Verb lists now include 'order'. Open question checked: TaskFiles finds files for nearly every task in pre-change plans 000060/000062 (legacy 000058 has no tasks); minor noise only (`.ext`, bare `interview.md`, dir `internal/status`) — not material, no STOP.
 - Task 5 done; fixed splitGraph dropping split spec's parallel_with (+ regression test).
 - Task 6 done. Milestone 2 commit on this advance.
+- Task 7 implemented: walkthrough orchestrated point 5 'project-wide rules', finished DONE list, spek-plan SKILL orchestrated bullet.
+- Task 7 done.
+- Task 8 implemented: spek-plan-epic SKILL store rule (epic summary), DONE contract + rules, widened genuine question, Step 4 DONE writes section, new Step 6 order+decisions, Step 7 review walks summary, Step 8 report adds dependencies count. Test section names renumbered (Step 7 review, Step 8 report). Avoided new 'ask' words so the allowlist is unchanged.
+- Task 8 done. Milestone 3 commit on this advance. Next: task 9 docs repo.

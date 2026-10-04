@@ -20,7 +20,7 @@ Your own notes for this run go in `.spektacular/working-context.md`: which epic,
 
 # Spektacular's files are reached through Spektacular
 
-Never use your own file tools on a store directory, and never build a store path by hand. Read and write plans only with `{{command}} plan file read` and `{{command}} plan file write --from <path>`, specs with `{{command}} spec file`, and epics with `{{command}} epic`. Every child prompt must restate this rule, because a child inherits neither this skill nor your context.
+Never use your own file tools on a store directory, and never build a store path by hand. Read and write plans only with `{{command}} plan file read` and `{{command}} plan file write --from <path>`, specs with `{{command}} spec file`, and epics with `{{command}} epic`. The epic's planning summary is read with `{{command}} epic summary read <epic>` and written one section at a time with `{{command}} epic summary write <epic> --data '{"section":"<section>"}' --from <path>`; only the orchestrator writes it, never a child. Every child prompt must restate this rule, because a child inherits neither this skill nor your context.
 
 # Step 1: Find the epic
 
@@ -54,45 +54,62 @@ Give each child exactly what it needs, because it inherits nothing from you:
 - to **resume**: run the same `plan new` command. It returns a resume report for the spec's lane instead of starting over; read back what the report names (the plan's working files and the lane's notes), then run the `goto` it gives, `{{command}} plan goto --data '{"step":"<current_step>","name":"<spec>"}'`;
 - "Follow the `spek-plan` skill. This run is orchestrated: every `goto` carries `\"name\":\"<spec>\"`, and you never ask the user anything yourself.";
 - the store-access rule above, word for word;
+- that only you write the epic's planning summary, so the child never runs `{{command}} epic summary write`;
 - the hand-back contract and the definition of a genuine open question, below.
 
 ## The hand-back contract
 
 A child ends every turn that stops its work with a final message whose **first line** is exactly one of:
 
-- `DONE: <spec>`, followed by the plan summary its walkthrough step prepares (in an orchestrated run the walkthrough prepares a summary instead of asking for sign-off): the approach, the milestones and tasks (naming any task a person must do), what is out of scope, and the drafting assumptions. Then any durable discovery worth saving to the knowledge base.
+- `DONE: <spec>`, followed by the plan summary its walkthrough step prepares (in an orchestrated run the walkthrough prepares a summary instead of asking for sign-off): the approach, the milestones and tasks (naming any task a person must do), what is out of scope, the drafting assumptions, and the project-wide rules it relies on or decides, one per line. Then any durable discovery worth saving to the knowledge base.
 - `QUESTION: <spec>`, followed by the question, the options, and the default it recommends. It then waits for your answer and carries on from the same step.
 - `FAILED: <spec>`, followed by the step it reached and the reason it cannot go on.
 
 ## What counts as a genuine open question
 
-Only a stop the plan workflow itself defines earns a question: a design reference that does not resolve, a disagreement with a referenced design, or a drafting decision with no reasonable default that only the user can settle. Everything else the child decides itself, records as a drafting assumption, and leaves for the review at the end of planning. A child never asks for approval of a section, and never asks the user to sign off its plan.
+Only a stop the plan workflow itself defines earns a question: a design reference that does not resolve, a disagreement with a referenced design, a plan choice that would contradict a decision the user recorded for that spec (in the spec, a design it references, or its interview notes where they still exist) or a knowledge entry, or a drafting decision with no reasonable default that only the user can settle. A contradiction of a recorded decision or a knowledge entry is never parked as a drafting assumption, a task for a person or a note for the review. While one child waits on its question, every other child keeps planning. Everything else the child decides itself, records as a drafting assumption, and leaves for the review at the end of planning. A child never asks for approval of a section, and never asks the user to sign off its plan.
 
 # Step 4: Handling a hand-back
 
-- **`DONE:`** — keep its summary for the end-of-planning review. Re-read `status` and start any spec that has just become ready.
+- **`DONE:`** — write that spec's section of the epic's planning summary from its `DONE:` summary: stage the section under `.spektacular/tmp/`, run `{{command}} epic summary write <epic> --data '{"section":"<spec>"}' --from <path>`, then remove the scratch file. The section covers the approach, the milestones and tasks, the tasks a person must do (or says there are none), what is out of scope, the drafting assumptions and the project-wide rules, under `###` sub-headings only, since `#` and `##` headings are refused. Sections for specs planned in earlier runs stay as they are. Keep the summary's project-wide rules for Step 6, then re-read `status` and start any spec that has just become ready.
 - **`QUESTION:`** — put the question to the user. Present it as ordinary text first, naming the spec, the options and the recommended default, then ask. While the user considers it, the other children keep going. Send the user's answer back to the same child, so it continues where it stopped. If your agent cannot continue a stopped child, start a fresh child on the same spec with the answer included in its prompt; it resumes the plan from its lane with the `goto` above.
 - **The user declines to answer now** ("not now", "I'll think about it") — enter stopping mode.
 - **`FAILED:`** — enter stopping mode.
 
-**Stopping mode:** start no new child, let the children already running finish, then go to the final report. A child waiting on a question the user declined to answer is not resumed: its plan stays in progress in its lane, and repeating the request picks it up. Name the spec that stopped the run and why.
+**Stopping mode:** start no new child, let the children already running finish, then go to the final report. A child waiting on a question the user declined to answer is not resumed: its plan stays in progress in its lane, and repeating the request picks it up. Name the spec that stopped the run and why. Before the final report, still run Step 6 when this run produced a plan.
 
 # Step 5: Progress
 
 After every child you start and every hand-back, tell the user in one line which specs are being planned, with their steps from `status`, and how many remain. For example: "Planning 2 of 5 specs: 000071_a (tasks), 000073_c (discovery). 2 remaining."
 
-# Step 6: The end-of-planning review
+# Step 6: Order and gather decisions
 
-When no child is running and nothing is left to start, show the user one summary entry for **every plan produced in this run**, built from each child's `DONE:` summary, before anything is implemented. Invite changes. Apply each change to the plan document it belongs to, where `<doc>` is `plan`, `context` or `research`: read it with `{{command}} plan file read <spec> <doc>`, stage the edited document under `.spektacular/tmp/`, write it back with `{{command}} plan file write <spec> <doc> --from <path>`, and remove the scratch file. Offer to save any durable discovery the children reported with the `spek-knowledge` skill, and save it only if the user accepts. Close the review on a direct confirmation question.
+Once the loop ends, finished or stopped, and only if a plan was produced in this run:
+
+1. **Order overlapping specs.** Run `{{command}} epic order <epic>`. It makes a spec depend on an earlier-listed one when their plans change the same files and nothing orders them yet, and logs each addition in the summary's "Order added for shared files" section. These dependencies are written without putting them to the user first; mention each one added in one line.
+2. **Gather cross-plan disagreements.** Compare the project-wide rules in this run's `DONE:` summaries with those in the summary's existing sections (`{{command}} epic summary read <epic>`). For every rule on which plans disagree, such as one plan editing the changelog by hand while another treats it as generated, write an entry under the decisions to settle with `{{command}} epic summary write <epic> --data '{"section":"decisions"}' --from <path>`, staged under `.spektacular/tmp/` and removed afterwards. Each entry names the rule, every plan involved and what each does, one proposed answer with a one-line reason, and the status "Open". Keep the entries already there. With no disagreement, leave the section as it is: it says "None." when empty.
+
+# Step 7: The end-of-planning review
+
+When no child is running and nothing is left to start, read the summary with `{{command}} epic summary read <epic>` and walk the user through it before anything is implemented. It holds one summary entry for **every plan produced in this run**, built from each child's `DONE:` summary, beside the sections kept from earlier runs. Present it as plain text, section by section, decisions first: the decisions to settle, then the order added for shared files, then each plan.
+
+- **Each open decision:** put its proposed answer to the user, who accepts it or gives another answer. Apply the outcome to every plan involved, rewrite each involved spec's section of the summary to match, and rewrite the decision's entry as "Settled: <outcome>".
+- **An added dependency the user wants removed:** run `{{command}} epic order <epic> --data '{"unorder":{"spec":"<later>","depends_on":"<earlier>"}}'`. The summary records the removal, and planning never adds that dependency again.
+- **Any other change:** Invite changes. Apply each one both to the plan document it belongs to and to that spec's section of the summary, so the two never disagree.
+
+A change to a plan document, where `<doc>` is `plan`, `context` or `research`: read it with `{{command}} plan file read <spec> <doc>`, stage the edited document under `.spektacular/tmp/`, write it back with `{{command}} plan file write <spec> <doc> --from <path>`, and remove the scratch file. A change to the summary goes through `{{command}} epic summary write` the same way.
+
+Offer to save any durable discovery the children reported with the `spek-knowledge` skill, and save it only if the user accepts. Close the review on a direct confirmation question.
 
 Skip the review if no plan was produced in this run.
 
-# Step 7: The final report
+# Step 8: The final report
 
 End every run, finished or stopped, with:
 
 - **Completed in this run:** each spec planned now.
 - **Skipped:** each spec that already had a plan.
+- **Dependencies added for shared files:** how many `epic order` added, each named in the summary.
 - **Still outstanding:** each spec not planned, and why: blocked on which specs, stopped by which failure, or waiting on a question the user chose not to answer.
 
 When everything is planned, say the epic is ready to implement with "implement this epic".
