@@ -871,7 +871,7 @@ The project README points to it.
 
 **Validation point**: The documentation site builds and type-checks cleanly with the new section in place, and the section covers resume and skip behaviour.
 
-#### - [ ] Task: Document planning and implementing an epic on the website
+#### - [x] Task: Document planning and implementing an epic on the website
 **Id:** 6d0a6408-f711-455f-aa8c-b941aa1a70c2
 **Repo:** docs
 **Depends on:**
@@ -909,10 +909,10 @@ Link to it from the page's opening explanation, and add a site changelog entry.
 7. **Seeing where an epic stands.** A fenced example of `status` for an example epic, with a trimmed JSON result showing `run` values.
 
 **Acceptance criteria**:
-- [ ] The epics page has a section describing planning and implementing an epic, including that a repeated request resumes and that completed work is skipped.
-- [ ] The section follows the site conventions (no layout markup in the page body, alternating section shading, no em dashes), and the site builds and type-checks cleanly.
+- [x] The epics page has a section describing planning and implementing an epic, including that a repeated request resumes and that completed work is skipped.
+- [x] The section follows the site conventions (no layout markup in the page body, alternating section shading, no em dashes), and the site builds and type-checks cleanly.
 
-#### - [ ] Task: Point the README at epic planning and implementation
+#### - [x] Task: Point the README at epic planning and implementation
 **Id:** 8b83f742-73d2-4f6b-acfd-7e8ace473672
 **Repo:** spektacular
 **Depends on:**
@@ -928,7 +928,7 @@ Add a short paragraph to the README's How It Works section. It introduces "plan 
 > **Epics.** When a piece of work is split into an epic, ask your agent to *plan this epic*, review the plans, then *implement this epic*. Independent specs are worked on in parallel, each spec is built in its own worktree and merged before the specs that depend on it, and repeating either request picks up where it stopped. See [Epics](https://spektacular.dev/epics/).
 
 **Acceptance criteria**:
-- [ ] The README tells a reader that an epic can be planned and implemented with one request each, and that repeating a request resumes.
+- [x] The README tells a reader that an epic can be planned and implemented with one request each, and that repeating a request resumes.
 
 ## Open Questions
 
@@ -1212,5 +1212,37 @@ Planning ignores dependencies outside the epic and dependencies between specs on
 - `spektacular: internal/agent/agent_test.go`, `internal/agent/claude_test.go`, `internal/agent/bob_test.go`, `internal/agent/codex_test.go`
 - `spektacular: cmd/init_test.go`, `cmd/migrate_test.go`, `cmd/instruction_contract_test.go`
 - `spektacular: templates/orchestrated_skill_section_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-04 — Task: Document planning and implementing an epic on the website
+
+**What was done**: The website's epics page gains a "Planning and implementing an epic" section, placed between "Dependencies between specs" and "Working with epics from the command line". It follows the plan's content outline:
+- the two requests;
+- planning order, parallel agents and skipping;
+- implementing in per-repo worktrees, with all-or-nothing merging before dependents start and refusal of unplanned or broken epics;
+- what still stops for the user;
+- what happens on a failure;
+- resuming by repeating the request, with an example progress line;
+- a trimmed `status --format json` example of the `run` view.
+
+The command-line section flips to `surface`, so the bands still alternate. The page's opening explanation points readers to the new section, and its description mentions it. The site changelog has an entry for 000062.
+
+**Deviations**: The opening explanation names the section in plain text instead of linking to an anchor, because `Section` renders no heading ids and adding them would change the site beyond content. The section uses "spek", following the page's own wording. The optional cross-link from `how-it-works.mdx` was not added.
+
+**Files changed**:
+- `docs: src/pages/epics.mdx`
+- `docs: CHANGELOG.md`
+
+**Discoveries**: `Section.astro` gives section headings no `id`, so in-page anchor links to a section do not resolve.
+
+### 2026-10-04 — Task: Point the README at epic planning and implementation
+
+**What was done**: Added an "Epics" paragraph to the README's How It Works section, after the `status` reference. It introduces "plan this epic" and "implement this epic", says independent specs run in parallel in their own worktrees and merge before their dependents, says a repeated request resumes, mentions the `run` view `status` adds for an epic, and links to the website's Epics page.
+
+**Deviations**: Added one sentence on the `status` run view, because this README section documents the `status` report.
+
+**Files changed**:
+- `spektacular: README.md`
 
 **Discoveries**: None.

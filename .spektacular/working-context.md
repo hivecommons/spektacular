@@ -47,3 +47,6 @@
 - Task 11 done.
 - Task 12 implemented: registered spek-plan-epic + spek-implement-epic in internal/agent skills.go/commands.go; appended '# When an orchestrator starts this skill' sections to spek-plan and spek-implement SKILL.md. Pinned-count agent tests need updating.
 - Task 12 done; Milestone 3 complete → milestone commit.
+- Task 13 implemented in docs repo: epics.mdx new section (surface=false) after Dependencies; CLI section flipped to surface; opening paragraph points to new section (no anchor: Section has no ids); description updated; CHANGELOG entry. build ok, astro check 0 errors (2 pre-existing hints), MDX guard clean, no em dashes. No Go tests per plan.
+- Task 13 done.
+- Task 14 done. All tasks ticked; Milestone 4 commit on advance to test_plan.
