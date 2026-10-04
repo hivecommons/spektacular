@@ -30,33 +30,33 @@ When an epic is planned with one request, the user gets a single summary documen
 -->
 ## Requirements
 
-- [ ] **A summary of the epic's plans is kept**
+- [x] **A summary of the epic's plans is kept**
   When planning an epic finishes, the system leaves one summary document for that epic. It holds a section for each spec planned, covering the approach, the milestones and tasks, any tasks needing a person, what is out of scope, and the drafting assumptions.
-- [ ] **Decisions come first**
+- [x] **Decisions come first**
   The summary document opens with the decisions the user needs to make, before any per-plan section.
-- [ ] **The summary can be read and updated**
+- [x] **The summary can be read and updated**
   Users and agents can read and update an epic's summary document.
-- [ ] **The review walks the summary**
+- [x] **The review walks the summary**
   The end-of-planning review presents the summary document. Any change the user asks for is applied to the affected plan and to the summary, so the two never disagree.
-- [ ] **Repeated planning keeps the summary current**
+- [x] **Repeated planning keeps the summary current**
   When planning an epic is repeated, the summary gains sections for newly planned specs and keeps the sections for specs planned before.
-- [ ] **Overlapping specs are ordered automatically**
+- [x] **Overlapping specs are ordered automatically**
   Two specs in the epic that change the same files, and have no ordering between them either directly or through other specs, are given a dependency without asking the user. The spec listed earlier in the epic goes first.
-- [ ] **Added dependencies are reported**
+- [x] **Added dependencies are reported**
   Each dependency added because of overlap is listed in the summary with the files the two specs share, so the user can see why and undo it during the review.
-- [ ] **Adding a dependency never re-plans**
+- [x] **Adding a dependency never re-plans**
   Ordering two specs because they overlap changes only the order they are implemented in; neither plan is re-planned.
-- [ ] **Contradicting the user's own decisions is a question**
+- [x] **Contradicting the user's own decisions is a question**
   Planning a spec stops to ask the user when its plan would contradict a decision the user recorded for that spec: in the spec, in a design it references, or, where they still exist, in the notes from writing it. During epic planning, the other specs carry on meanwhile.
-- [ ] **Contradicting the knowledge base is a question**
+- [x] **Contradicting the knowledge base is a question**
   Planning a spec stops to ask the user when its plan would contradict a knowledge entry. It is never left as a task for a person or a note for the review. During epic planning, the other specs carry on meanwhile.
-- [ ] **Cross-plan disagreements are gathered with a proposed answer**
+- [x] **Cross-plan disagreements are gathered with a proposed answer**
   When plans disagree on a project-wide rule, meaning a convention that governs files or practices more than one plan touches (such as how the changelog is kept), the summary's decisions name the disagreement, the plans involved, and one proposed answer.
-- [ ] **Settling a disagreement updates every plan**
+- [x] **Settling a disagreement updates every plan**
   When the user settles a cross-plan disagreement, every plan involved is updated to match, and the summary records the outcome.
-- [ ] **Single-spec planning is otherwise unchanged**
+- [x] **Single-spec planning is otherwise unchanged**
   Planning one spec on its own works as before, apart from the two questions above: it produces no summary document and changes no epic.
-- [ ] **Documentation**
+- [x] **Documentation**
   The public documentation's epic page describes the summary document, the automatic ordering of overlapping specs, and the questions raised while planning.
 
 <!--
@@ -90,21 +90,21 @@ When an epic is planned with one request, the user gets a single summary documen
 
 - [ ] **A summary of the epic's plans is kept**
   Plan an epic of three unplanned specs. When planning finishes, the epic has a summary document with exactly three per-plan sections, one for each spec. Each section names the approach, the milestones and tasks, any tasks needing a person (or says there are none), what is out of scope, and the drafting assumptions.
-- [ ] **Decisions come first**
+- [x] **Decisions come first**
   In the summary document, the decisions section appears before the first per-plan section. It is present, and says there are none, when there are none.
-- [ ] **The summary can be read and updated**
+- [x] **The summary can be read and updated**
   An epic's summary document can be read and rewritten through Spektacular. Asking for the summary of an epic that has none is refused with a message saying how to get one.
 - [ ] **The review walks the summary**
   During the review, ask for a change to one plan. Afterwards, both that plan and its section in the summary show the change.
 - [ ] **Repeated planning keeps the summary current**
   Plan an epic, stop after one spec is planned, then repeat the request. When it finishes, the summary has a section for every spec, and the first spec's section is unchanged.
-- [ ] **Overlapping specs are ordered automatically**
+- [x] **Overlapping specs are ordered automatically**
   Take an epic where independent specs A and B, with A listed first, both change the same file. After planning, the epic records that B depends on A, and the user was not asked. Specs that already have an ordering between them, directly or through another spec, gain no new dependency.
-- [ ] **Added dependencies are reported**
+- [x] **Added dependencies are reported**
   In the same epic, the summary lists the dependency added between A and B and names the shared file.
-- [ ] **An added dependency can be undone**
+- [x] **An added dependency can be undone**
   During the review, ask to remove the dependency added between A and B. Afterwards the epic no longer records it, and the summary shows it was removed.
-- [ ] **Adding a dependency never re-plans**
+- [x] **Adding a dependency never re-plans**
   In the same epic, A's and B's plans have the same content and created date before and after the dependency is added.
 - [ ] **Contradicting the user's own decisions is a question**
   Take a spec whose referenced design records choice X while one of its requirements pushes toward not-X. Planning puts a question to the user about it before that spec's plan is final. During epic planning, an independent spec keeps planning meanwhile.
@@ -114,7 +114,7 @@ When an epic is planned with one request, the user gets a single summary documen
   Take two specs in an epic whose plans keep the changelog differently, one editing it by hand and one treating it as generated. The summary's decisions section names the rule, both plans, and one proposed answer.
 - [ ] **Settling a disagreement updates every plan**
   After the user accepts the proposed answer, both plans follow it, and the summary marks the decision settled. Likewise, when the user picks a different answer instead, both plans follow the user's choice.
-- [ ] **Single-spec planning is otherwise unchanged**
+- [x] **Single-spec planning is otherwise unchanged**
   Planning one spec on its own produces no summary document and changes no epic. Its steps and questions are the same as before this change, apart from the two new questions.
 - [ ] **Documentation**
   The published epics page describes the summary document, the automatic ordering of overlapping specs, and the questions raised while planning.

@@ -29,3 +29,6 @@
 - Task 8 implemented: spek-plan-epic SKILL store rule (epic summary), DONE contract + rules, widened genuine question, Step 4 DONE writes section, new Step 6 order+decisions, Step 7 review walks summary, Step 8 report adds dependencies count. Test section names renumbered (Step 7 review, Step 8 report). Avoided new 'ask' words so the allowlist is unchanged.
 - Task 8 done. Milestone 3 commit on this advance. Next: task 9 docs repo.
 - Task 9 done (docs). All tasks ticked; Milestone 4 commit on advance to test_plan.
+- test-plan written (3 metrics + 9 live-agent procedures).
+- Feature changelogs written (project, spektacular, docs).
+- Spec reconciled: all 14 requirements [x]; 7/15 ACs [x]; live-agent ACs + published docs left open for the test plan.
