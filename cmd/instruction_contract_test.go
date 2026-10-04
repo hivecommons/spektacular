@@ -531,6 +531,30 @@ func TestEachWorkflowNamesWorkingContext(t *testing.T) {
 	}
 }
 
+// The epic skills drive no workflow of their own, so the per-workflow check
+// above does not reach them. They are still installed skills an agent reads:
+// pin that the rendered-surface corpus the contract checks walk includes both,
+// and that each names the working-context file it keeps its run notes in.
+func TestEpicSkillsAreInContractCorpusAndNameWorkingContext(t *testing.T) {
+	const command = "spektacular"
+	installDir := installClaudeInto(t, command)
+	corpus := workflowInstructionCorpus(t, command, installDir)
+
+	for _, skill := range []string{"spek-plan-epic", "spek-implement-epic"} {
+		label := filepath.Join(".claude", "skills", skill, "SKILL.md")
+		found := false
+		for _, src := range corpus {
+			if src.label == label {
+				found = true
+				require.Containsf(t, src.body, newWorkingContextPath,
+					"the installed %s skill must name %s", skill, newWorkingContextPath)
+				break
+			}
+		}
+		require.Truef(t, found, "the contract corpus must include the installed %s skill", skill)
+	}
+}
+
 // normalizeIndent strips leading whitespace from every line of s, so a block
 // included at an indent compares equal to the same block at column 0.
 func normalizeIndent(s string) string {

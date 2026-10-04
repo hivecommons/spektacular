@@ -796,7 +796,7 @@ A genuine open question from one spec is put to the user and the answer is sent 
 - Both skills are installed for every supported agent and pass the instruction contract checks.
 - A manual end-to-end run on a throwaway three-spec epic plans and then implements it from two requests, with no per-spec starts.
 
-#### - [ ] Task: Write the plan-this-epic skill
+#### - [x] Task: Write the plan-this-epic skill
 **Id:** 55a5dad7-fd89-428a-b86c-1c640865c6d1
 **Repo:** spektacular
 **Depends on:**
@@ -814,13 +814,13 @@ Write the `spek-plan-epic` skill. It works out which epic is meant, then loops o
 *Technical detail:* [context.md#task-write-the-plan-this-epic-skill](./context.md#task-write-the-plan-this-epic-skill)
 
 **Acceptance criteria**:
-- [ ] The skill is triggered by plain wording such as "plan this epic" as well as by the epic's name.
-- [ ] It plans only specs without a plan, in dependency order, with independent specs started together.
-- [ ] Its only user stops are genuine open questions from a spec and the end-of-planning review.
-- [ ] It defines a genuine open question, the hand-back contract with its subagents, and stop-on-failure behaviour.
-- [ ] Repeating the request after an interruption resumes in-progress plans and skips finished ones.
+- [x] The skill is triggered by plain wording such as "plan this epic" as well as by the epic's name.
+- [x] It plans only specs without a plan, in dependency order, with independent specs started together.
+- [x] Its only user stops are genuine open questions from a spec and the end-of-planning review.
+- [x] It defines a genuine open question, the hand-back contract with its subagents, and stop-on-failure behaviour.
+- [x] Repeating the request after an interruption resumes in-progress plans and skips finished ones.
 
-#### - [ ] Task: Write the implement-this-epic skill
+#### - [x] Task: Write the implement-this-epic skill
 **Id:** bc7be7b2-0add-4574-b7ed-8e46acf16832
 **Repo:** spektacular
 **Depends on:**
@@ -833,14 +833,14 @@ Write the `spek-implement-epic` skill. It works out which epic is meant and refu
 *Technical detail:* [context.md#task-write-the-implement-this-epic-skill](./context.md#task-write-the-implement-this-epic-skill)
 
 **Acceptance criteria**:
-- [ ] The skill is triggered by plain wording such as "implement this epic" as well as by the epic's name.
-- [ ] It implements nothing when any spec is unplanned or the dependencies are broken, and names the problem.
-- [ ] Each independent spec is implemented in its own worktree at the same time as the others, and is merged back before its dependents start.
-- [ ] A merge conflict stops the run and is shown to the user, not resolved silently.
-- [ ] It asks for no input between specs unless a genuine question or failure arises.
-- [ ] Repeating the request resumes in-progress specs in their worktrees and skips implemented ones.
+- [x] The skill is triggered by plain wording such as "implement this epic" as well as by the epic's name.
+- [x] It implements nothing when any spec is unplanned or the dependencies are broken, and names the problem.
+- [x] Each independent spec is implemented in its own worktree at the same time as the others, and is merged back before its dependents start.
+- [x] A merge conflict stops the run and is shown to the user, not resolved silently.
+- [x] It asks for no input between specs unless a genuine question or failure arises.
+- [x] Repeating the request resumes in-progress specs in their worktrees and skips implemented ones.
 
-#### - [ ] Task: Install the epic skills and teach the per-spec skills about orchestration
+#### - [x] Task: Install the epic skills and teach the per-spec skills about orchestration
 **Id:** 153eff91-88c7-43b3-8ecb-23cb093be6a0
 **Repo:** spektacular
 **Depends on:**
@@ -853,9 +853,9 @@ Register both epic skills, so that `init` and `migrate` install them for Claude,
 *Technical detail:* [context.md#task-install-the-epic-skills-and-teach-the-per-spec-skills-about-orchestration](./context.md#task-install-the-epic-skills-and-teach-the-per-spec-skills-about-orchestration)
 
 **Acceptance criteria**:
-- [ ] A freshly initialised project has both epic skills installed for every supported agent.
-- [ ] The plan and implement skills explain what changes when an orchestrator starts them, and are otherwise unchanged.
-- [ ] Every installed skill still passes the instruction contract checks.
+- [x] A freshly initialised project has both epic skills installed for every supported agent.
+- [x] The plan and implement skills explain what changes when an orchestrator starts them, and are otherwise unchanged.
+- [x] Every installed skill still passes the instruction contract checks.
 
 ### Milestone 4: Planning and implementing an epic is documented
 
@@ -1160,5 +1160,57 @@ Planning ignores dependencies outside the epic and dependencies between specs on
 - `spektacular: internal/status/pretty.go`
 - `spektacular: cmd/status.go`
 - `spektacular: cmd/status_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-04 — Task: Write the plan-this-epic skill
+
+**What was done**: Added `templates/skills/workflows/spek-plan-epic/SKILL.md`. Its description triggers on "plan this epic", "plan the epic", "plan <epic name>" and "plan all the specs in this epic". The skill:
+- finds the epic, then loops on `status <epic> --format json` (`run.plan`);
+- starts a child running the standard `spek-plan` skill as an orchestrated run for every ready spec, resumes in-progress ones, skips done ones and lets blocked ones wait;
+- defines the child prompt (spec, project root, the orchestrated `plan new`, the store-access rule), the `DONE:`/`QUESTION:`/`FAILED:` hand-back contract and what a genuine open question is;
+- relays questions while other children keep going, and enters stopping mode on a failure or a declined question;
+- reports progress after each change, and ends with an end-of-planning review applied through `plan file write` and a completed/skipped/outstanding report.
+
+**Deviations**: A child resumes through the same orchestrated `plan new`, whose resume report names the lane's notes and the `goto` to run. Building the lane path by hand would sidestep the CLI. A child waiting on a question counts as running, so a spec never gets two children. The open question about subagent continuation is handled with the planned fallback: restart a child on the same spec with the answer, which resumes its lane.
+
+**Files changed**:
+- `spektacular: templates/skills/workflows/spek-plan-epic/SKILL.md`
+- `spektacular: templates/plan_epic_skill_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-04 — Task: Write the implement-this-epic skill
+
+**What was done**: Added `templates/skills/workflows/spek-implement-epic/SKILL.md`. Its description triggers on "implement this epic", "build the epic" and "implement <epic name>". The skill:
+- refuses up front, implementing nothing, when `status` reports a problem that blocks implementing, and relays each problem;
+- asks once about uncommitted work when `dirty`;
+- loops on `run.implement`. For each ready spec it creates the worktrees with `epic worktree` and starts a child running the standard `spek-implement` skill as an orchestrated run in the returned project worktree. It resumes in-progress specs in their worktree and merges `awaiting_merge` and finished specs with `epic merge` before their dependents start;
+- on `epic_merge_conflict`, or any other worktree or merge refusal, shows it to the user and stops;
+- shares the planning skill's hand-back contract, question relay, stopping mode and progress line;
+- ends with a completed/skipped/outstanding report that also lists any worktrees left behind.
+
+**Deviations**: Also says what happens when the user declines to commit uncommitted work: the run goes ahead, and that work is not in the worktrees.
+
+**Files changed**:
+- `spektacular: templates/skills/workflows/spek-implement-epic/SKILL.md`
+- `spektacular: templates/implement_epic_skill_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-04 — Task: Install the epic skills and teach the per-spec skills about orchestration
+
+**What was done**: Registered `spek-plan-epic` and `spek-implement-epic` in `workflowSkills` and `workflowDescriptions`, so `init` and `migrate` install them for Claude, Bob (with command wrappers) and Codex. Appended a "When an orchestrator starts this skill" section to the `spek-plan` and `spek-implement` skills. It covers starting with `"orchestrated":true`, the `name` on every goto, handing questions back as `QUESTION:`, and ending with `DONE:` or `FAILED:`. For the plan skill it adds that the walkthrough prepares a summary instead of asking for sign-off; for the implement skill, that tasks run without asking between them. Tests that pin the skill list now expect eight skills, and new tests check installation for every agent, the new sections, and the epic skills' place in the contract corpus.
+
+**Deviations**: The orchestrator sections go at the end of each skill, so the existing pinned text is untouched.
+
+**Files changed**:
+- `spektacular: internal/agent/skills.go`
+- `spektacular: internal/agent/commands.go`
+- `spektacular: templates/skills/workflows/spek-plan/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: internal/agent/agent_test.go`, `internal/agent/claude_test.go`, `internal/agent/bob_test.go`, `internal/agent/codex_test.go`
+- `spektacular: cmd/init_test.go`, `cmd/migrate_test.go`, `cmd/instruction_contract_test.go`
+- `spektacular: templates/orchestrated_skill_section_test.go`
 
 **Discoveries**: None.

@@ -170,7 +170,7 @@ func TestInit_InstalledSkillsCarryUpgradePreamble(t *testing.T) {
 	rootCmd.SetArgs([]string{"init", "claude"})
 	require.NoError(t, rootCmd.Execute())
 
-	for _, skill := range []string{"spek-new", "spek-plan", "spek-implement", "spek-knowledge", "spek-manage-repos"} {
+	for _, skill := range []string{"spek-new", "spek-plan", "spek-implement", "spek-knowledge", "spek-manage-repos", "spek-plan-epic", "spek-implement-epic"} {
 		data, err := os.ReadFile(filepath.Join(dir, ".claude", "skills", skill, "SKILL.md"))
 		require.NoError(t, err)
 		body := string(data)
@@ -261,6 +261,67 @@ func TestInit_Codex(t *testing.T) {
 	require.NoDirExists(t, filepath.Join(dir, ".agents", "commands"))
 	require.NoDirExists(t, filepath.Join(dir, ".claude"))
 	require.NoDirExists(t, filepath.Join(dir, ".bob"))
+}
+
+// A freshly initialised project carries both epic skills for every supported
+// agent, rendered with the configured command, and Bob additionally gets a
+// command wrapper for each carrying the skill's description.
+func TestInit_InstallsEpicSkillsForEveryAgent(t *testing.T) {
+	// Each epic skill's own trigger phrase, from its description, proves the
+	// right template landed under the right name.
+	epicSkills := map[string]string{
+		"spek-plan-epic":      "plan this epic",
+		"spek-implement-epic": "implement this epic",
+	}
+	skillRoots := map[string]string{
+		"claude": ".claude/skills",
+		"bob":    ".bob/skills",
+		"codex":  ".agents/skills",
+	}
+	for agentName, root := range skillRoots {
+		t.Run(agentName, func(t *testing.T) {
+			resetRootCmd(t)
+			dir := t.TempDir()
+			t.Chdir(dir)
+
+			rootCmd.SetArgs([]string{"init", agentName})
+			require.NoError(t, rootCmd.Execute())
+
+			for skill, phrase := range epicSkills {
+				skillPath := filepath.Join(dir, filepath.FromSlash(root), skill, "SKILL.md")
+				data, err := os.ReadFile(skillPath)
+				require.NoError(t, err, "init %s must install %s", agentName, skillPath)
+				body := string(data)
+				require.Contains(t, body, phrase, skillPath)
+				require.Contains(t, body, "spektacular status <epic> --format json",
+					"%s must be rendered with the configured command", skillPath)
+				require.NotContains(t, body, "{{", "%s must carry no unrendered placeholder", skillPath)
+			}
+		})
+	}
+
+	t.Run("bob wrappers", func(t *testing.T) {
+		resetRootCmd(t)
+		dir := t.TempDir()
+		t.Chdir(dir)
+
+		rootCmd.SetArgs([]string{"init", "bob"})
+		require.NoError(t, rootCmd.Execute())
+
+		wrappers := map[string]string{
+			"spek-plan-epic":      "description: Plan every outstanding spec of an epic, side by side in dependency order.",
+			"spek-implement-epic": "description: Implement every planned spec of an epic, each in its own worktrees, in dependency order.",
+		}
+		for skill, desc := range wrappers {
+			cmdPath := filepath.Join(dir, ".bob", "commands", skill+".md")
+			data, err := os.ReadFile(cmdPath)
+			require.NoError(t, err, "init bob must install the %s command wrapper", skill)
+			body := string(data)
+			require.Contains(t, body, desc, cmdPath)
+			require.Contains(t, body, "`"+skill+"` skill", cmdPath)
+			require.NotContains(t, body, "{{", "%s must carry no unrendered placeholder", cmdPath)
+		}
+	})
 }
 
 func TestInit_InvalidAgent(t *testing.T) {

@@ -132,3 +132,12 @@ To start without committing them:
 - `false` starts the workflow without committing, so the workflow's own automatic commits will include that work alongside the agent's.
 
 Never choose for the user, and never guess from context which they would want — the whole point of the report is that their uncommitted work is about to be swept into a commit they did not make. If the commit fails (`code: auto_commit_failed`), tell them which repository failed and the reason git gave; the workflow has not started.
+
+# When an orchestrator starts this skill
+
+The `spek-implement-epic` skill implements a whole epic by starting one agent per spec, each running this skill in the spec's own worktree. If you were started that way, your prompt says so, and four things change:
+
+- Start with `{{command}} implement new --data '{"name":"<spec_name>","orchestrated":true}'`, from the worktree you were given. The run keeps its own progress record and notes in a lane and skips the uncommitted-changes question. Running the same command again resumes the lane.
+- Every `goto` carries `"name":"<spec_name>"`, exactly as the instructions print it.
+- Never ask the user anything yourself, and never ask whether to continue between tasks: tasks run one after another. Hand each genuine question back to your orchestrator as a final message whose first line is `QUESTION: <spec_name>`, and wait for its answer.
+- End the run with `DONE: <spec_name>` and the completion summary, or with `FAILED: <spec_name>` and the reason.

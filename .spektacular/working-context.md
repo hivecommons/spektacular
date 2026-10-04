@@ -41,3 +41,9 @@
 - Task 8 done: fixed dirtyOverlap (gitexec trims leading space of porcelain) found by tests; verified (29 pkgs); ticked + changelog.
 - Task 9 implemented: internal/status/run.go — RunSource{ProjectRoot, Worktrees, StoreAt, Touched, Dirty} on Options.Run (nil → no run view; only cmd/status.go sets it, and only when a name is given); SpecStatus.Run{Plan,Implement RunPart}, EpicStatus.Run{Order, Plan/Implement RunCounts, Dirty, Problems}. planDone = final plan + no plan workflow (lane or shared); implDone = implemented + final changelog + no implement workflow + no worktree; worktree w/ live lane → in_progress(root=worktree project); worktree finished per worktree store → awaiting_merge; worktree w/o lane unfinished → in_progress w/o step. Problems order: cycle, outside, unplanned; all blocks [implement]. Planning ignores outside deps and cycle-mate deps. Pretty prints planning/implementing counts + problems under epic header. Schema updated.
 - Task 9 done (awaiting_merge count always emitted); Milestone 2 complete → milestone commit.
+- Task 10 implemented: templates/skills/workflows/spek-plan-epic/SKILL.md written (not yet registered — task 12). Draft of spek-implement-epic in scratchpad/spek-implement-epic.md.
+- Task 10 done (skill text fixes: resume via orchestrated plan new, waiting child counts as running, read notes on repeat, docs named).
+- Task 11 implemented: templates/skills/workflows/spek-implement-epic/SKILL.md (same fixes as plan-epic).
+- Task 11 done.
+- Task 12 implemented: registered spek-plan-epic + spek-implement-epic in internal/agent skills.go/commands.go; appended '# When an orchestrator starts this skill' sections to spek-plan and spek-implement SKILL.md. Pinned-count agent tests need updating.
+- Task 12 done; Milestone 3 complete → milestone commit.
