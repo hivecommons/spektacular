@@ -1,181 +1,56 @@
-# Working context: 000060_epics-and-seeded-specs
+# Working context: 000061_version-check-upgrades-install
 
 ## Problem and motivation
 
-- GitHub #55: oversized requests produce specs with acceptance criteria too thin to build from;
-  implementing agents fill the gaps with assumptions. Offer to split into an epic.
-- GitHub #56: teams already write work up as issues/epics/design docs. Starting a spec from one only
-  works with careful phrasing; nothing records where content came from.
-- The spec is built to the design document `design/epics-and-seeded-specs.md` (source `design`,
-  draft, committed by the user). The spec should reference it, not copy it.
+- Today `version check` (run first by every skill) only reports a status (`match`, `upgrade_needed`, `mismatch`,
+  `missing`, `unsupported_format`) plus an `action` telling the agent to "ask the user to run `migrate`"
+  (`cmd/version.go:96`). Skills say "never run migrate or init". Meanwhile the gate (`cmd/gate.go`) refuses every
+  command except `migrate`, `init` and `version check` with `upgrade_required`.
+- User: "if it is the responsibility of the user to call this then it will never be used. We already check the version
+  I don't understand why we don't just execute the migrate step as part of this process."
+- The upgrade itself is already safe unattended: `migrate.Apply` is idempotent, keeps a `.vN.old` backup, refuses a
+  newer format; `migrate` also reinstalls the recorded agent's skills and managed AGENTS.md sections (skipped for `dev`).
+- `init <agent>` already runs `migrate.Apply` first, then scaffolds, sets agent, always reinstalls skills, and rewrites
+  the whole config.yaml via ToYAMLFile (reformats, drops comments).
 
-## Decisions from the design conversation (this session)
+## Decisions (user's words in quotes)
 
-- **One standalone spec, existing method.** User: "we should follow the existing method until this
-  spec has been implemented" — no epic/split used to specify this work itself.
-- **Split triggers** (now in the design, `### Split triggers`): a gate (agent must be able to name
-  ≥2 specs, each with its own independently verifiable AC), strong signals (any one), weak signals
-  (two or more), counter-signals, and "supporting work never counts".
-  - User's concern that prompted the supporting-work rule: "if I created an update which would also
-    update the docs, this would automatically create an epic?" → No. Code + its docs is one spec.
-    Surfaces/repos removed as signals; they matter only via independence.
-  - Nothing is ever automatic: always an offer; re-offer after decline only on a new strong signal
-    or new independent requirement group.
-- **Seeding is a prompt/skill concern, not a CLI feature.** User: "I don't really see why we need
-  cli commands here, this is a prompt issue" and "we really need more an instruction in the skill
-  on how to progress with this process".
-  - Skill: recognise a source however phrased, fetch, check child items (offer split), propose a
-    name, `spec new --data '{"name":…,"sources":[{"uri":…}]}'`.
-  - Interview step: seed work files from the source, list gaps, ask only about gaps; later steps
-    confirm drafts. Lives in the step so it survives resume.
-  - CLI's only part: accept `sources` on `spec new`, stamp `retrieved_date`, write to frontmatter.
-    `sources` must be added to closed `yamlShape` and `UpdateOptions`.
-- **Tool-agnostic fetching.** User: "we should not be specific about what tool or process is used to
-  fetch or read the issue, the agent should use its own tools … it could be a linear issue".
-  Design names what to collect (title, body, discussion, child items, stable URI), not how.
+1. Version check asks one question: do this project's config, agent files and skills match the current binary version?
+   "upgrade_needed should be gone from version_check, we should just check does the current config agent file and
+   skills match the current binary version." `upgrade_needed`/`mismatch`/`missing` collapse to one out-of-date result.
+2. A `dev` build always passes the version check: "That is a developer problem not the user and I think it is ok."
+3. When out of date, the agent asks the user one question: "Theoretically this is a simple question to the user, would
+   you like me to update your config..." On yes the agent runs `init <recorded agent>` and carries on; on no the skill
+   stops. Remove every migrate/init instruction from the skills: "Really we should not have any migrate commands in
+   the skill, this should be part of version check."
+4. The refusal stays: "we should not allow any action other than a version check when the config and skills are not
+   matching the binary." (`init` must also still run, being the upgrade path.) Its next_action names them, not migrate.
+5. `migrate` is removed: "we get rid of migrate, init should do everything migrate does". `init` performs the upgrade
+   "because someone may install the new binary and just init". `init` keeps requiring an agent argument: "if the user is
+   calling init then they will get prompted to specify the agent"; the agent passes the one recorded in config.yaml.
+6. Upgrades happen only at a version check, never inside a step: "You should never upgrade mid workflow" / "Mid workflow
+   you are not calling version check so migration would not be triggered". BUT upgrading on resume is required: "We
+   implement a spec, get to requirements and pause. The user updates the spektacular binary and then resumes the
+   workflow. If spektacular binaries commands have changed but the skills have not then the resume process will not
+   work ... So it is probably safer to do the check and upgrade with every version check".
+7. Paused workflow state (state.json current step/data) should be validated against the new version's workflow steps;
+   a step that no longer exists is refused with a clear next action. (Proposed by agent, not objected to.)
+8. A project written by a newer Spektacular is still refused (install the newer version). Assumed; user did not object.
 
 ## Alternatives rejected
 
-- `spec new --from <issue-url>` / `--file <staged source>` + `source` in workflow state: rejected —
-  CLI stays network-free and seeding needs no CLI surface beyond `sources`.
-- Counting surfaces/repos as split signals: rejected — false positives on code+docs changes.
+- User runs `migrate` manually (status quo): "it will never be used".
+- Holding back the upgrade while a workflow is paused: breaks resume after a binary update (decision 6).
+- `version check --upgrade` flag as the upgrade command: rejected in favour of `init`.
+- Treating `dev` as never matching / content-hash comparison: rejected, dev always matches.
 
-## Open items carried from the design
+## Plan-level notes (not spec content)
 
-- Open decisions 1–7 in the design (closing an epic, naming after split, `status --spec-only`,
-  splitting late, chaining beyond specify, detection before a spec exists, detection late).
-- Deferred to the spec: detection sensitivity (`epic_split_threshold` favoured), `epic split` input
-  format, source text snapshot/hash, posting back to source, implement wording, PR #65.
+- `init` should adopt migrate's targeted settings edits + backup rather than rewriting the whole config.yaml.
+- Convention now in knowledge: conventions/plans-never-change-the-active-install.md — this spec's plan must not
+  migrate/re-init this repo; verify with go test and throwaway projects. This repo now uses `command: spektacular`.
 
 ## Repos
 
-- `spektacular` (tool, Go CLI) and `docs` (spektacular-website, Astro docs site, root
-  /home/nicj/code/github.com/hivecommons/spektacular-website).
-
-## User preferences seen this session
-
-- Never commit unless explicitly asked (now in ~/.claude/CLAUDE.md). Project has `auto_commit: full`;
-  user committed the design themselves before the workflow started.
-
-## Interview answers (spec 000060)
-
-- Scope: everything in the design, one spec, one release ("I am going to create a release which
-  contains all this anyway"). Docs-site updates are in scope.
-- Epic done: "once all the related specs milestones are done" → derived from plans.
-- "We should be able to split an existing spec."
-- Detection only when creating a spec; prompt "once the spec is done", "unless you explicitly
-  instructed". AGENTS.md spec-trigger stays the same.
-- Child items: present before split → epic + specs set up instead; added after an epic exists →
-  suggest separate specs in that epic.
-- Design updated to match (## Decisions); design ref recorded on the spec.
-- Overview, requirements, ACs, constraints, technical approach all confirmed by the user ("ok") as drafted.
-- Tech approach defaults confirmed: no source snapshot, no post-back, PR #65 separate.
-- Non-goals to include: AGENTS.md spec-trigger unchanged; plans stay 1:1 with specs.
-
----
-
-# Plan workflow: 000060_epics-and-seeded-specs (started 2026-10-01)
-
-- Spec chosen by the user: 000060_epics-and-seeded-specs. User committed pending changes themselves
-  before `plan new` (no commit_existing flag needed).
-- Spec references design `design` / `epics-and-seeded-specs.md` — binding; architecture builds on it.
-- Success metrics to carry into Testing Approach: (1) seeded spec asks only gap questions,
-  (2) code+docs/tests/config never gets a split offer, (3) one status command shows whole epic.
-
-## Plan discovery learnings (2026-10-01)
-
-- Repos: spektacular (Go CLI) and docs (website). Research saved to .spektacular/work/000060_epics-and-seeded-specs/research.md.
-- Key calls: separate `internal/epic` frontmatter type (shared Metadata.Specs clashes); hand-written
-  `epic` verbs like `cmd/design.go`; schema bump 3->4 with `project3to4` (spec AC demands migration);
-  `split` step on the linear path verification -> split -> finished, also reachable from section
-  steps; split text in partials shared with spek-new skill; implement dependency check refuses with
-  `dependencies_unmet`, override by re-run with `override_dependencies: true`; stub = unclosed
-  draft not in active workflow; epic named after its first spec.
-- Self-hosting trap: after schema bump, this repo needs `go run . migrate` (ask user first).
-- Drafted sections saved in work dir: research, architecture, conventions, components, data_structures,
-  implementation_detail, dependencies, testing_approach, milestones, tasks_plan, tasks_context, assumptions.
-- 19 tasks / 4 milestones; ids from `plan task-id` are in tasks_plan.md (do not regenerate).
-- 2026-10-01: plan.md, context.md, research.md committed to the plan store; work dir removed. Now in walkthrough.
-- Walkthrough (2026-10-01), user decisions applied to spec, design and plan:
-  - splits always act on a complete spec (a mid-workflow request waits for completion) and write complete `final` specs via `epic split` (all sections in the JSON); no stubs, no continuing stubs;
-  - work that starts as items goes epic-first: `epic write` with no specs, then `spec new` with `epic` + `sources` per child; chaining = offer the next source item with no spec;
-  - when starting a spec and epics exist, ask about joining one, then read the epic and its specs;
-  - adding to a completed epic needs confirmation (`epic_complete`, `confirm_completed_epic`); completion stays derived;
-  - the user wants `epic split` kept as one command (reliability over agent-composed steps).
-- New task 9cdca194 "Guard additions to a completed epic"; task 31c5ced7 retitled "Start a spec with sources or in an epic".
-
----
-
-# Implement workflow: 000060_epics-and-seeded-specs (started 2026-10-01)
-
-- read_plan: structure valid, spec fully covered, first-task run (no `## Changelog` yet).
-- Drift found; user chose "proceed, adapt during implementation":
-  - Extra hard-coded `schema: 3` fixtures to sweep in the migrate task: cmd/version_test.go:198,214,246;
-    internal/config/config_test.go:812,1081,1096,1142; internal/config/repo_test.go:35;
-    internal/design/design_test.go:247; internal/project/init_test.go:309,409;
-    internal/migrate/engine_test.go:190,273,406 (2->3 step tests may stay).
-  - docs configuration.mdx currently says "Fourteen top-level keys" -> becomes Sixteen.
-  - 08-verification.md uses `{{next_step}}`; only Go step order changes.
-  - Knowledge entry architecture/working-with-files-from-steps.md:183 mentions `spec status` — update via spek-knowledge (offer to user) in the status-command task.
-- auto_commit: full in this project; the CLI commits at workflow points. Never commit by hand.
-- User chose "run without asking": loop tasks automatically; still stop on failures, drift, human tasks, decisions.
-- Helper scripts (session scratch, recreate if lost): tick.py ticks a task + its ACs; addlog.py appends a changelog entry.
-- Task 1 (depgraph) done 2026-10-01.
-- Tasks 2-6 done 2026-10-01 (metadata epic/sources, epic config, internal/epic, epic commands + docTxn link writer, epic split).
-- Task 7 (schema bump to 4 + project3to4) in progress. Workflow is driven with a pre-bump binary:
-  /tmp/claude-1000/-home-nicj-code-github-com-hivecommons-spektacular/511e649f-2bdc-4441-8428-ca3119c7190d/scratchpad/spek-prebump
-  (session scratch; if lost, `git stash` is NOT acceptable — instead ask the user to run the human migrate task).
-  Next task 99ad63fd is human: user reviews `go run . migrate --dry-run` and approves `go run . migrate`.
-- 2026-10-01 user: "I will run everything myself, but please go ahead and complete the code."
-  -> Do NOT run `migrate`, `init`, harbor, or advance the workflow FSM past the human task (advancing triggers auto_commit).
-  -> Implement + test + verify each remaining agent task; tick it and append its changelog entry via
-     `plan file write` with the pre-bump binary (no FSM transition). Human tasks stay unticked for the user.
-  -> Workflow state is parked at update_changelog/analyze before task 99ad63fd (human migrate).
-  -> Skill copies (.claude/skills, .bob/skills) and this repo's AGENTS.md managed sections need `init` — user runs it.
-- Recorded (ticked + changelog): 31c5 spec new sources/epic, e343 status report, bf23 split step.
-- Docs tasks 56ba (epics page) and b949 (seeding/settings) written in docs repo (uncommitted, on main), build+astro check green;
-  NOT yet recorded: reconcile the `dependencies_unmet` JSON sample in docs epics.mdx with the real CLI message after 0a3c lands.
-- Guard 9cdc code written (refuseCompletedEpic in cmd/epic_link.go; wired into epic write / epic split / spec new); tests pending.
-- 2026-10-01: ALL agent tasks implemented, tested, verified (go test ./... green x2; docs build + astro check green) and recorded
-  (ticked + changelog entries) via plan file write. Remaining unchecked: 99ad63fd (human: migrate this repo's config) and
-  e4194c32 (human: run harbor suites). No git commits made; docs repo changes are uncommitted on its main branch.
-- To resume once the user has run `go run . migrate`: `go run . implement goto --data '{"step":"analyze"}'` picks up the
-  human migrate task (tick it), then harbor (tick after the user runs it), then test_plan, update_feature_changelog,
-  reconcile_spec, finished. Auto-commit fires at milestone boundaries when the FSM advances.
-- Still for the user: `go run . init` to regenerate .claude/.bob skill copies and AGENTS.md managed sections (restore
-  agent/written_by/skills_version in config.yaml afterwards); knowledge entry architecture/working-with-files-from-steps.md:183
-  mentions retired `spec status` (offered via spek-knowledge).
-
----
-
-# Next spec (to start after 000060 finishes): version check upgrades the install
-
-User asked to create this spec (2026-10-02). Settled in conversation; seed every spec step from this and ask the user to confirm:
-
-- Problem: today `version check` only reports (`upgrade_needed` / `mismatch` / `missing` / `unsupported_format`) and every skill
-  hands the user "run `migrate`". If it's the user's job it will never be done. The upgrade code (`migrate.Apply` + agent
-  reinstall) is already safe to run unattended (idempotent, `.vN.old` backup, refuses newer format).
-- Decisions (user):
-  1. Version check asks one question: were this project's settings, agent files and skills written by the current binary?
-     `upgrade_needed`/`mismatch`/`missing` collapse into one "out of date" result. A `dev` build always matches
-     ("a developer problem, not the user's").
-  2. When out of date the agent asks the user ONE question ("update your settings and skills?"); on yes it runs
-     `init <recorded agent>` and carries on with the skill; on no the skill stops. No skill tells the user to run a command;
-     remove all migrate/init instructions from skills.
-  3. The CLI keeps refusing every command except the version check and `init` until updated (`upgrade_required`), with a
-     next_action naming them, not `migrate`.
-  4. `migrate` command is removed; `init` does everything migrate did (it already calls migrate.Apply). `init` keeps
-     requiring an agent; the agent passes the one recorded in config.yaml; a person names it.
-  5. Upgrades happen only at a version check (skill start, including resume), never inside a step. Upgrading on resume is
-     required: a user who installs a new binary mid-workflow and resumes needs skills matching the binary.
-  6. A paused workflow's state.json is validated against the new version's steps; a missing/renamed step is refused with a
-     clear next action.
-  7. A project written by a newer Spektacular is still refused (install the newer version) — assumed, user did not object.
-- Plan-level notes (not spec): init should use migrate's targeted settings edits + backup rather than rewriting the whole
-  config.yaml (ToYAMLFile drops comments/reformats); skills install regardless of version when init runs.
-- Related convention now in knowledge: conventions/plans-never-change-the-active-install.md (this spec's plan must not
-  migrate/re-init this repo; verify with go test + throwaway projects).
-- 2026-10-02: user migrated + init'd, set command: spektacular (installed via make install-local); spec-workflow harbor
-  passed (48/48); plan/implement harbor suites not run (in test plan). Milestone commits made via the FSM.
-  Test plan, project + spektacular + docs changelog records written; spec reconciled (56 ticked; 15 live-agent ACs left
-  unticked pending the manual runs in the test plan). Run finished next; then start the version-check spec (see above).
+- spektacular (CLI, skills, templates) and docs (spektacular-website: documents migrate/version check — likely needs
+  updating; ask in interview).
