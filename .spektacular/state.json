@@ -1,13 +1,23 @@
 {
   "kind": "spec",
-  "current_step": "overview",
+  "current_step": "finished",
   "completed_steps": [
     "new",
-    "interview"
+    "interview",
+    "overview",
+    "requirements",
+    "acceptance_criteria",
+    "constraints",
+    "technical_approach",
+    "success_metrics",
+    "non_goals",
+    "verification",
+    "split",
+    "finished"
   ],
-  "created_at": "2026-10-02T07:46:55.171610896Z",
-  "updated_at": "2026-10-02T07:59:10.990387109Z",
+  "created_at": "2026-10-04T05:40:02.412224667Z",
+  "updated_at": "2026-10-04T07:38:05.127426882Z",
   "data": {
-    "name": "000061_version-check-upgrades-install"
+    "name": "000062_epic-plan-and-implement"
   }
 }
