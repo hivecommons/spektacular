@@ -1,55 +1,27 @@
-# Working context — implement 000062_epic-plan-and-implement
+# Working context — spec 000063_epic-planning-summary-and-reordering
 
 ## Origin
-- Implement workflow started 2026-10-04 for `000062_epic-plan-and-implement` (user picked it).
-- Repo roots: spektacular → /home/nicj/code/github.com/hivecommons/spektacular; docs → /home/nicj/code/github.com/hivecommons/spektacular-website.
-- Binding design: `design:epics-and-seeded-specs.md`.
+- Came out of the user's first real run of "plan this epic" (from 000062) on their xcl project's 5-spec epic `references-and-secrets` (auto_commit off there).
+- The run produced 5 final plans with no mid-run questions, but the end-of-planning review exposed problems:
+  - Two independent specs (references-as-written, user-depends-on) both change `configuration-text.mdx` and `encode.go`, and the epic did not order them, so implementing them in parallel would conflict at merge.
+  - Plans disagreed on a project-wide rule (CHANGELOG.md hand-edited vs generated). The user is "not sure what is going on with changelog" (that is the xcl repo's own question, not Spektacular's).
+  - A plan departed from an interface the user had chosen, and another contradicted a binding knowledge entry. Both surfaced only in the review, not as questions during the run.
+  - The review output in chat was dense and garbled (wrapped, truncated lines), with the decisions buried after five summaries.
 
-## Decisions / answers
-- Task 1 (Restore a compiling build): duplicate installerFor removed from cmd/migrate.go; build compiles.
-- Task 1 test step: no new tests (context.md says the existing suite is the test).
-- Task 1 verify: go test -shuffle=on . ./cmd/... ./internal/... ./templates/... all green (27 pkgs). Use this package list; `go list ./...` fails on tests/harbor perms.
-- Task 1 ticked in plan.md (heading + criterion).
-- Task 1 changelog entry written. USER SAID: run without asking — loop between tasks automatically (still STOP on genuine mismatches/failed verification).
-- read_plan: structure valid (10 sections, 13 tasks across 4 milestones, all context links resolve).
-- Drift: none material. `internal/autocommit/git_test.go` is a new file to create; minor line shifts (e.g. workflowDescriptions at commands.go:18).
-- Spec coverage: all requirements and acceptance criteria covered; no descoped items.
-- Changelog mode: first-task (no `## Changelog` in plan yet).
-
-## Learnings
-- `go build ./...` trips on permission-denied tests/harbor/jobs; build named packages (`go build ./cmd/... ./internal/...`).
-- Never re-init/migrate this repo or `go run .` to drive a workflow; verify with go test + throwaway projects.
-- Task 2 (lanes) implemented: lane path helpers placed in internal/workflow/lane.go now (LaneStatePath/LaneNotesPath/LaneStateRel/LaneNotesRel/ReadLane/LaneNames) instead of moving them there in task 6; cmd/workflow_slot.go has workflowSlot, resolveGotoSlot, workflowNotFound, refuseLaneInProgress, orchestratedStart.
-- goto routing: no name → shared; lane exists → lane; shared same kind+name → shared; shared other kind → shared (guardKind reports as before); else workflow_not_found.
-- Standalone new refused (workflow_in_progress) while a lane for that spec is in progress, even with --force; next_action offers lane goto or `new --force` with orchestrated.
-- Task 2 done: verified green, ticked, changelog entry written. Lane-unaware instructions are tasks 3/4 scope.
-- Task 3 implemented: 31 template gotos carry "name":"{{plan_name}}"; plan/implement scratch paths → .spektacular/tmp/{{plan_name}}/...; autocommit.MessageTmpPath(name) shared by stepkit + cmd (per-name commit msg for ALL kinds incl. spec; name in goto only for plan/implement via commit.goto_name); Workflow.gotoData adds name to engine hints for plan/implement; resume templates get goto_name, notes_path (lane notes when orchestrated) and orchestrated --force data; resumeInstruction gained an `orchestrated bool` param.
-- autocommit has git_integration_test.go (not git_test.go) — use it for CommitPaths tests in task 5.
-- Task 3 done: verified green (27 pkgs), ticked, changelog written.
-- Task 4 implemented: stepkit exposes `orchestrated` + `working_context_path` (lane notes when orchestrated) vars; footer uses {{working_context_path}}; new partials/orchestrated-stop.md auto-appended by stepkit to every step of an orchestrated workflow (DEVIATION: one appended section instead of including a partial at each STOP); walkthrough/finished (plan), 07 loop + 12-finished (implement), resume prompts have {{#orchestrated}} branches; standalone renders verified byte-identical.
-- Task 4 done: verified green, ticked, changelog written (incl. fixes for hardcoded working-context in 13-assemble + implement-plan-documents partial w/ fallback, step 2b orchestrated, task-run DONE).
-- Task 5 implemented: autocommit.Git.CommitPaths (filters paths to existing-or-tracked; add -A -- paths; skip if nothing staged; commit -F - --only -- paths); autocommit/lock.go AcquireLock(dataDir) at .spektacular/workflows/.commit.lock (30s timeout, 10m stale); cmd/autocommit.go: orchestrated lanes removed on reaching finished (both no-commit and commit paths, before commit), plan lane commits via commitPlanLane (plan store dir, work/<name>, tmp/<name>, lane json+md) under lock; restore also restores lane notes.
-- Existing test TestOrchestratedPlanFinishesWithoutSignOff expects lane at finished — must change to expect lane removed.
-- Task 5 done: fixed CommitPaths retry bug (HEAD-only paths) found by tests; verified green; ticked + changelog.
-- Task 6 implemented: status.Options.Lane func(kind,name)*State (wired in cmd/status.go only; dependency-check call sites leave it nil); currentStep(opts,...) checks shared then lane; matchingWorkflow falls back to the first in-progress lane (WorkflowInfo.Orchestrated). Session log: snapshotStatePath(argv) picks lane for orchestrated `new` or `goto` naming a spec with a lane (skips values of --data/-d/--fields/--stdin/--file); finished lane (stateAfter nil) files under stateBefore's session id.
-- Task 6 done: verified green, ticked + changelog. Milestone 1 complete → milestone commit due on next advance.
-- USER APPROVED auto_commit milestone commits for this run (asked 2026-10-04); Milestone 1 committed 05b8cd9. Installed spektacular binary is pre-change: stage commit msg at .spektacular/tmp/git-commit-message.md and don't pass name in gotos.
-- Task 7 implemented: depgraph.CycleMembers (Tarjan SCC, self-loops) and TopoOrder (stable, earliest-in-order ready first; nodes never ready — on/behind a cycle — appended in order).
-- Task 7 done: verified, ticked, changelog.
-- Task 8 implemented: gitexec.RunCode (stdout + exit code; err only for exit>1); repo.New applies overlay `.spektacular/worktree-repos.json` (repo.Overlay{Spec,Repos}) to entry Locations; internal/worktree Manager{ProjectRoot,Config,Repos,Git Runner}: TouchedRepos(cfg,st,spec), Ensure (project checkout first, every registered repo in project work tree mapped too; dedup by top; worktree dir named after first repo in that checkout or "project"; info/exclude gets `/<rel>/.spektacular/worktrees/` + `/**/.spektacular/worktree-repos.json`), List/Find (spek/* under project worktrees dir), Merge (refuse MERGE_HEAD / dirty spec worktree / dirty main overlapping incoming; merge-tree dry run all; merge --no-ff all; worktree remove --force + branch -d). cmd/epic_worktree.go: `epic worktree`/`epic merge` --data {"spec"}; refusals spec_required, spec_not_found, plan_not_found, worktree_failed, worktree_not_found, epic_merge_conflict. templates/.spektacular/.gitignore += worktrees/, worktree-repos.json, workflows/.commit.lock. Smoke-tested in a throwaway project.
-- Spec names in this project need a timestamp prefix (e.g. 20260709000000-alpha) for `spec file write`.
-- Task 8 done: fixed dirtyOverlap (gitexec trims leading space of porcelain) found by tests; verified (29 pkgs); ticked + changelog.
-- Task 9 implemented: internal/status/run.go — RunSource{ProjectRoot, Worktrees, StoreAt, Touched, Dirty} on Options.Run (nil → no run view; only cmd/status.go sets it, and only when a name is given); SpecStatus.Run{Plan,Implement RunPart}, EpicStatus.Run{Order, Plan/Implement RunCounts, Dirty, Problems}. planDone = final plan + no plan workflow (lane or shared); implDone = implemented + final changelog + no implement workflow + no worktree; worktree w/ live lane → in_progress(root=worktree project); worktree finished per worktree store → awaiting_merge; worktree w/o lane unfinished → in_progress w/o step. Problems order: cycle, outside, unplanned; all blocks [implement]. Planning ignores outside deps and cycle-mate deps. Pretty prints planning/implementing counts + problems under epic header. Schema updated.
-- Task 9 done (awaiting_merge count always emitted); Milestone 2 complete → milestone commit.
-- Task 10 implemented: templates/skills/workflows/spek-plan-epic/SKILL.md written (not yet registered — task 12). Draft of spek-implement-epic in scratchpad/spek-implement-epic.md.
-- Task 10 done (skill text fixes: resume via orchestrated plan new, waiting child counts as running, read notes on repeat, docs named).
-- Task 11 implemented: templates/skills/workflows/spek-implement-epic/SKILL.md (same fixes as plan-epic).
-- Task 11 done.
-- Task 12 implemented: registered spek-plan-epic + spek-implement-epic in internal/agent skills.go/commands.go; appended '# When an orchestrator starts this skill' sections to spek-plan and spek-implement SKILL.md. Pinned-count agent tests need updating.
-- Task 12 done; Milestone 3 complete → milestone commit.
-- Task 13 implemented in docs repo: epics.mdx new section (surface=false) after Dependencies; CLI section flipped to surface; opening paragraph points to new section (no anchor: Section has no ids); description updated; CHANGELOG entry. build ok, astro check 0 errors (2 pre-existing hints), MDX guard clean, no em dashes. No Go tests per plan.
-- Task 13 done.
-- Task 14 done. All tasks ticked; Milestone 4 commit on advance to test_plan.
-- test_plan written (8 manual procedures).
-- feature changelog: project + spektacular + docs records written.
-- reconcile_spec: all 18 Requirements + Documentation AC ticked; other ACs await manual test plan (live agent).
+## Decisions (user's words)
+- "we need a summary doc which contains a summary of each plan as a section". The user accepted my proposal: one document per epic in the epic store, read/written via `spektacular epic ...`, one section per spec from the child's DONE: summary, a leading "Decisions to settle" section; the review walks it, and changes go into the plan and the summary.
+- "When planning, if dependencies like the documentation one, then we should rebuild the dependencies and re-write it." On asking first: "99% of the time folks are just going to agree so just write". So the orchestrator adds depends_on between overlapping independent specs and rewrites the epic itself, reporting it.
+- Proposed (not explicitly confirmed): the earlier-listed spec goes first; no automatic re-plan.
+- User: "Yes create the spec, I will action it before re-running".
+- Interview answers: scope also includes wider "genuine question" (contradicting recorded user decisions or knowledge entries → QUESTION mid-run) and cross-plan decisions (proposed single answer applied to every affected plan). Added dependency order: epic list order. Docs: update the website Epics page.
+- Overview confirmed.
+- Requirements confirmed (14).
+- Acceptance criteria confirmed (14).
+- Constraints confirmed (4). User: epics design may change if beneficial → Technical Approach, not a constraint (design doc must be updated to match).
+- Technical approach confirmed.
+- Success metrics confirmed.
+- Non-goals confirmed.
+- Verification: applied reviewer fixes; user chose new contradiction questions apply to ALL planning (single-spec unchanged otherwise).
+- Spec committed to store; work dir removed.
+- Split offered (3 specs), user declined: keep as one spec.
+- User approved workflow auto-commits for the rest of this session.

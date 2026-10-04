@@ -1,29 +1,23 @@
 {
-  "kind": "implement",
+  "kind": "spec",
   "current_step": "finished",
   "completed_steps": [
     "new",
-    "read_plan",
-    "analyze",
-    "implement",
-    "test",
-    "verify",
-    "update_plan",
-    "update_changelog",
-    "test_plan",
-    "update_feature_changelog",
-    "reconcile_spec",
+    "interview",
+    "overview",
+    "requirements",
+    "acceptance_criteria",
+    "constraints",
+    "technical_approach",
+    "success_metrics",
+    "non_goals",
+    "verification",
+    "split",
     "finished"
   ],
-  "created_at": "2026-10-04T08:11:05.81007546Z",
-  "updated_at": "2026-10-04T09:09:08.530405439Z",
+  "created_at": "2026-10-04T13:05:10.82508117Z",
+  "updated_at": "2026-10-04T13:34:15.559751499Z",
   "data": {
-    "committed_milestones": [
-      1,
-      2,
-      3,
-      4
-    ],
-    "name": "000062_epic-plan-and-implement"
+    "name": "000063_epic-planning-summary-and-reordering"
   }
 }
