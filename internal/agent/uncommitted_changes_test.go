@@ -210,6 +210,7 @@ func TestUncommittedChangesTextIsIdenticalAcrossAgents(t *testing.T) {
 		"claude": ".claude/skills",
 		"bob":    ".bob/skills",
 		"codex":  ".agents/skills",
+		"omp":    ".omp/skills",
 	}
 	for name, dir := range skillsDirs {
 		a, err := Lookup(name)
@@ -234,6 +235,7 @@ func TestUncommittedChangesTextIsIdenticalAcrossAgents(t *testing.T) {
 				"Bob's %s skill must be byte-identical to Claude's", tc.skill)
 			require.Equal(t, claude, codex,
 				"Codex's %s skill must be byte-identical to Claude's", tc.skill)
+			require.Equal(t, claude, readRenderedSkill(t, filepath.Join(tmp, ".omp", "skills"), tc.skill))
 		})
 	}
 }
