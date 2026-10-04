@@ -3,10 +3,14 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/hivecommons/spektacular/internal/autocommit"
+	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/repo"
 	"github.com/hivecommons/spektacular/internal/status"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/worktree"
 	"github.com/spf13/cobra"
 )
 
@@ -55,6 +59,39 @@ var statusTaskSchema = &schemaProp{Type: "object", Properties: map[string]*schem
 	}},
 }}
 
+// statusRunPartSchema is one part, planning or implementing, of a spec's run.
+var statusRunPartSchema = &schemaProp{Type: "object", Properties: map[string]*schemaProp{
+	"state":        {Type: "string", Enum: []string{"done", "in_progress", "awaiting_merge", "ready", "blocked"}, Description: "awaiting_merge is for implementing only"},
+	"waiting_on":   {Type: "array", Items: &schemaProp{Type: "string"}, Description: "blocked only: the specs it waits on"},
+	"current_step": {Type: "string", Description: "in_progress only: the live workflow's step"},
+	"root":         {Type: "string", Description: "where the work runs: the project, or the spec's project worktree"},
+	"repos":        {Type: "array", Items: &schemaProp{Type: "string"}, Description: "implementing only: the registered repos the plan touches"},
+}}
+
+// statusRunCountsSchema totals one part across an epic.
+var statusRunCountsSchema = &schemaProp{Type: "object", Properties: map[string]*schemaProp{
+	"done":           {Type: "integer"},
+	"in_progress":    {Type: "integer"},
+	"awaiting_merge": {Type: "integer"},
+	"ready":          {Type: "integer"},
+	"blocked":        {Type: "integer"},
+	"remaining":      {Type: "integer"},
+}}
+
+// statusEpicRunSchema is where an epic stands for planning and implementing.
+var statusEpicRunSchema = &schemaProp{Type: "object", Description: "present when an epic is named", Properties: map[string]*schemaProp{
+	"order":     {Type: "array", Items: &schemaProp{Type: "string"}, Description: "dependency order; ties follow the epic's list order"},
+	"plan":      statusRunCountsSchema,
+	"implement": statusRunCountsSchema,
+	"dirty":     {Type: "boolean", Description: "a registered repo has uncommitted changes"},
+	"problems": {Type: "array", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
+		"code":    {Type: "string", Enum: []string{"epic_unplanned", "epic_dependency_cycle", "epic_dependency_outside"}},
+		"specs":   {Type: "array", Items: &schemaProp{Type: "string"}},
+		"message": {Type: "string"},
+		"blocks":  {Type: "array", Items: &schemaProp{Type: "string"}, Description: "the parts it stops; never planning"},
+	}}},
+}}
+
 var statusOutputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
@@ -72,6 +109,7 @@ var statusOutputSchema = &schemaObj{
 				"tasks_total":       {Type: "integer"},
 			}},
 			"sources": statusSourcesSchema,
+			"run":     statusEpicRunSchema,
 		}},
 		"specs": {Type: "array", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
 			"name":            {Type: "string"},
@@ -91,6 +129,10 @@ var statusOutputSchema = &schemaObj{
 					"tasks_total":     {Type: "integer"},
 				}},
 				"tasks": {Type: "array", Items: statusTaskSchema},
+			}},
+			"run": {Type: "object", Description: "what the spec still needs; present when a name is given", Properties: map[string]*schemaProp{
+				"plan":      statusRunPartSchema,
+				"implement": statusRunPartSchema,
 			}},
 		}}},
 	},
@@ -140,6 +182,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			return s
 		},
 	}
+	if len(args) == 1 {
+		opts.Run = statusRunSource(cfg, root, opts.Store)
+	}
 
 	var r status.Report
 	if len(args) == 1 {
@@ -160,4 +205,44 @@ func runStatus(cmd *cobra.Command, args []string) error {
 func init() {
 	statusCmd.Flags().Bool("schema", false, "Print the input/output schema and exit")
 	statusCmd.Flags().String("format", statusFormatPretty, "Output format: pretty or json")
+}
+
+// statusRunSource is what the run view reads beyond the project store: the
+// spec worktrees, each worktree's own store, the repos each plan touches,
+// and whether any registered repo has uncommitted changes. status reports
+// and never refuses, so anything it cannot read — no git, an unregistered
+// repo — is simply absent from the view.
+func statusRunSource(cfg config.Config, root string, st store.Reader) *status.RunSource {
+	src := &status.RunSource{
+		ProjectRoot: root,
+		StoreAt: func(r string) store.Reader {
+			return store.NewSourceStore(r, "project")
+		},
+		Touched: func(spec string) []string {
+			names, err := worktree.TouchedRepos(cfg, st, spec)
+			if err != nil {
+				return nil
+			}
+			return names
+		},
+		Dirty: func() bool {
+			targets, err := autocommit.Targets(cfg, root, autoCommitGit)
+			if err != nil {
+				return false
+			}
+			dirty, err := autocommit.DirtyTargets(targets, autoCommitGit)
+			return err == nil && len(dirty) > 0
+		},
+	}
+	if set, err := repo.New(cfg, root, repoGit); err == nil {
+		m := worktree.Manager{ProjectRoot: root, Config: cfg, Repos: set, Git: worktreeGit}
+		src.Worktrees = func() ([]worktree.SpecWorktrees, error) {
+			all, err := m.List()
+			if err != nil {
+				return nil, nil
+			}
+			return all, nil
+		}
+	}
+	return src
 }

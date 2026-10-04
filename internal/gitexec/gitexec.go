@@ -65,3 +65,39 @@ func Run(dir string, stdin io.Reader, args ...string) (string, error) {
 	// TrimSpace (not just newline trimming) absorbs Windows CRLF endings.
 	return strings.TrimSpace(string(out)), nil
 }
+
+// RunCode is Run for the git commands that answer through their exit code as
+// well as their output — `merge-tree`, for one, exits 1 and lists the
+// conflicted paths on stdout. It returns trimmed stdout and the exit code
+// whenever git ran at all, and an error only when it could not run or exited
+// above 1, which git reserves for real failures.
+func RunCode(dir string, args ...string) (string, int, error) {
+	bin, err := exec.LookPath("git")
+	if err != nil {
+		return "", 0, fmt.Errorf("git is not installed or not on PATH: %w", err)
+	}
+	full := args
+	if dir != "" {
+		full = append([]string{"-C", dir}, args...)
+	}
+	cmd := exec.Command(bin, full...)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	if os.Getenv("GIT_SSH_COMMAND") == "" {
+		cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND=ssh -oBatchMode=yes")
+	}
+	out, err := cmd.Output()
+	if err == nil {
+		return strings.TrimSpace(string(out)), 0, nil
+	}
+	ee, ok := err.(*exec.ExitError)
+	if !ok {
+		return "", 0, fmt.Errorf("git %s: %w", args[0], err)
+	}
+	if code := ee.ExitCode(); code == 1 {
+		return strings.TrimSpace(string(out)), 1, nil
+	}
+	if stderr := strings.TrimSpace(string(ee.Stderr)); stderr != "" {
+		return "", ee.ExitCode(), fmt.Errorf("git %s: %s", args[0], stderr)
+	}
+	return "", ee.ExitCode(), fmt.Errorf("git %s: %w", args[0], err)
+}

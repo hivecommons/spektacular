@@ -553,7 +553,7 @@ func TestUnknownSubcommand_ReturnsStructuredErrorNamingValidSubcommands(t *testi
 		require.NoError(t, json.Unmarshal([]byte(stdout), &er))
 		require.Equal(t, "unknown_subcommand", er.Code)
 		require.Equal(t, `no subcommand given for "spektacular epic"`, er.Message)
-		require.Equal(t, "run one of: delete, list, read, split, write", er.NextAction)
+		require.Equal(t, "run one of: delete, list, merge, read, split, worktree, write", er.NextAction)
 	})
 
 	t.Run("--help still works and is unaffected", func(t *testing.T) {

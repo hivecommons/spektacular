@@ -653,7 +653,7 @@ func TestEpic_InputRefusalsCarryNextAction(t *testing.T) {
 
 	er = refuseEpic(t, "frobnicate")
 	require.Equal(t, "unknown_subcommand", er.Code)
-	require.Equal(t, "run one of: delete, list, read, split, write", er.NextAction)
+	require.Equal(t, "run one of: delete, list, merge, read, split, worktree, write", er.NextAction)
 }
 
 // `epic list` reports each epic's name, location and lifecycle fields.

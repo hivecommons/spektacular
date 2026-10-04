@@ -717,7 +717,7 @@ Because all of this is read from what is on disk, asking again after an interrup
 - a worktree is created, merged and removed;
 - a spec touching two repos gets a worktree in each, and a conflict in either is reported with neither repo merged.
 
-#### - [ ] Task: Order epic specs and find cycles
+#### - [x] Task: Order epic specs and find cycles
 **Id:** 58dd162c-be4d-4444-bb7c-82b33f1cb3ff
 **Repo:** spektacular
 **Depends on:**
@@ -733,11 +733,11 @@ The `run` view in `status` builds on both.
 *Technical detail:* [context.md#task-order-epic-specs-and-find-cycles](./context.md#task-order-epic-specs-and-find-cycles)
 
 **Acceptance criteria**:
-- [ ] Every spec on any cycle, including one depending on itself, is reported.
-- [ ] Specs are ordered so that every dependency comes first, with ties kept in list order.
-- [ ] Names outside the graph never break the ordering.
+- [x] Every spec on any cycle, including one depending on itself, is reported.
+- [x] Specs are ordered so that every dependency comes first, with ties kept in list order.
+- [x] Names outside the graph never break the ordering.
 
-#### - [ ] Task: Give each spec its own worktree and merge it back
+#### - [x] Task: Give each spec its own worktree and merge it back
 **Id:** febac6f5-23c3-4b75-b38d-020596c30cd9
 **Repo:** spektacular
 **Depends on:**
@@ -751,13 +751,13 @@ Add a worktree manager, a repo overlay and two epic commands:
 *Technical detail:* [context.md#task-give-each-spec-its-own-worktree-and-merge-it-back](./context.md#task-give-each-spec-its-own-worktree-and-merge-it-back)
 
 **Acceptance criteria**:
-- [ ] A spec whose plan touches two repos gets a worktree in each, and asking again returns the same worktrees.
-- [ ] Inside the spec's project worktree, every touched repo (its code, knowledge and changelog) resolves to the spec's worktree, never to the shared checkout.
-- [ ] The worktree directories are never picked up by commits in the main working copy.
-- [ ] A clean merge brings the spec's changes into every touched repo's main line and removes its worktrees and branches.
-- [ ] If any repo would conflict, nothing is merged in any repo and the conflicting files are reported per repo.
+- [x] A spec whose plan touches two repos gets a worktree in each, and asking again returns the same worktrees.
+- [x] Inside the spec's project worktree, every touched repo (its code, knowledge and changelog) resolves to the spec's worktree, never to the shared checkout.
+- [x] The worktree directories are never picked up by commits in the main working copy.
+- [x] A clean merge brings the spec's changes into every touched repo's main line and removes its worktrees and branches.
+- [x] If any repo would conflict, nothing is merged in any repo and the conflicting files are reported per repo.
 
-#### - [ ] Task: Report what an epic still needs in status
+#### - [x] Task: Report what an epic still needs in status
 **Id:** d8ca7865-f5e6-4c4c-a657-b200501cdaca
 **Repo:** spektacular
 **Depends on:**
@@ -777,12 +777,12 @@ Everything comes from what is on disk, so the same request resumes where the epi
 *Technical detail:* [context.md#task-report-what-an-epic-still-needs-in-status](./context.md#task-report-what-an-epic-still-needs-in-status)
 
 **Acceptance criteria**:
-- [ ] For planning, a spec is ready only once every spec it depends on has a final plan, and specs already planned are reported done.
-- [ ] For implementing, a spec is ready only once every dependency is fully implemented and merged, and specs already implemented are reported done.
-- [ ] A spec with a live lane, in the project or in its worktree, is reported in progress at its current step.
-- [ ] A finished but unmerged spec is reported awaiting merge.
-- [ ] An epic with an unplanned spec, a cycle, or an unimplemented outside dependency reports each as a problem that blocks implementing, naming the specs.
-- [ ] Problems never block planning, and the existing status fields are unchanged.
+- [x] For planning, a spec is ready only once every spec it depends on has a final plan, and specs already planned are reported done.
+- [x] For implementing, a spec is ready only once every dependency is fully implemented and merged, and specs already implemented are reported done.
+- [x] A spec with a live lane, in the project or in its worktree, is reported in progress at its current step.
+- [x] A finished but unmerged spec is reported awaiting merge.
+- [x] An epic with an unplanned spec, a cycle, or an unimplemented outside dependency reports each as a problem that blocks implementing, naming the specs.
+- [x] Problems never block planning, and the existing status fields are unchanged.
 
 ### Milestone 3: "Plan this epic" and "implement this epic"
 
@@ -1077,3 +1077,88 @@ Add a short paragraph to the README's How It Works section. It introduces "plan 
 - `spektacular: cmd/sessionlog_lane_test.go`
 
 **Discoveries**: The session log reads `os.Args`, not cobra's args, so routing it by `--data` needs its own argv scan that skips the values of value-taking flags (`--data`, `-d`, `--fields`, `--stdin`, `--file`).
+
+### 2026-10-04 — Task: Order epic specs and find cycles
+
+**What was done**: Added `depgraph.CycleMembers`, which uses Tarjan's strongly connected components to return every node on any cycle, self-loops included, in declared order. Added `depgraph.TopoOrder`, a stable Kahn ordering that always takes the earliest-declared ready node. Nodes that can never become ready, on a cycle or behind one, are appended in declared order. Dependencies on names outside the graph are ignored by both.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: internal/depgraph/depgraph.go`
+- `spektacular: internal/depgraph/depgraph_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-04 — Task: Give each spec its own worktree and merge it back
+
+**What was done**: Added the `internal/worktree` manager and the `epic worktree` / `epic merge` commands.
+- **Creating worktrees.** `epic worktree` gives a spec a worktree on `spek/<spec>` under `.spektacular/worktrees/<spec>/<repo>`, from HEAD:
+  - one in the project's repo;
+  - one in every registered repo its plan's tasks name, with repos sharing a checkout sharing one worktree.
+- **Repeat runs.** Existing worktrees and branches are reused.
+- **Keeping them out of git.** It adds the worktree folder and the overlay to the project repo's `info/exclude`.
+- **Repo overlay.** It writes a repo overlay (`.spektacular/worktree-repos.json`) into the project worktree. `repo.New` applies the overlay, so from inside the worktree every repo, with its stores and auto-commit targets, resolves into the spec's worktrees.
+- **Merging.** `epic merge` is all or nothing. It first refuses:
+  - a merge already in progress;
+  - a dirty spec worktree;
+  - main-copy changes the merge would overwrite.
+
+  It then dry-runs `git merge-tree` in every repo. On any conflict it merges nothing and returns `epic_merge_conflict` with paths per repo. Otherwise it merges each repo `--no-ff` and removes the worktrees and branches.
+- New project templates ignore `worktrees/`, `worktree-repos.json` and the commit lock.
+
+**Deviations**:
+- Added `gitexec.RunCode` (stdout plus exit code), because `merge-tree` reports conflicts through exit code 1 and stdout, and `Run` drops stdout on failure. The plan said `gitexec` would not change.
+- Every registered repo in the project's own work tree is mapped into the project worktree, touched or not.
+- Not covered by tests:
+  - a project nested below its repo's top level;
+  - the `MERGE_HEAD` refusal;
+  - rollback when a real merge fails after a clean dry run in a later repo. Earlier repos stay merged and the error names them.
+
+**Files changed**:
+- `spektacular: internal/worktree/worktree.go`
+- `spektacular: internal/worktree/worktree_test.go`
+- `spektacular: internal/gitexec/gitexec.go`
+- `spektacular: internal/gitexec/gitexec_test.go`
+- `spektacular: internal/repo/set.go`
+- `spektacular: internal/repo/set_test.go`
+- `spektacular: cmd/epic_worktree.go`
+- `spektacular: cmd/epic_worktree_test.go`
+- `spektacular: cmd/root_test.go`
+- `spektacular: cmd/epic_test.go`
+- `spektacular: templates/.spektacular/.gitignore`
+
+**Discoveries**:
+- `gitexec` trims all whitespace from output. That strips the leading space of the first `git status --porcelain` line, so column-based porcelain parsing silently misreads the first path. Use `--name-only` queries instead.
+
+### 2026-10-04 — Task: Report what an epic still needs in status
+
+**What was done**: `status <name>` now adds a `run` view, built in `internal/status/run.go` from an injectable `RunSource` (worktrees, worktree stores, touched repos, dirty check) that only `cmd/status.go` sets.
+
+Each spec gets `run.plan` and `run.implement`:
+- **States:** `done`, `in_progress` (with `current_step` and `root`), `awaiting_merge` (implementing only), `ready`, or `blocked` (with `waiting_on`). `run.implement` also lists the repos its plan touches.
+- **Planned** means a final plan with no plan workflow live.
+- **Implemented** means every task ticked, a final changelog, no implement workflow live and no worktree left.
+- **Worktree specs:** a spec with a worktree reads its lane and finish state from the worktree's own store.
+
+The epic gets `run`:
+- **`order`:** the dependency order, with ties following the epic's list order.
+- **Counts:** per part.
+- **`dirty`:** whether any registered repo has uncommitted changes.
+- **`problems`:** `epic_dependency_cycle`, `epic_dependency_outside` and `epic_unplanned`, each naming its specs and blocking only implementing.
+
+Planning ignores dependencies outside the epic and dependencies between specs on a cycle. The readable output adds planning and implementing lines and any problems under the epic header. The schema is updated. Existing fields are unchanged, and the dependency check and completed-epic guard build without the run view.
+
+**Deviations**:
+- Outside dependencies count as met when their spec is implemented, the same rule the implement-time dependency check uses. Unlike members, they need no final changelog or merge.
+- A spec whose tasks are all ticked but whose changelog is still a draft, with no live workflow or worktree, reports `ready`, not `done`.
+
+**Files changed**:
+- `spektacular: internal/status/run.go`
+- `spektacular: internal/status/run_test.go`
+- `spektacular: internal/status/report.go`
+- `spektacular: internal/status/pretty.go`
+- `spektacular: cmd/status.go`
+- `spektacular: cmd/status_test.go`
+
+**Discoveries**: None.

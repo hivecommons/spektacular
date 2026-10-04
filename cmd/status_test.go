@@ -618,3 +618,87 @@ func TestStatus_ReportsAnOrchestratedPlanLane(t *testing.T) {
 	require.Equal(t, "architecture", statusSpecs(t, again)["alpha"]["plan"].(map[string]any)["current_step"])
 	require.Equal(t, true, again["workflow"].(map[string]any)["orchestrated"])
 }
+
+// Naming an epic adds the run view: the epic's run block and a run block on
+// each spec, in a project that is not a git repo and has no worktrees.
+func TestStatus_EpicReportCarriesTheRunView(t *testing.T) {
+	dir := stProject(t)
+	data := filepath.Join(dir, ".spektacular")
+	// A's changelog record is final, so A is fully implemented.
+	writeArtifactStatusFile(t, filepath.Join(data, "changelog", "A.md"),
+		"---\ncreated_date: 2026-09-30\ndocument_status: final\n---", time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC))
+
+	got := statusOf(t, "E", "--format", "json")
+	run := got["epic"].(map[string]any)["run"].(map[string]any)
+	require.Equal(t, []any{"A", "B", "C"}, run["order"])
+	require.Equal(t, map[string]any{"done": float64(2), "in_progress": float64(0), "ready": float64(1), "blocked": float64(0), "awaiting_merge": float64(0), "remaining": float64(1)}, run["plan"])
+	require.Equal(t, map[string]any{"done": float64(1), "in_progress": float64(0), "ready": float64(1), "blocked": float64(1), "awaiting_merge": float64(0), "remaining": float64(2)}, run["implement"])
+	require.Equal(t, false, run["dirty"])
+	problems := run["problems"].([]any)
+	require.Len(t, problems, 1)
+	require.Equal(t, "epic_unplanned", problems[0].(map[string]any)["code"])
+	require.Equal(t, []any{"C"}, problems[0].(map[string]any)["specs"])
+
+	specs := statusSpecs(t, got)
+	require.Equal(t, map[string]any{
+		"plan":      map[string]any{"state": "done"},
+		"implement": map[string]any{"state": "done", "repos": []any{"testproj"}},
+	}, specs["A"]["run"], "repos are the registered repos the plan touches")
+	require.Equal(t, map[string]any{
+		"plan":      map[string]any{"state": "done"},
+		"implement": map[string]any{"state": "ready", "repos": []any{"testproj"}},
+	}, specs["B"]["run"])
+	require.Equal(t, map[string]any{
+		"plan":      map[string]any{"state": "ready"},
+		"implement": map[string]any{"state": "blocked", "waiting_on": []any{"C"}},
+	}, specs["C"]["run"])
+
+	// The pretty report's epic header carries the same totals.
+	stdout, _, code := runRootCmd(t, "status", "E")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "planning: 2 done, 0 in progress, 1 ready, 0 blocked")
+	require.Contains(t, stdout, "implementing: 1 done, 0 in progress, 1 ready, 1 blocked")
+	require.Contains(t, stdout, "problem (epic_unplanned): C has no final plan yet")
+}
+
+func TestStatus_SchemaDescribesTheRunView(t *testing.T) {
+	stdout, _, code := runRootCmd(t, "status", "--schema")
+	require.Equal(t, 0, code, stdout)
+	var schema commandSchema
+	require.NoError(t, json.Unmarshal([]byte(stdout), &schema))
+	epicRun := schema.Output.Properties["epic"].Properties["run"]
+	require.NotNil(t, epicRun)
+	for _, k := range []string{"order", "plan", "implement", "dirty", "problems"} {
+		require.Contains(t, epicRun.Properties, k)
+	}
+	specRun := schema.Output.Properties["specs"].Items.Properties["run"]
+	require.NotNil(t, specRun)
+	require.Contains(t, specRun.Properties, "plan")
+	require.Contains(t, specRun.Properties["implement"].Properties, "waiting_on")
+	require.Contains(t, stdout, "awaiting_merge")
+}
+
+// Without a name, status reports the workflow in progress and leaves the run
+// view out; naming the epic shows the shared workflow's spec in progress.
+func TestStatus_RunViewOnlyWhenANameIsGiven(t *testing.T) {
+	dir := stProject(t)
+	writeInProgressState(t, filepath.Join(dir, ".spektacular"), workflow.State{
+		Kind:        "implement",
+		CurrentStep: "analyze",
+		CreatedAt:   fixedResumeTime,
+		UpdatedAt:   time.Date(2026, time.September, 30, 10, 12, 0, 0, time.UTC),
+		Data:        map[string]any{"name": "B", "task": idB},
+	})
+
+	bare := statusOf(t, "--format", "json")
+	require.NotContains(t, bare["epic"].(map[string]any), "run")
+	for _, s := range bare["specs"].([]any) {
+		require.NotContains(t, s.(map[string]any), "run")
+	}
+
+	named := statusOf(t, "E", "--format", "json")
+	impl := statusSpecs(t, named)["B"]["run"].(map[string]any)["implement"].(map[string]any)
+	require.Equal(t, "in_progress", impl["state"])
+	require.Equal(t, "analyze", impl["current_step"])
+	require.Equal(t, filepath.Base(dir), filepath.Base(impl["root"].(string)))
+}

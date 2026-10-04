@@ -12,10 +12,11 @@
     "update_changelog"
   ],
   "created_at": "2026-10-04T08:11:05.81007546Z",
-  "updated_at": "2026-10-04T08:42:43.992452756Z",
+  "updated_at": "2026-10-04T08:58:23.536630449Z",
   "data": {
     "committed_milestones": [
-      1
+      1,
+      2
     ],
     "name": "000062_epic-plan-and-implement"
   }

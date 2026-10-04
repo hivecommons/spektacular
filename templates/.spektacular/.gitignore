@@ -7,3 +7,8 @@
 
 # Materialized member-repo clones must never enter the project's history.
 repos/
+# Per-spec git worktrees made while implementing an epic, and the repo
+# overlay inside them, are never part of the project's history.
+worktrees/
+worktree-repos.json
+workflows/.commit.lock

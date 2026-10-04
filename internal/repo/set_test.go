@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -689,4 +690,91 @@ func TestResolveAll_ReturnsRegistryOrder(t *testing.T) {
 		names[i] = r.Name
 	}
 	require.Equal(t, []string{"bravo", "alpha"}, names)
+}
+
+// writeOverlay writes the repo overlay into projectRoot/.spektacular.
+func writeOverlay(t *testing.T, projectRoot string, o Overlay) {
+	t.Helper()
+	raw, err := json.Marshal(o)
+	require.NoError(t, err)
+	dir := filepath.Join(projectRoot, ".spektacular")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, OverlayFile), raw, 0o644))
+}
+
+// A repo the overlay maps resolves to the overlay's location — its root, its
+// code, and its resolution — while an unmapped repo resolves as registered.
+func TestNew_OverlayRelocatesMappedReposOnly(t *testing.T) {
+	project := t.TempDir()
+	registered := t.TempDir()
+	writeFootprint(t, registered)
+	inWorktree := t.TempDir()
+	writeFootprint(t, inWorktree)
+	other := t.TempDir()
+	writeFootprint(t, other)
+	writeOverlay(t, project, Overlay{Spec: "alpha", Repos: map[string]string{"lib": inWorktree}})
+
+	set := newSet(t, project, newFakeGit(t),
+		config.RepoEntry{Name: "lib", Location: registered},
+		config.RepoEntry{Name: "other", Location: other},
+	)
+
+	root, ok := set.LocalRoot("lib")
+	require.True(t, ok)
+	require.Equal(t, inWorktree, root)
+	src, ok := set.LocalSource("lib")
+	require.True(t, ok)
+	require.Equal(t, inWorktree, src)
+	r, err := set.Resolve("lib")
+	require.NoError(t, err)
+	require.Equal(t, inWorktree, r.Root)
+
+	root, ok = set.LocalRoot("other")
+	require.True(t, ok)
+	require.Equal(t, other, root)
+	require.Equal(t, other, set.Entries()[1].Location)
+}
+
+// A relative location in the overlay is ignored: the overlay only ever names
+// absolute worktree paths, so a relative value is not trusted.
+func TestNew_OverlayRelativeLocationIsIgnored(t *testing.T) {
+	project := t.TempDir()
+	registered := t.TempDir()
+	writeFootprint(t, registered)
+	writeOverlay(t, project, Overlay{Spec: "alpha", Repos: map[string]string{"lib": "../elsewhere"}})
+
+	set := newSet(t, project, newFakeGit(t), config.RepoEntry{Name: "lib", Location: registered})
+
+	root, ok := set.LocalRoot("lib")
+	require.True(t, ok)
+	require.Equal(t, registered, root)
+}
+
+// With no overlay file, every repo resolves exactly as configured, relative
+// locations included.
+func TestNew_NoOverlayLeavesLocationsUnchanged(t *testing.T) {
+	project := t.TempDir()
+	writeFootprint(t, filepath.Join(project, "repos", "lib"))
+
+	set := newSet(t, project, newFakeGit(t), config.RepoEntry{Name: "lib", Location: "../repos/lib"})
+
+	require.Equal(t, "../repos/lib", set.Entries()[0].Location)
+	root, ok := set.LocalRoot("lib")
+	require.True(t, ok)
+	require.Equal(t, filepath.Join(project, "repos", "lib"), root)
+}
+
+// An overlay that is not JSON fails construction rather than silently
+// resolving into the shared checkouts.
+func TestNew_MalformedOverlayIsAnError(t *testing.T) {
+	project := t.TempDir()
+	dir := filepath.Join(project, ".spektacular")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, OverlayFile), []byte("{not json"), 0o644))
+
+	cfg := config.NewDefault()
+	cfg.Repos = []config.RepoEntry{{Name: "lib", Location: t.TempDir()}}
+	_, err := New(cfg, project, newFakeGit(t))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), OverlayFile)
 }

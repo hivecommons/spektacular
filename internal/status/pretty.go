@@ -39,7 +39,15 @@ func RenderPretty(w io.Writer, r Report) error {
 		if e.Done {
 			b.WriteString(", done")
 		}
-		b.WriteString("\n\n")
+		b.WriteString("\n")
+		if e.Run != nil {
+			fmt.Fprintf(&b, "  planning: %s\n", runCountsText(e.Run.Plan))
+			fmt.Fprintf(&b, "  implementing: %s\n", runCountsText(e.Run.Implement))
+			for _, p := range e.Run.Problems {
+				fmt.Fprintf(&b, "  problem (%s): %s\n", p.Code, p.Message)
+			}
+		}
+		b.WriteString("\n")
 		indent = "  "
 		if len(r.Specs) == 0 {
 			b.WriteString(indent + "no specs\n")
@@ -110,4 +118,14 @@ func requestedIndex(r Report) int {
 		}
 	}
 	return -1
+}
+
+// runCountsText words one part's counts for the epic header, for example
+// "1 done, 1 in progress, 2 ready, 0 blocked".
+func runCountsText(c RunCounts) string {
+	text := fmt.Sprintf("%d done, %d in progress", c.Done, c.InProgress)
+	if c.AwaitingMerge > 0 {
+		text += fmt.Sprintf(", %d awaiting merge", c.AwaitingMerge)
+	}
+	return text + fmt.Sprintf(", %d ready, %d blocked", c.Ready, c.Blocked)
 }

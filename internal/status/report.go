@@ -62,6 +62,9 @@ type EpicStatus struct {
 	Done           bool                 `json:"done"`
 	Progress       EpicProgress         `json:"progress"`
 	Sources        []metadata.SourceRef `json:"sources"`
+	// Run is where the epic stands for planning and implementing; present
+	// when the run view was asked for.
+	Run *EpicRun `json:"run,omitempty"`
 }
 
 // EpicProgress totals an epic: specs implemented of total, and tasks
@@ -88,6 +91,9 @@ type SpecStatus struct {
 	Sources []metadata.SourceRef `json:"sources"`
 	// Plan is null when the spec has no plan.
 	Plan *PlanStatus `json:"plan"`
+	// Run is what the spec still needs; present when the run view was asked
+	// for.
+	Run *SpecRun `json:"run,omitempty"`
 
 	// counts is the plan's progress whatever its format, for the tree.
 	counts TaskCounts
@@ -131,6 +137,9 @@ type Options struct {
 	// Lane reads the orchestrated workflow of kind for a spec — its lane —
 	// or returns nil when it has none. nil reports no lanes.
 	Lane func(kind, name string) *workflow.State
+	// Run, when set, adds the run view: what each spec, and the epic, still
+	// needs for planning and implementing.
+	Run *RunSource
 }
 
 // lane is the in-progress orchestrated workflow of kind for name, or nil.
@@ -349,6 +358,11 @@ func buildTarget(opts Options, target Target) (Report, error) {
 	}
 
 	r.Workflow = matchingWorkflow(opts, r.Specs)
+	if opts.Run != nil {
+		if err := buildRun(opts, &r); err != nil {
+			return Report{}, err
+		}
+	}
 	return r, nil
 }
 
