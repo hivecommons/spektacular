@@ -377,6 +377,39 @@ func TestNoAgentFacingInstructionCarriesProjectRoot(t *testing.T) {
 	}
 }
 
+// Library skills are served raw and must address stored artifacts through the
+// CLI, not hard-coded directories. Managed sections may name these paths when
+// prohibiting direct access, so this guard deliberately covers only the library.
+func TestNoLibrarySkillNamesStoreDirectory(t *testing.T) {
+	storeDirectory := regexp.MustCompile(`\.spektacular/(specs|plans|changelog|knowledge|design)\b`)
+	skills := 0
+	for _, src := range agentFacingCorpus(t, "spektacular") {
+		if !strings.HasPrefix(src.label, "skill ") {
+			continue
+		}
+		skills++
+		for i, line := range strings.Split(src.body, "\n") {
+			require.Emptyf(t, storeDirectory.FindString(line),
+				"%s:%d: library skills must use CLI commands instead of store directories: %s", src.label, i+1, line)
+		}
+	}
+	require.NotZero(t, skills, "the corpus must contain library skills to check")
+}
+
+func TestSpawnPlanningAgentsUsesFileCommands(t *testing.T) {
+	skillProject(t)
+	body := fetchSkillInstructions(t, "spawn-planning-agents")
+	for _, command := range []string{
+		"plan file list",
+		"plan file read <name> plan",
+		"spec file list",
+		"spec file read <name>",
+	} {
+		require.Contains(t, body, "`"+command+"`")
+	}
+	require.NotContains(t, body, "{{", "library skills are served without mustache substitution")
+}
+
 func TestNoEmittedInstructionNamesOldWorkingContext(t *testing.T) {
 	for _, src := range agentFacingCorpus(t, "spektacular") {
 		require.NotContainsf(t, src.body, oldWorkingContextPath,
