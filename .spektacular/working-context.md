@@ -1,22 +1,25 @@
-# Working context — 000062_epic-plan-and-implement
+# Working context — plan 000062_epic-plan-and-implement
 
 ## Origin
-- User's request (exact phrasing): "We need to create a new spec that enables epics to be planned and implemented as a single command".
-- The previous in-progress spec workflow (000061_version-check-upgrades-install, stopped at overview) was discarded with `--force` at the user's choice; its uncommitted draft files remain in the working tree.
-- User chose NOT to commit existing uncommitted changes before this workflow started (`commit_existing: false`).
-- The project currently has no epics (`spektacular epic list` is empty), so this spec does not belong to an epic.
+- Plan workflow started 2026-10-04 for spec `000062_epic-plan-and-implement` (user picked it).
+- Binding design: `design:epics-and-seeded-specs.md` (epic never planned/implemented itself; plans 1:1 with specs; deps constrain implementation only; status derives all state).
 
 ## Decisions / answers
-- Spec name chosen: `epic-plan-and-implement` → minted as `000062_epic-plan-and-implement`.
-- Interview answers: delivered as skill(s) driving "plan this epic" then "implement this epic"; fewer interruptions than per-spec interactive runs; only do what's not already done (skip planned/implemented specs); docs repo must be updated.
-- Unanswered: extend spek-plan/spek-implement vs new epic skills (left to technical approach). Stop-on-failure is an assumption to confirm.
-- Overview confirmed as drafted.
-- Requirements confirmed (12 items), incl. stop-on-failure, end-of-planning review summary, and implement refusing/reporting unplanned specs.
-- Acceptance criteria confirmed (12, one per requirement).
-- Constraints confirmed; design ref added to design:epics-and-seeded-specs.md.
-- Technical approach confirmed; no design doc offered (nothing worked/settled enough).
-- Success metrics confirmed.
-- Non-goals confirmed (5).
-- Verification: reviewer found 9 issues; all fixes applied with user's OK (implement refuses up front on unplanned specs; added planning-failure, mid-spec resume, broken-dependency requirements; metrics replaced; 2 non-goals trimmed). Spec written to store.
-- Post-verification amendment (user): planning strictly in dependency order (one plan may influence another); parallel subagents using the standard plan/implement skills; planning in parallel in one repo; implementation in git worktrees merged back at every junction; conflicts reported not silently resolved; on failure let running finish, start none; subagent open questions relayed via main agent. Split offer still pending (re-offer after amendment).
-- Split offered twice (before and after amendment); user declined: keep as one spec.
+- Discovery done; research in .spektacular/work/000062_epic-plan-and-implement/research.md.
+- Direction: opt-in per-name state files for epic-run children (name on goto); standalone runs unchanged on state.json.
+- First task fixes duplicate `installerFor` in cmd/migrate.go (HEAD does not compile).
+
+## Learnings
+- state.json, working-context.md, repo-state.json, and a tmp file are git-tracked; `.spektacular/tmp/` is NOT gitignored.
+- auto-commit does `git add -A` per work tree; plan tmp files and commit-message path are fixed names -> clash under parallel plans.
+- status `planned` counts draft plans; `implemented` flips before implement wrap-up; no read-time cycle check; no topo sort in depgraph.
+- docs repo location is outside project tree -> worktree isolation for it is unresolved (open assumption).
+- Architecture chosen (option A): spek-plan-epic + spek-implement-epic skills; CLI: orchestrated lanes (.spektacular/workflows/<kind>-<name>.json/.md), name in every plan/implement goto, `epic next`, `epic worktree`/`epic merge`, deferred walkthrough, path-scoped lane commits, exclusive specs for external repos.
+- Sections done: research, architecture, conventions, components, data_structures, implementation_detail.
+- Tasks drafted (14 tasks, 4 milestones); ids minted via plan task-id.
+- Assembled and staged to .spektacular/tmp/{plan,context,research}_template.md.
+- All three plan documents written to store; work dir removed. Now at walkthrough.
+- Walkthrough: user asked every touched repo gets its own worktree -> replaced 'exclusive' rule with per-repo worktrees + repo overlay (repo.New) + all-or-nothing merge via git merge-tree. All three docs rewritten.
+- Walkthrough: user asked to fold epic next into status -> run view in status (internal/status/run.go), no epic next cmd/epicrun pkg; skills read status --format json; problems list w/ blocks:[implement].
+- spawn-planning-agents store-access bug filed as issue #70; Out of Scope links it.
+- User signed off the plan at walkthrough (2026-10-04).
