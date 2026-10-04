@@ -33,41 +33,41 @@ When a piece of work has been split into an epic of several specs, users can mov
 -->
 ## Requirements
 
-- [ ] **Plan an epic on request**
+- [x] **Plan an epic on request**
   Users can ask the agent to plan an epic by name, or in plain wording such as "plan this epic". The agent then produces a plan for every spec in that epic that does not yet have one, without the user starting each spec's planning separately.
-- [ ] **Implement an epic on request**
+- [x] **Implement an epic on request**
   Users can ask the agent to implement an epic by name, or in plain wording such as "implement this epic". The agent then implements every planned spec in that epic that is not yet implemented, without the user starting each spec's implementation separately.
-- [ ] **Dependency order for implementation**
+- [x] **Dependency order for implementation**
   When implementing an epic, the system must implement a spec only after every spec it depends on has been implemented.
-- [ ] **Dependency order for planning**
+- [x] **Dependency order for planning**
   When planning an epic, a spec is planned only after every spec it depends on has been planned, so its plan can take theirs into account.
-- [ ] **Independent specs run in parallel**
+- [x] **Independent specs run in parallel**
   When planning or implementing an epic, specs whose dependencies are all satisfied (planned for planning, implemented for implementation) are worked on at the same time by separate agents, not one after another.
-- [ ] **Parallel work is combined before dependents start**
+- [x] **Parallel work is combined before dependents start**
   Work from specs implemented in parallel is combined into the main line of development before any spec that depends on it starts. A conflict when combining is reported to the user, not resolved silently.
-- [ ] **Open questions reach the user**
+- [x] **Open questions reach the user**
   When an agent working on one spec hits a genuine open question, the question is put to the user and the answer is returned to that agent. Agents working on other specs carry on meanwhile.
-- [ ] **Only outstanding work is done**
+- [x] **Only outstanding work is done**
   Specs that already have a plan are not re-planned when planning an epic. Specs already implemented are not re-implemented when implementing an epic.
-- [ ] **Resumable by repeating the request**
+- [x] **Resumable by repeating the request**
   If a run is interrupted, the user can make the same request again. It continues from where the epic stands, with no work already completed being lost or repeated.
-- [ ] **Fewer interruptions than per-spec runs**
+- [x] **Fewer interruptions than per-spec runs**
   Planning or implementing an epic must ask the user for input less often than running each spec's plan or implementation one by one. The agent stops only for genuine open questions it cannot resolve, and for the end-of-planning review.
-- [ ] **Review of the epic's plans**
+- [x] **Review of the epic's plans**
   Once planning an epic has finished, the user is shown a summary of each plan it produced, so the plans can be reviewed before any implementation starts.
-- [ ] **Stop on failure**
+- [x] **Stop on failure**
   If implementing a spec fails, no new specs are started; specs already running are allowed to finish. The user is told which spec failed, why, and what else completed.
-- [ ] **Stop on planning failure**
+- [x] **Stop on planning failure**
   If planning a spec fails, or hits an open question the user chooses not to answer now, no new specs are started; specs already running are allowed to finish. The user is told which spec stopped the run, why, and what else completed.
-- [ ] **Resume part-way through a spec**
+- [x] **Resume part-way through a spec**
   If a run is interrupted while a spec's plan or implementation is still in progress, repeating the request resumes that spec's in-progress work from where it stopped rather than restarting it.
-- [ ] **Broken dependencies are refused**
+- [x] **Broken dependencies are refused**
   If an epic's dependencies contain a cycle, or name a spec outside the epic that is not implemented, implementing the epic refuses before starting any spec and reports the problem to the user.
-- [ ] **Progress is visible**
+- [x] **Progress is visible**
   While planning or implementing an epic, the user can see which specs are being worked on and how many remain. At the end, the user is told what was completed, what was skipped because it was already done, and what is still outstanding.
-- [ ] **Implementing needs plans**
+- [x] **Implementing needs plans**
   When asked to implement an epic in which some specs have no plan yet, the system refuses up front: it names the unplanned specs and implements nothing until they are planned.
-- [ ] **Documentation**
+- [x] **Documentation**
   The project's public documentation explains how to plan and implement an epic, including the resume and skip behaviour.
 
 <!--
@@ -135,7 +135,7 @@ When a piece of work has been split into an epic of several specs, users can mov
   During a plan or implement run on an epic, the user is told which specs are being worked on and how many remain. The final message lists the specs completed, skipped as already done, and still outstanding.
 - [ ] **Implementing needs plans**
   Ask to implement an epic in which one spec has no plan. The user is told the name of the unplanned spec, and no spec in the epic is implemented by that request.
-- [ ] **Documentation**
+- [x] **Documentation**
   The published documentation has a page or section that describes planning and implementing an epic, including that a repeated request resumes and that completed work is skipped.
 
 <!--

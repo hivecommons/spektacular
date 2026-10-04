@@ -50,3 +50,6 @@
 - Task 13 implemented in docs repo: epics.mdx new section (surface=false) after Dependencies; CLI section flipped to surface; opening paragraph points to new section (no anchor: Section has no ids); description updated; CHANGELOG entry. build ok, astro check 0 errors (2 pre-existing hints), MDX guard clean, no em dashes. No Go tests per plan.
 - Task 13 done.
 - Task 14 done. All tasks ticked; Milestone 4 commit on advance to test_plan.
+- test_plan written (8 manual procedures).
+- feature changelog: project + spektacular + docs records written.
+- reconcile_spec: all 18 Requirements + Documentation AC ticked; other ACs await manual test plan (live agent).
