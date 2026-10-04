@@ -156,10 +156,22 @@ func renderAllStepInstructions(t *testing.T, command string) []renderedInstructi
 // can be compared across modes.
 func renderAllStepInstructionsMode(t *testing.T, command, autoCommit string) []renderedInstruction {
 	t.Helper()
+	return renderAllStepInstructionsWith(t, command, autoCommit, false)
+}
+
+// renderAllStepInstructionsWith is renderAllStepInstructionsMode with the
+// workflow data's "orchestrated" flag under the caller's control, so a step
+// can be rendered as a standalone run or as a lane of an orchestrated one.
+func renderAllStepInstructionsWith(t *testing.T, command, autoCommit string, orchestrated bool) []renderedInstruction {
+	t.Helper()
 	requireStepTableComplete(t)
 
 	out := make([]renderedInstruction, 0, len(stepTemplateTable))
 	for _, row := range stepTemplateTable {
+		renderData := contractData{"name": "demo-feature"}
+		if orchestrated {
+			renderData["orchestrated"] = true
+		}
 		capture := &contractCapture{}
 		err := stepkit.WriteStepResult(
 			stepkit.StepRequest{
@@ -168,7 +180,7 @@ func renderAllStepInstructionsMode(t *testing.T, command, autoCommit string) []r
 				TemplatePath: row.templatePath,
 				Strategy:     contractStrategy{},
 			},
-			contractData{"name": "demo-feature"},
+			renderData,
 			capture, nil, workflow.Config{Command: command, Kind: row.workflow, AutoCommit: autoCommit},
 			func(_, _, _, instruction string) any { return instruction },
 		)
@@ -277,7 +289,7 @@ func workflowInstructionCorpus(t *testing.T, command, installDir string) []instr
 	}
 
 	for _, kind := range contractWorkflows {
-		body, err := resumeInstruction(command, kind, "demo-feature", "some_step", "")
+		body, err := resumeInstruction(command, kind, "demo-feature", "some_step", "", false)
 		require.NoError(t, err)
 		corpus = append(corpus, instructionSource{"steps/resume.md (" + kind + ")", body})
 
@@ -694,4 +706,135 @@ func TestAutoCommitInstruction_PrecedesWorkingContextFooter(t *testing.T) {
 	require.Less(t, commitAt, footerAt, "the git-commit instruction must come before the working-context footer")
 	require.True(t, strings.HasSuffix(body, contractWorkingContextFooter),
 		"the working-context footer must still be the last thing in the instruction")
+}
+
+// gotoDataPayload captures the --data payload of a workflow goto invocation,
+// labelled by the workflow kind it advances.
+var gotoDataPayload = regexp.MustCompile(`\b(spec|plan|implement|repo) goto --data '([^']*)'`)
+
+// contractSpecName is the instance name renderAllStepInstructionsMode gives
+// every workflow, hand-copied rather than read back from the harness.
+const contractSpecName = "demo-feature"
+
+// Every plan and implement instruction that advances the workflow names the
+// spec it belongs to, so the goto routes to that spec's workflow when several
+// are in progress — in every auto_commit mode, so the git-commit partial's
+// goto is held to the same rule. Spec and repo gotos never gain the spec
+// name: their workflows do not route by it.
+func TestPlanAndImplementGotosNameTheSpec(t *testing.T) {
+	const wantName = `"name":"` + contractSpecName + `"`
+
+	for _, mode := range []string{"", config.AutoCommitWorkflow, config.AutoCommitFull} {
+		t.Run("auto_commit="+mode, func(t *testing.T) {
+			named := map[string]int{}
+			commitGotos := 0
+			for _, ri := range renderAllStepInstructionsMode(t, "spektacular", mode) {
+				for i, line := range strings.Split(ri.body, "\n") {
+					for _, m := range gotoDataPayload.FindAllStringSubmatch(line, -1) {
+						kind, payload := m[1], m[2]
+						require.Equalf(t, ri.workflow, kind,
+							"%s:%d: a %s instruction advances a %s workflow: %s", ri.templatePath, i+1, ri.workflow, kind, line)
+						switch kind {
+						case "plan", "implement":
+							require.Containsf(t, payload, wantName,
+								"%s:%d: a %s goto must name the spec: %s", ri.templatePath, i+1, kind, line)
+							named[kind]++
+							if strings.Contains(payload, `"commit_message_from"`) {
+								commitGotos++
+							}
+						case "spec":
+							require.NotContainsf(t, payload, `"name":`,
+								"%s:%d: a spec goto must not carry a name: %s", ri.templatePath, i+1, line)
+						case "repo":
+							require.NotContainsf(t, payload, wantName,
+								"%s:%d: a repo goto must not carry the spec name: %s", ri.templatePath, i+1, line)
+						}
+					}
+				}
+			}
+			require.NotZero(t, named["plan"], "the plan renders must contain goto invocations to check")
+			require.NotZero(t, named["implement"], "the implement renders must contain goto invocations to check")
+			if mode != "" {
+				require.NotZero(t, commitGotos,
+					"with auto_commit on, the commit partial's plan/implement goto must be among those checked")
+			}
+		})
+	}
+}
+
+// scratchPath matches a path under the scratch directory that names something
+// inside it (a bare `.spektacular/tmp/` mention is not a staged file).
+var scratchPath = regexp.MustCompile(`\.spektacular/tmp/[A-Za-z0-9_<>.-][^\s` + "`" + `'")]*`)
+
+// Every file a plan or implement instruction stages, and the commit message
+// a plan or implement commit point stages, lives in a scratch folder of the
+// spec's own, so two specs' workflows never overwrite each other's files.
+func TestPlanAndImplementScratchFilesLiveInTheSpecsOwnFolder(t *testing.T) {
+	const own = ".spektacular/tmp/" + contractSpecName + "/"
+
+	checked := 0
+	for _, ri := range renderAllStepInstructionsMode(t, "spektacular", config.AutoCommitWorkflow) {
+		if ri.workflow != "plan" && ri.workflow != "implement" {
+			continue
+		}
+		for i, line := range strings.Split(ri.body, "\n") {
+			for _, p := range scratchPath.FindAllString(line, -1) {
+				require.Truef(t, strings.HasPrefix(p, own),
+					"%s:%d: scratch path %q is not in the spec's own folder %s", ri.templatePath, i+1, p, own)
+				checked++
+			}
+		}
+	}
+	require.NotZero(t, checked, "the plan and implement renders must stage scratch files to check")
+}
+
+// The plan workflow's staged documents, named file by file at each step that
+// assembles, verifies, commits or cleans them up, are the spec's own; and the
+// commit message staged at plan, implement and spec commit points sits in
+// that spec's folder too. Hand-maintained expectations, step by step. (The
+// harness renders the write and finished steps' already-committed branch, so
+// their `--from` commit branch is pinned in internal/steps/plan's
+// TestWriteSteps_StageInTheSpecsOwnFolder instead.)
+func TestStagedPlanDocumentsAndCommitMessageAreNamedPerSpec(t *testing.T) {
+	const own = ".spektacular/tmp/" + contractSpecName + "/"
+	want := map[string][]string{
+		"assemble":     {own + "plan_template.md", own + "context_template.md", own + "research_template.md"},
+		"verification": {own + "plan_template.md", own + "context_template.md", own + "research_template.md"},
+	}
+	bare := []string{
+		".spektacular/tmp/plan_template.md",
+		".spektacular/tmp/context_template.md",
+		".spektacular/tmp/research_template.md",
+	}
+
+	seen := 0
+	for _, ri := range renderAllStepInstructionsMode(t, "spektacular", "") {
+		if ri.workflow != "plan" {
+			continue
+		}
+		for _, b := range bare {
+			require.NotContainsf(t, ri.body, b, "%s stages a plan document outside the spec's own folder", ri.templatePath)
+		}
+		paths, ok := want[ri.stepName]
+		if !ok {
+			continue
+		}
+		seen++
+		for _, p := range paths {
+			require.Containsf(t, ri.body, p, "%s must name %s", ri.templatePath, p)
+		}
+	}
+	require.Equal(t, len(want), seen, "every plan step with staged documents must be rendered")
+
+	for _, c := range []struct{ kind, step string }{
+		{"plan", "walkthrough"},
+		{"implement", "reconcile_spec"},
+		{"spec", "split"},
+	} {
+		body := commitLeadingInstruction(t, c.kind, c.step)
+		require.Containsf(t, body, own+"git-commit-message.md",
+			"the %s commit message must be staged in the spec's own folder", c.kind)
+		require.NotContainsf(t, body, ".spektacular/tmp/git-commit-message.md",
+			"the %s commit message must not be staged at the shared scratch path", c.kind)
+	}
 }

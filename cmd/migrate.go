@@ -77,20 +77,6 @@ func installerFor(root, cfgPath string) migrate.Installer {
 	}
 }
 
-func installerFor(root, cfgPath string) migrate.Installer {
-return func(name string) error {
-a, err := agent.Lookup(name)
-if err != nil {
-return err
-}
-cfg, err := config.FromYAMLFile(cfgPath)
-if err != nil {
-return err
-}
-return a.Install(root, cfg, io.Discard)
-}
-}
-
 // migrateError turns an upgrade failure into an error response whose
 // next_action says how to recover. rep is the partial report Apply returned
 // with the error; cfgPath is the project settings file.

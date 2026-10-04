@@ -70,4 +70,4 @@ Save the result to its working file. Using your own `Write` tool, write the **Co
 
 Once the chosen direction is recorded in the assumption log and the draft is saved, advance:
 
-{{config.command}} plan goto --data '{"step":"{{next_step}}"}'
+{{config.command}} plan goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'

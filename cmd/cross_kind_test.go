@@ -137,12 +137,24 @@ func TestMismatchInstruction_RendersBothPathsAcrossKinds(t *testing.T) {
 	require.Contains(t, out, "000024_resume")
 	require.Contains(t, out, "discovery")
 	// Continue the in-progress (plan) workflow with its own skill.
-	require.Contains(t, out, `spektacular plan goto --data '{"step":"discovery"}'`)
+	require.Contains(t, out, `spektacular plan goto --data '{"step":"discovery","name":"000024_resume"}'`)
 	// Or overwrite and start the requested (spec) workflow.
 	require.Contains(t, out, "spektacular spec new --force")
 	// Must not steer the agent to resume the plan as a spec.
 	require.NotContains(t, out, "spec goto", "must not suggest resuming the other kind as a spec")
 	require.True(t, strings.Contains(out, "in progress"), "must state a workflow is in progress")
+}
+
+// TestMismatchInstruction_SpecInProgressCarriesNoName asserts the cross-kind
+// prompt resumes an in-progress spec without a name: only plan and implement
+// gotos route by the spec name.
+func TestMismatchInstruction_SpecInProgressCarriesNoName(t *testing.T) {
+	out, err := mismatchInstruction("spektacular", "spec", "plan", "000024_resume", "overview")
+	require.NoError(t, err)
+
+	require.Contains(t, out, `spektacular spec goto --data '{"step":"overview"}'`)
+	require.NotContains(t, out, `"name":`)
+	require.Contains(t, out, "spektacular plan new --force")
 }
 
 // TestRepoGuidedAdd_RunsToCompletionBesideAnInProgressSpec is the isolation

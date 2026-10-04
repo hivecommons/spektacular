@@ -639,3 +639,135 @@ func TestRenderPretty_StandaloneAndWorkflow(t *testing.T) {
 	require.NoError(t, RenderPretty(&buf, Report{}))
 	require.Equal(t, "no workflow in progress\n", buf.String())
 }
+
+// lanes is a fake Options.Lane: the lane for kind+name, or nil.
+func lanes(m map[string]*workflow.State) func(kind, name string) *workflow.State {
+	return func(kind, name string) *workflow.State { return m[kind+"-"+name] }
+}
+
+// An orchestrated plan or implement workflow runs in its own lane, beside
+// the shared state.json: status reports its live step and, when the shared
+// workflow does not cover the report, its workflow block marked orchestrated.
+func TestBuild_OrchestratedLane(t *testing.T) {
+	updated := time.Date(2026, 10, 1, 9, 30, 0, 0, time.UTC)
+	planLane := func(name, step string) *workflow.State {
+		return &workflow.State{Kind: "plan", CurrentStep: step, CompletedSteps: []string{"new", "overview"}, UpdatedAt: updated, Data: map[string]any{"name": name, "orchestrated": true}}
+	}
+
+	t.Run("a plan lane's step is the plan's current step", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		e.opts.Lane = lanes(map[string]*workflow.State{"plan-B": planLane("B", "discovery")})
+
+		r, err := Build(e.opts, "B")
+		require.NoError(t, err)
+		require.Equal(t, "discovery", specByName(t, r, "B").Plan.CurrentStep)
+		require.Equal(t, "finished", specByName(t, r, "A").Plan.CurrentStep, "another spec's lane is not this plan's step")
+		require.Equal(t, &WorkflowInfo{Kind: "plan", Name: "B", CurrentStep: "discovery", CompletedSteps: []string{"new", "overview"}, UpdatedAt: "2026-10-01T09:30:00Z", Orchestrated: true}, r.Workflow)
+
+		raw, err := json.Marshal(r.Workflow)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"kind":"plan","name":"B","current_step":"discovery","completed_steps":["new","overview"],"updated_at":"2026-10-01T09:30:00Z","orchestrated":true}`, string(raw))
+	})
+
+	t.Run("an implement lane is reported as an orchestrated implement workflow", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		e.opts.Lane = lanes(map[string]*workflow.State{"implement-B": {Kind: "implement", CurrentStep: "analyze", Data: map[string]any{"name": "B", "orchestrated": true}}})
+
+		r, err := Build(e.opts, "E")
+		require.NoError(t, err)
+		require.NotNil(t, r.Workflow)
+		require.Equal(t, "implement", r.Workflow.Kind)
+		require.Equal(t, "B", r.Workflow.Name)
+		require.Equal(t, "analyze", r.Workflow.CurrentStep)
+		require.True(t, r.Workflow.Orchestrated)
+		require.Equal(t, "finished", specByName(t, r, "B").Plan.CurrentStep, "an implement lane is not the plan's own step")
+	})
+
+	t.Run("a plan lane with no plan written yet shows in the workflow block", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		e.opts.Lane = lanes(map[string]*workflow.State{"plan-C": planLane("C", "overview")})
+
+		r, err := Build(e.opts, "C")
+		require.NoError(t, err)
+		require.Nil(t, specByName(t, r, "C").Plan)
+		require.NotNil(t, r.Workflow)
+		require.Equal(t, "plan", r.Workflow.Kind)
+		require.Equal(t, "C", r.Workflow.Name)
+		require.Equal(t, "overview", r.Workflow.CurrentStep)
+		require.True(t, r.Workflow.Orchestrated)
+	})
+
+	t.Run("the shared workflow is unaffected by a lane for another spec", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		e.opts.State = &workflow.State{Kind: "spec", CurrentStep: "requirements", Data: map[string]any{"name": "C"}}
+		e.opts.Lane = lanes(map[string]*workflow.State{"plan-B": planLane("B", "discovery")})
+
+		r, err := Build(e.opts, "E")
+		require.NoError(t, err)
+		require.Equal(t, "requirements", specByName(t, r, "C").CurrentStep)
+		require.Equal(t, "discovery", specByName(t, r, "B").Plan.CurrentStep)
+		require.Equal(t, &WorkflowInfo{Kind: "spec", Name: "C", CurrentStep: "requirements", CompletedSteps: []string{}}, r.Workflow, "the shared workflow's block wins and is not marked orchestrated")
+	})
+
+	t.Run("a shared workflow for the same name wins over its lane", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		e.opts.State = &workflow.State{Kind: "plan", CurrentStep: "architecture", Data: map[string]any{"name": "B"}}
+		e.opts.Lane = lanes(map[string]*workflow.State{"plan-B": planLane("B", "discovery")})
+
+		r, err := Build(e.opts, "B")
+		require.NoError(t, err)
+		require.Equal(t, "architecture", specByName(t, r, "B").Plan.CurrentStep)
+		require.Equal(t, "architecture", r.Workflow.CurrentStep)
+		require.False(t, r.Workflow.Orchestrated)
+	})
+
+	t.Run("a finished lane is not in progress", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		e.opts.Lane = lanes(map[string]*workflow.State{"plan-B": planLane("B", "finished")})
+
+		r, err := Build(e.opts, "B")
+		require.NoError(t, err)
+		require.Equal(t, "finished", specByName(t, r, "B").Plan.CurrentStep)
+		require.Nil(t, r.Workflow)
+	})
+
+	t.Run("lanes are only read for plan and implement", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		var asked []string
+		e.opts.Lane = func(kind, name string) *workflow.State {
+			asked = append(asked, kind)
+			return &workflow.State{Kind: kind, CurrentStep: "interview", Data: map[string]any{"name": name}}
+		}
+		e.write("specs/S.md", "---\ncreated_date: \"2026-09-28\"\ndocument_status: draft\n---\n\n# Spec\n")
+
+		r, err := Build(e.opts, "S")
+		require.NoError(t, err)
+		require.Equal(t, "", r.Specs[0].CurrentStep, "a spec's step never comes from a lane")
+		require.NotContains(t, asked, "spec")
+	})
+}
+
+// A standalone workflow block carries no orchestrated key at all.
+func TestBuild_StandaloneWorkflowBlockOmitsOrchestrated(t *testing.T) {
+	e := newEnv(t)
+	e.standardEpic()
+	e.opts.State = &workflow.State{Kind: "plan", CurrentStep: "milestones", Data: map[string]any{"name": "B"}}
+
+	r, err := Build(e.opts, "B")
+	require.NoError(t, err)
+	raw, err := json.Marshal(r)
+	require.NoError(t, err)
+	var got struct {
+		Workflow map[string]any `json:"workflow"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &got))
+	require.Equal(t, "milestones", got.Workflow["current_step"])
+	require.NotContains(t, got.Workflow, "orchestrated")
+}

@@ -52,7 +52,8 @@ func runPlanNew(cmd *cobra.Command, _ []string) error {
 			Input: &schemaObj{
 				Type: "object",
 				Properties: map[string]*schemaProp{
-					"name": {Type: "string", Pattern: "^[a-z0-9_-]+$", MaxLen: 64},
+					"name":         {Type: "string", Pattern: "^[a-z0-9_-]+$", MaxLen: 64},
+					"orchestrated": {Type: "boolean", Description: "true when an epic orchestrator starts the run: it keeps its own lane under .spektacular/workflows/ and skips the uncommitted-changes question"},
 				},
 				Required: []string{"name"},
 			},
@@ -82,6 +83,15 @@ func runPlanNew(cmd *cobra.Command, _ []string) error {
 	// spec new so the driving agent can offer resume without first
 	// prompting the user for a spek name.
 	statePath := stateFilePath(dataDir)
+	laneName, orchestrated, err := orchestratedStart(dataStr)
+	if err != nil {
+		return err
+	}
+	if orchestrated {
+		// An orchestrated run keeps its own lane, so it probes only that lane
+		// for a resume: a standalone workflow never blocks it.
+		statePath = workflow.LaneStatePath(dataDir, "plan", laneName)
+	}
 	if dryRun {
 		statePath += ".dryrun-tmp"
 	} else {
@@ -108,12 +118,21 @@ func runPlanNew(cmd *cobra.Command, _ []string) error {
 	if input.Name == "" || !nameRegexp.MatchString(input.Name) || len(input.Name) > 64 {
 		return fmt.Errorf("name must match ^[a-z0-9_-]+$ and be at most 64 characters")
 	}
+	if !orchestrated && !dryRun {
+		if err := refuseLaneInProgress(dataDir, cfg.Command, "plan", input.Name); err != nil {
+			return err
+		}
+	}
 
 	// The uncommitted-changes gate runs once the name is validated, so its
 	// pre-workflow commit message can name the real spec, and before
 	// clearState — the first thing this command writes.
-	if err := startGate(cfg, root, "plan", input.Name, dataStr, dryRun); err != nil {
-		return err
+	// An orchestrated run skips it: the orchestrator raises uncommitted work
+	// once, at the start of the whole run.
+	if !orchestrated {
+		if err := startGate(cfg, root, "plan", input.Name, dataStr, dryRun); err != nil {
+			return err
+		}
 	}
 	if !dryRun {
 		clearState(statePath)
@@ -124,6 +143,9 @@ func runPlanNew(cmd *cobra.Command, _ []string) error {
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, store.NewSourceStore(root, "project"), out)
 	wf.SetData("name", input.Name)
+	if orchestrated {
+		wf.SetData("orchestrated", true)
+	}
 
 	if err := readInputIntoWorkflow(cmd, wf); err != nil {
 		return err
@@ -142,6 +164,7 @@ func runPlanGoto(cmd *cobra.Command, _ []string) error {
 				Type: "object",
 				Properties: map[string]*schemaProp{
 					"step": {Type: "string", Enum: workflow.New(plan.Steps(), "", workflow.Config{}, nil, nil).StepNames()},
+					"name": {Type: "string", Pattern: "^[a-z0-9_-]+$", MaxLen: 64, Description: "the spec whose workflow to advance; routes to its orchestrated lane when it has one"},
 				},
 				Required: []string{"step"},
 			},
@@ -182,14 +205,24 @@ func runPlanGoto(cmd *cobra.Command, _ []string) error {
 
 	// Refuse to operate on an in-progress workflow of a different kind (e.g. a
 	// spec); resuming it from here would apply plan steps to a spek's state.
-	if handled, err := guardKind(stateFilePath(dataDir), cfg.Command, "plan"); err != nil {
+	// The spec name routes the goto to that spec's workflow — its lane, or
+	// the shared record when that holds it. It is a routing key, never
+	// workflow data, so it is removed before the rest is copied in.
+	gotoName, _ := input["name"].(string)
+	delete(input, "name")
+	slot, err := resolveGotoSlot(dataDir, cfg.Command, "plan", gotoName)
+	if err != nil {
+		return err
+	}
+
+	if handled, err := guardKind(slot.StatePath, cfg.Command, "plan"); err != nil {
 		return err
 	} else if handled {
 		return err
 	}
 
 	wfCfg := workflow.Config{Command: cfg.Command, Kind: "plan", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
-	return gotoWithAutoCommit(cmd, cfg, root, stateFilePath(dataDir), "plan",
+	return gotoWithAutoCommit(cmd, cfg, root, slot.StatePath, "plan",
 		plan.Steps(), wfCfg, input, stepVal, "no active plan found — run 'plan new' first")
 }
 

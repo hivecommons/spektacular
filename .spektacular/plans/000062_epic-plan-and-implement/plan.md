@@ -594,7 +594,7 @@ The orchestrator resumes a child that asked a question by sending it the user's 
 
 **Validation point**: Two orchestrated plan runs for different specs can be driven step by step, interleaved, in one project alongside an ordinary run, and both finish with correct, separate commits. The full test suite passes, including every existing check on ordinary runs.
 
-#### - [ ] Task: Restore a compiling build
+#### - [x] Task: Restore a compiling build
 **Id:** a78b1879-184c-4bbf-b728-34effbc9d780
 **Repo:** spektacular
 **Depends on:** none
@@ -605,9 +605,9 @@ The last commit left a second, identical copy of the migrate installer helper, s
 *Technical detail:* [context.md#task-restore-a-compiling-build](./context.md#task-restore-a-compiling-build)
 
 **Acceptance criteria**:
-- [ ] The project builds and the full test suite runs and passes with no change in behaviour.
+- [x] The project builds and the full test suite runs and passes with no change in behaviour.
 
-#### - [ ] Task: Run orchestrated plan and implement workflows in their own lanes
+#### - [x] Task: Run orchestrated plan and implement workflows in their own lanes
 **Id:** ec3dddb2-84b5-4e2c-8870-d839962ed9c3
 **Repo:** spektacular
 **Depends on:**
@@ -619,14 +619,14 @@ Introduce workflow slots. Starting a plan or implement workflow with `orchestrat
 *Technical detail:* [context.md#task-run-orchestrated-plan-and-implement-workflows-in-their-own-lanes](./context.md#task-run-orchestrated-plan-and-implement-workflows-in-their-own-lanes)
 
 **Acceptance criteria**:
-- [ ] Two orchestrated plan workflows for different specs and one ordinary workflow can all be in progress in one project, each advancing independently.
-- [ ] Repeating an orchestrated start for a spec whose lane is in progress returns a resume report for that lane instead of starting over.
-- [ ] An ordinary start for a spec whose lane is in progress is refused, naming the lane.
-- [ ] A `goto` naming a spec reaches that spec's workflow, and the name is never stored in the workflow's data.
-- [ ] A `goto` naming a spec that has no workflow, or that does not match the shared record, is refused with a next step.
-- [ ] A `goto` with no name behaves exactly as before.
+- [x] Two orchestrated plan workflows for different specs and one ordinary workflow can all be in progress in one project, each advancing independently.
+- [x] Repeating an orchestrated start for a spec whose lane is in progress returns a resume report for that lane instead of starting over.
+- [x] An ordinary start for a spec whose lane is in progress is refused, naming the lane.
+- [x] A `goto` naming a spec reaches that spec's workflow, and the name is never stored in the workflow's data.
+- [x] A `goto` naming a spec that has no workflow, or that does not match the shared record, is refused with a next step.
+- [x] A `goto` with no name behaves exactly as before.
 
-#### - [ ] Task: Name the spec in every plan and implement instruction and keep scratch files per spec
+#### - [x] Task: Name the spec in every plan and implement instruction and keep scratch files per spec
 **Id:** 180b71a6-7359-48c3-9d60-9e674a36f94f
 **Repo:** spektacular
 **Depends on:**
@@ -638,12 +638,12 @@ Every `goto` that the plan and implement steps, the resume reports and the CLI's
 *Technical detail:* [context.md#task-name-the-spec-in-every-plan-and-implement-instruction-and-keep-scratch-files-per-spec](./context.md#task-name-the-spec-in-every-plan-and-implement-instruction-and-keep-scratch-files-per-spec)
 
 **Acceptance criteria**:
-- [ ] Every rendered plan and implement instruction that advances the workflow names the spec it belongs to, and a contract test enforces this.
-- [ ] Resume reports for plan and implement tell the agent to resume with the spec named.
-- [ ] Staged plan documents and staged commit messages live in a folder for their own spec.
-- [ ] Ordinary plan and implement runs still pass every existing instruction check.
+- [x] Every rendered plan and implement instruction that advances the workflow names the spec it belongs to, and a contract test enforces this.
+- [x] Resume reports for plan and implement tell the agent to resume with the spec named.
+- [x] Staged plan documents and staged commit messages live in a folder for their own spec.
+- [x] Ordinary plan and implement runs still pass every existing instruction check.
 
-#### - [ ] Task: Let an orchestrated run hand back instead of asking
+#### - [x] Task: Let an orchestrated run hand back instead of asking
 **Id:** 0737c1b4-8835-4246-a780-e5e6911b9cbe
 **Repo:** spektacular
 **Depends on:**
@@ -661,12 +661,12 @@ Ordinary runs keep their wording unchanged.
 *Technical detail:* [context.md#task-let-an-orchestrated-run-hand-back-instead-of-asking](./context.md#task-let-an-orchestrated-run-hand-back-instead-of-asking)
 
 **Acceptance criteria**:
-- [ ] An orchestrated plan finishes, closing its documents final, without asking the user for sign-off, and hands back a summary of the plan.
-- [ ] An orchestrated implementation moves on to its next task without asking.
-- [ ] Orchestrated steps name the lane's own notes file, not the shared one.
-- [ ] The ordinary walkthrough and between-task question are unchanged, and their existing checks still pass.
+- [x] An orchestrated plan finishes, closing its documents final, without asking the user for sign-off, and hands back a summary of the plan.
+- [x] An orchestrated implementation moves on to its next task without asking.
+- [x] Orchestrated steps name the lane's own notes file, not the shared one.
+- [x] The ordinary walkthrough and between-task question are unchanged, and their existing checks still pass.
 
-#### - [ ] Task: Scope orchestrated plan commits to their own files
+#### - [x] Task: Scope orchestrated plan commits to their own files
 **Id:** c42805f7-06dc-4373-bd55-6e71404802d5
 **Repo:** spektacular
 **Depends on:**
@@ -678,12 +678,12 @@ When auto-commit is on and an orchestrated plan finishes, the commit stages only
 *Technical detail:* [context.md#task-scope-orchestrated-plan-commits-to-their-own-files](./context.md#task-scope-orchestrated-plan-commits-to-their-own-files)
 
 **Acceptance criteria**:
-- [ ] A finishing orchestrated plan's commit contains its own plan, working files and lane files, and nothing belonging to another plan in progress.
-- [ ] Two plans finishing at the same moment both commit successfully, one after the other.
-- [ ] A failed commit leaves every other workflow's progress untouched.
-- [ ] Ordinary and implement-lane commits behave exactly as before.
+- [x] A finishing orchestrated plan's commit contains its own plan, working files and lane files, and nothing belonging to another plan in progress.
+- [x] Two plans finishing at the same moment both commit successfully, one after the other.
+- [x] A failed commit leaves every other workflow's progress untouched.
+- [x] Ordinary and implement-lane commits behave exactly as before.
 
-#### - [ ] Task: Show orchestrated runs in status and the session log
+#### - [x] Task: Show orchestrated runs in status and the session log
 **Id:** f5868aaa-8731-4333-9cdb-037dcffb4de9
 **Repo:** spektacular
 **Depends on:**
@@ -695,9 +695,9 @@ When auto-commit is on and an orchestrated plan finishes, the commit stages only
 *Technical detail:* [context.md#task-show-orchestrated-runs-in-status-and-the-session-log](./context.md#task-show-orchestrated-runs-in-status-and-the-session-log)
 
 **Acceptance criteria**:
-- [ ] While an orchestrated plan is in progress, `status` for its spec shows the plan's current step.
-- [ ] Session-log entries for a lane's commands are filed under that lane.
-- [ ] Existing status output for ordinary runs is unchanged.
+- [x] While an orchestrated plan is in progress, `status` for its spec shows the plan's current step.
+- [x] Session-log entries for a lane's commands are filed under that lane.
+- [x] Existing status output for ordinary runs is unchanged.
 
 ### Milestone 2: Spektacular can say what an epic still needs, and isolate parallel implementation
 
@@ -954,3 +954,126 @@ Add a short paragraph to the README's How It Works section. It introduces "plan 
 - **Changing what an epic is, or the dependency check run when a spec is implemented on its own.** The epic format, its validation and the single-spec dependency check are unchanged, as the `epics-and-seeded-specs.md` design settles.
 - **Fixing `skill spawn-planning-agents`, which tells agents to read the plan and spec directories directly.** This breaks the store-access rule but predates this feature and is unrelated to it. Tracked in [#70](https://github.com/hivecommons/spektacular/issues/70).
 - **Updating this repository's own installed skills and configuration.** Per the "plans never change the active install" convention, the new skills reach this repo only through a normal install and migrate between workflows.
+
+## Changelog
+
+### 2026-10-04 — Task: Restore a compiling build
+
+**What was done**: Removed the second, unindented copy of `installerFor` from `cmd/migrate.go` (introduced by commit 1188110), so the `cmd` package compiles again. The full suite passes under `-shuffle=on`.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: cmd/migrate.go`
+
+**Discoveries**: `go list ./...` (and so `go test ./...`) fails on a permission-denied `tests/harbor/jobs/...` directory. Run the suite as `go test -shuffle=on . ./cmd/... ./internal/... ./templates/...`; `dagger/` is a separate module.
+
+### 2026-10-04 — Task: Run orchestrated plan and implement workflows in their own lanes
+
+**What was done**: `plan new` and `implement new` accept `"orchestrated": true`. Such a run keeps its state in `.spektacular/workflows/<kind>-<name>.json`, probes only that lane for a resume, skips the uncommitted-changes gate and records `orchestrated` in workflow data. Both `goto` commands accept `name`, strip it before data is copied, and route to the lane, or to `state.json` when it holds that name. Unknown or mismatched names are refused with `workflow_not_found`. A standalone `new` for a spec whose lane is in progress is refused with `workflow_in_progress`, naming the lane.
+
+**Deviations**: The lane path helpers went straight into `internal/workflow/lane.go` (`LaneStatePath`, `LaneNotesPath`, `LaneStateRel`, `LaneNotesRel`, `ReadLane`, `LaneNames`) instead of starting in `cmd` and moving there in a later task. A named goto against a shared record of another kind falls through to the existing cross-kind report rather than `workflow_not_found`. A standalone `new` is refused while a lane is in progress even with `--force`; the next action offers `new --force` with `orchestrated` to discard the lane.
+
+**Files changed**:
+- `spektacular: internal/workflow/lane.go`
+- `spektacular: internal/workflow/lane_test.go`
+- `spektacular: cmd/workflow_slot.go`
+- `spektacular: cmd/workflow_lane_test.go`
+- `spektacular: cmd/plan.go`
+- `spektacular: cmd/implement.go`
+
+**Discoveries**: Until the next two tasks land, instructions rendered inside a lane (step `goto` lines, the resume report and the working-context footer) still name the shared slot. An agent following them would drive `state.json`, so lanes are not usable end to end before then.
+
+### 2026-10-04 — Task: Name the spec in every plan and implement instruction and keep scratch files per spec
+
+**What was done**: Every `goto` in the plan and implement step templates now carries `"name":"{{plan_name}}"`. So do the resume and cross-kind resume reports for plan and implement, the commit-message partial, the engine's `invalid_transition` hints and the implement `changelog_missing` hint. Plan and implement scratch files moved under `.spektacular/tmp/<plan_name>/`, and the staged commit message moved to `.spektacular/tmp/<name>/git-commit-message.md` through a new shared `autocommit.MessageTmpPath`. Contract tests require the name in every rendered plan and implement goto, and per-spec scratch paths.
+
+**Deviations**: The per-name commit-message path applies to every kind, spec included, for one shape; only plan and implement gotos carry the name. The resume templates also became lane-aware here: an orchestrated report names the lane's notes file and offers `new --force` with `orchestrated`. `resumeInstruction` gained an `orchestrated` parameter.
+
+**Files changed**:
+- `spektacular: templates/steps/plan/*.md (01-19)`
+- `spektacular: templates/steps/implement/*.md (01-11)`
+- `spektacular: templates/steps/resume.md`
+- `spektacular: templates/steps/resume_implement.md`
+- `spektacular: templates/steps/resume_mismatch.md`
+- `spektacular: templates/partials/git-commit-message.md`
+- `spektacular: internal/autocommit/message.go`
+- `spektacular: internal/stepkit/stepkit.go`
+- `spektacular: internal/workflow/workflow.go`
+- `spektacular: internal/steps/implement/steps.go`
+- `spektacular: cmd/autocommit.go`
+- `spektacular: cmd/resume.go`
+- `spektacular: cmd/instruction_contract_test.go`, `cmd/autocommit_test.go`, `cmd/milestones_test.go`, `cmd/cross_kind_test.go`, `cmd/resume_test.go`, `cmd/implement_task_run_test.go`, `cmd/implement_test.go`
+- `spektacular: internal/autocommit/message_test.go`, `internal/workflow/workflow_test.go`, `internal/steps/plan/steps_test.go`, `internal/steps/implement/steps_test.go`
+
+**Discoveries**: The contract harness renders the write steps (15-17, 19) through `WriteStepResult` with no store, so it only ever sees their "already committed" branch. Per-spec staging for those steps is pinned by unit tests in `internal/steps/plan` instead.
+
+### 2026-10-04 — Task: Let an orchestrated run hand back instead of asking
+
+**What was done**: `stepkit` now exposes `orchestrated` and `working_context_path` to every step template, and the footer names the lane's own notes file for an orchestrated run. Every step of an orchestrated workflow gets a "Running under an orchestrator" section. It says to hand each STOP back as `QUESTION: <spec>`, report an unrecoverable failure as `FAILED: <spec>`, and never ask between tasks or offer knowledge capture. The orchestrated walkthrough reads the plan back, prepares a summary and advances to `finished` with no sign-off. The plan's finished step then hands back `DONE: <spec>` with that summary. An orchestrated implement loops between tasks without asking, lists discoveries for the orchestrator instead of offering them, and ends with `DONE: <spec>`. An orchestrated resume report resumes without asking. Standalone renders are byte-identical to before.
+
+**Deviations**: The plan had a partial included at each STOP sentence. Instead, one orchestrated section is appended by `stepkit` to every orchestrated step, so no STOP can be missed. The `implement-plan-documents` partial falls back to `.spektacular/working-context.md` when no `working_context_path` is set, because it is also rendered into the installed `spek-implement` skill.
+
+**Files changed**:
+- `spektacular: internal/stepkit/stepkit.go`
+- `spektacular: cmd/resume.go`
+- `spektacular: templates/partials/orchestrated-stop.md`
+- `spektacular: templates/partials/working-context-footer.md`
+- `spektacular: templates/partials/implement-plan-documents.md`
+- `spektacular: templates/steps/plan/13-assemble.md`
+- `spektacular: templates/steps/plan/18-walkthrough.md`
+- `spektacular: templates/steps/plan/19-finished.md`
+- `spektacular: templates/steps/implement/07-update_changelog.md`
+- `spektacular: templates/steps/implement/12-finished.md`
+- `spektacular: templates/steps/resume.md`
+- `spektacular: templates/steps/resume_implement.md`
+- `spektacular: cmd/orchestrated_test.go`, `cmd/instruction_contract_test.go`
+- `spektacular: internal/steps/plan/orchestrated_test.go`, `internal/steps/implement/orchestrated_test.go`
+
+**Discoveries**: Mustache standalone section tags (`{{^x}}` on a line of their own) are stripped together with their newline. Wrapping existing prose can drop a blank line, so check standalone renders for byte identity after any such edit. Partials shared between step templates and install-time skills only get `{{command}}` at install time, so any new variable they use needs a fallback.
+
+### 2026-10-04 — Task: Scope orchestrated plan commits to their own files
+
+**What was done**:
+- `autocommit.Git` gained `CommitPaths`. It stages only the given paths (additions, changes and deletions) and commits them with `--only`, leaving every other change in the tree as it was.
+- A new project-level commit lock at `.spektacular/workflows/.commit.lock` serialises these commits. It waits up to 30s and breaks a lock older than 10 minutes.
+- When an orchestrated plan finishes with auto-commit on, it commits only its own files: its plan store directory, `.spektacular/work/<name>/`, `.spektacular/tmp/<name>/` and its lane files.
+- Every lane's files are removed when it reaches `finished` (before the commit, so a plan lane's deletion is part of it), and also when auto-commit is off.
+- A failed commit restores only that lane's state and notes.
+- Standalone and implement-lane commits are unchanged.
+
+**Deviations**:
+- `CommitPaths` keeps a path that is on disk, in the index, or in HEAD.
+  - The HEAD case covers a retry after a rejected commit, whose lane deletion is already staged.
+  - Paths known only to HEAD go to the commit but not to `git add`, which refuses them.
+- The plan's open question is answered: `git commit --only` with a fully deleted tracked directory works on the installed git.
+- Known minor issue: `AcquireLock` can race when two waiters both find the same stale lock. One may remove the other's fresh lock. This needs a lock already abandoned for 10 minutes and is not handled.
+
+**Files changed**:
+- `spektacular: internal/autocommit/git.go`
+- `spektacular: internal/autocommit/lock.go`
+- `spektacular: internal/autocommit/lock_test.go`
+- `spektacular: internal/autocommit/git_integration_test.go`
+- `spektacular: internal/autocommit/targets_test.go`
+- `spektacular: cmd/autocommit.go`
+- `spektacular: cmd/orchestrated_commit_test.go`
+- `spektacular: cmd/orchestrated_test.go`
+
+**Discoveries**:
+- `git ls-files` reports the index, not HEAD, and `git add -A -- <path>` fails for a path that is in neither the work tree nor the index. So a path-scoped commit that retries after a hook rejection must look at HEAD to find deletions it already staged.
+
+### 2026-10-04 — Task: Show orchestrated runs in status and the session log
+
+**What was done**: `status.Options` gained a `Lane` reader, which `cmd/status.go` wires to `workflow.ReadLane`. A plan's current step now comes from the shared workflow when that matches, and otherwise from the spec's in-progress lane. When the shared workflow matches none of the reported specs, the report's `workflow` block falls back to the first in-progress plan or implement lane, marked `orchestrated: true`. The debug session log now snapshots the lane for an orchestrated `new`, or for a `goto` naming a spec that has a lane, so lane commands are filed under `<kind>:<name>`. A lane's finishing command, whose files are then removed, is filed under the lane too.
+
+**Deviations**: The dependency-check call sites (`cmd/implement.go`, `cmd/epic_link.go`) leave `Lane` nil, since they never report a current step. When a spec has both a plan lane and an implement lane in progress, the `workflow` block shows the plan lane.
+
+**Files changed**:
+- `spektacular: internal/status/report.go`
+- `spektacular: cmd/status.go`
+- `spektacular: cmd/root.go`
+- `spektacular: internal/status/status_test.go`
+- `spektacular: cmd/status_test.go`
+- `spektacular: cmd/sessionlog_lane_test.go`
+
+**Discoveries**: The session log reads `os.Args`, not cobra's args, so routing it by `--data` needs its own argv scan that skips the values of value-taking flags (`--data`, `-d`, `--fields`, `--stdin`, `--file`).

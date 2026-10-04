@@ -91,4 +91,4 @@ Before advancing, save your research to its working file. Using your own `Write`
 
 Once research is complete, advance:
 
-{{config.command}} plan goto --data '{"step":"{{next_step}}"}'
+{{config.command}} plan goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'

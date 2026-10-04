@@ -555,7 +555,7 @@ func TestWriteStep_CommitsOwnDocument(t *testing.T) {
 	// plan.md absent from the store — the step must instruct the commit.
 	_, err := writePlan()(data, writer, st, cfg)
 	require.NoError(t, err)
-	require.Contains(t, writer.result.Instruction, "--from .spektacular/tmp/plan_template.md",
+	require.Contains(t, writer.result.Instruction, "--from .spektacular/tmp/test/plan_template.md",
 		"write_plan must instruct committing plan.md from its scratch file when it is not yet in the store")
 
 	// A committed, filled plan.md — no commit command, reports done.
@@ -564,8 +564,63 @@ func TestWriteStep_CommitsOwnDocument(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, writer.result.Instruction, "already been committed",
 		"write_plan must report plan.md is already committed once it is in the store")
-	require.NotContains(t, writer.result.Instruction, "--from .spektacular/tmp/plan_template.md",
+	require.NotContains(t, writer.result.Instruction, "--from .spektacular/tmp/test/plan_template.md",
 		"write_plan must not re-instruct the commit once plan.md is in the store")
+}
+
+// TestWriteSteps_StageInTheSpecsOwnFolder asserts each write step, while its
+// document is not yet in the store, commits it from — and removes — a scratch
+// file in the spec's own folder under .spektacular/tmp, never a scratch file
+// shared by every spec.
+func TestWriteSteps_StageInTheSpecsOwnFolder(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cb   workflow.StepCallback
+		doc  string
+	}{
+		{"write_plan", writePlan(), "plan"},
+		{"write_context", writeContext(), "context"},
+		{"write_research", writeResearch(), "research"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := store.NewFileStore(t.TempDir(), "project")
+			writer := &captureWriter{}
+			data := &testData{values: map[string]any{"name": "000007_billing"}}
+			cfg := workflow.Config{Command: "spektacular", Kind: "plan", PlanDir: "plans", SpecDir: "specs"}
+
+			_, err := tc.cb(data, writer, st, cfg)
+			require.NoError(t, err)
+			out := writer.result.Instruction
+
+			own := ".spektacular/tmp/000007_billing/" + tc.doc + "_template.md"
+			require.Contains(t, out, "plan file write 000007_billing "+tc.doc+" --from "+own)
+			require.Contains(t, out, "rm "+own)
+			require.NotContains(t, out, ".spektacular/tmp/"+tc.doc+"_template.md",
+				"%s must not stage its document at a scratch path shared by every spec", tc.name)
+			require.Contains(t, out, `"name":"000007_billing"`, "%s must advance with the spec named", tc.name)
+		})
+	}
+}
+
+// TestFinishedStep_IncompletePlanCommitsFromTheSpecsOwnFolder asserts the
+// finished step's recovery path, shown when plan documents are missing from
+// the store, commits and removes the scratch files in the spec's own folder.
+func TestFinishedStep_IncompletePlanCommitsFromTheSpecsOwnFolder(t *testing.T) {
+	st := store.NewFileStore(t.TempDir(), "project")
+	writer := &captureWriter{}
+	data := &testData{values: map[string]any{"name": "000007_billing"}}
+	cfg := workflow.Config{Command: "spektacular", Kind: "plan", PlanDir: "plans", SpecDir: "specs"}
+
+	_, err := finished()(data, writer, st, cfg)
+	require.NoError(t, err)
+	out := writer.result.Instruction
+
+	for _, doc := range []string{"plan", "context", "research"} {
+		own := ".spektacular/tmp/000007_billing/" + doc + "_template.md"
+		require.Contains(t, out, "--from "+own)
+		require.NotContains(t, out, ".spektacular/tmp/"+doc+"_template.md")
+	}
+	require.Contains(t, out, "rm .spektacular/tmp/000007_billing/plan_template.md")
 }
 
 // --- Phase 4.2: workflows and skills go cross-repo ---

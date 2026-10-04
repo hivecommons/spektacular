@@ -48,6 +48,9 @@ type WorkflowInfo struct {
 	CurrentStep    string   `json:"current_step"`
 	CompletedSteps []string `json:"completed_steps"`
 	UpdatedAt      string   `json:"updated_at"`
+	// Orchestrated marks a workflow an epic orchestrator started, which runs
+	// in its own lane beside any standalone workflow.
+	Orchestrated bool `json:"orchestrated,omitempty"`
 }
 
 // EpicStatus is an epic's lifecycle and roll-up. The roll-up is derived on
@@ -125,6 +128,20 @@ type Options struct {
 	// Locate maps a registered repo name to its declared git source; nil
 	// reports every location as "".
 	Locate func(repo string) string
+	// Lane reads the orchestrated workflow of kind for a spec — its lane —
+	// or returns nil when it has none. nil reports no lanes.
+	Lane func(kind, name string) *workflow.State
+}
+
+// lane is the in-progress orchestrated workflow of kind for name, or nil.
+func (o Options) lane(kind, name string) *workflow.State {
+	if o.Lane == nil || (kind != "plan" && kind != "implement") {
+		return nil
+	}
+	if s := o.Lane(kind, name); s != nil && s.InProgress() {
+		return s
+	}
+	return nil
 }
 
 // Build reports on name, which may be an epic, a spec or a plan (see
@@ -331,7 +348,7 @@ func buildTarget(opts Options, target Target) (Report, error) {
 		r.Epic.Done = p.SpecsTotal > 0 && p.SpecsImplemented == p.SpecsTotal
 	}
 
-	r.Workflow = matchingWorkflow(opts.State, r.Specs)
+	r.Workflow = matchingWorkflow(opts, r.Specs)
 	return r, nil
 }
 
@@ -359,7 +376,7 @@ func buildSpec(opts Options, name string, dependsOn []string, epicSources []meta
 				s.DocumentStatus = string(fm.DocumentStatus)
 				s.Sources = append(s.Sources, fm.Sources...)
 			}
-			s.CurrentStep = currentStep(opts.State, "spec", name, metadata.DocumentStatus(s.DocumentStatus), fm != nil)
+			s.CurrentStep = currentStep(opts, "spec", name, metadata.DocumentStatus(s.DocumentStatus), fm != nil)
 		}
 	}
 	s.Sources = append(s.Sources, epicSources...)
@@ -387,7 +404,7 @@ func buildPlan(opts Options, name string) (*PlanStatus, PlanFacts) {
 	p := &PlanStatus{
 		Name:           name,
 		DocumentStatus: string(docStatus),
-		CurrentStep:    currentStep(opts.State, "plan", name, docStatus, fm != nil),
+		CurrentStep:    currentStep(opts, "plan", name, docStatus, fm != nil),
 	}
 	if parsed.Format == plantask.FormatTasks {
 		locate := opts.Locate
@@ -407,12 +424,16 @@ func buildPlan(opts Options, name string) (*PlanStatus, PlanFacts) {
 	return p, PlanFacts{Exists: true, Stale: docStatus == metadata.StatusStale, Parsed: parsed}
 }
 
-// currentStep is the live step when the workflow in progress is this kind
-// working on this name; otherwise "stale" for a stale document, "finished"
-// for a closed one, and "" for one still open with no live workflow.
-func currentStep(s *workflow.State, kind, name string, docStatus metadata.DocumentStatus, hasFrontmatter bool) string {
-	if s != nil && s.InProgress() && s.Kind == kind && stateName(s) == name {
+// currentStep is the live step when a workflow in progress is this kind
+// working on this name — the shared one, or the name's own lane; otherwise
+// "stale" for a stale document, "finished" for a closed one, and "" for one
+// still open with no live workflow.
+func currentStep(opts Options, kind, name string, docStatus metadata.DocumentStatus, hasFrontmatter bool) string {
+	if s := opts.State; s != nil && s.InProgress() && s.Kind == kind && stateName(s) == name {
 		return s.CurrentStep
+	}
+	if lane := opts.lane(kind, name); lane != nil {
+		return lane.CurrentStep
 	}
 	if docStatus == metadata.StatusStale {
 		return "stale"
@@ -423,16 +444,28 @@ func currentStep(s *workflow.State, kind, name string, docStatus metadata.Docume
 	return ""
 }
 
-// matchingWorkflow is the workflow block when the workflow in progress works
-// on one of the reported specs or plans.
-func matchingWorkflow(s *workflow.State, specs []SpecStatus) *WorkflowInfo {
-	if s == nil || !s.InProgress() {
-		return nil
+// matchingWorkflow is the workflow block when the shared workflow in
+// progress works on one of the reported specs or plans, or else when one of
+// them has an orchestrated plan or implement lane in progress (the first, in
+// report order).
+func matchingWorkflow(opts Options, specs []SpecStatus) *WorkflowInfo {
+	if s := opts.State; s != nil && s.InProgress() {
+		name := stateName(s)
+		for _, spec := range specs {
+			if spec.Name == name || (spec.Plan != nil && spec.Plan.Name == name) {
+				return workflowInfo(s)
+			}
+		}
 	}
-	name := stateName(s)
 	for _, spec := range specs {
-		if spec.Name == name || (spec.Plan != nil && spec.Plan.Name == name) {
-			return workflowInfo(s)
+		for _, kind := range []string{"plan", "implement"} {
+			if lane := opts.lane(kind, spec.Name); lane != nil {
+				info := workflowInfo(lane)
+				info.Kind = kind
+				info.Name = spec.Name
+				info.Orchestrated = true
+				return info
+			}
 		}
 	}
 	return nil

@@ -239,7 +239,7 @@ func finished() workflow.StepCallback {
 						"changelog_missing",
 						fmt.Sprintf("project-level changelog record %q was never written by update_feature_changelog", changelogPath),
 					).WithResource(changelogPath).
-						WithNextAction(fmt.Sprintf("re-run the update_feature_changelog step: `%s implement goto --data '{\"step\":\"update_feature_changelog\"}'`", cfg.Command))
+						WithNextAction(fmt.Sprintf("re-run the update_feature_changelog step: `%s implement goto --data '{\"step\":\"update_feature_changelog\",\"name\":%q}'`", cfg.Command, planName))
 				}
 				return "", err
 			}

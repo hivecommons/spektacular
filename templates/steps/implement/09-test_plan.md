@@ -29,12 +29,12 @@ Do not invent metrics the plan does not list, and do not restate metrics already
 
 The test plan is a plan-store artifact. **Never write it with the `Write`/`Edit` tools directly into the plan directory** — stage it, then commit it through the CLI:
 
-1. Use the `Write` tool to stage the content at the scratch path `.spektacular/tmp/test-plan.md`. When manual metrics exist, list one procedure per metric. When none exist, write a single explicit line: `All success metrics are covered by automated behavioural tests; no manual test plan is required.`
+1. Use the `Write` tool to stage the content at the scratch path `.spektacular/tmp/{{plan_name}}/test-plan.md`. When manual metrics exist, list one procedure per metric. When none exist, write a single explicit line: `All success metrics are covered by automated behavioural tests; no manual test plan is required.`
 2. Commit it and remove the scratch file:
 
    ```
-   {{config.command}} plan file write {{plan_name}} test-plan --from .spektacular/tmp/test-plan.md
-   rm .spektacular/tmp/test-plan.md
+   {{config.command}} plan file write {{plan_name}} test-plan --from .spektacular/tmp/{{plan_name}}/test-plan.md
+   rm .spektacular/tmp/{{plan_name}}/test-plan.md
    ```
 
 After the write succeeds, confirm it with `{{config.command}} plan file read {{plan_name}} test-plan`.
@@ -48,5 +48,5 @@ If the plan's `## Testing Approach` section does not mention success metrics at 
 Once the test plan artifact is written (or the explicit "none required" state is recorded):
 
 ```
-{{config.command}} implement goto --data '{"step":"{{next_step}}"}'
+{{config.command}} implement goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```

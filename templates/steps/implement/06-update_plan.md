@@ -18,11 +18,11 @@ The plan documents are owned by spektacular. **Never edit plan.md with the `Writ
 
 1. Read the current plan.md: `{{config.command}} plan file read {{plan_name}} plan`.
 2. Apply the checkbox changes above to the content you read.
-3. Stage the updated plan.md with the `Write` tool at the scratch path `.spektacular/tmp/plan_update.md`, point `plan file write` at it with `--from`, then remove the scratch file:
+3. Stage the updated plan.md with the `Write` tool at the scratch path `.spektacular/tmp/{{plan_name}}/plan_update.md`, point `plan file write` at it with `--from`, then remove the scratch file:
 
    ```
-   {{config.command}} plan file write {{plan_name}} plan --from .spektacular/tmp/plan_update.md
-   rm .spektacular/tmp/plan_update.md
+   {{config.command}} plan file write {{plan_name}} plan --from .spektacular/tmp/{{plan_name}}/plan_update.md
+   rm .spektacular/tmp/{{plan_name}}/plan_update.md
    ```
 
 ### STOP-on-mismatch
@@ -34,5 +34,5 @@ If any acceptance criterion passed verification but describes an outcome that no
 Once checkboxes are updated and committed:
 
 ```
-{{config.command}} implement goto --data '{"step":"{{next_step}}"}'
+{{config.command}} implement goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```

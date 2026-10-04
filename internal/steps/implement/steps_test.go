@@ -305,7 +305,7 @@ func TestReadPlanTemplateDirectsDescopedMarkerMechanics(t *testing.T) {
 	out := renderStep(t, readPlan())
 	require.Contains(t, out, "**Descoped requirements**:", "descoped gaps must use the documented marker format")
 	require.Contains(t, strings.ToLower(out), "already recorded as accepted", "spec coverage check must skip gaps already recorded as accepted")
-	require.Contains(t, out, "plan file write test plan --from .spektacular/tmp/plan_update.md", "descoped marker must be committed via `plan file write`")
+	require.Contains(t, out, "plan file write test plan --from .spektacular/tmp/test/plan_update.md", "descoped marker must be committed via `plan file write`")
 }
 
 func TestAnalyzeStepReferencesSpawnImplementationAgents(t *testing.T) {
@@ -491,8 +491,8 @@ func TestUpdateFeatureChangelogStepMentionsSourcesAndCommitCommand(t *testing.T)
 	out := renderStep(t, updateFeatureChangelog())
 	require.Contains(t, out, "spec file read test", "update_feature_changelog must read the feature's spec via `spec file read`")
 	require.Contains(t, out, "plan file read test plan", "update_feature_changelog must read the plan's implementation history via `plan file read`")
-	require.Contains(t, out, ".spektacular/tmp/changelog_project.md", "update_feature_changelog must stage the project-level record at a project-scoped scratch path")
-	require.Contains(t, out, "changelog file write test --from .spektacular/tmp/changelog_project.md", "update_feature_changelog must commit the project-level record via `changelog file write`")
+	require.Contains(t, out, ".spektacular/tmp/test/changelog_project.md", "update_feature_changelog must stage the project-level record at a project-scoped scratch path")
+	require.Contains(t, out, "changelog file write test --from .spektacular/tmp/test/changelog_project.md", "update_feature_changelog must commit the project-level record via `changelog file write`")
 	// The rendered advance target must match the FSM, which only allows
 	// update_feature_changelog → reconcile_spec (finished is two steps away).
 	require.Contains(t, out, `"step":"reconcile_spec"`, "update_feature_changelog must advance to reconcile_spec, not skip it")
@@ -511,7 +511,7 @@ func TestUpdateFeatureChangelogStepDerivesOneEntryPerAffectedRepo(t *testing.T) 
 		"update_feature_changelog must direct writing one repo-level record per affected repo")
 	require.Contains(t, out, "spektacular repo list",
 		"update_feature_changelog must discover repos via `repo list`")
-	require.Contains(t, out, "changelog file write test --repo <repo-name> --from .spektacular/tmp/changelog_<repo>.md",
+	require.Contains(t, out, "changelog file write test --repo <repo-name> --from .spektacular/tmp/test/changelog_<repo>.md",
 		"per-repo records must be committed through `changelog file write --repo`")
 	require.Contains(t, out, "> Derived from project",
 		"each repo record must carry a human-readable reference line")
@@ -607,8 +607,8 @@ func TestReconcileSpecStepMentionsSourcesAndCommitCommand(t *testing.T) {
 	out := renderStep(t, reconcileSpec())
 	require.Contains(t, out, "spec file read test", "reconcile_spec must read the feature's spec via `spec file read`")
 	require.Contains(t, out, "plan file read test plan", "reconcile_spec must read the plan's implementation history via `plan file read`")
-	require.Contains(t, out, ".spektacular/tmp/spec_reconcile.md", "reconcile_spec must stage its record at the scratch path")
-	require.Contains(t, out, "spec file write test --from .spektacular/tmp/spec_reconcile.md", "reconcile_spec must commit the record via `spec file write`")
+	require.Contains(t, out, ".spektacular/tmp/test/spec_reconcile.md", "reconcile_spec must stage its record at the scratch path")
+	require.Contains(t, out, "spec file write test --from .spektacular/tmp/test/spec_reconcile.md", "reconcile_spec must commit the record via `spec file write`")
 }
 
 // --- Phase 1.5: terminal-step closure of test-plan and changelog artifacts ---

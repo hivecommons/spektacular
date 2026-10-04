@@ -55,6 +55,11 @@ func (f *fakeGit) CommitAll(top, message string) error {
 	return f.commitErr[top]
 }
 
+func (f *fakeGit) CommitPaths(top string, _ []string, message string) error {
+	f.commitCalls = append(f.commitCalls, commitCall{Dir: top, Message: message})
+	return f.commitErr[top]
+}
+
 // newLocation creates an existing, registerable repo location: a directory
 // with no repo.yaml, which LocalSource resolves to the directory itself.
 func newLocation(t *testing.T, parent, name string) string {

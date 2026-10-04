@@ -555,3 +555,66 @@ func TestStatus_TaskRefusalsPointAtStatus(t *testing.T) {
 		require.NotContains(t, er.NextAction, "plan export")
 	}
 }
+
+// An orchestrated plan in progress runs in its own lane, not state.json:
+// status for its spec shows the lane's live step on the plan, and the
+// workflow block marked orchestrated, while a standalone workflow in
+// state.json keeps its block free of the orchestrated key.
+func TestStatus_ReportsAnOrchestratedPlanLane(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, "")
+	data := filepath.Join(dir, ".spektacular")
+	write := func(rel, content string) {
+		p := filepath.Join(data, rel)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
+	}
+	ep := epic.Epic{
+		CreatedDate:    time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: metadata.StatusDraft,
+		Specs: []epic.EpicSpec{
+			{Name: "alpha", DependsOn: []string{}},
+			{Name: "beta", DependsOn: []string{}},
+		},
+		Body: []byte("## Overview\n\nAn epic.\n"),
+	}
+	raw, err := ep.Render()
+	require.NoError(t, err)
+	write("epics/lanes.md", string(raw))
+	for _, n := range []string{"alpha", "beta"} {
+		write("specs/"+n+".md", "---\ncreated_date: 2026-09-28\ndocument_status: final\nepic: lanes\n---\n\n# Spec "+n+"\n")
+	}
+	write("specs/solo.md", "---\ncreated_date: 2026-09-28\ndocument_status: final\n---\n\n# Spec solo\n")
+	// alpha's plan is already written as a draft; beta's is not written yet.
+	write("plans/alpha/plan.md", "---\ncreated_date: 2026-09-29\ndocument_status: draft\nspec: alpha\n---\n\n# Plan\n")
+
+	startPlanLane(t, "alpha")
+	walkPlanLane(t, "alpha", "discovery", "architecture")
+	startPlanLane(t, "beta")
+	walkPlanLane(t, "beta", "discovery")
+	require.NoFileExists(t, stateFilePath(data), "orchestrated starts never write state.json")
+
+	got := statusOf(t, "alpha", "--format", "json")
+	specs := statusSpecs(t, got)
+	require.Equal(t, "architecture", specs["alpha"]["plan"].(map[string]any)["current_step"])
+	require.Nil(t, specs["beta"]["plan"])
+	w := got["workflow"].(map[string]any)
+	require.Equal(t, "plan", w["kind"])
+	require.Equal(t, "alpha", w["name"], "the first in-progress lane in report order")
+	require.Equal(t, "architecture", w["current_step"])
+	require.Equal(t, true, w["orchestrated"])
+
+	// A standalone plan for another spec lives in state.json; the lanes'
+	// steps still come through, and its own block has no orchestrated key.
+	runOK(t, "plan", "new", "--data", `{"name":"solo"}`)
+	solo := statusOf(t, "solo", "--format", "json")
+	sw := solo["workflow"].(map[string]any)
+	require.Equal(t, "solo", sw["name"])
+	require.Equal(t, "overview", sw["current_step"])
+	require.NotContains(t, sw, "orchestrated")
+
+	again := statusOf(t, "lanes", "--format", "json")
+	require.Equal(t, "architecture", statusSpecs(t, again)["alpha"]["plan"].(map[string]any)["current_step"])
+	require.Equal(t, true, again["workflow"].(map[string]any)["orchestrated"])
+}

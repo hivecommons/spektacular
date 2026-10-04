@@ -92,4 +92,4 @@ Both working files are git-tracked and are read back on resume and when the plan
 
 Once the drafted tasks are saved to both working files, advance:
 
-{{config.command}} plan goto --data '{"step":"{{next_step}}"}'
+{{config.command}} plan goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'

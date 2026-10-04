@@ -2,9 +2,9 @@
 
 The three plan documents were assembled and staged in the previous step at:
 
-- `.spektacular/tmp/plan_template.md`
-- `.spektacular/tmp/context_template.md`
-- `.spektacular/tmp/research_template.md`
+- `.spektacular/tmp/{{plan_name}}/plan_template.md`
+- `.spektacular/tmp/{{plan_name}}/context_template.md`
+- `.spektacular/tmp/{{plan_name}}/research_template.md`
 
 Verify them here. This step **only checks correctness** — it writes nothing to the plan store (the write steps that follow do that). If a scratch file is missing (the `.spektacular/tmp/` path is git-ignored and does not survive a crash), re-assemble it from the per-section working files under `.spektacular/work/{{plan_name}}/` before verifying.
 
@@ -69,5 +69,5 @@ This step does not touch the plan store. Never write or edit the plan documents 
 Then advance:
 
 ```
-{{config.command}} plan goto --data '{"step":"{{next_step}}"}'
+{{config.command}} plan goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```

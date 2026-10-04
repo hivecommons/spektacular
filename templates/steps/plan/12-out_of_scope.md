@@ -32,4 +32,4 @@ Before advancing, save this section to its working file. Using your own `Write` 
 
 Once the drafted exclusions are saved, advance:
 
-{{config.command}} plan goto --data '{"step":"{{next_step}}"}'
+{{config.command}} plan goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'

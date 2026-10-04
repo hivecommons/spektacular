@@ -332,8 +332,10 @@ func TestAutoCommit_ImplementCompletionCommitsEachChangedRepoOnce(t *testing.T) 
 func TestAutoCommit_RefusesCompletionWithoutAUsableMessage(t *testing.T) {
 	// The remediation is identical for both refusals: stage the message at
 	// the advertised path, then re-run the same goto carrying it.
-	const wantNextAction = `write the git commit message to .spektacular/tmp/git-commit-message.md, ` +
-		`then run: spektacular spec goto --data '{"step":"finished","commit_message_from":".spektacular/tmp/git-commit-message.md"}'`
+	// The message is staged in the spec's own scratch folder; a spec goto
+	// never carries a "name" (only plan and implement instructions do).
+	const wantNextAction = `write the git commit message to .spektacular/tmp/000001_billing/git-commit-message.md, ` +
+		`then run: spektacular spec goto --data '{"step":"finished","commit_message_from":".spektacular/tmp/000001_billing/git-commit-message.md"}'`
 
 	requireRefused := func(t *testing.T, fx gitFixture, stdout string, code int, wantCode, wantMessage string) {
 		t.Helper()
@@ -394,8 +396,8 @@ func TestAutoCommit_HookRejectionLeavesWorkflowOnPreviousStep(t *testing.T) {
 	require.Contains(t, er.Message, "lint-failed-in-hook")
 	require.Equal(t,
 		`fix the cause git reported above (a failing hook, for example), `+
-			`re-stage the message at .spektacular/tmp/git-commit-message.md, `+
-			`then re-run: spektacular spec goto --data '{"step":"finished","commit_message_from":".spektacular/tmp/git-commit-message.md"}'`,
+			`re-stage the message at .spektacular/tmp/000001_billing/git-commit-message.md, `+
+			`then re-run: spektacular spec goto --data '{"step":"finished","commit_message_from":".spektacular/tmp/000001_billing/git-commit-message.md"}'`,
 		er.NextAction)
 
 	// Only the failure is reported: the step's own output is dropped rather

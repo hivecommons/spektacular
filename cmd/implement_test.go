@@ -198,7 +198,9 @@ func TestImplementGoto_UpdateFeatureChangelogInstructsChangelogWrite(t *testing.
 	instruction, ok := result["instruction"].(string)
 	require.True(t, ok)
 	require.Contains(t, instruction, "changelog file write")
-	require.Contains(t, instruction, ".spektacular/tmp/changelog_project.md")
+	require.Contains(t, instruction, ".spektacular/tmp/fixture/changelog_project.md")
+	require.NotContains(t, instruction, ".spektacular/tmp/changelog_project.md",
+		"the project record must be staged in the spec's own scratch folder")
 }
 
 func TestImplementSteps_ListsAllSteps(t *testing.T) {

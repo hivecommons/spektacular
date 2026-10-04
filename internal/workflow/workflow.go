@@ -252,12 +252,23 @@ func (w *Workflow) nextActionForSteps(valid []string) string {
 	}
 	commands := make([]string, len(valid))
 	for i, step := range valid {
-		commands[i] = fmt.Sprintf(`%s %s goto --data '{"step":"%s"}'`, w.cfg.Command, w.cfg.Kind, step)
+		commands[i] = fmt.Sprintf(`%s %s goto --data '%s'`, w.cfg.Command, w.cfg.Kind, w.gotoData(step))
 	}
 	if len(commands) == 1 {
 		return "run: " + commands[0]
 	}
 	return "run one of: " + strings.Join(commands, "; ")
+}
+
+// gotoData renders a goto's --data for step. A plan or implement goto also
+// carries the spec name, which routes it to that spec's workflow when several
+// are in progress; other kinds take no name.
+func (w *Workflow) gotoData(step string) string {
+	name, _ := w.GetData("name")
+	if n, ok := name.(string); ok && n != "" && (w.cfg.Kind == "plan" || w.cfg.Kind == "implement") {
+		return fmt.Sprintf(`{"step":%q,"name":%q}`, step, n)
+	}
+	return fmt.Sprintf(`{"step":%q}`, step)
 }
 
 // renderStep re-invokes a step's callback to re-emit its instruction without

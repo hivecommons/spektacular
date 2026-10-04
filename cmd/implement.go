@@ -60,6 +60,7 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 				Properties: map[string]*schemaProp{
 					"name":                  {Type: "string", Pattern: "^[a-z0-9_-]+$", MaxLen: 64, Description: "the spec to implement (its plan shares the name)"},
 					"task":                  {Type: "string"},
+					"orchestrated":          {Type: "boolean", Description: "true when an epic orchestrator starts the run: it keeps its own lane under .spektacular/workflows/ and skips the uncommitted-changes question"},
 					"override_dependencies": {Type: "boolean", Description: "start even though a spec this one depends on in its epic is not implemented yet; set only after the user agrees, and refused under epic.strict_dependencies"},
 				},
 				Required: []string{"name"},
@@ -90,6 +91,15 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	// spec new so the driving agent can offer resume without first
 	// prompting the user for a plan name.
 	statePath := stateFilePath(dataDir)
+	laneName, orchestrated, err := orchestratedStart(dataStr)
+	if err != nil {
+		return err
+	}
+	if orchestrated {
+		// An orchestrated run keeps its own lane, so it probes only that lane
+		// for a resume: a standalone workflow never blocks it.
+		statePath = workflow.LaneStatePath(dataDir, "implement", laneName)
+	}
 	if dryRun {
 		statePath += ".dryrun-tmp"
 	} else {
@@ -118,6 +128,11 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	if input.Name == "" || !nameRegexp.MatchString(input.Name) || len(input.Name) > 64 {
 		return fmt.Errorf("name must match ^[a-z0-9_-]+$ and be at most 64 characters")
 	}
+	if !orchestrated && !dryRun {
+		if err := refuseLaneInProgress(dataDir, cfg.Command, "implement", input.Name); err != nil {
+			return err
+		}
+	}
 
 	// Precondition: the plan file must exist before an implement workflow
 	// can run against it. The workflow operates on an already-approved plan.
@@ -144,8 +159,12 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	// The uncommitted-changes gate runs once the plan is known to exist, so a
 	// refusal here never precedes a plan-not-found error, and before
 	// clearState — the first thing this command writes.
-	if err := startGate(cfg, root, "implement", input.Name, dataStr, dryRun); err != nil {
-		return err
+	// An orchestrated run skips it: the orchestrator raises uncommitted work
+	// once, at the start of the whole run.
+	if !orchestrated {
+		if err := startGate(cfg, root, "implement", input.Name, dataStr, dryRun); err != nil {
+			return err
+		}
 	}
 	if !dryRun {
 		clearState(statePath)
@@ -156,6 +175,9 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, projectStore, out)
 	wf.SetData("name", input.Name)
+	if orchestrated {
+		wf.SetData("orchestrated", true)
+	}
 	if input.Task != "" {
 		wf.SetData("task", input.Task)
 	}
@@ -180,6 +202,7 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 				Type: "object",
 				Properties: map[string]*schemaProp{
 					"step": {Type: "string", Enum: workflow.New(implement.Steps(), "", workflow.Config{}, nil, nil).StepNames()},
+					"name": {Type: "string", Pattern: "^[a-z0-9_-]+$", MaxLen: 64, Description: "the spec whose workflow to advance; routes to its orchestrated lane when it has one"},
 				},
 				Required: []string{"step"},
 			},
@@ -220,12 +243,22 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 
 	// Refuse to operate on an in-progress workflow of a different kind (e.g. a
 	// spec or plan); resuming it from here would apply implement steps to it.
-	if handled, err := guardKind(stateFilePath(dataDir), cfg.Command, "implement"); err != nil {
+	// The spec name routes the goto to that spec's workflow — its lane, or
+	// the shared record when that holds it. It is a routing key, never
+	// workflow data, so it is removed before the rest is copied in.
+	gotoName, _ := input["name"].(string)
+	delete(input, "name")
+	slot, err := resolveGotoSlot(dataDir, cfg.Command, "implement", gotoName)
+	if err != nil {
+		return err
+	}
+
+	if handled, err := guardKind(slot.StatePath, cfg.Command, "implement"); err != nil {
 		return err
 	} else if handled {
 		return err
 	}
-	wf := workflow.New(implement.Steps(), stateFilePath(dataDir), workflow.Config{}, nil, nil)
+	wf := workflow.New(implement.Steps(), slot.StatePath, workflow.Config{}, nil, nil)
 	if nameVal, ok := wf.GetData("name"); ok {
 		projectStore := store.NewSourceStore(root, "project")
 		if err := refuseStalePlan(cfg, projectStore, fmt.Sprintf("%v", nameVal)); err != nil {
@@ -234,7 +267,7 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 	}
 
 	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
-	return gotoWithAutoCommit(cmd, cfg, root, stateFilePath(dataDir), "implement",
+	return gotoWithAutoCommit(cmd, cfg, root, slot.StatePath, "implement",
 		implement.Steps(), wfCfg, input, stepVal, "no active implement workflow found — run 'implement new' first")
 }
 

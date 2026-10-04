@@ -6,6 +6,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/status"
 	"github.com/hivecommons/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/spf13/cobra"
 )
 
@@ -134,6 +135,10 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		Store:  store.NewSourceStore(root, "project"),
 		State:  status.ReadState(stateFilePath(dir)),
 		Locate: status.RepoLocations(cfg, root, repoGit),
+		Lane: func(kind, name string) *workflow.State {
+			s, _ := workflow.ReadLane(dir, kind, name)
+			return s
+		},
 	}
 
 	var r status.Report

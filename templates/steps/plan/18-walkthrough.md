@@ -1,5 +1,6 @@
 ## Step {{step}}: {{title}}
 
+{{^orchestrated}}
 All three plan documents are committed to the plan store. Before the workflow can finish, walk the user through the plan and get their explicit sign-off. This review is mandatory — do not offer it as a choice, and do not skip it because the user seems satisfied.
 
 Begin by reading all three committed documents back through the CLI — ground the review in the committed state, not your memory of drafting it (on a resumed session, this is the only reliable source):
@@ -26,5 +27,30 @@ Only conclude the walkthrough once the user gives an explicit affirmative answer
 Once the user has explicitly signed off, advance to the finished step:
 
 ```
-{{config.command}} plan goto --data '{"step":"{{next_step}}"}'
+{{config.command}} plan goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```
+{{/orchestrated}}
+{{#orchestrated}}
+All three plan documents are committed to the plan store. This run is orchestrated: the user reviews every plan of the epic together once planning ends, so there is **no sign-off here**. Do not ask the user to review this plan, and do not wait for an answer.
+
+Read all three committed documents back through the CLI, so your summary reflects the committed state rather than your memory of drafting it:
+
+```
+{{config.command}} plan file read {{plan_name}} plan
+{{config.command}} plan file read {{plan_name}} context
+{{config.command}} plan file read {{plan_name}} research
+```
+
+From them, prepare the summary you will hand back to your orchestrator at the end of the run. Keep it short, one or two lines per point:
+
+1. The chosen approach and why it was picked over the alternatives.
+2. The milestones and their tasks. Name every task whose `**Execution:**` is `human`, with its reason, or say there are none.
+3. What was deliberately left out of scope.
+4. The drafting assumptions from the `## Drafting assumptions` section of the plan's `research` document: each decision in a line, so the user can challenge it at the review.
+
+Then advance to the finished step, which marks the documents final:
+
+```
+{{config.command}} plan goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
+```
+{{/orchestrated}}
