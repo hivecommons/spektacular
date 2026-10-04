@@ -1,27 +1,25 @@
-# Working context — spec 000063_epic-planning-summary-and-reordering
+# Working context — plan 000063_epic-planning-summary-and-reordering
 
-## Origin
-- Came out of the user's first real run of "plan this epic" (from 000062) on their xcl project's 5-spec epic `references-and-secrets` (auto_commit off there).
-- The run produced 5 final plans with no mid-run questions, but the end-of-planning review exposed problems:
-  - Two independent specs (references-as-written, user-depends-on) both change `configuration-text.mdx` and `encode.go`, and the epic did not order them, so implementing them in parallel would conflict at merge.
-  - Plans disagreed on a project-wide rule (CHANGELOG.md hand-edited vs generated). The user is "not sure what is going on with changelog" (that is the xcl repo's own question, not Spektacular's).
-  - A plan departed from an interface the user had chosen, and another contradicted a binding knowledge entry. Both surfaced only in the review, not as questions during the run.
-  - The review output in chat was dense and garbled (wrapped, truncated lines), with the decisions buried after five summaries.
+## Origin (carried from the spec session)
+- Came from the user's first real "plan this epic" run on their xcl project's 5-spec epic `references-and-secrets`: two independent specs both changed `configuration-text.mdx` / `encode.go` with no ordering; plans disagreed on CHANGELOG handling; one plan contradicted a user-chosen interface and another a knowledge entry — all only surfaced in a dense end-of-run review.
+- User decisions from the spec session: summary doc lives in the epic store, read/written via `spektacular epic ...`; overlap dependencies are written without asking ("99% of the time folks are just going to agree"); earlier-listed spec goes first; no re-plan on added dependency; new contradiction questions apply to all planning (single-spec otherwise unchanged).
 
-## Decisions (user's words)
-- "we need a summary doc which contains a summary of each plan as a section". The user accepted my proposal: one document per epic in the epic store, read/written via `spektacular epic ...`, one section per spec from the child's DONE: summary, a leading "Decisions to settle" section; the review walks it, and changes go into the plan and the summary.
-- "When planning, if dependencies like the documentation one, then we should rebuild the dependencies and re-write it." On asking first: "99% of the time folks are just going to agree so just write". So the orchestrator adds depends_on between overlapping independent specs and rewrites the epic itself, reporting it.
-- Proposed (not explicitly confirmed): the earlier-listed spec goes first; no automatic re-plan.
-- User: "Yes create the spec, I will action it before re-running".
-- Interview answers: scope also includes wider "genuine question" (contradicting recorded user decisions or knowledge entries → QUESTION mid-run) and cross-plan decisions (proposed single answer applied to every affected plan). Added dependency order: epic list order. Docs: update the website Epics page.
-- Overview confirmed.
-- Requirements confirmed (14).
-- Acceptance criteria confirmed (14).
-- Constraints confirmed (4). User: epics design may change if beneficial → Technical Approach, not a constraint (design doc must be updated to match).
-- Technical approach confirmed.
-- Success metrics confirmed.
-- Non-goals confirmed.
-- Verification: applied reviewer fixes; user chose new contradiction questions apply to ALL planning (single-spec unchanged otherwise).
-- Spec committed to store; work dir removed.
-- Split offered (3 specs), user declined: keep as one spec.
-- User approved workflow auto-commits for the rest of this session.
+## Plan session
+- User chose spec 000063 to plan.
+- Discovery done. No design refs on the spec; the epics design (`epics-and-seeded-specs.md`) must still be updated (constraint) if the epic format changes.
+- Key learnings: per-task files live only in context.md "File changes" (backticked paths, `<repo>:` prefix for other repos); plan.md forbids file refs. Spec work dir (interview.md) is deleted at spec verification, so interview notes are normally unavailable. Any new STOP in a plan step becomes a QUESTION: under orchestration automatically via `partials/orchestrated-stop.md`. Standalone step text must not contain "orchestrat"/"QUESTION:"/"DONE:" (cmd/orchestrated_test.go). depgraph has no reachability helper.
+- Architecture chosen: `epic order` (context.md file overlap, depgraph.Reaches, parallel_with on unorder), `epic summary read/write` (section-addressed, epics/<epic>/summary.md, Decisions first), shared proceed-unless-blocked partial with recorded-decision/knowledge STOP, walkthrough summary +project-wide rules, spek-plan-epic writes/walks the summary. Design doc update via `design author`.
+- Components + data structures drafted: `parallel_with` on epic spec entries; depgraph.Reaches; plantask TaskFiles(plan, context, repos); `epic order` (+unorder), `epic summary read/write` (sections: decisions, ordering [CLI-only], <spec>); summary rendered title→Decisions→Order added→spec sections.
+- Implementation detail drafted (epic hand-written verb pattern, docTxn, summary parse/render round-trip, pure overlap reader, partial for proceed rule).
+- Dependencies drafted (000062/000060/000058 landed; no design refs; epics design updated, not built on).
+- Testing approach drafted: all 3 success metrics are manual (test plan); epic order/summary command tests are load-bearing.
+- Milestones: M1 stop rule in plan steps (all planning); M2 epic summary + epic order CLI + design update; M3 spek-plan-epic summary/review; M4 docs.
+- Tasks drafted: 9 tasks (ids allocated), docs task depends on epic order + spek-plan-epic task.
+- Open questions: one (old plans' file-change shape vs reader).
+- Out of scope drafted.
+- Assembled and staged plan/context/research to .spektacular/tmp/<plan>/.
+- Verification: removed binary-name commands from plan.md sources; anchors/ids checked.
+- plan.md written to store.
+- context.md written to store.
+- research.md written; work dir removed. Next: walkthrough with user.
+- User signed off the walkthrough; advancing to finished.
