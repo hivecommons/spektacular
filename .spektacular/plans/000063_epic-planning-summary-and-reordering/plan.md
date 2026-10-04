@@ -347,7 +347,7 @@ Testing follows the project's three layers:
 
 **Validation point**: The rendered plan steps carry the new stop rule in every drafting step. Architecture and verification carry the explicit check, and tasks and open questions forbid parking a contradiction. Orchestrated rendering turns the stop into a question hand-back. Ordinary single-spec rendering is otherwise unchanged. The full test suite passes.
 
-#### - [ ] Task: Make contradicting a recorded decision or knowledge entry a stop in every plan step
+#### - [x] Task: Make contradicting a recorded decision or knowledge entry a stop in every plan step
 **Id:** 73cd67dd-ae53-4fcd-8aa6-836626ebbd4a
 **Repo:** spektacular
 **Depends on:** none
@@ -358,12 +358,12 @@ The eleven drafting steps each carry their own copy of the paragraph that says w
 *Technical detail:* [context.md#task-make-contradicting-a-recorded-decision-or-knowledge-entry-a-stop-in-every-plan-step](./context.md#task-make-contradicting-a-recorded-decision-or-knowledge-entry-a-stop-in-every-plan-step)
 
 **Acceptance criteria**:
-- [ ] Every drafting step of the plan workflow tells the agent to carry on without interruption, except to stop and ask when a choice would contradict a recorded decision or a knowledge entry.
-- [ ] The wording lives in one place, and every drafting step shows the same text.
-- [ ] When the plan is run for an epic, the same stop is handed back as a question to the orchestrator.
-- [ ] Planning one spec on its own shows no orchestration wording, and its steps are otherwise unchanged.
+- [x] Every drafting step of the plan workflow tells the agent to carry on without interruption, except to stop and ask when a choice would contradict a recorded decision or a knowledge entry.
+- [x] The wording lives in one place, and every drafting step shows the same text.
+- [x] When the plan is run for an epic, the same stop is handed back as a question to the orchestrator.
+- [x] Planning one spec on its own shows no orchestration wording, and its steps are otherwise unchanged.
 
-#### - [ ] Task: Check plans against recorded decisions and knowledge before they are final
+#### - [x] Task: Check plans against recorded decisions and knowledge before they are final
 **Id:** f4575a0e-c560-44fa-aadb-e4e61e4a2f95
 **Repo:** spektacular
 **Depends on:**
@@ -381,10 +381,10 @@ The plan skill's own description says the same.
 *Technical detail:* [context.md#task-check-plans-against-recorded-decisions-and-knowledge-before-they-are-final](./context.md#task-check-plans-against-recorded-decisions-and-knowledge-before-they-are-final)
 
 **Acceptance criteria**:
-- [ ] Discovery tells the planner which recorded decisions to check, and says interview notes are read only when they still exist.
-- [ ] Architecture and verification each tell the planner to compare the plan with the spec's recorded decisions, referenced designs and knowledge entries, and to stop and ask on any contradiction.
-- [ ] The tasks step says a contradiction is never a task for a person, and the open-questions step says it is never parked as an open question.
-- [ ] A plan for one spec on its own still has the same steps and sign-off as before.
+- [x] Discovery tells the planner which recorded decisions to check, and says interview notes are read only when they still exist.
+- [x] Architecture and verification each tell the planner to compare the plan with the spec's recorded decisions, referenced designs and knowledge entries, and to stop and ask on any contradiction.
+- [x] The tasks step says a contradiction is never a task for a person, and the open-questions step says it is never parked as an open question.
+- [x] A plan for one spec on its own still has the same steps and sign-off as before.
 
 ### Milestone 2: An epic keeps a planning summary, and overlapping specs are ordered automatically
 
@@ -584,3 +584,47 @@ The site changelog records the change.
 - Comparing files across specs from real code changes. Overlap is read from what the plans say they change. Merge-time conflict detection when implementing is unchanged.
 - A new harbor end-to-end suite for epic planning. Live epic behaviour is covered by the implementation test plan, as in 000062.
 - Changing the plan task format in `plan`, including any per-task file list there. Files stay in the plan's technical notes.
+
+## Changelog
+
+### 2026-10-04 — Task: Make contradicting a recorded decision or knowledge entry a stop in every plan step
+
+**What was done**: Moved the "Proceed unless genuinely blocked" paragraph, which had been copied by hand into the 11 plan drafting steps, into a new shared partial. The partial adds a rule: a choice that contradicts a decision the user recorded for the spec (its sections, a referenced design, or its interview notes where they still exist), or a knowledge entry, is always a STOP to ask the user. It is never parked as a drafting assumption, a `human` task, an open question or a review note. Orchestrated runs hand the stop back as a `QUESTION:` through the existing stop partial.
+
+**Deviations**: None. The new tests sit in a new `TestGatheringStepsStopOnContradictingRecordedDecision` rather than in an extended `TestGatheringStepsProceedWithoutApprovalGates`, which is unchanged.
+
+**Files changed**:
+- `spektacular: templates/partials/proceed-unless-blocked.md`
+- `spektacular: templates/steps/plan/02-discovery.md`
+- `spektacular: templates/steps/plan/03-architecture.md`
+- `spektacular: templates/steps/plan/04-components.md`
+- `spektacular: templates/steps/plan/05-data_structures.md`
+- `spektacular: templates/steps/plan/06-implementation_detail.md`
+- `spektacular: templates/steps/plan/07-dependencies.md`
+- `spektacular: templates/steps/plan/08-testing_approach.md`
+- `spektacular: templates/steps/plan/09-milestones.md`
+- `spektacular: templates/steps/plan/10-tasks.md`
+- `spektacular: templates/steps/plan/11-open_questions.md`
+- `spektacular: templates/steps/plan/12-out_of_scope.md`
+- `spektacular: internal/steps/plan/steps_test.go`
+- `spektacular: internal/steps/plan/orchestrated_test.go`
+
+**Discoveries**: Step templates already resolve `{{> partials/...}}` includes through `stepkit.FSPartials`, so no rendering change was needed. Shared partials included in plan steps must avoid the orchestration-only words ("orchestrat", "QUESTION:", "DONE:", "FAILED:", ".spektacular/workflows/"), which `cmd/orchestrated_test.go` forbids in standalone renders. `go test ./...` breaks locally on an unreadable, gitignored `tests/harbor/jobs/` directory, so packages have to be listed explicitly.
+
+### 2026-10-04 — Task: Check plans against recorded decisions and knowledge before they are final
+
+**What was done**: Gave the planner explicit places to apply the new stop rule. Discovery has a "Recorded decisions" paragraph: the spec's sections, every referenced design, and `interview.md` only if it still exists. Its clarify bullet now always asks on a contradiction. Architecture checks the direction against recorded decisions and knowledge before recording it, and verification checks the staged plan the same way. Tasks says a contradiction is never a `human` task, and open questions gains a "departs from the spec's chosen interface" example that must not be parked there. The `spek-plan` skill gains a "Recorded decisions and knowledge" section.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: templates/steps/plan/02-discovery.md`
+- `spektacular: templates/steps/plan/03-architecture.md`
+- `spektacular: templates/steps/plan/10-tasks.md`
+- `spektacular: templates/steps/plan/11-open_questions.md`
+- `spektacular: templates/steps/plan/14-verification.md`
+- `spektacular: templates/skills/workflows/spek-plan/SKILL.md`
+- `spektacular: internal/steps/plan/steps_test.go`
+- `spektacular: templates/orchestrated_skill_section_test.go`
+
+**Discoveries**: `templates/orchestrated_skill_section_test.go` is in `package templates`, not `templates_test`, so the `section` / `flat` helpers from `seeding_test.go` are not reachable from it. The Go `dagger/` directory is a separate module, so build and test patterns must name `./cmd/... ./internal/... ./templates/...` rather than include it.

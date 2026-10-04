@@ -34,6 +34,8 @@ Then pull in topic-specific knowledge for the **design surfaces** this feature i
 
 **Knowledge outranks the code it describes.** Every entry you load or retrieve above — conventions, glossary, architecture, gotchas, learnings, decisions — states how this project works and how the work must be done. The code is the current state, and it may not have caught up yet. Where an entry and the code disagree, **plan to the entry** and treat the difference as work to do; a codebase that does something else is not evidence that an entry is stale, obsolete, or superseded. This applies with full force when an entry mandates a library, a structure, or a pattern the code does not use yet — that is the entry doing its job. If you genuinely believe an entry is wrong, raise it with the user and ask; never silently overrule it in the plan.
 
+**Recorded decisions.** The user's recorded decisions for this spec are what the plan must not contradict without asking: the spec's Requirements, Constraints, Technical Approach, Non-Goals and Acceptance Criteria; every design the spec references; and the spec's interview notes at `.spektacular/work/{{plan_name}}/interview.md`, read only if it exists. The spec workflow normally removes those notes once the spec is written, so their absence is normal and nothing to report. Keep these decisions, and the knowledge entries you loaded, in view for every later step: a choice that would contradict one of them is a STOP to ask the user, never a judgement call to record.
+
 If the plan touches tests, read the relevant test files directly as part of Step 3 (Codebase Research) to understand conventions (framework, naming, fixtures, mocking) before planning changes. Don't cache findings — the test files are the source of truth.
 
 ### Step 3: Codebase Research
@@ -69,7 +71,7 @@ Keep this dense. Assume a future agent will read it cold and need to make decisi
 ### Step 5: Read and Clarify
 
 - Read all findings fully
-- Ask only questions the code cannot answer
+- Ask only questions the code cannot answer, and always ask when what you found would make the plan contradict a recorded decision or a knowledge entry
 - Report a brief summary of key discoveries to the user in passing — informational, not a review gate; do not wait for acknowledgement
 
 ### Step 6: Capturing a learning (optional)
@@ -87,7 +89,7 @@ Before advancing, save your research to its working file. Using your own `Write`
 - **Rejected**: alternatives considered and why not
 ```
 
-**Proceed unless genuinely blocked.** Do not stop to present this section for review or approval. Only when a decision has no reasonable default — mutually exclusive directions you cannot responsibly choose between, or information only the user holds — STOP and present the options to the user in one block, and do not advance past the point that depends on the answer until they respond. Otherwise proceed without interruption.
+{{> partials/proceed-unless-blocked}}
 
 Once research is complete, advance:
 

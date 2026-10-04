@@ -45,6 +45,8 @@ Mark a task `human` when completing it needs any of:
 
 Anything else is `agent`. Write the reason after the type, naming which of these applies: `**Execution:** human — needs access to the production signing key`.
 
+A contradiction with a recorded decision or a knowledge entry is **never a `human` task**, not even as "a stakeholder decision". Stop and ask the user now, while planning, and plan to their answer.
+
 **Split mixed work.** A task that would need both an agent and a person is split into two tasks: the agent's part, and the person's part as its own `human` task that depends on the agent's. For example, adding a release workflow that then needs a production signing secret created is an `agent` task (add the workflow) and a `human` task (create the secret) whose `**Depends on:**` lists the agent task.
 
 ### Task content in the plan's context.md
@@ -88,7 +90,7 @@ Both working files are git-tracked and are read back on resume and when the plan
 - **Rejected**: alternatives considered and why not
 ```
 
-**Proceed unless genuinely blocked.** Do not stop to present this section for review or approval. Only when a decision has no reasonable default — mutually exclusive directions you cannot responsibly choose between, or information only the user holds — STOP and present the options to the user in one block, and do not advance past the point that depends on the answer until they respond. Otherwise proceed without interruption.
+{{> partials/proceed-unless-blocked}}
 
 Once the drafted tasks are saved to both working files, advance:
 

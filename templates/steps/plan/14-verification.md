@@ -59,6 +59,7 @@ A common failure mode is silently dropping a section when assembling. Check each
   `{{config.command}} plan file write` enforces the structural rules above and refuses a plan.md that breaks them, naming the task. If a write step is refused, fix the named task in `tasks_plan.md`, re-assemble and retry.
 - **The plan's context.md** — per-task technical notes under headings matching plan.md's `*Technical detail:*` anchors.
 - **research.md** — alternatives considered and rejected with citations. Dense enough to rehydrate a cold session.
+- **Recorded decisions and knowledge** — check the staged plan against the spec's recorded decisions (its sections, every design it references, and its interview notes only if they still exist) and against the knowledge entries loaded in discovery. If anything in the plan contradicts one of them, STOP and ask the user before Step 3 re-stages; do not record it as an assumption, a `human` task or an open question.
 
 ### Step 3: Fix and re-stage
 

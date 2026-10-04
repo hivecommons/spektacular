@@ -55,6 +55,13 @@ read and the source it came from** in its Dependencies. If any reference does no
 discovery step stops and reports rather than planning around the gap — a broken reference is
 meant to surface here, not during implementation.
 
+# Recorded decisions and knowledge
+
+Planning stops to ask the user whenever the plan would contradict a decision the user recorded for
+the spec (in the spec itself, in a design it references, or in its interview notes where those still
+exist) or a knowledge entry. Such a contradiction is never settled silently, and never left as a task
+for a person, an open question or a note for the review.
+
 # Working files vs. the store documents
 
 The drafting steps run without stopping for section approval — draft each section, save it, and advance; only a genuinely blocking question (no reasonable default, or information only the user holds) interrupts the user before the walkthrough.

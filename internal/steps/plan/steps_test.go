@@ -10,6 +10,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/stepkit"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/templates"
 	"github.com/stretchr/testify/require"
 )
 
@@ -118,6 +119,60 @@ func TestGatheringStepsProceedWithoutApprovalGates(t *testing.T) {
 				require.NotContains(t, out, phrase,
 					"%s step must not contain the wait-for-approval phrasing %q", tc.name, phrase)
 			}
+		})
+	}
+}
+
+// contradictionStopRule is the opening sentence of the contradiction stop in
+// templates/partials/proceed-unless-blocked.md, hand-copied so a rewording of
+// the rule is a deliberate test change.
+const contradictionStopRule = "**A choice that would contradict a decision the user recorded for this spec, or a knowledge entry, is always the user's to make.**"
+
+// TestGatheringStepsStopOnContradictingRecordedDecision asserts every plan
+// drafting step carries on without interruption except to stop and ask when a
+// choice would contradict a recorded decision or a knowledge entry, and that
+// the wording comes from the one shared partial rather than a per-step copy.
+func TestGatheringStepsStopOnContradictingRecordedDecision(t *testing.T) {
+	const include = "{{> partials/proceed-unless-blocked}}"
+
+	steps := []struct {
+		name     string
+		cb       workflow.StepCallback
+		template string
+	}{
+		{"discovery", discovery(), "steps/plan/02-discovery.md"},
+		{"architecture", architecture(), "steps/plan/03-architecture.md"},
+		{"components", components(), "steps/plan/04-components.md"},
+		{"data_structures", dataStructures(), "steps/plan/05-data_structures.md"},
+		{"implementation_detail", implementationDetail(), "steps/plan/06-implementation_detail.md"},
+		{"dependencies", dependencies(), "steps/plan/07-dependencies.md"},
+		{"testing_approach", testingApproach(), "steps/plan/08-testing_approach.md"},
+		{"milestones", milestones(), "steps/plan/09-milestones.md"},
+		{"tasks", tasks(), "steps/plan/10-tasks.md"},
+		{"open_questions", openQuestions(), "steps/plan/11-open_questions.md"},
+		{"out_of_scope", outOfScope(), "steps/plan/12-out_of_scope.md"},
+	}
+
+	for _, tc := range steps {
+		t.Run(tc.name, func(t *testing.T) {
+			out := renderStep(t, tc.cb)
+			require.Equal(t, 1, strings.Count(out, "contradict a decision the user recorded"),
+				"%s step must carry the contradiction stop exactly once", tc.name)
+			require.Contains(t, out, contradictionStopRule)
+			require.Contains(t, out, "STOP and ask the user before going further")
+			require.Contains(t, out, "Never record such a contradiction as a drafting assumption, a `human` task, an open question or a note left for the review.")
+			require.Equal(t, 1, strings.Count(out, "Otherwise proceed without interruption."),
+				"%s step must carry the proceed-unless-blocked rule exactly once", tc.name)
+
+			raw, err := templates.FS.ReadFile(tc.template)
+			require.NoError(t, err)
+			src := string(raw)
+			require.Equal(t, 1, strings.Count(src, include),
+				"%s must include the shared proceed-unless-blocked partial exactly once", tc.template)
+			require.NotContains(t, src, "**Proceed unless genuinely blocked.**",
+				"%s must not keep its own copy of the proceed-unless-blocked rule", tc.template)
+			require.NotContains(t, src, "contradict a decision the user recorded",
+				"%s must not keep its own copy of the contradiction stop", tc.template)
 		})
 	}
 }
@@ -823,4 +878,80 @@ func TestDependenciesStepNamesEveryDesignDocument(t *testing.T) {
 		require.Equalf(t, 1, strings.Count(out, tc.anchor),
 			"%s (expected %q exactly once)", tc.why, tc.anchor)
 	}
+}
+
+// --- Plans are checked against recorded decisions and knowledge ---
+
+// TestDiscoveryStepNamesTheRecordedDecisions asserts discovery lists which
+// recorded decisions the plan must not contradict, reads the spec's interview
+// notes only when they still exist, and always asks on a contradiction. The
+// expected strings are hand-copied from templates/steps/plan/02-discovery.md,
+// with the plan name rendered.
+func TestDiscoveryStepNamesTheRecordedDecisions(t *testing.T) {
+	out := renderStep(t, discovery())
+
+	require.Equal(t, 1, strings.Count(out, "**Recorded decisions.**"),
+		"discovery must carry the recorded-decisions paragraph exactly once")
+	for _, want := range []string{
+		"the spec's Requirements, Constraints, Technical Approach, Non-Goals and Acceptance Criteria",
+		"every design the spec references",
+		"the spec's interview notes at `.spektacular/work/test/interview.md`, read only if it exists",
+		"their absence is normal and nothing to report",
+		"a choice that would contradict one of them is a STOP to ask the user, never a judgement call to record",
+		"always ask when what you found would make the plan contradict a recorded decision or a knowledge entry",
+	} {
+		require.Contains(t, out, want)
+	}
+	require.NotContains(t, out, "{{plan_name}}", "the interview notes path must render the plan name")
+}
+
+// TestArchitectureStepChecksRecordedDecisionsBeforeRecording asserts the
+// architecture step compares its direction with the recorded decisions and
+// knowledge entries before recording it, and stops to ask on a contradiction.
+func TestArchitectureStepChecksRecordedDecisionsBeforeRecording(t *testing.T) {
+	out := renderStep(t, architecture())
+
+	check := "Before recording anything, check the direction against the spec's recorded decisions and the knowledge entries loaded in the discovery step."
+	stop := "If the direction would contradict a recorded decision or a knowledge entry, that is not a choice to record: STOP and ask the user, and pick a direction only once they have answered."
+	require.Equal(t, 1, strings.Count(out, check))
+	require.Contains(t, out, stop)
+	require.Less(t, strings.Index(out, check), strings.Index(out, "Pick the best-grounded direction yourself"),
+		"the check must come before the direction is chosen and recorded")
+}
+
+// TestVerificationChecksTheStagedPlanAgainstRecordedDecisions asserts the
+// verification quality check compares the staged plan with the spec's
+// sections, referenced designs, interview notes where they exist and the
+// loaded knowledge entries, and stops to ask before re-staging.
+func TestVerificationChecksTheStagedPlanAgainstRecordedDecisions(t *testing.T) {
+	out := renderStep(t, verification())
+
+	for _, want := range []string{
+		"**Recorded decisions and knowledge**",
+		"check the staged plan against the spec's recorded decisions (its sections, every design it references, and its interview notes only if they still exist) and against the knowledge entries loaded in discovery",
+		"STOP and ask the user before Step 3 re-stages",
+		"do not record it as an assumption, a `human` task or an open question",
+	} {
+		require.Contains(t, out, want)
+	}
+}
+
+// TestTasksStepNeverMakesAContradictionAHumanTask asserts a contradiction with
+// a recorded decision or a knowledge entry is asked about now, never handed to
+// a person as a task.
+func TestTasksStepNeverMakesAContradictionAHumanTask(t *testing.T) {
+	out := renderStep(t, tasks())
+	require.Contains(t, out, "A contradiction with a recorded decision or a knowledge entry is **never a `human` task**, not even as \"a stakeholder decision\".")
+	require.Contains(t, out, "Stop and ask the user now, while planning, and plan to their answer.")
+}
+
+// TestOpenQuestionsStepNeverParksAContradiction asserts the open-questions
+// step lists a departure from the spec's decisions among what does not belong
+// there, and sends it to the user now.
+func TestOpenQuestionsStepNeverParksAContradiction(t *testing.T) {
+	out := renderStep(t, openQuestions())
+	example := "- \"This plan departs from the spec's chosen interface\" → never parked as an open question: stop and ask the user now"
+	require.Contains(t, out, example)
+	require.Less(t, strings.Index(out, "Examples of what does NOT belong here:"), strings.Index(out, example),
+		"the example must sit in the does-NOT-belong list")
 }

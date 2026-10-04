@@ -1,25 +1,18 @@
-# Working context — plan 000063_epic-planning-summary-and-reordering
+# Working context — implement 000063_epic-planning-summary-and-reordering
 
-## Origin (carried from the spec session)
-- Came from the user's first real "plan this epic" run on their xcl project's 5-spec epic `references-and-secrets`: two independent specs both changed `configuration-text.mdx` / `encode.go` with no ordering; plans disagreed on CHANGELOG handling; one plan contradicted a user-chosen interface and another a knowledge entry — all only surfaced in a dense end-of-run review.
-- User decisions from the spec session: summary doc lives in the epic store, read/written via `spektacular epic ...`; overlap dependencies are written without asking ("99% of the time folks are just going to agree"); earlier-listed spec goes first; no re-plan on added dependency; new contradiction questions apply to all planning (single-spec otherwise unchanged).
+## Origin (carried from the spec/plan sessions)
+- Came from the user's xcl `references-and-secrets` epic: two specs both changed `configuration-text.mdx` / `encode.go` unordered; CHANGELOG handling disagreed; plans contradicted a user-chosen interface and a knowledge entry; end-of-run review was dense.
+- User decisions: summary doc lives in epic store via `spektacular epic ...`; overlap deps written without asking; earlier-listed spec goes first; no re-plan on added dep; new contradiction questions apply to all planning.
 
-## Plan session
-- User chose spec 000063 to plan.
-- Discovery done. No design refs on the spec; the epics design (`epics-and-seeded-specs.md`) must still be updated (constraint) if the epic format changes.
-- Key learnings: per-task files live only in context.md "File changes" (backticked paths, `<repo>:` prefix for other repos); plan.md forbids file refs. Spec work dir (interview.md) is deleted at spec verification, so interview notes are normally unavailable. Any new STOP in a plan step becomes a QUESTION: under orchestration automatically via `partials/orchestrated-stop.md`. Standalone step text must not contain "orchestrat"/"QUESTION:"/"DONE:" (cmd/orchestrated_test.go). depgraph has no reachability helper.
-- Architecture chosen: `epic order` (context.md file overlap, depgraph.Reaches, parallel_with on unorder), `epic summary read/write` (section-addressed, epics/<epic>/summary.md, Decisions first), shared proceed-unless-blocked partial with recorded-decision/knowledge STOP, walkthrough summary +project-wide rules, spek-plan-epic writes/walks the summary. Design doc update via `design author`.
-- Components + data structures drafted: `parallel_with` on epic spec entries; depgraph.Reaches; plantask TaskFiles(plan, context, repos); `epic order` (+unorder), `epic summary read/write` (sections: decisions, ordering [CLI-only], <spec>); summary rendered title→Decisions→Order added→spec sections.
-- Implementation detail drafted (epic hand-written verb pattern, docTxn, summary parse/render round-trip, pure overlap reader, partial for proceed rule).
-- Dependencies drafted (000062/000060/000058 landed; no design refs; epics design updated, not built on).
-- Testing approach drafted: all 3 success metrics are manual (test plan); epic order/summary command tests are load-bearing.
-- Milestones: M1 stop rule in plan steps (all planning); M2 epic summary + epic order CLI + design update; M3 spek-plan-epic summary/review; M4 docs.
-- Tasks drafted: 9 tasks (ids allocated), docs task depends on epic order + spek-plan-epic task.
-- Open questions: one (old plans' file-change shape vs reader).
-- Out of scope drafted.
-- Assembled and staged plan/context/research to .spektacular/tmp/<plan>/.
-- Verification: removed binary-name commands from plan.md sources; anchors/ids checked.
-- plan.md written to store.
-- context.md written to store.
-- research.md written; work dir removed. Next: walkthrough with user.
-- User signed off the walkthrough; advancing to finished.
+## Implement session
+- User chose 000063 to implement (2026-10-04).
+- read_plan: structure OK, no drift found (all paths/symbols exist), every spec item covered. First-task invocation (no ## Changelog yet).
+- Repo roots: spektacular = /home/nicj/code/github.com/hivecommons/spektacular, docs = /home/nicj/code/github.com/hivecommons/spektacular-website.
+- Task 1 analysis: step templates already include partials (`{{> partials/...}}` via stepkit.FSPartials); new partial must avoid "orchestrat", "QUESTION:", "FAILED:", "DONE:", ".spektacular/workflows/" (cmd/orchestrated_test.go TestStandaloneStepsCarryNoOrchestratorHandBack).
+- Task 1 implemented: `templates/partials/proceed-unless-blocked.md` (anchor phrase "contradict a decision the user recorded"), included in the 11 gathering steps.
+- Env gotcha: `go test ./...` fails on a root-owned dir under gitignored `tests/harbor/jobs/` (permission denied). Run packages explicitly: `go test $(find . -name '*.go' -not -path './tests/harbor/jobs/*' -printf '%h\n' | sort -u)`.
+- Task 1 tests: TestGatheringStepsStopOnContradictingRecordedDecision (steps_test.go), TestOrchestratedGatingStepHandsBackContradictionStop (orchestrated_test.go).
+- Task 1 verified green. Local golangci-lint panics (built with go1.26, local go1.27); Makefile lint is just go vet — use go vet on explicit package trees.
+- User said 'keep goin' after task 1: treating as continue without pausing between tasks. Knowledge offer (partial wording gotcha) not answered = deferred.
+- Task 2 implemented: discovery 'Recorded decisions' paragraph + clarify bullet; architecture Step 2 check; tasks 'never a `human` task'; open-questions example; verification 'Recorded decisions and knowledge' quality bullet; spek-plan SKILL '# Recorded decisions and knowledge' section.
+- Verify helper: scratchpad/verify.sh (build/vet/test on ./ ./cmd/... ./internal/... ./templates/...; dagger is a separate module). Tick helper: scratchpad/tick.py <file> <title>.

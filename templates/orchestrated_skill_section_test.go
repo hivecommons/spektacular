@@ -96,3 +96,38 @@ func TestOrchestratedSectionIsSelfContainedAndLast(t *testing.T) {
 		}
 	}
 }
+
+// recordedDecisionsHeading opens spek-plan's section on stopping to ask when a
+// plan would contradict a recorded decision or a knowledge entry.
+const recordedDecisionsHeading = "# Recorded decisions and knowledge"
+
+// spek-plan tells the planner, in the user-driven flow, to stop and ask on any
+// contradiction with a recorded decision or a knowledge entry, and never to
+// leave one as a task for a person, an open question or a review note. The
+// section sits before the orchestrated section so it binds every run, and
+// carries none of the orchestrated-only markers.
+func TestSpekPlanStopsOnContradictingRecordedDecisions(t *testing.T) {
+	const path = "skills/workflows/spek-plan/SKILL.md"
+	before, _ := splitOrchestratedSection(t, path)
+
+	require.Equalf(t, 1, strings.Count(before, recordedDecisionsHeading+"\n"),
+		"%s must carry %q exactly once, before %q", path, recordedDecisionsHeading, orchestratedSectionHeading)
+	start := strings.Index(before, recordedDecisionsHeading+"\n")
+	rest := before[start+len(recordedDecisionsHeading)+1:]
+	if end := strings.Index(rest, "\n# "); end >= 0 {
+		rest = rest[:end]
+	}
+	body := strings.Join(strings.Fields(rest), " ")
+
+	for _, phrase := range []string{
+		"Planning stops to ask the user whenever the plan would contradict a decision the user recorded for the spec",
+		"(in the spec itself, in a design it references, or in its interview notes where those still exist) or a knowledge entry.",
+		"Such a contradiction is never settled silently, and never left as a task for a person, an open question or a note for the review.",
+	} {
+		require.Containsf(t, body, phrase, "%s's %q section lost a load-bearing phrase", path, recordedDecisionsHeading)
+	}
+	for _, needle := range []string{"QUESTION:", "DONE:", "FAILED:"} {
+		require.NotContainsf(t, body, needle,
+			"%s: %q belongs only in the orchestrated section", path, needle)
+	}
+}

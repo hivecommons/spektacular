@@ -45,6 +45,25 @@ func TestOrchestratedWalkthroughHasNoSignOff(t *testing.T) {
 	require.Contains(t, out, "refresh `.spektacular/workflows/plan-000007_billing.md`")
 }
 
+// An orchestrated drafting step carries the contradiction stop and hands a
+// STOP back to the orchestrator as a QUESTION naming the spec.
+func TestOrchestratedGatheringStepHandsBackContradictionStop(t *testing.T) {
+	for name, cb := range map[string]workflow.StepCallback{
+		"discovery":    discovery(),
+		"architecture": architecture(),
+		"tasks":        tasks(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			out := renderOrchestrated(t, cb, store.NewFileStore(t.TempDir(), "project"))
+			require.Contains(t, out, "contradict a decision the user recorded")
+			require.Contains(t, out, "STOP and ask the user before going further")
+			require.Contains(t, out, "## Running under an orchestrator")
+			require.Contains(t, out, "**Wherever this step says to STOP, to ask the user, or to report to the user**, hand it back instead.")
+			require.Contains(t, out, "`QUESTION: 000007_billing`")
+		})
+	}
+}
+
 // The standalone walkthrough keeps its mandatory sign-off and carries none of
 // the orchestrated branch or hand-back section.
 func TestStandaloneWalkthroughKeepsSignOff(t *testing.T) {
