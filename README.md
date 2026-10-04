@@ -2,7 +2,7 @@
 
 Spektacular — **Spek** for short. The specs it produces are called **speks**.
 
-Agent-agnostic CLI tool for spec-driven development, providing skills and integrations for coding agents (Claude, Bob, Codex) to plan and implement work from a written spek.
+Agent-agnostic CLI tool for spec-driven development, providing skills and integrations for coding agents (Claude, Bob, Codex, GitHub Copilot CLI) to plan and implement work from a written spek.
 
 > **Status:** early development — see the [releases page](https://github.com/hivecommons/spektacular/releases) for the latest version.
 
@@ -14,7 +14,7 @@ Its core competencies:
 
 - **Self-contained binary plus installed agent skills.** A single binary that, on `init`, installs the skills (and commands) your coding agent needs to run the Spek workflows.
 - **State-machine-driven workflow.** Spec, plan, and implement each run as a stepwise state machine. Spek hands the agent one per-step prompt at a time (`new` / `goto` / `steps`), so every stage is resumable — stop, inspect, edit, and resume without losing work.
-- **Agent-agnostic, multi-agent support.** Works with claude, bob, and codex; pick the one your team already uses, or register your own.
+- **Agent-agnostic, multi-agent support.** Works with claude, bob, codex, and copilot; pick the one your team already uses, or register your own.
 - **Project knowledge base.** A searchable, layered store of conventions, architecture, gotchas, and learnings that feeds context into planning.
 - **Project design documents.** The worked design a feature is built to (an API shape, a user-facing flow, a data format) kept wherever your team already keeps it and referenced by the spek that needs it, so speks stay readable and planning is bound to the design that was agreed.
 
@@ -66,12 +66,12 @@ brew install hivecommons/homebrew-repo/spektacular
 go install github.com/hivecommons/spektacular@latest
 ```
 
-Or download a pre-built binary from the [releases page](https://github.com/hivecommons/spektacular/releases). See the [install docs](https://spektacular.dev/install/) for apt and other methods. You also need a supported coding agent CLI (claude, bob, or codex) installed and configured.
+Or download a pre-built binary from the [releases page](https://github.com/hivecommons/spektacular/releases). See the [install docs](https://spektacular.dev/install/) for apt and other methods. You also need a supported coding agent CLI (claude, bob, codex, or copilot) installed and configured.
 
 Once installed, the minimal path is initialise → spec → plan → implement:
 
 ```bash
-# 1. Initialise your project for a coding agent (claude, bob, or codex)
+# 1. Initialise your project for a coding agent (claude, bob, codex, or copilot)
 spektacular init claude
 
 # 2. Scaffold a spek, then fill in your requirements
@@ -91,11 +91,47 @@ Speks are plain markdown with a small set of structured sections (overview, requ
 
 ## Supported agents
 
-Spek ships with three coding-agent integrations. `spektacular init <agent>` runs the chosen agent's install step, writing its workflow skills (and, where the agent has no skill mechanism, command wrappers) into your project:
+Spek ships with four coding-agent integrations. `spektacular init <agent>` runs the chosen agent's install step, writing its workflow skills (and, where the agent has no skill mechanism, command wrappers) into your project:
 
 - **claude** — installs the workflow skills under `.claude/skills/` and ensures the project's `CLAUDE.md` imports `@AGENTS.md`, so the Spek agent rules take effect.
 - **bob** — installs skills under `.bob/skills/` and command wrappers under `.bob/commands/`.
 - **codex** — installs skills under `.agents/skills/`.
+- **copilot** — GitHub Copilot CLI; installs the six workflow skills under `.github/skills/` and the same standing rules in root `AGENTS.md`, with no command wrappers or extra instruction files.
+
+### GitHub Copilot CLI
+
+Install [Copilot CLI](https://docs.github.com/copilot/how-tos/copilot-cli), then run:
+
+```bash
+cd my-project
+spektacular init copilot
+copilot
+```
+
+Inside the interactive session, start a workflow with `/spek-new add user auth`,
+`/spek-plan`, `/spek-implement`, `/spek-knowledge`, `/spek-manage-repos`, or
+`/spek-design`. Text after a command is passed to its skill. Start Copilot in the
+project's top folder: Spektacular commands do not search parent directories.
+Command names in non-interactive prompts such as `copilot -p "/spek-new add user auth"`
+are **not expanded**; start workflows inside a session instead. This integration
+covers the CLI, not editor Copilot or the cloud agent.
+
+On shared projects, Copilot discovers each named skill once and prefers its
+`.github/skills/` copy over `.agents/skills/` and `.claude/skills/`. Setup keeps
+other agents' files and the project's own instruction files. A top-level
+`CLAUDE.md` importing `@AGENTS.md` (as Claude setup creates) causes Copilot to
+receive the standing rules twice: it reads `AGENTS.md` directly and follows the
+import. Copilot-only setup does not create that import.
+
+`init copilot` makes `copilot` the project's recorded agent. `migrate` refreshes
+only that agent's files on upgrade; other agents' copies can fall behind. After
+upgrading a shared project, run `spektacular init <agent>` once for **each** agent.
+The last init determines the recorded agent.
+
+If you previously ran `init claude` or `init codex` only as a Copilot workaround,
+run `spektacular init copilot`. The old agent's files remain and may be removed
+manually if that agent is unused. Keep the shared `AGENTS.md`. Rules remain
+doubled for as long as a `CLAUDE.md` importing it remains.
 
 Each integration is deliberately small: an agent implements a narrow `Agent` interface — `Name()` (its CLI identifier) and `Install()` (which writes its workflow artefacts) — and registers itself with the agent package from an `init()` function. Adding a new agent means implementing those two methods and registering the type.
 

@@ -133,7 +133,7 @@ func TestInstallKnowledgeTriggerSection_CrossAgentIdempotency(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := config.NewDefault()
 
-	for _, name := range []string{"claude", "codex", "bob"} {
+	for _, name := range []string{"claude", "codex", "bob", "copilot"} {
 		a, err := Lookup(name)
 		require.NoError(t, err, "agent %s should be registered", name)
 		require.NoError(t, a.Install(tmp, cfg, io.Discard), "Install for %s", name)
