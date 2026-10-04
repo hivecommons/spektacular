@@ -653,7 +653,7 @@ func TestEpic_InputRefusalsCarryNextAction(t *testing.T) {
 
 	er = refuseEpic(t, "frobnicate")
 	require.Equal(t, "unknown_subcommand", er.Code)
-	require.Equal(t, "run one of: delete, list, merge, read, split, worktree, write", er.NextAction)
+	require.Equal(t, "run one of: delete, list, merge, order, read, split, summary, worktree, write", er.NextAction)
 }
 
 // `epic list` reports each epic's name, location and lifecycle fields.
@@ -686,18 +686,21 @@ func TestEpicList_ReportsFields(t *testing.T) {
 	require.Equal(t, "epics/000060_other.md", byName["000060_other"]["path"])
 }
 
-// `--schema` on each verb publishes an input and an output schema.
+// `--schema` on each verb, including `order` and the nested `summary` verbs, publishes an input and an output schema.
 func TestEpicSchema_EachVerbPublishesInputAndOutput(t *testing.T) {
 	epicProject(t)
 	for verb, outKeys := range map[string][]string{
-		"read":   {"content"},
-		"write":  {"name", "path", "specs", "linked", "unlinked"},
-		"list":   {"files"},
-		"delete": {"name", "deleted", "unlinked"},
-		"split":  {"epic", "path", "created", "linked"},
+		"read":          {"content"},
+		"write":         {"name", "path", "specs", "linked", "unlinked"},
+		"list":          {"files"},
+		"delete":        {"name", "deleted", "unlinked"},
+		"split":         {"epic", "path", "created", "linked"},
+		"order":         {"epic", "added", "unplanned", "removed"},
+		"summary read":  {"content"},
+		"summary write": {"epic", "section", "sections"},
 	} {
 		t.Run(verb, func(t *testing.T) {
-			stdout, code := runEpic(t, verb, "--schema")
+			stdout, code := runEpic(t, append(strings.Fields(verb), "--schema")...)
 			require.Equal(t, 0, code)
 			var raw map[string]json.RawMessage
 			require.NoError(t, json.Unmarshal([]byte(stdout), &raw))
@@ -715,8 +718,10 @@ func TestEpicSchema_EachVerbPublishesInputAndOutput(t *testing.T) {
 			require.ElementsMatch(t, outKeys, keys)
 
 			if want, ok := map[string][]string{
-				"write": {"specs", "sources", "spec", "confirm_completed_epic"},
-				"split": {"spec", "overview", "sources", "specs", "confirm_completed_epic"},
+				"write":         {"specs", "sources", "spec", "confirm_completed_epic"},
+				"split":         {"spec", "overview", "sources", "specs", "confirm_completed_epic"},
+				"summary write": {"section"},
+				"order":         {"unorder"},
 			}[verb]; ok {
 				var in struct {
 					Properties map[string]json.RawMessage `json:"properties"`

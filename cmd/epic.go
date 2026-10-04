@@ -24,7 +24,7 @@ import (
 // `specs` as a list of bare names: an epic's `specs` graph of
 // {name, depends_on} entries would be silently dropped on the first write.
 // Epics have their own frontmatter type (internal/epic) and their own verbs,
-// `epic read / write / list / delete / split`, with no `file` level, and every
+// `epic read / write / list / delete / split / summary`, with no `file` level, and every
 // write keeps the epic and its specs in agreement (cmd/epic_link.go).
 
 var epicCmd = &cobra.Command{
@@ -86,8 +86,9 @@ var sourceItemSchema = &schemaProp{Type: "object", Properties: map[string]*schem
 }}
 
 var epicSpecItemSchema = &schemaProp{Type: "object", Properties: map[string]*schemaProp{
-	"name":       {Type: "string"},
-	"depends_on": {Type: "array", Items: &schemaProp{Type: "string"}, Description: "names of specs in this epic it depends on; [] when none"},
+	"name":          {Type: "string"},
+	"depends_on":    {Type: "array", Items: &schemaProp{Type: "string"}, Description: "names of specs in this epic it depends on; [] when none"},
+	"parallel_with": {Type: "array", Items: &schemaProp{Type: "string"}, Description: "earlier specs the user allowed to run side by side despite shared files; maintained by epic order, omit to leave unset"},
 }}
 
 var epicWriteInputSchema = &schemaObj{
@@ -433,10 +434,13 @@ func runEpicDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// Unlink every member first, then remove the epic, all inside one
-	// transaction: a failure part-way leaves the epic and every spec as they
-	// were.
+	// Remove the planning summary, unlink every member, then remove the
+	// epic, all inside one transaction: a failure part-way leaves the epic,
+	// its summary and every spec as they were.
 	t := newDocTxn(st)
+	if err := t.delete(summaryPath(cfg, name)); err != nil {
+		return t.fail(err)
+	}
 	var unlinked []string
 	for _, member := range current.SpecNames() {
 		spec, readErr := readSpecFile(st, cfg, member)
@@ -457,6 +461,11 @@ func runEpicDelete(cmd *cobra.Command, args []string) error {
 	if err := t.delete(epicPath(cfg, name)); err != nil {
 		return t.fail(err)
 	}
+	// The summary's folder goes last, once nothing can roll back into it. A
+	// rollback rewrites the summary, which recreates the folder, so the folder
+	// itself is not part of the transaction. A folder that still holds
+	// anything else is left in place, so its removal error is ignored.
+	_ = st.Delete(summaryDir(cfg, name))
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	return out.WriteResult(map[string]any{
 		"name":     name,

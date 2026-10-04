@@ -370,7 +370,15 @@ func splitGraph(existing *epic.Epic, in splitInput, names map[string]string) []e
 		for _, d := range s.DependsOn {
 			deps = append(deps, rename(d))
 		}
-		return epic.EpicSpec{Name: name, DependsOn: deps}
+		e := epic.EpicSpec{Name: name, DependsOn: deps}
+		// A spec already in the epic keeps the pairs the user let run side
+		// by side, so a later `epic order` never re-adds them.
+		if existing != nil {
+			if prev, ok := existing.Member(name); ok {
+				e.ParallelWith = prev.ParallelWith
+			}
+		}
+		return e
 	}
 	var out []epic.EpicSpec
 	placed := false

@@ -13,7 +13,7 @@ const CodeInvalid = "epic_invalid"
 
 // invalidNextAction is where every graph refusal points: the specs list is
 // only ever supplied through --data on epic write or in a split description.
-const invalidNextAction = "fix the specs list (each entry needs a name and a depends_on list, [] when it has none) and re-run the epic write or epic split"
+const invalidNextAction = "fix the specs list (each entry needs a name and a depends_on list, [] when it has none; parallel_with may name only other specs in the epic) and re-run the epic write or epic split; to let two specs run side by side, use epic order with unorder"
 
 // Validate applies the epic graph rules to specs and returns the first broken
 // rule as a structured error naming the offending spec. Rules are checked in
@@ -38,6 +38,14 @@ func Validate(specs []EpicSpec) error {
 		for _, dep := range s.DependsOn {
 			if !seen[dep] {
 				return invalid(s.Name, fmt.Sprintf("spec %q depends on %q, which is not a spec in this epic", s.Name, dep))
+			}
+		}
+		for _, other := range s.ParallelWith {
+			switch {
+			case other == s.Name:
+				return invalid(s.Name, fmt.Sprintf("spec %q names itself in parallel_with", s.Name))
+			case !seen[other]:
+				return invalid(s.Name, fmt.Sprintf("spec %q is parallel_with %q, which is not a spec in this epic", s.Name, other))
 			}
 		}
 	}

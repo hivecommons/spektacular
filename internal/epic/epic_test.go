@@ -137,6 +137,49 @@ func TestRender_Shape(t *testing.T) {
 	require.Equal(t, want, string(raw))
 }
 
+func TestRender_ParallelWithRoundTripsAndIsOmittedWhenEmpty(t *testing.T) {
+	e := Epic{
+		CreatedDate:    day(2026, time.September, 1),
+		DocumentStatus: metadata.StatusDraft,
+		Specs: []EpicSpec{
+			{Name: "auth", DependsOn: []string{}},
+			{Name: "billing", DependsOn: []string{}, ParallelWith: []string{"auth"}},
+			{Name: "reports", DependsOn: []string{"auth"}, ParallelWith: []string{}},
+		},
+		Body: []byte(epicBody),
+	}
+	raw, err := e.Render()
+	require.NoError(t, err)
+	want := "---\n" +
+		"created_date: \"2026-09-01\"\n" +
+		"document_status: draft\n" +
+		"specs:\n" +
+		"    - name: auth\n" +
+		"      depends_on: []\n" +
+		"    - name: billing\n" +
+		"      depends_on: []\n" +
+		"      parallel_with:\n" +
+		"        - auth\n" +
+		"    - name: reports\n" +
+		"      depends_on:\n" +
+		"        - auth\n" +
+		"---\n\n" +
+		epicBody
+	require.Equal(t, want, string(raw), "parallel_with is written only when it names a spec")
+
+	got, err := Parse(raw)
+	require.NoError(t, err)
+	require.Equal(t, []EpicSpec{
+		{Name: "auth", DependsOn: []string{}},
+		{Name: "billing", DependsOn: []string{}, ParallelWith: []string{"auth"}},
+		{Name: "reports", DependsOn: []string{"auth"}},
+	}, got.Specs)
+
+	again, err := got.Render()
+	require.NoError(t, err)
+	require.Equal(t, string(raw), string(again), "render, parse, render is byte-identical")
+}
+
 func TestParse_NoFrontmatterReturnsBodyOnly(t *testing.T) {
 	raw := []byte("# Just a body\n")
 	got, err := Parse(raw)

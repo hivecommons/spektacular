@@ -54,7 +54,7 @@ A contradiction with a recorded decision or a knowledge entry is **never a `huma
 Each task in the plan's `context.md` must have:
 
 - **Heading**: `### Task: <title matching plan.md>` so plan.md's `*Technical detail:*` link resolves.
-- **File changes**: Specific file:line changes based on research findings; prefix paths in registered repos other than the colocated one with the repo name (`<repo>:path:line`)
+- **File changes**: Specific file:line changes based on research findings, one file per entry. Every entry begins with the file's path in backticks (`` `path:line` ``), and a path in a registered repo other than the colocated one is prefixed with the repo name (`` `<repo>:path:line` ``). Spektacular reads these paths to find plans in an epic that change the same files, so a file change written in prose without its backticked path is missed.
 - **Complexity**: Low / Medium / High
 - **Token estimate**: ~Nk tokens (rough estimate for agent context usage)
 - **Agent strategy**:

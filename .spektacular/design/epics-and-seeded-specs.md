@@ -116,8 +116,10 @@ a request made mid-workflow is acted on once the spec is complete.
   offers the next child that has no spec yet. The user can stop at any point and continue later.
 - Without a split or an epic, the result is one standalone spec, exactly as today.
 
-**3. Plan.** Unchanged. Each spec gets its own plan with `plan new <spec>`, in any order. Planning a
-spec whose dependencies are not implemented yet is normal and never checked.
+**3. Plan.** Each spec gets its own plan with `plan new <spec>`, in any order. Planning a
+spec whose dependencies are not implemented yet is normal and never checked. An epic can also be
+planned with one request, which keeps a planning summary with the epic and orders specs whose
+plans change the same files (see *Epics → Planning*).
 
 **4. Implement.** What gets implemented is a spec, not a plan: the user implements a spec, and the
 plan is how the implement workflow carries it out. `implement new <spec>` finds the spec's plan (it
@@ -160,7 +162,7 @@ epic:
 specs*): `false`, the default, warns and lets the user continue; `true` refuses. It follows the
 precedent of `plan.strict_spec_changes`.
 
-CLI verbs `epic read / write / list / delete / split`, under the same store-access rules as specs
+CLI verbs `epic read / write / list / delete / split / order` and `epic summary read / write`, under the same store-access rules as specs
 and plans. An epic can be written with no specs yet, for the epic-first route.
 
 **Joining an epic.** A spec joins an epic when it is started in one
@@ -180,8 +182,24 @@ status has to be reset.
 `epic`. Both sides are always written together, following the design-ref pattern
 (`cmd/design_ref.go`, `writeBackLink`). Epics don't nest.
 
-**Planning.** Unchanged. Plans stay 1:1 with specs, so each of an epic's specs is planned on its
-own. Everything a plan needs is in its spec.
+**Planning.** Plans stay 1:1 with specs, so each of an epic's specs is planned on its own, and
+everything a plan needs is in its spec. Planning an epic with one request ("plan this epic") adds
+two things around those plans:
+
+- **A planning summary kept with the epic**, at `<epics>/<epic>/summary.md` in the epic store. It is
+  never a plan, `epic list` and ID allocation ignore its folder, and `epic delete` removes it with
+  the epic. The CLI renders it in a fixed order: the decisions the user needs to make first
+  ("None." when there are none), then the order added for shared files, then one section per
+  planned spec in epic list order. `epic summary write` replaces one section at a time
+  (`decisions` or a member spec), so repeated planning and review edits leave the other sections
+  untouched; only `epic order` writes the ordering section, as an append-only log.
+- **Automatic ordering of overlapping specs.** When planning ends, `epic order` compares the files
+  each planned spec's tasks name in the plan's context document. Two specs that share a file and
+  have no ordering between them, directly or through other specs, are ordered without asking: the
+  spec listed later depends on the one listed earlier. Only the epic is written, so nothing is
+  re-planned. The review walks the summary, and the user can undo an added dependency there with
+  `epic order --data '{"unorder":…}'`, which records the pair in `parallel_with` so it is never
+  added again.
 
 **Dependencies.** The epic holds the dependency graph between its specs, the same way a plan holds
 the graph between its tasks (`plan-task-graph.md`). One level up the same shape repeats:
@@ -264,7 +282,8 @@ the split moved to it, plus a copy of each constraint and non-goal shared with t
 | Field | On | Rule |
 |---|---|---|
 | `spec` | epic | Provenance: the spec whose interview produced the split, which is always the epic's first spec. Absent when the epic was written straight from a source. |
-| `specs` | epic | The epic's specs, each an entry `{name, depends_on}`. `name` is the spec. `depends_on` lists the names of the specs in this epic it depends on, and is always present: `[]` when there are none. List order is display order, and breaks ties between specs that are ready at the same time. Maintained only by the CLI and validated on every write. |
+| `specs` | epic | The epic's specs, each an entry `{name, depends_on}`, with an optional `parallel_with`. `name` is the spec. `depends_on` lists the names of the specs in this epic it depends on, and is always present: `[]` when there are none. List order is display order, and breaks ties between specs that are ready at the same time. Maintained only by the CLI and validated on every write. |
+| `parallel_with` | epic, on a `specs` entry | Optional, omitted when empty. Earlier specs in the same epic that the user allowed to be implemented side by side with this one even though their plans share files. Maintained only by `epic order`, and read only by it, so a dependency the user removed is never re-added. |
 | `epic` | spec | The spec's epic. The reverse of `specs`, always written with it. |
 | `sources` | both | Provenance: only what directly seeded this document, never copied from the epic (see Provenance). Optional. |
 
@@ -366,10 +385,16 @@ replace any prose ordering: the graph is the order.
 - has an entry without `name` or without `depends_on`;
 - names the same spec twice;
 - has a `depends_on` naming a spec that is not an entry in the same `specs`;
-- contains a cycle, including a spec depending on itself.
+- contains a cycle, including a spec depending on itself;
+- has a `parallel_with` naming a spec that is not an entry in the same `specs`, or the entry itself.
 
 A dependency on a spec outside the epic, or on a standalone spec, is not expressible yet, just as a
 plan task cannot yet depend on a task in another plan.
+
+**The one automatic writer.** People write the graph through `epic write` and `epic split`.
+`epic order` is the only command that adds a dependency itself: when two planned specs name the
+same file in their plans and nothing orders them, it makes the later-listed one depend on the
+earlier one, and records the addition in the epic's planning summary.
 
 **What a dependency means.** B depends on A when B cannot be implemented until A has been. Writing
 and planning B are never held back: specifying and planning ahead is normal. The only point the

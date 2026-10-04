@@ -625,3 +625,51 @@ func TestEpicSplit_Schema(t *testing.T) {
 	require.ElementsMatch(t, []string{"epic", "path", "created", "linked"}, keys(got.Output.Properties))
 	require.ElementsMatch(t, []string{"from"}, keys(got.Flags))
 }
+
+// Splitting a spec keeps another member's parallel_with, recorded when a
+// dependency was undone at review, so `epic order` still never re-adds it.
+func TestEpicSplit_KeepsAnotherSpecsParallelWith(t *testing.T) {
+	root := epicProject(t)
+	writeSpecFixture(t, root, "000010_a", epicTestSpecFixed)
+	writeSpecFixture(t, root, "000011_b", epicTestSpecFixed)
+	epicWrite(t, testEpic, `{"specs":[{"name":"000010_a","depends_on":[]},{"name":"000011_b","depends_on":["000010_a"]}]}`)
+	stdout, code := runEpic(t, "order", testEpic, "--data", `{"unorder":{"spec":"000011_b","depends_on":"000010_a"}}`)
+	require.Equalf(t, 0, code, "unorder failed: %s", stdout)
+
+	epicSplit(t, map[string]any{
+		"spec": "000010_a",
+		"specs": []map[string]any{
+			{"name": "000010_a", "depends_on": []string{}, "body": sb{"overview": "Narrowed a.", "acceptance_criteria": []string{"a works"}}},
+			{"title": "c", "depends_on": []string{"000010_a"}, "body": sb{"overview": "Split-off c. More.", "acceptance_criteria": []string{"c works"}}},
+		},
+	})
+
+	require.Contains(t, strings.Join(frontmatterOf(t, epicFilePath(root, testEpic)), "\n"),
+		"    - name: 000010_a\n      depends_on: []\n"+
+			"    - name: 000011_b\n      depends_on: []\n      parallel_with:\n        - 000010_a\n"+
+			"    - name: 000012_c\n      depends_on:\n        - 000010_a")
+}
+
+// Splitting the spec that carries parallel_with keeps it on that spec, so a
+// later `epic order` does not put back the dependency the user removed.
+func TestEpicSplit_KeepsTheSplitSpecsOwnParallelWith(t *testing.T) {
+	root := epicProject(t)
+	writeSpecFixture(t, root, "000010_a", epicTestSpecFixed)
+	writeSpecFixture(t, root, "000011_b", epicTestSpecFixed)
+	epicWrite(t, testEpic, `{"specs":[{"name":"000010_a","depends_on":[]},{"name":"000011_b","depends_on":["000010_a"]}]}`)
+	stdout, code := runEpic(t, "order", testEpic, "--data", `{"unorder":{"spec":"000011_b","depends_on":"000010_a"}}`)
+	require.Equalf(t, 0, code, "unorder failed: %s", stdout)
+
+	epicSplit(t, map[string]any{
+		"spec": "000011_b",
+		"specs": []map[string]any{
+			{"name": "000011_b", "depends_on": []string{}, "body": sb{"overview": "Narrowed b.", "acceptance_criteria": []string{"b works"}}},
+			{"title": "c", "depends_on": []string{"000011_b"}, "body": sb{"overview": "Split-off c. More.", "acceptance_criteria": []string{"c works"}}},
+		},
+	})
+
+	require.Contains(t, strings.Join(frontmatterOf(t, epicFilePath(root, testEpic)), "\n"),
+		"    - name: 000010_a\n      depends_on: []\n"+
+			"    - name: 000011_b\n      depends_on: []\n      parallel_with:\n        - 000010_a\n"+
+			"    - name: 000012_c\n      depends_on:\n        - 000011_b")
+}

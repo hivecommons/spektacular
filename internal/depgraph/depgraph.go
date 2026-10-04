@@ -191,3 +191,24 @@ func dependsOn(deps map[string][]string, n, target string) bool {
 	}
 	return false
 }
+
+// Reaches reports whether from depends on to through deps, directly or
+// through other nodes. A node reaches itself only when a cycle leads back to
+// it. Names absent from deps have no edges.
+func Reaches(deps map[string][]string, from, to string) bool {
+	seen := map[string]bool{}
+	stack := append([]string{}, deps[from]...)
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if n == to {
+			return true
+		}
+		if seen[n] {
+			continue
+		}
+		seen[n] = true
+		stack = append(stack, deps[n]...)
+	}
+	return false
+}

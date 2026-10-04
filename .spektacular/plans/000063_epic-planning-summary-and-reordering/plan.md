@@ -397,7 +397,7 @@ The plan skill's own description says the same.
 
 **Validation point**: In a throwaway project with an epic of three planned specs, two of which share a file, `epic order` adds exactly one dependency, reports the shared file and leaves every plan byte-identical. A second run adds nothing. Undoing it removes the dependency and a later run does not re-add it. `epic summary` reads and writes sections in their fixed order. The full test suite passes.
 
-#### - [ ] Task: Find the files each planned task changes
+#### - [x] Task: Find the files each planned task changes
 **Id:** 77b6c91f-d4e2-455a-985f-54b78e2b93e8
 **Repo:** spektacular
 **Depends on:**
@@ -413,12 +413,12 @@ The tasks step is tightened so every file change in the technical notes starts w
 *Technical detail:* [context.md#task-find-the-files-each-planned-task-changes](./context.md#task-find-the-files-each-planned-task-changes)
 
 **Acceptance criteria**:
-- [ ] For a plan with technical notes, the reader returns each task's files with the right repo, ignoring line numbers.
-- [ ] A plan without technical notes yields no files and never fails.
-- [ ] The graph query is true for a direct or indirect dependency and false otherwise.
-- [ ] The tasks step asks for every file change to start with its path in backticks.
+- [x] For a plan with technical notes, the reader returns each task's files with the right repo, ignoring line numbers.
+- [x] A plan without technical notes yields no files and never fails.
+- [x] The graph query is true for a direct or indirect dependency and false otherwise.
+- [x] The tasks step asks for every file change to start with its path in backticks.
 
-#### - [ ] Task: Keep a planning summary document with each epic
+#### - [x] Task: Keep a planning summary document with each epic
 **Id:** eb25fb94-3707-4956-8e35-8867fb6e69d0
 **Repo:** spektacular
 **Depends on:** none
@@ -429,14 +429,14 @@ Add `epic summary read` and `epic summary write`. They keep one summary document
 *Technical detail:* [context.md#task-keep-a-planning-summary-document-with-each-epic](./context.md#task-keep-a-planning-summary-document-with-each-epic)
 
 **Acceptance criteria**:
-- [ ] An epic's summary can be written section by section and read back, with decisions first whatever order the sections were written in.
-- [ ] The decisions section is always present and says there are none when it is empty.
-- [ ] Rewriting one spec's section leaves every other section exactly as it was.
-- [ ] Reading the summary of an epic that has none is refused with a message saying how to get one.
-- [ ] Writing an unknown section, a spec outside the epic, or content that would break the layout is refused and changes nothing.
-- [ ] Deleting an epic also deletes its summary.
+- [x] An epic's summary can be written section by section and read back, with decisions first whatever order the sections were written in.
+- [x] The decisions section is always present and says there are none when it is empty.
+- [x] Rewriting one spec's section leaves every other section exactly as it was.
+- [x] Reading the summary of an epic that has none is refused with a message saying how to get one.
+- [x] Writing an unknown section, a spec outside the epic, or content that would break the layout is refused and changes nothing.
+- [x] Deleting an epic also deletes its summary.
 
-#### - [ ] Task: Order overlapping specs automatically
+#### - [x] Task: Order overlapping specs automatically
 **Id:** 519d3710-8a35-465d-aaaa-69e6a11a9f36
 **Repo:** spektacular
 **Depends on:**
@@ -449,14 +449,14 @@ Add `epic order`. For every pair of planned specs in an epic that change the sam
 *Technical detail:* [context.md#task-order-overlapping-specs-automatically](./context.md#task-order-overlapping-specs-automatically)
 
 **Acceptance criteria**:
-- [ ] Two independent planned specs that change the same file end up with the later-listed one depending on the earlier one, and the user is not asked.
-- [ ] Specs already ordered directly or through another spec gain no new dependency, and running the command again adds nothing.
-- [ ] The added dependency is listed in the summary and in the command's result, naming the shared files.
-- [ ] Both specs' plans keep the same content and created date before and after.
-- [ ] Undoing an added dependency removes it from the epic, the summary shows it was removed, and a later run does not add it back.
-- [ ] Specs without a plan are left out and reported as unplanned.
+- [x] Two independent planned specs that change the same file end up with the later-listed one depending on the earlier one, and the user is not asked.
+- [x] Specs already ordered directly or through another spec gain no new dependency, and running the command again adds nothing.
+- [x] The added dependency is listed in the summary and in the command's result, naming the shared files.
+- [x] Both specs' plans keep the same content and created date before and after.
+- [x] Undoing an added dependency removes it from the epic, the summary shows it was removed, and a later run does not add it back.
+- [x] Specs without a plan are left out and reported as unplanned.
 
-#### - [ ] Task: Update the epics design for the summary and automatic ordering
+#### - [x] Task: Update the epics design for the summary and automatic ordering
 **Id:** 0633acc8-d444-41ef-94ef-2a24eb4b900a
 **Repo:** spektacular
 **Depends on:**
@@ -474,8 +474,8 @@ This replaces its line that planning is unchanged. The document keeps its captur
 *Technical detail:* [context.md#task-update-the-epics-design-for-the-summary-and-automatic-ordering](./context.md#task-update-the-epics-design-for-the-summary-and-automatic-ordering)
 
 **Acceptance criteria**:
-- [ ] The epics design describes the new optional field, the summary document, both commands, and automatic ordering at the end of epic planning.
-- [ ] The design keeps its original capture date and its links to the specs that reference it.
+- [x] The epics design describes the new optional field, the summary document, both commands, and automatic ordering at the end of epic planning.
+- [x] The design keeps its original capture date and its links to the specs that reference it.
 
 ### Milestone 3: "Plan this epic" ends with one summary document to review
 
@@ -628,3 +628,68 @@ The site changelog records the change.
 - `spektacular: templates/orchestrated_skill_section_test.go`
 
 **Discoveries**: `templates/orchestrated_skill_section_test.go` is in `package templates`, not `templates_test`, so the `section` / `flat` helpers from `seeding_test.go` are not reachable from it. The Go `dagger/` directory is a separate module, so build and test patterns must name `./cmd/... ./internal/... ./templates/...` rather than include it.
+
+### 2026-10-04 — Task: Find the files each planned task changes
+
+**What was done**: Added `depgraph.Reaches`, an iterative reachability query that answers whether one node depends on another directly or transitively, and that terminates on cycles. Added `plantask.TaskFiles` with `FileRef`, a tolerant reader that returns the files each task's `### Task:` section of the plan's context document names, attributed to a registered repo. The tasks step now requires every file change to begin with its backticked path.
+
+**Deviations**: The reader's "looks like a path" rule was made concrete. A token must contain `/` or end in a lower-case extension, so Go selectors such as `epic.Member` are not counted. A token ending in `/` is a directory and is skipped, and paths inside fenced code blocks are ignored, so examples never create overlaps.
+
+**Files changed**:
+- `spektacular: internal/depgraph/depgraph.go`
+- `spektacular: internal/depgraph/depgraph_test.go`
+- `spektacular: internal/plantask/files.go`
+- `spektacular: internal/plantask/files_test.go`
+- `spektacular: templates/steps/plan/10-tasks.md`
+- `spektacular: internal/steps/plan/steps_test.go`
+
+**Discoveries**: Context sections also cite files the task only reads (for example "as `cmd/plan_file.go` does"), and the reader cannot tell these from files it changes. Overlap is therefore deliberately generous, as research.md's open assumption accepts. The plan's open question about older plans is checked once `epic order` exists.
+
+### 2026-10-04 — Task: Keep a planning summary document with each epic
+
+**What was done**: Added `epic summary read` and `epic summary write`. Each epic has one planning summary at `<epics>/<epic>/summary.md`, parsed and rendered by `internal/epic/summary.go` in a fixed layout. The layout is the title, then Decisions to settle ("None." when empty), then Order added for shared files ("None added."), then one section per spec in epic list order. A write replaces one section (`decisions` or a member spec) and leaves every other section byte for byte. Writing `ordering`, an unknown section, a non-member, or a body with a `#` / `##` heading is refused with `epic_summary_section_invalid`. Reading a missing summary is refused with `epic_summary_not_found`, which points at "plan this epic". `appendOrdering` is the internal hook for `epic order`. `epic delete` removes the summary inside its transaction and then the empty folder.
+
+**Deviations**: The summary's folder is removed outside the transaction, on a best-effort basis, after everything else succeeds. `docTxn` can only remember files, and a rollback that rewrites the summary recreates the folder anyway. The pinned "run one of: …" epic verb lists in `cmd/root_test.go` and `cmd/epic_test.go` gained `summary`.
+
+**Files changed**:
+- `spektacular: internal/epic/summary.go`
+- `spektacular: internal/epic/summary_test.go`
+- `spektacular: cmd/epic_summary.go`
+- `spektacular: cmd/epic_summary_test.go`
+- `spektacular: cmd/epic.go`
+- `spektacular: cmd/epic_test.go`
+- `spektacular: cmd/root_test.go`
+
+**Discoveries**: A decisions body of exactly "None." (and an ordering body of exactly "None added.") reads back as empty, by design. `ValidSectionBody` refuses a `## ` line even inside a fenced code block in a section body. `TestEpicSchema_EachVerbPublishesInputAndOutput` now accepts two-word verbs.
+
+### 2026-10-04 — Task: Order overlapping specs automatically
+
+**What was done**: Added `epic order`. It reads each member's plan and context through the store and collects each plan's files with `plantask.TaskFiles`. Walking pairs in list order, it makes the later spec depend on the earlier one when their plans share a file, nothing orders them either way (`depgraph.Reaches`, re-checked after each added edge), and the user has not let them run side by side. It writes the epic, body untouched, and the summary's ordering log in one transaction, and writes nothing when nothing is added. It reports `added` with the shared files and `unplanned` members. `--data '{"unorder":…}'` removes one edge, records the pair in the later spec's new optional `parallel_with`, and logs the removal. Validation refuses a `parallel_with` naming a non-member or the spec itself.
+
+**Deviations**: Fixed a gap the tests found. `epic split` rebuilt the split spec's own entry and dropped its `parallel_with`; `splitGraph` now carries it over from the existing member. The epic write schema also documents `parallel_with`.
+
+**Files changed**:
+- `spektacular: internal/epic/epic.go`
+- `spektacular: internal/epic/validate.go`
+- `spektacular: internal/epic/epic_test.go`
+- `spektacular: internal/epic/validate_test.go`
+- `spektacular: cmd/epic_order.go`
+- `spektacular: cmd/epic_order_test.go`
+- `spektacular: cmd/epic.go`
+- `spektacular: cmd/epic_split.go`
+- `spektacular: cmd/epic_split_test.go`
+- `spektacular: cmd/epic_test.go`
+- `spektacular: cmd/root_test.go`
+
+**Discoveries**: The plan's open question is resolved. Run against this repo's pre-change plans (000060 and 000062), the reader finds files for nearly every task. The only noise is a bare `.ext`, a bare `interview.md` and a directory written without a trailing slash, none of which is material. Undoing B→A can make a later run add C→A when C had reached A only through B; that is correct, because the two still share files. `epic write` with a whole `specs` list still replaces `parallel_with` with whatever the caller supplies.
+
+### 2026-10-04 — Task: Update the epics design for the summary and automatic ordering
+
+**What was done**: Rewrote `epics-and-seeded-specs.md` through `design author`. Process step 3 and "Epics → Planning" no longer say "Unchanged": they describe the planning summary kept with the epic and the automatic ordering of overlapping specs at the end of epic planning, including undoing an addition at the review. The field table has a `parallel_with` row, and the `specs` row mentions it. The verb list adds `epic order` and `epic summary read / write`. "Dependencies between specs" adds the `parallel_with` validation rule and a paragraph naming `epic order` as the graph's only automatic writer.
+
+**Deviations**: Also updated Process step 3, which said "Unchanged" too, so the design does not contradict itself.
+
+**Files changed**:
+- `spektacular: .spektacular/design/epics-and-seeded-specs.md`
+
+**Discoveries**: None.

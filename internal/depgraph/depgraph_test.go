@@ -225,3 +225,49 @@ func TestTopoOrder_EveryNodeExactlyOnce(t *testing.T) {
 	require.ElementsMatch(t, order, got)
 	require.Len(t, got, len(order))
 }
+
+func TestReaches_Direct(t *testing.T) {
+	deps := map[string][]string{"a": {"b"}}
+	require.True(t, Reaches(deps, "a", "b"))
+	require.False(t, Reaches(deps, "b", "a"), "a dependency is not reached backwards")
+}
+
+func TestReaches_Transitive(t *testing.T) {
+	deps := map[string][]string{"a": {"b"}, "b": {"c"}, "c": {"d"}}
+	require.True(t, Reaches(deps, "a", "c"))
+	require.True(t, Reaches(deps, "a", "d"))
+	require.True(t, Reaches(deps, "b", "d"))
+	require.False(t, Reaches(deps, "d", "a"))
+}
+
+func TestReaches_Unrelated(t *testing.T) {
+	deps := map[string][]string{"a": {"b"}, "c": {"d"}}
+	require.False(t, Reaches(deps, "a", "c"))
+	require.False(t, Reaches(deps, "a", "d"))
+	require.False(t, Reaches(deps, "c", "b"))
+}
+
+func TestReaches_Self(t *testing.T) {
+	deps := map[string][]string{"a": {"b"}}
+	require.False(t, Reaches(deps, "a", "a"), "a node without a cycle does not reach itself")
+
+	require.True(t, Reaches(map[string][]string{"a": {"a"}}, "a", "a"), "a self loop reaches itself")
+	require.True(t, Reaches(map[string][]string{"a": {"b"}, "b": {"a"}}, "a", "a"),
+		"a cycle leading back reaches itself")
+}
+
+func TestReaches_Unknown(t *testing.T) {
+	deps := map[string][]string{"a": {"b"}}
+	require.False(t, Reaches(deps, "ghost", "a"), "a name absent from deps has no edges")
+	require.False(t, Reaches(deps, "a", "ghost"))
+	require.False(t, Reaches(nil, "a", "b"))
+	require.True(t, Reaches(map[string][]string{"a": {"ghost"}}, "a", "ghost"),
+		"an edge to an undeclared name still reaches it")
+}
+
+func TestReaches_CycleTerminates(t *testing.T) {
+	deps := map[string][]string{"a": {"b"}, "b": {"c"}, "c": {"a"}, "x": {"y"}}
+	require.False(t, Reaches(deps, "a", "x"), "a cycle not leading to the target terminates false")
+	require.True(t, Reaches(deps, "b", "a"))
+	require.True(t, Reaches(deps, "c", "b"))
+}

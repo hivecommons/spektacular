@@ -797,6 +797,9 @@ func TestTasksStepTeachesTheTaskFormat(t *testing.T) {
 	require.Contains(t, out, "Split mixed work", "work needing both an agent and a person is split")
 	require.Contains(t, out, "depends on the agent's", "the person's task depends on the agent's")
 	require.Contains(t, out, "Never invent an id")
+	require.Contains(t, out, "Every entry begins with the file's path in backticks",
+		"every file change starts with its backticked path")
+	require.Contains(t, out, "`` `<repo>:path:line` ``")
 }
 
 // TestVerificationChecksTaskLines asserts verification checks every task's

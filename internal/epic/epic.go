@@ -21,9 +21,15 @@ import (
 // the same epic it depends on. A nil DependsOn means the field was absent,
 // which Validate refuses; a non-nil empty slice means no dependencies, and is
 // what every caller building an entry by hand must pass.
+//
+// ParallelWith names earlier specs in the same epic that the user chose to let
+// be implemented side by side even though their plans change the same files.
+// Only `epic order` reads and writes it, so it never re-adds a dependency the
+// user removed. It is omitted when empty.
 type EpicSpec struct {
-	Name      string   `yaml:"name" json:"name"`
-	DependsOn []string `yaml:"depends_on" json:"depends_on"`
+	Name         string   `yaml:"name" json:"name"`
+	DependsOn    []string `yaml:"depends_on" json:"depends_on"`
+	ParallelWith []string `yaml:"parallel_with,omitempty" json:"parallel_with,omitempty"`
 }
 
 // Epic is the in-memory mirror of an epic document.
@@ -136,7 +142,7 @@ func (e Epic) Render() ([]byte, error) {
 		if deps == nil {
 			deps = []string{}
 		}
-		out.Specs[i] = EpicSpec{Name: s.Name, DependsOn: deps}
+		out.Specs[i] = EpicSpec{Name: s.Name, DependsOn: deps, ParallelWith: s.ParallelWith}
 	}
 	if !e.ClosedDate.IsZero() {
 		out.ClosedDate = e.ClosedDate.Format(metadata.DateFormat)

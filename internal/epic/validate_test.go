@@ -16,6 +16,13 @@ func TestValidate_ValidGraphPasses(t *testing.T) {
 	}))
 }
 
+func TestValidate_ParallelWithAnotherMemberPasses(t *testing.T) {
+	require.NoError(t, Validate([]EpicSpec{
+		{Name: "auth", DependsOn: []string{}},
+		{Name: "billing", DependsOn: []string{}, ParallelWith: []string{"auth"}},
+	}))
+}
+
 func TestValidate_EmptyListPasses(t *testing.T) {
 	require.NoError(t, Validate(nil))
 	require.NoError(t, Validate([]EpicSpec{}))
@@ -82,6 +89,24 @@ func TestValidate_RefusesEachRule(t *testing.T) {
 			},
 			wantResource: "auth",
 			wantMessage:  []string{`"auth"`, "dependency cycle", "auth -> auth"},
+		},
+		{
+			name: "parallel_with names a spec outside the epic",
+			specs: []EpicSpec{
+				{Name: "auth", DependsOn: []string{}},
+				{Name: "billing", DependsOn: []string{}, ParallelWith: []string{"payments"}},
+			},
+			wantResource: "billing",
+			wantMessage:  []string{`"billing"`, `"payments"`, "parallel_with", "not a spec in this epic"},
+		},
+		{
+			name: "parallel_with names the spec itself",
+			specs: []EpicSpec{
+				{Name: "auth", DependsOn: []string{}},
+				{Name: "billing", DependsOn: []string{}, ParallelWith: []string{"billing"}},
+			},
+			wantResource: "billing",
+			wantMessage:  []string{`"billing"`, "names itself in parallel_with"},
 		},
 	}
 
