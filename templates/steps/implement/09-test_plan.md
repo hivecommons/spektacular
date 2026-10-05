@@ -1,6 +1,6 @@
 ## Step {{step}}: {{title}}
 
-Produce the **test plan** artifact for the success metrics that could not be covered by an automated behavioural test. This step runs last, after every task is implemented and verified, so the procedures you write reference the **real** implementation — actual endpoints, commands, file paths, and thresholds — not guesses from planning time.
+Produce the **test plan** artifact for the success metrics that could not be covered by an automated behavioural test, and for the manual reviews the plan lists. This step runs last, after every task is implemented and verified, so the procedures you write reference the **real** implementation — actual endpoints, commands, file paths, and thresholds — not guesses from planning time.
 
 ### Step 1: Find the metrics that need manual verification
 
@@ -12,7 +12,9 @@ Read the plan's Testing Approach through the plan store — never with the `Read
 
 In the `## Testing Approach` section the planner classified each of the spec's success metrics as either **covered by a behavioural test** or **manual — to be captured in the implementation test plan**. Collect the manual ones. Also include any metric the plan expected to be automatable but that proved otherwise while implementing (you noted these during the `test` step).
 
-If there are none — every success metric is covered by an automated behavioural test — you still write the artifact, with an explicit "none required" state (Step 3).
+Collect the plan's manual reviews too: every review or check by a person that the Testing Approach flags the same way, such as a design or UX review, a sign-off or checking behaviour by hand. A plan never makes these tasks, so the test plan is where they are recorded and done.
+
+If there are none — every success metric is covered by an automated behavioural test and no manual review is listed — you still write the artifact, with an explicit "none required" state (Step 3).
 
 ### Step 2: Write a concrete, grounded procedure for each
 
@@ -23,13 +25,15 @@ For every manual metric, write a procedure someone else could follow without rea
 - **Expected result** — the pass condition, stated as a number to compare against.
 - **Who / when** — who runs it and at what point (e.g. pre-release, against staging).
 
-Do not invent metrics the plan does not list, and do not restate metrics already covered by automated tests — those live in the test suite, not here.
+For every manual review, write what the reviewer looks at, where (the page, command or file to open in the real implementation), what to look for, and what counts as passing.
+
+Do not invent metrics or reviews the plan does not list, and do not restate metrics already covered by automated tests — those live in the test suite, not here.
 
 ### Step 3: Write the artifact to the plan store
 
 The test plan is a plan-store artifact. **Never write it with the `Write`/`Edit` tools directly into the plan directory** — stage it, then commit it through the CLI:
 
-1. Use the `Write` tool to stage the content at the scratch path `.spektacular/tmp/{{plan_name}}/test-plan.md`. When manual metrics exist, list one procedure per metric. When none exist, write a single explicit line: `All success metrics are covered by automated behavioural tests; no manual test plan is required.`
+1. Use the `Write` tool to stage the content at the scratch path `.spektacular/tmp/{{plan_name}}/test-plan.md`. When manual metrics or manual reviews exist, list one procedure per metric and one per review. When none exist, write a single explicit line: `All success metrics are covered by automated behavioural tests and no manual review is listed; no manual test plan is required.`
 2. Commit it and remove the scratch file:
 
    ```

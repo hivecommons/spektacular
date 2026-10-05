@@ -244,7 +244,7 @@ func TestEpicOrder_AddedDependencyIsListedInTheSummaryAndResult(t *testing.T) {
 
 	require.Equal(t, todayFrontmatter()+
 		"# Planning summary: 000050_rollout\n\n"+
-		"## Decisions to settle\nNone.\n\n"+
+		"## Decisions\nNone.\n\n"+
 		"## Order added for shared files\n"+
 		"- Added: `000011_b` now depends on `000010_a`. Both change `testproj:pkg/x.go`, `testproj:pkg/y.go`.\n",
 		readSummaryFile(t, root))
@@ -317,7 +317,7 @@ func TestEpicOrder_UndoRemovesTheDependencyForGood(t *testing.T) {
 	removed := "- Removed at review: `000011_b` no longer depends on `000010_a`; they may be implemented side by side.\n"
 	require.Equal(t, todayFrontmatter()+
 		"# Planning summary: 000050_rollout\n\n"+
-		"## Decisions to settle\nNone.\n\n"+
+		"## Decisions\nNone.\n\n"+
 		"## Order added for shared files\n"+added+removed,
 		readSummaryFile(t, root))
 
@@ -335,7 +335,7 @@ func TestEpicOrder_UndoRemovesTheDependencyForGood(t *testing.T) {
 	require.Empty(t, final.Added)
 	require.Equal(t, todayFrontmatter()+
 		"# Planning summary: 000050_rollout\n\n"+
-		"## Decisions to settle\nNone.\n\n"+
+		"## Decisions\nNone.\n\n"+
 		"## Order added for shared files\n"+added+removed+
 		"- Added: `000012_c` now depends on `000010_a`. Both change `testproj:pkg/y.go`.\n",
 		readSummaryFile(t, root))

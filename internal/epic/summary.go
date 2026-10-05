@@ -12,7 +12,7 @@ import (
 )
 
 // The planning summary is the document planning an epic with one request
-// leaves beside the epic: the decisions the user needs to make, the order
+// leaves beside the epic: the decisions the user settled while planning, the order
 // planning added for specs whose plans share files, and one section per
 // planned spec. The CLI owns its skeleton; every section but the ordering log
 // is written by the orchestrating agent, one section at a time.
@@ -24,10 +24,13 @@ const (
 )
 
 const (
-	decisionsHeading = "Decisions to settle"
-	orderingHeading  = "Order added for shared files"
-	noDecisions      = "None."
-	noOrdering       = "None added."
+	decisionsHeading = "Decisions"
+	// legacyDecisionsHeading is what summaries written before decisions were
+	// settled during planning call the section; it still reads as decisions.
+	legacyDecisionsHeading = "Decisions to settle"
+	orderingHeading        = "Order added for shared files"
+	noDecisions            = "None."
+	noOrdering             = "None added."
 )
 
 // Summary is the in-memory mirror of an epic's planning summary. Empty
@@ -70,7 +73,7 @@ func ParseSummary(raw []byte) (Summary, error) {
 		text := strings.Trim(strings.Join(lines, "\n"), "\n")
 		switch heading {
 		case "":
-		case decisionsHeading:
+		case decisionsHeading, legacyDecisionsHeading:
 			if text != noDecisions {
 				s.Decisions = text
 			}
@@ -138,8 +141,8 @@ func (s Summary) orderedSpecs(order []string) []SummarySection {
 	return out
 }
 
-// Render writes the summary in its fixed layout: the title, Decisions to
-// settle, Order added for shared files, then one section per spec in order
+// Render writes the summary in its fixed layout: the title, Decisions,
+// Order added for shared files, then one section per spec in order
 // (the epic's list order), whatever order the sections were written in.
 func (s Summary) Render(epicName string, order []string) []byte {
 	var buf bytes.Buffer

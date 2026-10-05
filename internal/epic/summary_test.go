@@ -14,7 +14,7 @@ const summaryFull = "---\n" +
 	"\n" +
 	"# Planning summary: 000050_rollout\n" +
 	"\n" +
-	"## Decisions to settle\n" +
+	"## Decisions\n" +
 	"- Pick a storage backend.\n" +
 	"\n" +
 	"## Order added for shared files\n" +
@@ -64,7 +64,7 @@ func TestSummary_SectionForASpecNoLongerInTheEpicComesLast(t *testing.T) {
 
 	require.Equal(t, []string{"decisions", "ordering", "auth", "gone"}, s.SectionNames([]string{"auth"}))
 	require.Equal(t, "---\ncreated_date: \"2026-09-01\"\n---\n\n# Planning summary: e\n\n"+
-		"## Decisions to settle\nNone.\n\n## Order added for shared files\nNone added.\n\n"+
+		"## Decisions\nNone.\n\n## Order added for shared files\nNone added.\n\n"+
 		"## auth\nAdds login.\n\n## gone\nWas removed.\n",
 		string(s.Render("e", []string{"auth"})))
 }
@@ -80,7 +80,7 @@ func TestSummary_ReplacingOneSectionLeavesTheOthersByteIdentical(t *testing.T) {
 		"\n" +
 		"# Planning summary: 000050_rollout\n" +
 		"\n" +
-		"## Decisions to settle\n" +
+		"## Decisions\n" +
 		"- Pick a storage backend.\n" +
 		"\n" +
 		"## Order added for shared files\n" +
@@ -98,7 +98,7 @@ func TestSummary_EmptyDecisionsAndOrderingRenderTheirNoneLines(t *testing.T) {
 	s := Summary{CreatedDate: "2026-09-01"}
 	rendered := s.Render("000050_rollout", nil)
 	require.Equal(t, "---\ncreated_date: \"2026-09-01\"\n---\n\n# Planning summary: 000050_rollout\n\n"+
-		"## Decisions to settle\nNone.\n\n## Order added for shared files\nNone added.\n",
+		"## Decisions\nNone.\n\n## Order added for shared files\nNone added.\n",
 		string(rendered))
 
 	// The "none" lines read back as empty, not as content.
@@ -130,4 +130,20 @@ func TestValidSectionBody(t *testing.T) {
 
 	err := ValidSectionBody("ok\n## Bad")
 	require.ErrorContains(t, err, "line 2")
+}
+
+// A summary written before decisions were settled during planning calls the
+// section "Decisions to settle"; it still reads as the decisions and renders
+// under the current heading.
+func TestSummary_LegacyDecisionsHeadingStillReads(t *testing.T) {
+	legacy := "---\ncreated_date: \"2026-10-04\"\n---\n\n# Planning summary: 000070_e\n\n" +
+		"## Decisions to settle\n- Changelog: generated.\n\n" +
+		"## Order added for shared files\nNone added.\n"
+	s, err := ParseSummary([]byte(legacy))
+	require.NoError(t, err)
+	require.Equal(t, "- Changelog: generated.", s.Decisions)
+	require.Empty(t, s.Specs, "the legacy heading must not read as a spec section")
+	require.Equal(t, "---\ncreated_date: \"2026-10-04\"\n---\n\n# Planning summary: 000070_e\n\n"+
+		"## Decisions\n- Changelog: generated.\n\n"+
+		"## Order added for shared files\nNone added.\n", string(s.Render("000070_e", nil)))
 }

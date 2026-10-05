@@ -53,7 +53,7 @@ A common failure mode is silently dropping a section when assembling. Check each
   - an `**Id:**` line holding an id issued by `{{config.command}} plan task-id`, unique in the plan;
   - a `**Repo:**` line naming exactly one registered repo. In a project with more than one registered repo, confirm the line is actually present on every single task, not just the tasks that read as obviously cross-repo — this is the check most likely to be skipped;
   - a `**Depends on:**` line, either `none` or one `- <id> — <title>` entry per dependency, each id belonging to a task in this plan, with no dependency cycle;
-  - an `**Execution:**` line, `agent` or `human — <reason>`, decided against the criteria in the tasks step, with any work that needs both an agent and a person split into two tasks;
+  - an `**Execution:**` line, `agent` or `human — <reason>`, decided against the criteria in the tasks step, with any work that needs both an agent and a person split into two tasks. No `human` task only reviews, signs off or checks something by hand: move each such check to the Testing Approach as a manual item;
   - a summary paragraph, a `*Technical detail:*` link, and outcome-based acceptance criteria.
 
   `{{config.command}} plan file write` enforces the structural rules above and refuses a plan.md that breaks them, naming the task. If a write step is refused, fix the named task in `tasks_plan.md`, re-assemble and retry.

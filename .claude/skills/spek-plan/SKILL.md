@@ -59,6 +59,13 @@ read and the source it came from** in its Dependencies. If any reference does no
 discovery step stops and reports rather than planning around the gap — a broken reference is
 meant to surface here, not during implementation.
 
+# Recorded decisions and knowledge
+
+Planning stops to ask the user whenever the plan would contradict a decision the user recorded for
+the spec (in the spec itself, in a design it references, or in its interview notes where those still
+exist) or a knowledge entry. Such a contradiction is never settled silently, and never left as a task
+for a person, an open question or a note for the review.
+
 # Working files vs. the store documents
 
 The drafting steps run without stopping for section approval — draft each section, save it, and advance; only a genuinely blocking question (no reasonable default, or information only the user holds) interrupts the user before the walkthrough.
@@ -119,3 +126,12 @@ spektacular plan new --data '{"name": "<spec_name>", "commit_existing": false}'
 - `false` starts the workflow without committing, so the workflow's own automatic commits will include that work alongside the agent's.
 
 Never choose for the user, and never guess from context which they would want — the whole point of the report is that their uncommitted work is about to be swept into a commit they did not make. If the commit fails (`code: auto_commit_failed`), tell them which repository failed and the reason git gave; the workflow has not started.
+
+# When an orchestrator starts this skill
+
+The `spek-plan-epic` skill plans a whole epic by starting one agent per spec, each running this skill. If you were started that way, your prompt says so, and four things change:
+
+- Start with `spektacular plan new --data '{"name":"<spec_name>","orchestrated":true}'`. The run keeps its own progress record and notes in a lane, beside any other workflow, and skips the uncommitted-changes question. Running the same command again resumes the lane.
+- Every `goto` carries `"name":"<spec_name>"`, exactly as the instructions print it.
+- Never ask the user anything yourself. Hand each genuine question back to your orchestrator as a final message whose first line is `QUESTION: <spec_name>`, and wait for its answer. There is no sign-off walkthrough: the walkthrough step has you prepare a summary instead. Besides the approach, tasks, scope and assumptions, that summary lists the project-wide rules the plan relies on or decides, such as how the changelog is kept, so the orchestrator can spot plans that disagree, and the manual checks the test plan will carry.
+- End the run with `DONE: <spec_name>` and that summary, or with `FAILED: <spec_name>` and the reason.

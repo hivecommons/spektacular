@@ -23,6 +23,10 @@ Walk every metric in the spec's **Success Metrics** section and make each one ve
 - **Behavioural test** — when the metric can be asserted automatically (e.g. "responds within 100ms" → a latency assertion), say so and describe what the test guarantees. The implementer writes the actual test.
 - **Manual — captured in the implementation test plan** — when the metric cannot be expressed as an automated behavioural test (load under real infrastructure, manual observation, production telemetry), flag it with exactly that phrase. The implement workflow produces a concrete test-plan artifact for these once the code exists, so do **not** write the procedure here — just classify the metric.
 
+### Account for manual reviews
+
+List every review or check a person must make before the work counts as accepted: a design or UX review, a sign-off, checking behaviour by hand. Flag each with the same phrase, **Manual — captured in the implementation test plan**, and say in one line what is checked. These are never plan tasks: a review left as a task is never ticked. If the work needs none, say so.
+
 If the spec has no success metrics, note that there are none to verify. This metric→verification mapping is the handoff the implementer relies on: the implement workflow consumes the plan, not the spec, so a metric not carried here is invisible downstream.
 
 ### What NOT to include

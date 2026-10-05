@@ -33,7 +33,7 @@ var orchestratedSkillCases = []orchestratedSkillCase{
 			"Never ask the user anything yourself.",
 			"a final message whose first line is `QUESTION: <spec_name>`",
 			"There is no sign-off walkthrough: the walkthrough step has you prepare a summary instead.",
-			"that summary lists the project-wide rules the plan relies on or decides, such as how the changelog is kept, so the orchestrator can spot plans that disagree.",
+			"that summary lists the project-wide rules the plan relies on or decides, such as how the changelog is kept, so the orchestrator can spot plans that disagree, and the manual checks the test plan will carry.",
 			"End the run with `DONE: <spec_name>` and that summary, or with `FAILED: <spec_name>` and the reason.",
 		},
 	},

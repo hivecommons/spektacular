@@ -42,6 +42,7 @@ func TestOrchestratedWalkthroughHasNoSignOff(t *testing.T) {
 	require.Contains(t, out, "5. The project-wide rules this plan relies on or decides:")
 	require.Contains(t, out, "one line each with what this plan does, or say there are none.")
 	require.Contains(t, out, "Your orchestrator compares these across the epic's plans to find where they disagree.")
+	require.Contains(t, out, "6. The manual checks: every success metric and review the Testing Approach flags **Manual — captured in the implementation test plan**, one line each with what a person will check, or say there are none.")
 	require.Contains(t, out, `spektacular plan goto --data '{"step":"finished","name":"000007_billing"}'`)
 	require.Contains(t, out, "## Running under an orchestrator")
 	require.Contains(t, out, "`QUESTION: 000007_billing`")
@@ -100,7 +101,7 @@ func TestOrchestratedFinishedClosesDocsAndHandsBackDone(t *testing.T) {
 
 	require.Contains(t, out, "first line is exactly `DONE: 000007_billing`")
 	require.Contains(t, out, "do not report to the user")
-	require.Contains(t, out, "(approach, milestones and tasks with any `human` tasks, out of scope, drafting assumptions, project-wide rules)")
+	require.Contains(t, out, "(approach, milestones and tasks with any `human` tasks, out of scope, drafting assumptions, project-wide rules, manual checks)")
 	require.NotContains(t, out, "The user signed off")
 	require.NotContains(t, out, "approved and ready for implementation")
 	require.Contains(t, out, "## Running under an orchestrator")

@@ -785,15 +785,20 @@ func TestTasksStepTeachesTheTaskFormat(t *testing.T) {
 		require.Contains(t, out, want)
 	}
 
-	// The four criteria for a human task, hand-copied from the design.
+	// The three criteria for a human task: work a person must do, never a
+	// review a person only looks at.
 	for _, criterion := range []string{
 		"secrets or access an agent will not have",
 		"action outside the repo",
-		"judgement that must be a person's",
-		"verification only a person can do",
+		"physical work only a person can do",
 	} {
 		require.Contains(t, out, criterion)
 	}
+	for _, review := range []string{"design sign-off", "visual or UX review", "verification only a person can do"} {
+		require.NotContains(t, out, review, "a review is not a reason for a human task")
+	}
+	require.Contains(t, out, "**A review or a manual check is never a task.**")
+	require.Contains(t, out, "Record it instead as a manual item in the Testing Approach, flagged **Manual — captured in the implementation test plan**, by adding it to `.spektacular/work/test/testing_approach.md`.")
 	require.Contains(t, out, "Split mixed work", "work needing both an agent and a person is split")
 	require.Contains(t, out, "depends on the agent's", "the person's task depends on the agent's")
 	require.Contains(t, out, "Never invent an id")
@@ -809,6 +814,18 @@ func TestVerificationChecksTaskLines(t *testing.T) {
 	for _, want := range []string{"## Milestones & Tasks", "## Per-Task Technical Notes", "**Id:**", "**Repo:**", "**Depends on:**", "**Execution:**"} {
 		require.Contains(t, out, want)
 	}
+}
+
+// A review is never left as a human task: the testing approach lists it as a
+// manual item and verification moves any review task there.
+func TestReviewsGoToTheTestPlanNotHumanTasks(t *testing.T) {
+	approach := renderStep(t, testingApproach())
+	require.Contains(t, approach, "### Account for manual reviews")
+	require.Contains(t, approach, "Flag each with the same phrase, **Manual — captured in the implementation test plan**")
+	require.Contains(t, approach, "These are never plan tasks: a review left as a task is never ticked.")
+
+	verify := renderStep(t, verification())
+	require.Contains(t, verify, "No `human` task only reviews, signs off or checks something by hand: move each such check to the Testing Approach as a manual item;")
 }
 
 // TestWalkthroughNamesHumanTasks asserts the walkthrough names every human

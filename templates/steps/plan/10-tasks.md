@@ -40,10 +40,11 @@ Mark a task `human` when completing it needs any of:
 
 - secrets or access an agent will not have (production credentials, cloud consoles, signing keys);
 - action outside the repo (deploying, releasing, DNS, purchasing or approving something);
-- judgement that must be a person's (legal or licensing, design sign-off, a stakeholder decision);
-- verification only a person can do (visual or UX review, physical hardware).
+- physical work only a person can do (connecting, flashing or setting up hardware).
 
 Anything else is `agent`. Write the reason after the type, naming which of these applies: `**Execution:** human — needs access to the production signing key`.
+
+**A review or a manual check is never a task.** A design or UX review, a sign-off, or checking behaviour by hand is something a person looks at, not work that makes the change exist, and as a task it would stay open for ever and hold the plan back from ever counting as implemented. Record it instead as a manual item in the Testing Approach, flagged **Manual — captured in the implementation test plan**, by adding it to `.spektacular/work/{{plan_name}}/testing_approach.md`. The implement workflow writes every manual item into the test plan once the code exists.
 
 A contradiction with a recorded decision or a knowledge entry is **never a `human` task**, not even as "a stakeholder decision". Stop and ask the user now, while planning, and plan to their answer.
 

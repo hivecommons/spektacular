@@ -188,11 +188,16 @@ two things around those plans:
 
 - **A planning summary kept with the epic**, at `<epics>/<epic>/summary.md` in the epic store. It is
   never a plan, `epic list` and ID allocation ignore its folder, and `epic delete` removes it with
-  the epic. The CLI renders it in a fixed order: the decisions the user needs to make first
+  the epic. The CLI renders it in a fixed order: the decisions settled while planning first
   ("None." when there are none), then the order added for shared files, then one section per
-  planned spec in epic list order. `epic summary write` replaces one section at a time
-  (`decisions` or a member spec), so repeated planning and review edits leave the other sections
-  untouched; only `epic order` writes the ordering section, as an append-only log.
+  planned spec in epic list order, each listing the manual checks its test plan will carry.
+  `epic summary write` replaces one section at a time (`decisions` or a member spec), so repeated
+  planning and review edits leave the other sections untouched; only `epic order` writes the
+  ordering section, as an append-only log.
+- **Decisions are settled before the summary exists.** When the plans disagree on a project-wide
+  rule, such as how the changelog is kept, the orchestrator puts each disagreement to the user
+  with one proposed answer and applies the outcome to every plan involved. Only then does it
+  write the summary, so the summary records settled decisions and never an open question.
 - **Automatic ordering of overlapping specs.** When planning ends, `epic order` compares the files
   each planned spec's tasks name in the plan's context document. Two specs that share a file and
   have no ordering between them, directly or through other specs, are ordered without asking: the

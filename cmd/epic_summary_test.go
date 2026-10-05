@@ -87,7 +87,7 @@ func TestEpicSummary_WrittenSectionBySectionReadsBackDecisionsFirst(t *testing.T
 	want := todayFrontmatter() +
 		"# Planning summary: 000050_rollout\n" +
 		"\n" +
-		"## Decisions to settle\n" +
+		"## Decisions\n" +
 		"- Choose the default backend.\n" +
 		"\n" +
 		"## Order added for shared files\n" +
@@ -121,7 +121,7 @@ func TestEpicSummary_DecisionsSectionAlwaysPresent(t *testing.T) {
 	require.Equal(t, 0, code)
 	require.Equal(t, todayFrontmatter()+
 		"# Planning summary: 000050_rollout\n\n"+
-		"## Decisions to settle\nNone.\n\n"+
+		"## Decisions\nNone.\n\n"+
 		"## Order added for shared files\nNone added.\n\n"+
 		"## 000010_a\nA's plan.\n", stdout)
 
@@ -132,7 +132,7 @@ func TestEpicSummary_DecisionsSectionAlwaysPresent(t *testing.T) {
 	require.Equal(t, 0, code)
 	require.Equal(t, todayFrontmatter()+
 		"# Planning summary: 000050_rollout\n\n"+
-		"## Decisions to settle\nNone.\n\n"+
+		"## Decisions\nNone.\n\n"+
 		"## Order added for shared files\nNone added.\n\n"+
 		"## 000010_a\nA's plan.\n", stdout)
 }
@@ -147,7 +147,7 @@ func TestEpicSummary_RewritingOneSectionLeavesTheOthers(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte("---\ncreated_date: \"2026-01-02\"\n---\n\n"+
 		"# Planning summary: 000050_rollout\n\n"+
-		"## Decisions to settle\n- Keep or drop the flag?\n\n"+
+		"## Decisions\n- Keep or drop the flag?\n\n"+
 		"## Order added for shared files\n- 000010_a before 000011_b: both change cmd/root.go\n\n"+
 		"## 000010_a\nOld A.\n\n### Detail\nKept?\n\n"+
 		"## 000011_b\nB stays.\n"), 0o644))
@@ -158,7 +158,7 @@ func TestEpicSummary_RewritingOneSectionLeavesTheOthers(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "---\ncreated_date: \"2026-01-02\"\n---\n\n"+
 		"# Planning summary: 000050_rollout\n\n"+
-		"## Decisions to settle\n- Keep or drop the flag?\n\n"+
+		"## Decisions\n- Keep or drop the flag?\n\n"+
 		"## Order added for shared files\n- 000010_a before 000011_b: both change cmd/root.go\n\n"+
 		"## 000010_a\nNew A.\n\n"+
 		"## 000011_b\nB stays.\n", string(raw),
@@ -249,7 +249,7 @@ func TestEpicSummary_DeeperHeadingsAreAccepted(t *testing.T) {
 	require.Equal(t, 0, code)
 	require.Equal(t, todayFrontmatter()+
 		"# Planning summary: 000050_rollout\n\n"+
-		"## Decisions to settle\nNone.\n\n"+
+		"## Decisions\nNone.\n\n"+
 		"## Order added for shared files\nNone added.\n\n"+
 		"## 000011_b\n### Steps\n#### Detail\nText.\n", stdout)
 }
@@ -316,7 +316,7 @@ func TestEpicSummary_AppendOrdering(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, todayFrontmatter()+
 		"# Planning summary: 000050_rollout\n\n"+
-		"## Decisions to settle\nNone.\n\n"+
+		"## Decisions\nNone.\n\n"+
 		"## Order added for shared files\n- first\n", string(raw))
 
 	summaryWrite(t, testEpic, "000011_b", "B's plan.\n")
@@ -325,7 +325,7 @@ func TestEpicSummary_AppendOrdering(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, todayFrontmatter()+
 		"# Planning summary: 000050_rollout\n\n"+
-		"## Decisions to settle\nNone.\n\n"+
+		"## Decisions\nNone.\n\n"+
 		"## Order added for shared files\n- first\n- second\n- third\n\n"+
 		"## 000011_b\nB's plan.\n", string(raw))
 }

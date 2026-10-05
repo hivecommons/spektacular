@@ -27,6 +27,6 @@ Read any of them back with `{{config.command}} plan file read {{plan_name}} <doc
 The user signed off on the plan during the walkthrough, and the documents are now marked final. Inform the user that the plan workflow is finished and the plan is approved and ready for implementation.
 {{/orchestrated}}
 {{#orchestrated}}
-The documents are now marked final. This run is orchestrated, so do not report to the user: end your run with a final message for your orchestrator whose first line is exactly `DONE: {{plan_name}}`, followed by the plan summary you prepared in the walkthrough step (approach, milestones and tasks with any `human` tasks, out of scope, drafting assumptions, project-wide rules) and any durable discovery worth saving to the knowledge base.
+The documents are now marked final. This run is orchestrated, so do not report to the user: end your run with a final message for your orchestrator whose first line is exactly `DONE: {{plan_name}}`, followed by the plan summary you prepared in the walkthrough step (approach, milestones and tasks with any `human` tasks, out of scope, drafting assumptions, project-wide rules, manual checks) and any durable discovery worth saving to the knowledge base.
 {{/orchestrated}}
 {{/plan_incomplete}}

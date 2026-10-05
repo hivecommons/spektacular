@@ -827,3 +827,14 @@ func TestReadPlanInTaskRunStillReadsTheWholePlan(t *testing.T) {
 	}
 	require.Contains(t, out, "design document the plan references")
 }
+
+// The test plan carries the plan's manual reviews as well as its manual
+// metrics, since a plan never makes a review a task.
+func TestTestPlanStepCollectsManualReviews(t *testing.T) {
+	out := renderStep(t, testPlan())
+	require.Contains(t, out, "and for the manual reviews the plan lists.")
+	require.Contains(t, out, "Collect the plan's manual reviews too")
+	require.Contains(t, out, "A plan never makes these tasks, so the test plan is where they are recorded and done.")
+	require.Contains(t, out, "For every manual review, write what the reviewer looks at")
+	require.Contains(t, out, "list one procedure per metric and one per review")
+}
