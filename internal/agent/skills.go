@@ -21,7 +21,7 @@ type workflowSkill struct {
 }
 
 // workflowSkills is the single source of truth for which skills every agent
-// installs. All three supported agents consume these byte-identical SKILL.md
+// installs. All supported agents consume these byte-identical SKILL.md
 // templates.
 var workflowSkills = []workflowSkill{
 	{Name: "spek-new", TemplatePath: "skills/workflows/spek-new/SKILL.md"},
