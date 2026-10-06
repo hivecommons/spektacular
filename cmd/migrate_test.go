@@ -108,7 +108,7 @@ func TestMigrate_FormatBehindAndSkillsStaleReachesMatch(t *testing.T) {
 
 	require.FileExists(t, filepath.Join(dir, ".claude", "skills", "spek-new", "SKILL.md"))
 	cfg := readSettingsMap(t, cfgPath)
-	require.Equal(t, 3, cfg["schema"])
+	require.Equal(t, 4, cfg["schema"])
 	require.Equal(t, "0.20.0", cfg["skills_version"])
 	require.Equal(t, 2, readSettingsMap(t, filepath.Join(dir, ".spektacular", "repo.yaml"))["schema"])
 	require.NoFileExists(t, filepath.Join(dir, ".spektacular", "version"))
@@ -144,15 +144,20 @@ func TestMigrate_DryRunReportsEverythingAndChangesNothing(t *testing.T) {
 		require.Equal(t, cfgPath, f.Path)
 		require.Equal(t, migrate.Kind("project"), f.Kind)
 		require.Equal(t, 1, f.From)
-		require.Equal(t, 3, f.To)
+		require.Equal(t, 4, f.To)
 		require.Equal(t, []string{
 			"split legacy single-file settings and record installed skills version",
 			"resolve spec, plan and changelog folders from the settings file",
+			"add the epic store and epic_split_threshold",
 		}, f.Steps)
 		for key, to := range map[string]string{
 			"spec.config.directory":      "specs",
 			"plan.config.directory":      "plans",
 			"changelog.config.directory": "changelog",
+			"epic_split_threshold":       "moderate",
+			"epic.provider":              "file",
+			"epic.strict_dependencies":   "false",
+			"epic.config.directory":      "epics",
 		} {
 			require.True(t, hasAction(f.Actions, "set", cfgPath, key, to), "must report %s set to %s: %+v", key, to, f.Actions)
 		}
@@ -227,7 +232,7 @@ func TestMigrate_ReportsByteIdenticalBackup(t *testing.T) {
 func TestMigrate_StaleSkillsOnCurrentProjectOnlyTouchesSkillsVersion(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	cfgPath := writeSettingsFile(t, dir, "config.yaml", `schema: 3
+	cfgPath := writeSettingsFile(t, dir, "config.yaml", `schema: 4
 written_by: 9.9.9
 skills_version: 9.9.9
 name: proj
@@ -262,10 +267,12 @@ repos:
 	require.True(t, rep.Skills.Reinstall)
 
 	require.FileExists(t, filepath.Join(dir, ".claude", "skills", "spek-new", "SKILL.md"))
-	// An upgrade installs skills this project never had, spek-design included,
-	// and the settings comparison below is what pins "without any settings
-	// change" alongside it.
+	// An upgrade installs skills this project never had, spek-design and the
+	// epic skills included, and the settings comparison below is what pins
+	// "without any settings change" alongside it.
 	require.FileExists(t, filepath.Join(dir, ".claude", "skills", "spek-design", "SKILL.md"))
+	require.FileExists(t, filepath.Join(dir, ".claude", "skills", "spek-plan-epic", "SKILL.md"))
+	require.FileExists(t, filepath.Join(dir, ".claude", "skills", "spek-implement-epic", "SKILL.md"))
 	after := readSettingsMap(t, cfgPath)
 	require.Equal(t, "0.20.0", after["skills_version"])
 	for _, k := range []string{"skills_version", "written_by"} {
@@ -352,7 +359,7 @@ func TestMigrate_NoProject(t *testing.T) {
 func TestMigrate_NoAgentWithStaleSkillsFails(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSettingsFile(t, dir, "config.yaml", "schema: 3\nskills_version: 9.9.9\nname: proj\ncommand: spektacular\n")
+	writeSettingsFile(t, dir, "config.yaml", "schema: 4\nskills_version: 9.9.9\nname: proj\ncommand: spektacular\n")
 
 	er := runMigrateError(t)
 	require.Equal(t, "migrate_failed", er.Code)
@@ -366,7 +373,7 @@ func TestMigrate_NoAgentWithStaleSkillsFails(t *testing.T) {
 func TestMigrate_DifferentWrittenByIsUpToDate(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSettingsFile(t, dir, "config.yaml", `schema: 3
+	writeSettingsFile(t, dir, "config.yaml", `schema: 4
 written_by: 7.7.7
 skills_version: 0.20.0
 name: proj
@@ -466,10 +473,11 @@ func TestMigrate_LegacyStoreFoldersKeepEveryArtifact(t *testing.T) {
 	require.Equal(t, "upgraded", rep.Status)
 	require.Equal(t, cfgPath, rep.Files[0].Path)
 	require.Equal(t, 1, rep.Files[0].From)
-	require.Equal(t, 3, rep.Files[0].To)
+	require.Equal(t, 4, rep.Files[0].To)
 	require.Equal(t, []string{
 		"split legacy single-file settings and record installed skills version",
 		"resolve spec, plan and changelog folders from the settings file",
+		"add the epic store and epic_split_threshold",
 	}, rep.Files[0].Steps)
 	for key, to := range map[string]string{
 		"spec.config.directory":      "specs",

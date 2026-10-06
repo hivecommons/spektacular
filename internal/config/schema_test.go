@@ -35,11 +35,11 @@ type loader struct {
 
 func formatLoaders() map[string]loader {
 	return map[string]loader{
-		"ParseYAMLFile": {kind: "project", want: 3, file: "config.yaml", body: projectBody, load: func(p string) error {
+		"ParseYAMLFile": {kind: "project", want: 4, file: "config.yaml", body: projectBody, load: func(p string) error {
 			_, err := ParseYAMLFile(p)
 			return err
 		}},
-		"FromYAMLFile": {kind: "project", want: 3, file: "config.yaml", body: projectBody, load: func(p string) error {
+		"FromYAMLFile": {kind: "project", want: 4, file: "config.yaml", body: projectBody, load: func(p string) error {
 			_, err := FromYAMLFile(p)
 			return err
 		}},

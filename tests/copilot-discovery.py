@@ -39,11 +39,11 @@ with tempfile.TemporaryDirectory() as temporary:
             found = json.loads(subprocess.check_output(
                 ["copilot", "skill", "list", "--json"], cwd=project, env=env, text=True))
             workflows = [s for s in found if s["name"] in SKILLS]
-            assert len(workflows) == 6, workflows
+            assert len(workflows) == 8, workflows
             assert {s["name"] for s in workflows} == SKILLS
             for skill in workflows:
                 assert Path(skill["path"]) == project / ".github/skills" / skill["name"], skill
             instructions = json.loads(subprocess.check_output(
                 ["copilot", "instruction", "list", "--json"], cwd=project, env=env, text=True))
             assert any(i["sourcePath"] == "AGENTS.md" for i in instructions), instructions
-            print(f"PASS: {agents}: six native skills, AGENTS.md discovered")
+            print(f"PASS: {agents}: eight native skills, AGENTS.md discovered")

@@ -42,7 +42,7 @@ func TestGate_UnversionedProjectBlocksSpecNewUntilMigrated(t *testing.T) {
 	require.Equal(t, cfgPath, er.Resource)
 	require.Equal(t,
 		"this project's settings are out of date for this Spektacular: "+
-			cfgPath+" (format 1, needs 3), "+
+			cfgPath+" (format 1, needs 4), "+
 			filepath.Join(dir, ".spektacular", "repo.yaml")+" (format 1, needs 2)",
 		er.Message)
 	require.Equal(t, gateNextAction, er.NextAction)
@@ -62,7 +62,7 @@ func TestGate_UnversionedProjectBlocksSpecNewUntilMigrated(t *testing.T) {
 func TestGate_StaleSkillsBlockSpecNewUntilMigrated(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	cfgPath := writeSettingsFile(t, dir, "config.yaml", `schema: 3
+	cfgPath := writeSettingsFile(t, dir, "config.yaml", `schema: 4
 skills_version: 0.0.1
 name: proj
 command: spektacular
@@ -96,7 +96,7 @@ repos:
 func TestGate_UnrecordedSkillsAreUpgradeRequired(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	cfgPath := writeSettingsFile(t, dir, "config.yaml", `schema: 3
+	cfgPath := writeSettingsFile(t, dir, "config.yaml", `schema: 4
 name: proj
 command: spektacular
 agent: claude
@@ -122,7 +122,7 @@ func TestGate_DevBuildIgnoresSkillsVersion(t *testing.T) {
 	t.Cleanup(func() { version = "0.20.0" })
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSettingsFile(t, dir, "config.yaml", `schema: 3
+	writeSettingsFile(t, dir, "config.yaml", `schema: 4
 skills_version: 0.23.0
 name: proj
 command: spektacular
@@ -220,7 +220,7 @@ func TestGate_NewerProjectIsRefused(t *testing.T) {
 			require.Equal(t, "config_newer_format", er.Code)
 			require.Equal(t, cfgPath, er.Resource)
 			require.Equal(t,
-				"install a newer Spektacular release: this file needs settings format 99 and this build supports format 3. The file has not been changed",
+				"install a newer Spektacular release: this file needs settings format 99 and this build supports format 4. The file has not been changed",
 				er.NextAction)
 			require.Equal(t, before, snapshotDir(t, dir))
 		})

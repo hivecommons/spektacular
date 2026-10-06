@@ -52,6 +52,10 @@ type storeFileKind struct {
 	requireID  bool
 	repoRouted bool
 	validate   writeValidator
+	// preDelete, when non-nil, may refuse a delete before anything is
+	// removed. Only the spec group sets one: a spec still listed by an epic
+	// cannot be deleted.
+	preDelete func(cfg config.Config, st store.Store, storePath string) error
 }
 
 // stripLeadingFrontmatterBlocks removes zero or more leading YAML frontmatter
@@ -327,6 +331,15 @@ func newStoreFileCmd(k storeFileKind) *cobra.Command {
 			st, storeDir, err := storeFileStore(k.dir)
 			if err != nil {
 				return err
+			}
+			if k.preDelete != nil {
+				cfg, err := loadConfig()
+				if err != nil {
+					return err
+				}
+				if err := k.preDelete(cfg, st, addr.StorePath(storeDir)); err != nil {
+					return err
+				}
 			}
 			return st.Delete(addr.StorePath(storeDir))
 		},

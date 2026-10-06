@@ -29,6 +29,8 @@ inside a plan.
 
 ### Step 2: Choose and Record
 
+Before recording anything, check the direction against the spec's recorded decisions and the knowledge entries loaded in the discovery step. If the direction would contradict a recorded decision or a knowledge entry, that is not a choice to record: STOP and ask the user, and pick a direction only once they have answered.
+
 Pick the best-grounded direction yourself — do not put the choice to the user — and record it as the leading entry in the assumption log (see below), covering:
 
 1. **Chosen direction** — which option to pursue
@@ -66,8 +68,8 @@ Save the result to its working file. Using your own `Write` tool, write the **Co
 - **Rejected**: alternatives considered and why not
 ```
 
-**Proceed unless genuinely blocked.** Do not stop to present this section for review or approval. Only when a decision has no reasonable default — mutually exclusive directions you cannot responsibly choose between, or information only the user holds — STOP and present the options to the user in one block, and do not advance past the point that depends on the answer until they respond. Otherwise proceed without interruption.
+{{> partials/proceed-unless-blocked}}
 
 Once the chosen direction is recorded in the assumption log and the draft is saved, advance:
 
-{{config.command}} plan goto --data '{"step":"{{next_step}}"}'
+{{config.command}} plan goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'

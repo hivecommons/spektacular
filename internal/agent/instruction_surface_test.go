@@ -37,6 +37,12 @@ var forbiddenInstructionSubstrings = []string{
 	"| go run . plan file write",
 	"reads stdin",
 	"with no frontmatter added and nothing reformatted",
+	// The per-kind status commands and plan export were replaced by the one
+	// top-level `status`; no instruction may present them.
+	"spec status",
+	"plan status",
+	"implement status",
+	"plan export",
 }
 
 // forbiddenAddressingPatterns match the retired ways of addressing a spec,

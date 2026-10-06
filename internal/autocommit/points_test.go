@@ -15,8 +15,9 @@ func TestPointFor(t *testing.T) {
 		to   string
 		want Point
 	}{
-		{"spec completion in workflow mode", "workflow", "spec", "verification", "finished", PointCompletion},
-		{"spec completion in full mode", "full", "spec", "verification", "finished", PointCompletion},
+		{"spec completion in workflow mode", "workflow", "spec", "split", "finished", PointCompletion},
+		{"spec completion in full mode", "full", "spec", "split", "finished", PointCompletion},
+		{"spec verification moving on to the split step is not a commit point", "full", "spec", "verification", "split", PointNone},
 		{"plan completion in workflow mode", "workflow", "plan", "walkthrough", "finished", PointCompletion},
 		{"plan completion in full mode", "full", "plan", "walkthrough", "finished", PointCompletion},
 		{"implement completion in workflow mode", "workflow", "implement", "reconcile_spec", "finished", PointCompletion},
@@ -31,11 +32,11 @@ func TestPointFor(t *testing.T) {
 		{"workflow mode never makes a milestone point on the last phase", "workflow", "implement", "update_changelog", "test_plan", PointNone},
 		{"mode off never makes a milestone point", "off", "implement", "update_changelog", "analyze", PointNone},
 
-		{"mode off never commits", "off", "spec", "verification", "finished", PointNone},
+		{"mode off never commits", "off", "spec", "split", "finished", PointNone},
 		{"absent mode never commits", "", "plan", "walkthrough", "finished", PointNone},
 
 		{"an ordinary transition is not a commit point", "full", "spec", "overview", "requirements", PointNone},
-		{"the right steps in the wrong workflow are not a commit point", "full", "plan", "verification", "finished", PointNone},
+		{"the right steps in the wrong workflow are not a commit point", "full", "plan", "split", "finished", PointNone},
 	}
 
 	for _, tc := range cases {
@@ -54,8 +55,9 @@ func TestLeadsToCommit(t *testing.T) {
 		next string
 		want Point
 	}{
-		{"spec verification leads to a commit in workflow mode", "workflow", "spec", "verification", "finished", PointCompletion},
-		{"spec verification leads to a commit in full mode", "full", "spec", "verification", "finished", PointCompletion},
+		{"spec split leads to a commit in workflow mode", "workflow", "spec", "split", "finished", PointCompletion},
+		{"spec split leads to a commit in full mode", "full", "spec", "split", "finished", PointCompletion},
+		{"spec verification leads nowhere now the split step follows it", "full", "spec", "verification", "split", PointNone},
 		{"plan walkthrough leads to a commit in workflow mode", "workflow", "plan", "walkthrough", "finished", PointCompletion},
 		{"plan walkthrough leads to a commit in full mode", "full", "plan", "walkthrough", "finished", PointCompletion},
 		{"implement reconcile_spec leads to a commit in workflow mode", "workflow", "implement", "reconcile_spec", "finished", PointCompletion},

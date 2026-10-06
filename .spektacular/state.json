@@ -1,27 +1,29 @@
 {
-  "kind": "spec",
+  "kind": "implement",
   "current_step": "finished",
   "completed_steps": [
     "new",
-    "interview",
-    "overview",
-    "requirements",
-    "acceptance_criteria",
-    "constraints",
-    "technical_approach",
-    "success_metrics",
-    "non_goals",
-    "verification",
+    "read_plan",
+    "analyze",
+    "implement",
+    "test",
+    "verify",
+    "update_plan",
+    "update_changelog",
+    "test_plan",
+    "update_feature_changelog",
+    "reconcile_spec",
     "finished"
   ],
-  "created_at": "2026-09-25T13:25:27.465463216Z",
-  "updated_at": "2026-09-25T14:01:22.570450083Z",
+  "created_at": "2026-10-04T14:07:47.171696106Z",
+  "updated_at": "2026-10-04T14:40:46.482260937Z",
   "data": {
     "committed_milestones": [
       1,
       2,
-      3
+      3,
+      4
     ],
-    "name": "000059_normalise-artifact-addressing"
+    "name": "000063_epic-planning-summary-and-reordering"
   }
 }

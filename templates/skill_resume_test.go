@@ -84,8 +84,10 @@ func TestImplementSkillDocumentsSingleTaskRuns(t *testing.T) {
 	require.NoError(t, err)
 	body := string(content)
 
-	require.Contains(t, body, `implement new --data '{"name": "<plan_name>", "task": "<task_id>"}'`)
-	require.Contains(t, body, "plan export <plan_name> --format json")
+	require.Contains(t, body, `implement new --data '{"name": "<spec_name>", "task": "<task_id>"}'`)
+	require.Contains(t, body, "status <spec_name> --format json")
+	require.Contains(t, body, "specs[].plan.tasks")
+	require.NotContains(t, body, "plan export")
 	for _, code := range []string{"task_not_found", "task_completed", "task_dependencies_incomplete", "task_requires_human"} {
 		require.Contains(t, body, code)
 	}

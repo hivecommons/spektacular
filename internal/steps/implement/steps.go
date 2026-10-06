@@ -154,17 +154,17 @@ func updateChangelog() workflow.StepCallback {
 			return "", err
 		}
 		if !ok {
-			return "", writeStep("update_changelog", "test_plan", "steps/implement/07-update_changelog.md", data, out, st, cfg, nil)
+			return "", writeStep("update_changelog", "test_plan", "steps/implement/07-update_changelog.md", data, out, st, cfg, withDependencyOverride(data, nil))
 		}
 		last := len(p.OpenTasks()) == 0
 		next := "finished"
 		if last {
 			next = "test_plan"
 		}
-		return "", writeStep("update_changelog", next, "steps/implement/07-update_changelog.md", data, out, st, cfg, map[string]any{
+		return "", writeStep("update_changelog", next, "steps/implement/07-update_changelog.md", data, out, st, cfg, withDependencyOverride(data, map[string]any{
 			"task":      taskVars(task),
 			"last_task": last,
-		})
+		}))
 	}
 }
 
@@ -185,7 +185,7 @@ func testPlan() workflow.StepCallback {
 // was actually built rather than what was originally planned.
 func updateFeatureChangelog() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
-		return "", writeStep("update_feature_changelog", "reconcile_spec", "steps/implement/10-update_feature_changelog.md", data, out, st, cfg, nil)
+		return "", writeStep("update_feature_changelog", "reconcile_spec", "steps/implement/10-update_feature_changelog.md", data, out, st, cfg, withDependencyOverride(data, nil))
 	}
 }
 
@@ -239,7 +239,7 @@ func finished() workflow.StepCallback {
 						"changelog_missing",
 						fmt.Sprintf("project-level changelog record %q was never written by update_feature_changelog", changelogPath),
 					).WithResource(changelogPath).
-						WithNextAction(fmt.Sprintf("re-run the update_feature_changelog step: `%s implement goto --data '{\"step\":\"update_feature_changelog\"}'`", cfg.Command))
+						WithNextAction(fmt.Sprintf("re-run the update_feature_changelog step: `%s implement goto --data '{\"step\":\"update_feature_changelog\",\"name\":%q}'`", cfg.Command, planName))
 				}
 				return "", err
 			}
@@ -288,4 +288,51 @@ func taskExtra(data workflow.Data, st store.Store, cfg workflow.Config) (map[str
 // taskVars is the template value for the selected task.
 func taskVars(t plantask.Task) map[string]any {
 	return map[string]any{"id": t.ID, "title": t.Title}
+}
+
+// withDependencyOverride adds the unmet dependencies an implement run was
+// started past to extra, for the changelog steps to record: the list as
+// "dependency_override" (each entry's name and state) and
+// "has_dependency_override", so a template renders its heading once rather
+// than once per entry. extra is returned unchanged when the run overrode
+// nothing.
+//
+// The workflow data holds the list as the command set it on a fresh run, but
+// as []any of map[string]any once it has been through state.json, so both
+// shapes are read.
+func withDependencyOverride(data workflow.Data, extra map[string]any) map[string]any {
+	raw, ok := data.Get("dependency_override")
+	if !ok {
+		return extra
+	}
+	var entries []map[string]any
+	switch v := raw.(type) {
+	case []map[string]any:
+		entries = v
+	case []any:
+		for _, item := range v {
+			if m, ok := item.(map[string]any); ok {
+				entries = append(entries, m)
+			}
+		}
+	}
+	var deps []map[string]any
+	for _, e := range entries {
+		name, _ := e["name"].(string)
+		if name == "" {
+			continue
+		}
+		state, _ := e["state"].(string)
+		deps = append(deps, map[string]any{"name": name, "state": state})
+	}
+	if len(deps) == 0 {
+		return extra
+	}
+	out := make(map[string]any, len(extra)+2)
+	for k, v := range extra {
+		out[k] = v
+	}
+	out["has_dependency_override"] = true
+	out["dependency_override"] = deps
+	return out
 }

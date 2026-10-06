@@ -48,3 +48,15 @@ func PreWorkflowMessage(kind, specName string) string {
 		"Spektacular committed them separately at the user's request so they are not "+
 		"mixed with the agent's work.\n", kind, specName, kind, specName)
 }
+
+// MessageTmpPath is the project-relative path an agent is told to stage the
+// commit message for the workflow named name. It sits in a folder of that
+// workflow's own under the scratch directory, so workflows running side by
+// side never overwrite each other's staged message. With no name it falls
+// back to the scratch directory itself.
+func MessageTmpPath(name string) string {
+	if name == "" {
+		return ".spektacular/tmp/git-commit-message.md"
+	}
+	return ".spektacular/tmp/" + name + "/git-commit-message.md"
+}

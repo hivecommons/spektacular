@@ -108,6 +108,12 @@ func TestSpecNewSchemaDocumentsNameAndOptionalID(t *testing.T) {
 	require.Equal(t, []string{"name"}, schema.Input.Required)
 	require.Equal(t, identifier.MaxPartLength, schema.Input.Properties["name"].MaxLen)
 	require.Equal(t, identifier.MaxPartLength, schema.Input.Properties["id"].MaxLen)
+
+	require.Contains(t, schema.Input.Properties, "sources")
+	require.Equal(t, "array", schema.Input.Properties["sources"].Type)
+	require.Contains(t, schema.Input.Properties["sources"].Items.Properties, "uri")
+	require.Contains(t, schema.Input.Properties, "epic")
+	require.Equal(t, "string", schema.Input.Properties["epic"].Type)
 }
 
 func TestSpecNew_DefaultUsesTimestampPrefix(t *testing.T) {
@@ -472,4 +478,113 @@ func TestSpecNew_DirectoryOutsideProjectIsRefused(t *testing.T) {
 	require.Contains(t, er.NextAction, "`spec.config.directory`")
 	require.Contains(t, er.NextAction, "`specs`")
 	require.NoDirExists(t, filepath.Join(filepath.Dir(dir), "elsewhere"))
+}
+
+// specFrontmatter returns the stored spec's frontmatter as one string.
+func specFrontmatter(t *testing.T, root, name string) string {
+	t.Helper()
+	return strings.Join(frontmatterOf(t, filepath.Join(root, ".spektacular", "specs", name+".md")), "\n")
+}
+
+// A spec started with sources records each link with today's retrieval date;
+// one started without records none.
+func TestSpecNew_Sources(t *testing.T) {
+	t.Run("each source is recorded with today's date", func(t *testing.T) {
+		root := epicProject(t)
+		result, err := runSpecNewForTest(t, "--data", `{"name":"seeded","sources":[{"uri":"https://example.com/issues/45"},{"uri":"https://example.com/doc"}]}`)
+		require.NoError(t, err)
+		fm := specFrontmatter(t, root, result.SpecName)
+		today := time.Now().UTC().Format("2006-01-02")
+		require.Contains(t, fm, "uri: https://example.com/issues/45\n      retrieved_date: \""+today+"\"")
+		require.Contains(t, fm, "uri: https://example.com/doc\n      retrieved_date: \""+today+"\"")
+	})
+
+	t.Run("a spec started without sources records none", func(t *testing.T) {
+		root := epicProject(t)
+		result, err := runSpecNewForTest(t, "--data", `{"name":"plain","sources":[]}`)
+		require.NoError(t, err)
+		require.NotContains(t, specFrontmatter(t, root, result.SpecName), "sources:")
+	})
+
+	t.Run("a source with no uri is refused and nothing is written", func(t *testing.T) {
+		root := epicProject(t)
+		before := snapshotTree(t, root)
+		_, err := runSpecNewForTest(t, "--data", `{"name":"seeded","sources":[{"uri":"https://example.com/a"},{}]}`)
+		var cliErr *output.ErrorResponse
+		require.ErrorAs(t, err, &cliErr)
+		require.Equal(t, "sources_invalid", cliErr.Code)
+		require.Equal(t, "sources[1]", cliErr.Resource)
+		require.Contains(t, cliErr.NextAction, `"sources":[{"uri":"https://`)
+		require.Equal(t, before, snapshotTree(t, root))
+	})
+}
+
+// A spec started in an epic is listed by it from the start, with no
+// dependencies, and names it; an unknown epic is refused with nothing written.
+func TestSpecNew_InEpic(t *testing.T) {
+	t.Run("the epic lists the spec and the spec names the epic", func(t *testing.T) {
+		root := epicProject(t)
+		writeSpecFixture(t, root, "000001_existing", epicTestSpecFixed)
+		epicWrite(t, testEpic, specsData("000001_existing"))
+
+		result, err := runSpecNewForTest(t, "--data", `{"name":"joiner","epic":"`+testEpic+`"}`)
+		require.NoError(t, err)
+		require.Equal(t, "new", result.Step)
+
+		require.Equal(t, []string{"000001_existing", result.SpecName}, epicSpecsOf(t, epicFilePath(root, testEpic)))
+		require.Contains(t, strings.Join(frontmatterOf(t, epicFilePath(root, testEpic)), "\n"),
+			"- name: "+result.SpecName+"\n      depends_on: []")
+		require.Equal(t, testEpic, specEpicOf(t, filepath.Join(root, ".spektacular", "specs", result.SpecName+".md")))
+		requireAgreement(t, root, testEpic, "000001_existing", result.SpecName)
+		require.FileExists(t, filepath.Join(root, ".spektacular", "state.json"))
+	})
+
+	t.Run("an unknown epic is refused and nothing is written", func(t *testing.T) {
+		root := epicProject(t)
+		before := snapshotTree(t, root)
+		_, err := runSpecNewForTest(t, "--data", `{"name":"joiner","epic":"000099_missing"}`)
+		var cliErr *output.ErrorResponse
+		require.ErrorAs(t, err, &cliErr)
+		require.Equal(t, "epic_not_found", cliErr.Code)
+		require.Contains(t, cliErr.NextAction, "epic list")
+		require.Equal(t, before, snapshotTree(t, root))
+		require.NoDirExists(t, filepath.Join(root, ".spektacular", "specs"))
+		require.NoFileExists(t, filepath.Join(root, ".spektacular", "state.json"))
+	})
+
+	t.Run("a failed join removes the new spec and restores the epic", func(t *testing.T) {
+		root := epicProject(t)
+		epicWrite(t, testEpic, "")
+		epicBefore, err := os.ReadFile(epicFilePath(root, testEpic))
+		require.NoError(t, err)
+		failEpicLinkOnCall(t, 1, nil)
+
+		resetRootCmd(t)
+		stdout, _ := setupImplementCmd(t)
+		rootCmd.SetArgs([]string{"spec", "new", "--data", `{"name":"joiner","epic":"` + testEpic + `"}`})
+		err = rootCmd.Execute()
+		var cliErr *output.ErrorResponse
+		require.ErrorAs(t, err, &cliErr)
+		require.Equal(t, "epic_link_failed", cliErr.Code)
+		require.Empty(t, stdout.String(), "the new step's result is not reported for a spec that was removed")
+
+		epicAfter, err := os.ReadFile(epicFilePath(root, testEpic))
+		require.NoError(t, err)
+		require.Equal(t, string(epicBefore), string(epicAfter))
+		entries, _ := os.ReadDir(filepath.Join(root, ".spektacular", "specs"))
+		require.Empty(t, entries)
+		require.NoFileExists(t, filepath.Join(root, ".spektacular", "state.json"))
+	})
+}
+
+// Without sources or an epic, spec new writes a spec carrying neither key.
+func TestSpecNew_WithoutSourcesOrEpicIsUnchanged(t *testing.T) {
+	root := epicProject(t)
+	result, err := runSpecNewForTest(t, "--data", `{"name":"plain"}`)
+	require.NoError(t, err)
+	require.Equal(t, "new", result.Step)
+	fm := specFrontmatter(t, root, result.SpecName)
+	require.NotContains(t, fm, "sources:")
+	require.NotContains(t, fm, "epic:")
+	require.NoDirExists(t, filepath.Join(root, ".spektacular", "epics"))
 }

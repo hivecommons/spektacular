@@ -20,8 +20,9 @@ Find all files related to the feature being planned. Organize results by categor
 ### Agent 2: Prior Research
 Search for existing research and plans related to this feature:
 - Search the configured knowledge sources with the `knowledge search` command for related notes, gotchas, or prior learnings — results are ranked one per matching document, tagged by the tier and store name they came from, and carry the entry's own `tags`. A document need not contain every query word: it is returned if it carries evidence for any of them, so an empty result is not proof that nothing on the subject exists — try a differently-worded query before concluding the knowledge base is silent
-- Check `.spektacular/plans/` for related plans
-- Check `.spektacular/specs/` for related specs
+- List prior plans with `plan file list` and read related plans with `plan file read <name> plan`
+- List prior specs with `spec file list` and read related specs with `spec file read <name>`
+- Reach stored artifacts only through the CLI, never by listing or reading store directories with your own file tools; store locations are configured and must not be built by hand
 - Look for relevant issues, tickets, or TODOs in the codebase
 
 ### Agent 3: Similar Implementations

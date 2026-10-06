@@ -1,6 +1,6 @@
 ---
 name: spek-implement
-description: Execute an approved Plan to implement the feature.
+description: Implement an approved Spec by executing its Plan.
 ---
 
 {{> partials/version-check}}
@@ -10,7 +10,7 @@ description: Execute an approved Plan to implement the feature.
 
 # What this skill does
 
-This skill drives a **multi-step interactive workflow** that executes an approved plan held in the plan store, producing working code, tests, and a changelog. The workflow is owned by the `{{command}}` CLI, not by you — the CLI is the state machine and you are the executor, and the CLI (not the filesystem) is how you reach every plan document.
+This skill drives a **multi-step interactive workflow** that implements a spec by executing its approved plan held in the plan store, producing working code, tests, and a changelog. The workflow is owned by the `{{command}}` CLI, not by you — the CLI is the state machine and you are the executor, and the CLI (not the filesystem) is how you reach every plan document.
 
 On each turn, the CLI returns JSON containing an `instruction` field. That instruction describes exactly one step (e.g. analyze, implement a task, verify, update changelog, write the test plan, …). You must:
 
@@ -41,31 +41,50 @@ This includes the edits the implement workflow makes to `plan.md` — ticking ta
 
 > **Cross-repo implementation.** When the plan attributes work to registered member repos, carry each part of the work out in its attributed repo's code (`{{command}} repo list` reports where it lives as `root`), and follow the workflow's changelog instructions to write the central record plus one derived entry per affected repo via `{{command}} changelog file write ... --repo <name>`.
 
-Ask the user which plan to implement before proceeding. To enumerate the available plans, run `{{command}} plan file list` — the CLI's list is the source of truth for what counts as a plan. You don't need to look for an in-progress workflow yourself — the CLI detects and reports one for you (see below).
+Ask the user which spec to implement before proceeding. A spec is implemented through its plan, which shares the spec's name. To enumerate the specs that have a plan, run `{{command}} plan file list` — the CLI's list is the source of truth for what counts as a plan. You don't need to look for an in-progress workflow yourself — the CLI detects and reports one for you (see below).
 
-The plan must already exist in the plan store — confirm with `{{command}} plan file list`. If it does not, stop and tell the user to run `{{command}} plan` first.
+The spec's plan must already exist in the plan store — confirm with `{{command}} plan file list`. If it does not, stop and tell the user to run `{{command}} plan new` for the spec first.
 
 Start the implement workflow by running:
 
 ```
-{{command}} implement new --data '{"name": "<plan_name>"}'
+{{command}} implement new --data '{"name": "<spec_name>"}'
 ```
+
+## If the spec depends on specs that are not implemented
+
+A spec in an epic may depend on other specs in it. When one of them is not implemented yet, `implement new` refuses with `code: dependencies_unmet` and starts nothing. Its `message` names each unmet dependency and its state, for example "`<spec>` depends on `<dependency>`, which is in progress (2/5 tasks complete)".
+
+This is a question for the user, not a decision for you. Tell them each unmet dependency and its state, and ask whether to continue anyway:
+
+- **If they choose to continue**, re-run the same command with `"override_dependencies": true` added, exactly as the `next_action` gives it:
+
+  ```
+  {{command}} implement new --data '{"name": "<spec_name>", "override_dependencies": true}'
+  ```
+
+  The workflow starts, and the changelog steps record that implementation started past the unmet dependencies.
+- **Otherwise**, offer to implement the first unmet dependency that is ready instead, using the `implement new` command the `next_action` names. When the `next_action` says no dependency is ready yet, tell the user so.
+
+When the project sets `epic.strict_dependencies`, no override exists: `dependencies_unmet` offers no way to continue, and a request that carries `"override_dependencies": true` is refused with `code: dependency_override_refused`. Tell the user each unmet dependency and its state, and offer the ready dependency the `next_action` names. Never add `"override_dependencies": true` without the user's explicit agreement.
+
+Specifying and planning a spec are never held back by its dependencies; only implementation is.
 
 ## Implementing one task
 
 A plan written as tasks can be implemented one task at a time. When the user (or an orchestrator) asks for one specific task of a plan, start a single-task run by adding the task's id:
 
 ```
-{{command}} implement new --data '{"name": "<plan_name>", "task": "<task_id>"}'
+{{command}} implement new --data '{"name": "<spec_name>", "task": "<task_id>"}'
 ```
 
-When the user names the task by its title rather than its id, look the id up in the plan's task graph first:
+When the user names the task by its title rather than its id, look the id up in the spec's status report first:
 
 ```
-{{command}} plan export <plan_name> --format json
+{{command}} status <spec_name> --format json
 ```
 
-Each entry of `tasks` carries its `id` and `title`. A single-task run still reads the whole plan, its context, research and referenced designs, but implements, tests, verifies and ticks only that task. The feature-level wrap-up (test plan, feature changelog, spec reconciliation) happens only in the run that completes the plan's last open task.
+The tasks are under `specs[].plan.tasks`, in the entry whose `name` is the spec; each carries its `id` and `title`. A single-task run still reads the whole plan, its context, research and referenced designs, but implements, tests, verifies and ticks only that task. The feature-level wrap-up (test plan, feature changelog, spec reconciliation) happens only in the run that completes the plan's last open task.
 
 The CLI refuses a task that cannot start, and starts nothing: `task_not_found`, `task_completed`, `task_dependencies_incomplete` (it lists the tasks to implement first) and `task_requires_human` (it gives the reason a person must do it). Relay the refusal and its `next_action` to the user rather than working around it.
 
@@ -86,7 +105,7 @@ The CLI refuses a task that cannot start, and starts nothing: `task_not_found`, 
 3. **To start fresh** (discarding the in-progress workflow — it remains recoverable via git), re-run with `--force`:
 
    ```
-   {{command}} implement new --force --data '{"name": "<plan_name>"}'
+   {{command}} implement new --force --data '{"name": "<spec_name>"}'
    ```
 
 Otherwise the command returns the first `instruction` and a fresh workflow has started. From that point on, follow the loop above: do what the instruction says, then call `{{command}} implement goto --data '{"step":"<next_step>"}'` to get the next one. Do not invent step names — every instruction tells you the exact `goto` command to run next.
@@ -100,16 +119,25 @@ This is a question for the user, not a decision for you. Tell them which reposit
 To commit the existing changes first:
 
 ```
-{{command}} implement new --data '{"name": "<plan_name>", "commit_existing": true}'
+{{command}} implement new --data '{"name": "<spec_name>", "commit_existing": true}'
 ```
 
 To start without committing them:
 
 ```
-{{command}} implement new --data '{"name": "<plan_name>", "commit_existing": false}'
+{{command}} implement new --data '{"name": "<spec_name>", "commit_existing": false}'
 ```
 
 - `true` commits the existing changes first, in their own commit whose message says they are the user's work from before the workflow. The workflow then starts on a clean tree.
 - `false` starts the workflow without committing, so the workflow's own automatic commits will include that work alongside the agent's.
 
 Never choose for the user, and never guess from context which they would want — the whole point of the report is that their uncommitted work is about to be swept into a commit they did not make. If the commit fails (`code: auto_commit_failed`), tell them which repository failed and the reason git gave; the workflow has not started.
+
+# When an orchestrator starts this skill
+
+The `spek-implement-epic` skill implements a whole epic by starting one agent per spec, each running this skill in the spec's own worktree. If you were started that way, your prompt says so, and four things change:
+
+- Start with `{{command}} implement new --data '{"name":"<spec_name>","orchestrated":true}'`, from the worktree you were given. The run keeps its own progress record and notes in a lane and skips the uncommitted-changes question. Running the same command again resumes the lane.
+- Every `goto` carries `"name":"<spec_name>"`, exactly as the instructions print it.
+- Never ask the user anything yourself, and never ask whether to continue between tasks: tasks run one after another. Hand each genuine question back to your orchestrator as a final message whose first line is `QUESTION: <spec_name>`, and wait for its answer.
+- End the run with `DONE: <spec_name>` and the completion summary, or with `FAILED: <spec_name>` and the reason.

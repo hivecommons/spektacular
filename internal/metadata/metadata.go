@@ -55,6 +55,9 @@ func ParseDocumentStatus(raw string) (DocumentStatus, bool) {
 
 const dateFormat = "2006-01-02"
 
+// DateFormat is the day-precision layout every lifecycle date is written in.
+const DateFormat = dateFormat
+
 // Metadata is the in-memory mirror of an artifact's YAML frontmatter block.
 // CreatedDate is stamped on first write and preserved thereafter. ClosedDate
 // is zero until the first transition to a closed document status and is
@@ -83,6 +86,21 @@ type Metadata struct {
 	// document, while Specs is every spec that points at it. Modelled here for
 	// the same reason Designs is: yamlShape is a closed schema.
 	Specs []string
+	// Epic is the epic this spec belongs to, empty for a standalone spec. Only
+	// the epic link writer sets it, so an epic and its specs agree.
+	Epic string
+	// Sources are the external materials that directly seeded this spec, each
+	// with the date it was retrieved. Only spec new sets them; like Designs,
+	// they are modelled here so the closed schema carries them forward.
+	Sources []SourceRef
+}
+
+// SourceRef is one piece of existing material a document was seeded from: a
+// stable link to it and the date it was retrieved (YYYY-MM-DD), stamped by
+// the CLI. Specs and epics carry the same shape.
+type SourceRef struct {
+	URI           string `yaml:"uri" json:"uri"`
+	RetrievedDate string `yaml:"retrieved_date" json:"retrieved_date"`
 }
 
 // DesignRef is one reference from an artifact to a design document. It names
@@ -107,6 +125,8 @@ type yamlShape struct {
 	Plan           string         `yaml:"plan,omitempty"`
 	Designs        []DesignRef    `yaml:"designs,omitempty"`
 	Specs          []string       `yaml:"specs,omitempty"`
+	Epic           string         `yaml:"epic,omitempty"`
+	Sources        []SourceRef    `yaml:"sources,omitempty"`
 }
 
 // yamlInShape is the decode-side twin of yamlShape. It holds document_status
@@ -126,6 +146,9 @@ type yamlInShape struct {
 	Designs yaml.Node `yaml:"designs"`
 	// Specs is a raw node for the same reason Designs is.
 	Specs yaml.Node `yaml:"specs"`
+	Epic  string    `yaml:"epic"`
+	// Sources is a raw node for the same reason Designs is.
+	Sources yaml.Node `yaml:"sources"`
 }
 
 // MarshalYAML implements yaml.Marshaler.
@@ -139,6 +162,8 @@ func (m Metadata) MarshalYAML() (interface{}, error) {
 		Plan:           m.Plan,
 		Designs:        m.Designs,
 		Specs:          m.Specs,
+		Epic:           m.Epic,
+		Sources:        m.Sources,
 	}
 	if !m.ClosedDate.IsZero() {
 		out.ClosedDate = m.ClosedDate.Format(dateFormat)
@@ -180,6 +205,8 @@ func (m *Metadata) UnmarshalYAML(node *yaml.Node) error {
 	m.Plan = in.Plan
 	m.Designs = decodeDesignRefs(in.Designs)
 	m.Specs = decodeSpecNames(in.Specs)
+	m.Epic = in.Epic
+	m.Sources = decodeSourceRefs(in.Sources)
 	return nil
 }
 
@@ -200,6 +227,31 @@ func decodeDesignRefs(node yaml.Node) []DesignRef {
 			continue
 		}
 		if ref.Source == "" || ref.Path == "" {
+			continue
+		}
+		refs = append(refs, ref)
+	}
+	return refs
+}
+
+// decodeSourceRefs reads the sources list leniently, on the same bargain
+// decodeDesignRefs strikes: an absent, empty, malformed or non-list value
+// yields no sources instead of an error. Non-mapping entries and entries with
+// no uri are dropped, since a source that cannot be followed records nothing.
+func decodeSourceRefs(node yaml.Node) []SourceRef {
+	if node.Kind != yaml.SequenceNode {
+		return nil
+	}
+	var refs []SourceRef
+	for _, item := range node.Content {
+		if item.Kind != yaml.MappingNode {
+			continue
+		}
+		var ref SourceRef
+		if err := item.Decode(&ref); err != nil {
+			continue
+		}
+		if ref.URI == "" {
 			continue
 		}
 		refs = append(refs, ref)
@@ -238,6 +290,14 @@ func validateDocumentStatus(s DocumentStatus) error {
 	}
 	return fmt.Errorf("invalid document status %q; must be one of %v", s, DocumentStatuses())
 }
+
+// IsClosed reports whether s is a closed document status, for a document kind
+// that stamps its own lifecycle dates (an epic). Draft and blank are open.
+func IsClosed(s DocumentStatus) bool { return isClosed(s) }
+
+// ValidateDocumentStatus returns an error unless s is a status a caller can
+// set, for a document kind that stamps its own lifecycle (an epic).
+func ValidateDocumentStatus(s DocumentStatus) error { return validateDocumentStatus(s) }
 
 // isClosed reports whether s is final, superseded or archived. Draft and
 // blank are open.

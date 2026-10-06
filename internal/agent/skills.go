@@ -21,7 +21,7 @@ type workflowSkill struct {
 }
 
 // workflowSkills is the single source of truth for which skills every agent
-// installs. All three supported agents consume these byte-identical SKILL.md
+// installs. All supported agents consume these byte-identical SKILL.md
 // templates.
 var workflowSkills = []workflowSkill{
 	{Name: "spek-new", TemplatePath: "skills/workflows/spek-new/SKILL.md"},
@@ -30,6 +30,8 @@ var workflowSkills = []workflowSkill{
 	{Name: "spek-knowledge", TemplatePath: "skills/workflows/spek-knowledge/SKILL.md"},
 	{Name: "spek-manage-repos", TemplatePath: "skills/workflows/spek-manage-repos/SKILL.md"},
 	{Name: "spek-design", TemplatePath: "skills/workflows/spek-design/SKILL.md"},
+	{Name: "spek-plan-epic", TemplatePath: "skills/workflows/spek-plan-epic/SKILL.md"},
+	{Name: "spek-implement-epic", TemplatePath: "skills/workflows/spek-implement-epic/SKILL.md"},
 }
 
 // sourceFS is the filesystem the install helpers read templates from. It is

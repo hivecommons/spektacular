@@ -26,12 +26,12 @@ Do not mark a checkbox satisfied on a partial or speculative match — if in dou
 
 The spec is a spec-store artifact. **Never write it with the `Write`/`Edit` tools directly into the spec directory** — stage it, then commit it through the CLI:
 
-1. Use the `Write` tool to stage the full updated spec content (with satisfied checkboxes flipped to `[x]`, everything else unchanged) at the scratch path `.spektacular/tmp/spec_reconcile.md`.
+1. Use the `Write` tool to stage the full updated spec content (with satisfied checkboxes flipped to `[x]`, everything else unchanged) at the scratch path `.spektacular/tmp/{{plan_name}}/spec_reconcile.md`.
 2. Commit it and remove the scratch file:
 
    ```
-   {{config.command}} spec file write {{plan_name}} --from .spektacular/tmp/spec_reconcile.md
-   rm .spektacular/tmp/spec_reconcile.md
+   {{config.command}} spec file write {{plan_name}} --from .spektacular/tmp/{{plan_name}}/spec_reconcile.md
+   rm .spektacular/tmp/{{plan_name}}/spec_reconcile.md
    ```
 
 After the write succeeds, confirm it with `{{config.command}} spec file read {{plan_name}}`.
@@ -45,5 +45,5 @@ If the feature's spec cannot be read by the name `{{plan_name}}`, or the plan's 
 Once the spec is reconciled and confirmed:
 
 ```
-{{config.command}} implement goto --data '{"step":"{{next_step}}"}'
+{{config.command}} implement goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```

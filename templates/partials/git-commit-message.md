@@ -23,7 +23,7 @@ Write the message to `{{commit.tmp_path}}` with your own file tool, then add it
 to the advance command:
 
 ```
-{{command}} {{commit.kind}} goto --data '{"step":"{{next_step}}","commit_message_from":"{{commit.tmp_path}}"}'
+{{command}} {{commit.kind}} goto --data '{"step":"{{next_step}}",{{#commit.goto_name}}"name":"{{commit.goto_name}}",{{/commit.goto_name}}"commit_message_from":"{{commit.tmp_path}}"}'
 ```
 
 Do not ask the user to confirm the commit — it happens without asking.

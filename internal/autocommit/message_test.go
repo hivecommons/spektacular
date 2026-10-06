@@ -81,3 +81,14 @@ func TestPreWorkflowMessage(t *testing.T) {
 			"user's request so they are not mixed with the agent's work.\n",
 		PreWorkflowMessage("implement", "000057_git-commit"))
 }
+
+// TestMessageTmpPath asserts a staged commit message lives in a scratch folder
+// of its own spec's, so workflows for different specs running side by side
+// never overwrite each other's message; with no name it falls back to the
+// scratch directory itself.
+func TestMessageTmpPath(t *testing.T) {
+	require.Equal(t, ".spektacular/tmp/000001_billing/git-commit-message.md", MessageTmpPath("000001_billing"))
+	require.Equal(t, ".spektacular/tmp/billing/git-commit-message.md", MessageTmpPath("billing"))
+	require.Equal(t, ".spektacular/tmp/git-commit-message.md", MessageTmpPath(""))
+	require.NotEqual(t, MessageTmpPath("a"), MessageTmpPath("b"))
+}

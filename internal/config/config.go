@@ -25,6 +25,15 @@ const (
 	SpecTriggerThresholdLenient  = "lenient"
 )
 
+// EpicSplitThreshold* are the values of epic_split_threshold, which sets how
+// readily the agent offers to split a complete spec into an epic. It is
+// independent of spec_trigger_threshold and is read live by the agent.
+const (
+	EpicSplitThresholdStrict   = "strict"
+	EpicSplitThresholdModerate = "moderate"
+	EpicSplitThresholdLenient  = "lenient"
+)
+
 // AutoCommit* are the values of the auto_commit project setting, which
 // decides when Spektacular makes a git commit on the user's behalf.
 // AutoCommitOff is the default: an absent key means no automatic commits.
@@ -54,6 +63,9 @@ const (
 	DefaultSpecDir      = "specs"
 	DefaultPlanDir      = "plans"
 	DefaultChangelogDir = "changelog"
+	// DefaultEpicDir is the epic store directory, landing in
+	// .spektacular/epics. It is created on the first epic write, never by init.
+	DefaultEpicDir = "epics"
 
 	// DefaultTaskIDProvider issues plan task identifiers when
 	// plan.task_id.provider is not set.
@@ -128,6 +140,27 @@ type FilePlanConfig struct {
 type ChangelogConfig struct {
 	Provider string              `yaml:"provider"`
 	Config   FileChangelogConfig `yaml:"config"`
+}
+
+// EpicConfig holds configuration for epic storage. It names a storage
+// provider, whether an unmet dependency between an epic's specs refuses an
+// implement run outright (rather than allowing an override), and the
+// provider's settings.
+type EpicConfig struct {
+	Provider           string         `yaml:"provider"`
+	StrictDependencies bool           `yaml:"strict_dependencies"`
+	Config             FileEpicConfig `yaml:"config"`
+}
+
+// FileEpicConfig is the file-provider configuration for the epic section.
+type FileEpicConfig struct {
+	// Directory is the store directory, in the same two forms as
+	// FileSpecConfig.Directory: project-root-relative in a loaded Config,
+	// relative to the folder holding config.yaml on disk.
+	Directory string `yaml:"directory"`
+	// fileForm is the value as read from config.yaml, written back
+	// unchanged while Directory still resolves to it.
+	fileForm string
 }
 
 // FileChangelogConfig is the file-provider configuration for the changelog section.
@@ -297,11 +330,13 @@ type Config struct {
 	Command              string          `yaml:"command"`
 	Agent                string          `yaml:"agent"`
 	SpecTriggerThreshold string          `yaml:"spec_trigger_threshold"`
+	EpicSplitThreshold   string          `yaml:"epic_split_threshold"`
 	AutoCommit           string          `yaml:"auto_commit"`
 	Debug                DebugConfig     `yaml:"debug"`
 	Spec                 SpecConfig      `yaml:"spec"`
 	Plan                 PlanConfig      `yaml:"plan"`
 	Changelog            ChangelogConfig `yaml:"changelog"`
+	Epic                 EpicConfig      `yaml:"epic"`
 	Knowledge            KnowledgeConfig `yaml:"knowledge,omitempty"`
 	Design               DesignConfig    `yaml:"design,omitempty"`
 	Repos                []RepoEntry     `yaml:"repos,omitempty"`
@@ -322,6 +357,7 @@ func NewDefault() Config {
 	return Config{
 		Command:              "spektacular",
 		SpecTriggerThreshold: SpecTriggerThresholdModerate,
+		EpicSplitThreshold:   EpicSplitThresholdModerate,
 		AutoCommit:           AutoCommitOff,
 		Debug: DebugConfig{
 			Enabled: false,
@@ -344,6 +380,12 @@ func NewDefault() Config {
 			Provider: ProviderFile,
 			Config: FileChangelogConfig{
 				Directory: filepath.Join(ProjectConfigDirName, DefaultChangelogDir),
+			},
+		},
+		Epic: EpicConfig{
+			Provider: ProviderFile,
+			Config: FileEpicConfig{
+				Directory: filepath.Join(ProjectConfigDirName, DefaultEpicDir),
 			},
 		},
 		// Knowledge is empty by default: the project level lists only sources
@@ -390,6 +432,7 @@ func ParseYAMLFile(path string) (Config, error) {
 	cfg.Spec.Config.Directory = DefaultSpecDir
 	cfg.Plan.Config.Directory = DefaultPlanDir
 	cfg.Changelog.Config.Directory = DefaultChangelogDir
+	cfg.Epic.Config.Directory = DefaultEpicDir
 	if err := yaml.Unmarshal([]byte(expanded), &cfg); err != nil {
 		return Config{}, fmt.Errorf("parsing config file %s: %w", path, err)
 	}
@@ -432,6 +475,7 @@ func (c *Config) storeDirs() []storeDir {
 		{"spec", &c.Spec.Config.Directory, &c.Spec.Config.fileForm},
 		{"plan", &c.Plan.Config.Directory, &c.Plan.Config.fileForm},
 		{"changelog", &c.Changelog.Config.Directory, &c.Changelog.Config.fileForm},
+		{"epic", &c.Epic.Config.Directory, &c.Epic.Config.fileForm},
 	}
 }
 
@@ -589,6 +633,15 @@ func (c Config) Validate() error {
 	default:
 		return fmt.Errorf("spec_trigger_threshold must be one of %q, %q, or %q", SpecTriggerThresholdStrict, SpecTriggerThresholdModerate, SpecTriggerThresholdLenient)
 	}
+	switch c.EpicSplitThreshold {
+	case "", EpicSplitThresholdStrict, EpicSplitThresholdModerate, EpicSplitThresholdLenient:
+	default:
+		return output.NewError("config_invalid",
+			fmt.Sprintf("epic_split_threshold must be one of %q, %q, or %q", EpicSplitThresholdStrict, EpicSplitThresholdModerate, EpicSplitThresholdLenient)).
+			WithResource("epic_split_threshold").
+			WithNextAction(fmt.Sprintf("set epic_split_threshold in .spektacular/config.yaml to %s, %s or %s (or remove the key to use %s)",
+				EpicSplitThresholdStrict, EpicSplitThresholdModerate, EpicSplitThresholdLenient, EpicSplitThresholdModerate))
+	}
 	switch c.AutoCommit {
 	case "", AutoCommitOff, AutoCommitWorkflow, AutoCommitFull:
 	default:
@@ -605,6 +658,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := c.Changelog.Validate(); err != nil {
+		return err
+	}
+	if err := c.Epic.Validate(); err != nil {
 		return err
 	}
 	// Only the project's store directories are bound to the project root; a
@@ -685,7 +741,7 @@ func validateStoreDir(key, dir string) error {
 	}
 	return output.NewError("config_invalid",
 		fmt.Sprintf("%s.config.directory %q is outside the project", key, dir)).
-		WithNextAction(fmt.Sprintf("set `%s.config.directory` to a folder inside the project, relative to the folder holding config.yaml (e.g. `%s`)", key, map[string]string{"spec": DefaultSpecDir, "plan": DefaultPlanDir, "changelog": DefaultChangelogDir}[key]))
+		WithNextAction(fmt.Sprintf("set `%s.config.directory` to a folder inside the project, relative to the folder holding config.yaml (e.g. `%s`)", key, map[string]string{"spec": DefaultSpecDir, "plan": DefaultPlanDir, "changelog": DefaultChangelogDir, "epic": DefaultEpicDir}[key]))
 }
 
 // Validate checks whether the spec config names a supported provider and
@@ -725,6 +781,23 @@ func (c ChangelogConfig) Validate() error {
 	}
 	if c.Config.Directory == "" {
 		return fmt.Errorf("changelog.config.directory must not be empty")
+	}
+	return nil
+}
+
+// Validate checks whether the epic config names a supported provider and
+// carries valid provider settings.
+func (c EpicConfig) Validate() error {
+	if c.Provider != ProviderFile {
+		return output.NewError("config_invalid",
+			fmt.Sprintf("epic.provider %q is not supported (only %q)", c.Provider, ProviderFile)).
+			WithResource("epic.provider").
+			WithNextAction(fmt.Sprintf("set epic.provider in .spektacular/config.yaml to %s", ProviderFile))
+	}
+	if c.Config.Directory == "" {
+		return output.NewError("config_invalid", "epic.config.directory must not be empty").
+			WithResource("epic.config.directory").
+			WithNextAction(fmt.Sprintf("set epic.config.directory in .spektacular/config.yaml to a folder relative to it, such as %s", DefaultEpicDir))
 	}
 	return nil
 }

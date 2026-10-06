@@ -96,5 +96,9 @@ cp /tmp/spec_final.md .spektacular/tmp/spec_final.md
 spektacular spec file write "$SPEC_NAME" --from .spektacular/tmp/spec_final.md
 rm .spektacular/tmp/spec_final.md
 
+# Run the split check. The scenario is one coupled feature, so no split is
+# offered and nothing is written.
+spektacular spec goto --data '{"step":"split"}'
+
 # Finish the workflow.
 spektacular spec goto --data '{"step":"finished"}'

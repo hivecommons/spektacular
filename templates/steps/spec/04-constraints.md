@@ -2,6 +2,8 @@
 
 Draft the hard constraints and boundaries the solution must operate within, from the interview findings in `.spektacular/work/{{spec_name}}/interview.md` (and this section's own working file, if one already exists from a prior pass). Present the draft to the user and ask them to confirm it or tell you what's wrong.
 
+**A pre-filled draft is confirmed, never asked from scratch.** If `.spektacular/work/{{spec_name}}/constraints.md` already holds content (seeded from a source at the interview, or carried over from an earlier pass), that content is your draft. Present it to the user to confirm or refine, noting anything the interview added since, and do not ask for this section as if it were blank.
+
 Examples:
 • Must integrate with the existing authentication system
 • Cannot introduce breaking changes to the public API
@@ -71,5 +73,7 @@ Before advancing, save this section to its working file. Using your own `Write` 
 Once you are satisfied, move to the next step by running the command:
 
 {{config.command}} spec goto --data '{"step":"{{next_step}}"}'
+
+**A split asked for now.** If the user asks to split this spec into an epic before it is complete, do not split yet: a split always acts on a complete spec. Record the request in `.spektacular/working-context.md` (what they asked, and any specs they named) and carry on with this step. The request is acted on at the `split` step, once every section has been gathered.
 
 **If the user rejects this draft.** If the user indicates this draft is wrong, ask a follow-up question to understand why before changing anything, the issue may reveal a broader need you didn't surface, or may be a genuine miss on your part, and the follow-up conversation determines which. Apply any resulting changes directly to the working file(s) they belong to, which may include a different section's working file than the one under review; a section amended this way does not need a fresh confirmation step now, the end-of-workflow verification step is where everything, including this change, gets reviewed together. The follow-up conversation may surface edits to more than one section, or conclude that nothing needs to change after all — do not assume the fix is exactly one edit to exactly the section under review.

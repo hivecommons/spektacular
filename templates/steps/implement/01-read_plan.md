@@ -89,11 +89,11 @@ If one or more spec items have no coverage and are not already marked descoped, 
 - <requirement/acceptance-criterion short title> — descoped: <one-line reason>
 ```
 
-Apply the edit by reading the plan with `{{config.command}} plan file read {{plan_name}} plan`, adding or extending the list, staging the updated document with the `Write` tool at the scratch path `.spektacular/tmp/plan_update.md`, then committing it and removing the scratch file:
+Apply the edit by reading the plan with `{{config.command}} plan file read {{plan_name}} plan`, adding or extending the list, staging the updated document with the `Write` tool at the scratch path `.spektacular/tmp/{{plan_name}}/plan_update.md`, then committing it and removing the scratch file:
 
 ```
-{{config.command}} plan file write {{plan_name}} plan --from .spektacular/tmp/plan_update.md
-rm .spektacular/tmp/plan_update.md
+{{config.command}} plan file write {{plan_name}} plan --from .spektacular/tmp/{{plan_name}}/plan_update.md
+rm .spektacular/tmp/{{plan_name}}/plan_update.md
 ```
 
 Do **not** continue to Step 4 until every gap is either fixed in the plan or recorded as descoped.
@@ -110,5 +110,5 @@ Check whether a `{{changelog_section_name}}` section already exists inside the p
 Once validation passes, drift is resolved, and changelog mode is known:
 
 ```
-{{config.command}} implement goto --data '{"step":"{{next_step}}"}'
+{{config.command}} implement goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```

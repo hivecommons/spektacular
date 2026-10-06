@@ -306,7 +306,7 @@ func TestInit_BackfillsMissingNamePreservingOtherSettings(t *testing.T) {
 
 	// A hand-written config with no name and a non-default spec directory,
 	// written relative to the folder holding config.yaml.
-	raw := "schema: 3\nspec:\n  provider: file\n  config:\n    directory: ../docs/specs\n"
+	raw := "schema: 4\nspec:\n  provider: file\n  config:\n    directory: ../docs/specs\n"
 	require.NoError(t, os.WriteFile(filepath.Join(spektacularDir, "config.yaml"), []byte(raw), 0644))
 
 	// Force is required because .spektacular already exists.
@@ -406,7 +406,7 @@ func TestInit_SeedsReposIntoOlderConfigWithoutRegistry(t *testing.T) {
 	require.NoError(t, os.MkdirAll(spektacularDir, 0755))
 
 	// An older config: name present, repos absent.
-	raw := "schema: 3\nname: legacy-proj\nspec:\n  provider: file\n  config:\n    directory: ../docs/specs\n"
+	raw := "schema: 4\nname: legacy-proj\nspec:\n  provider: file\n  config:\n    directory: ../docs/specs\n"
 	require.NoError(t, os.WriteFile(filepath.Join(spektacularDir, "config.yaml"), []byte(raw), 0644))
 
 	// Force is required because .spektacular already exists.
@@ -506,7 +506,7 @@ func TestInit_UnversionedExistingConfigIsRefusedAsFormatError(t *testing.T) {
 	require.True(t, ok, "expected a *config.FormatError, got %T: %v", err, err)
 	require.Equal(t, "project", fe.Kind)
 	require.Equal(t, 1, fe.Found)
-	require.Equal(t, 3, fe.Want)
+	require.Equal(t, 4, fe.Want)
 	require.False(t, fe.Newer())
 
 	after, err := os.ReadFile(configPath)

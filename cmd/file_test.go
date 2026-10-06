@@ -348,3 +348,51 @@ func TestChangelogFileDelete_DoesNotHonourRepoRouting(t *testing.T) {
 	require.True(t, er.IsError)
 	require.Equal(t, "unknown flag: --repo", er.Message)
 }
+
+// Criterion: deleting a spec that still belongs to an epic is refused,
+// naming the epic and how to take the spec out of it first, and nothing is
+// removed. Once the epic no longer lists it, the same delete succeeds.
+func TestSpecFileDelete_RefusedWhileAnEpicListsTheSpec(t *testing.T) {
+	root := epicProject(t)
+	pa := writeSpecFixture(t, root, "000010_a", epicTestSpecFixed)
+	writeSpecFixture(t, root, "000011_b", epicTestSpecFixed)
+	epicWrite(t, testEpic, specsData("000010_a", "000011_b"))
+	before := snapshotTree(t, root)
+
+	resetRootCmd(t)
+	stdout, stderr, code := runRootCmd(t, "spec", "file", "delete", "000010_a")
+	require.Equal(t, 1, code)
+	require.Empty(t, stderr)
+	var er output.ErrorResponse
+	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
+	require.True(t, er.IsError)
+	require.Equal(t, "spec_in_epic_delete", er.Code)
+	require.Equal(t, "000010_a", er.Resource)
+	require.Contains(t, er.Message, `"000010_a"`)
+	require.Contains(t, er.Message, `"`+testEpic+`"`)
+	require.Contains(t, er.NextAction, "spektacular epic write "+testEpic+" --from")
+	require.Contains(t, er.NextAction, "every spec except 000010_a")
+	require.Contains(t, er.NextAction, "spektacular epic read "+testEpic)
+	require.Equal(t, before, snapshotTree(t, root), "a refused delete must remove and rewrite nothing")
+
+	// Take the spec out of the epic, then the delete goes through.
+	epicWrite(t, testEpic, specsData("000011_b"))
+	resetRootCmd(t)
+	stdout, stderr, code = runRootCmd(t, "spec", "file", "delete", "000010_a")
+	require.Equalf(t, 0, code, "delete after removal failed: %s", stdout)
+	require.Empty(t, stderr)
+	require.NoFileExists(t, pa)
+}
+
+// A spec that belongs to no epic is deleted exactly as before the guard.
+func TestSpecFileDelete_StandaloneSpecIsUnaffectedByTheEpicGuard(t *testing.T) {
+	root := epicProject(t)
+	pa := writeSpecFixture(t, root, "000010_a", epicTestSpecFixed)
+
+	resetRootCmd(t)
+	stdout, stderr, code := runRootCmd(t, "spec", "file", "delete", "000010_a")
+	require.Equal(t, 0, code)
+	require.Empty(t, stderr)
+	require.Empty(t, stdout)
+	require.NoFileExists(t, pa)
+}

@@ -202,23 +202,22 @@ func walkSteps(t *testing.T, kind string, steps ...string) {
 // and so the name every spec-workflow commit message must carry.
 const fixtureSpecName = "000001_billing"
 
-// startSpecWorkflow founds a spec workflow and walks it to verification, the
-// last step before the completion commit.
+// startSpecWorkflow founds a spec workflow and walks it to split, the last
+// step before the completion commit.
 func startSpecWorkflow(t *testing.T) {
 	t.Helper()
 	_, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
 	require.Equal(t, 0, code)
-	walkSpecToVerification(t)
+	walkSpecToSplit(t)
 }
 
-// walkSpecToVerification drives a spec workflow that `new` has already
-// founded through every step up to verification, the last one before the
-// completion commit.
-func walkSpecToVerification(t *testing.T) {
+// walkSpecToSplit drives a spec workflow that `new` has already founded
+// through every step up to split, the last one before the completion commit.
+func walkSpecToSplit(t *testing.T) {
 	t.Helper()
 	walkSteps(t, "spec",
 		"interview", "overview", "requirements", "acceptance_criteria", "constraints",
-		"technical_approach", "success_metrics", "non_goals", "verification")
+		"technical_approach", "success_metrics", "non_goals", "verification", "split")
 }
 
 // requireNothingCommittedYet is the "no commits appear while the workflow is
@@ -333,8 +332,10 @@ func TestAutoCommit_ImplementCompletionCommitsEachChangedRepoOnce(t *testing.T) 
 func TestAutoCommit_RefusesCompletionWithoutAUsableMessage(t *testing.T) {
 	// The remediation is identical for both refusals: stage the message at
 	// the advertised path, then re-run the same goto carrying it.
-	const wantNextAction = `write the git commit message to .spektacular/tmp/git-commit-message.md, ` +
-		`then run: spektacular spec goto --data '{"step":"finished","commit_message_from":".spektacular/tmp/git-commit-message.md"}'`
+	// The message is staged in the spec's own scratch folder; a spec goto
+	// never carries a "name" (only plan and implement instructions do).
+	const wantNextAction = `write the git commit message to .spektacular/tmp/000001_billing/git-commit-message.md, ` +
+		`then run: spektacular spec goto --data '{"step":"finished","commit_message_from":".spektacular/tmp/000001_billing/git-commit-message.md"}'`
 
 	requireRefused := func(t *testing.T, fx gitFixture, stdout string, code int, wantCode, wantMessage string) {
 		t.Helper()
@@ -346,7 +347,7 @@ func TestAutoCommit_RefusesCompletionWithoutAUsableMessage(t *testing.T) {
 		require.Equal(t, "finished", er.Resource)
 		require.Equal(t, wantNextAction, er.NextAction)
 
-		require.Equal(t, "verification", currentStep(t, fx), "the workflow must stay where it was")
+		require.Equal(t, "split", currentStep(t, fx), "the workflow must stay where it was")
 		require.Equal(t, "1", commitCount(t, fx.root), "a refused completion must commit nothing")
 	}
 
@@ -395,15 +396,15 @@ func TestAutoCommit_HookRejectionLeavesWorkflowOnPreviousStep(t *testing.T) {
 	require.Contains(t, er.Message, "lint-failed-in-hook")
 	require.Equal(t,
 		`fix the cause git reported above (a failing hook, for example), `+
-			`re-stage the message at .spektacular/tmp/git-commit-message.md, `+
-			`then re-run: spektacular spec goto --data '{"step":"finished","commit_message_from":".spektacular/tmp/git-commit-message.md"}'`,
+			`re-stage the message at .spektacular/tmp/000001_billing/git-commit-message.md, `+
+			`then re-run: spektacular spec goto --data '{"step":"finished","commit_message_from":".spektacular/tmp/000001_billing/git-commit-message.md"}'`,
 		er.NextAction)
 
 	// Only the failure is reported: the step's own output is dropped rather
 	// than printed alongside it.
 	require.Equal(t, 1, jsonDocuments(t, stdout))
 
-	require.Equal(t, "verification", currentStep(t, fx), "the workflow must be put back on its previous step")
+	require.Equal(t, "split", currentStep(t, fx), "the workflow must be put back on its previous step")
 	require.Equal(t, "1", commitCount(t, fx.root))
 
 	// Fix the cause, re-stage the message as the remediation says, and re-run

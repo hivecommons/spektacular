@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hivecommons/spektacular/internal/plantask"
+	"github.com/hivecommons/spektacular/internal/status"
 	"github.com/stretchr/testify/require"
 )
 
@@ -96,11 +97,10 @@ func TestImplementNewTask_StartsAndReportsTheTask(t *testing.T) {
 	require.Equal(t, "read_plan", res["step"])
 	require.FileExists(t, statePath)
 
-	stdout, _, code = runRootCmd(t, "implement", "status")
-	require.Equal(t, 0, code, stdout)
-	var status map[string]any
-	require.NoError(t, json.Unmarshal([]byte(stdout), &status))
-	require.Equal(t, idB, status["task"])
+	// The task a run implements is recorded in the workflow's data.
+	state := status.ReadState(statePath)
+	require.NotNil(t, state)
+	require.Equal(t, idB, state.Data["task"])
 
 	// A second start finds the run in progress; its resume report carries
 	// the task.
@@ -113,13 +113,11 @@ func TestImplementNewTask_StartsAndReportsTheTask(t *testing.T) {
 }
 
 func TestImplementNew_WithoutATaskReportsNoTask(t *testing.T) {
-	taskRunProject(t, taskRunPlan())
+	statePath := taskRunProject(t, taskRunPlan())
 
 	_, _, code := runRootCmd(t, "implement", "new", "--data", `{"name":"`+taskPlanName+`"}`)
 	require.Equal(t, 0, code)
-	stdout, _, code := runRootCmd(t, "implement", "status")
-	require.Equal(t, 0, code)
-	var status map[string]any
-	require.NoError(t, json.Unmarshal([]byte(stdout), &status))
-	require.NotContains(t, status, "task")
+	state := status.ReadState(statePath)
+	require.NotNil(t, state)
+	require.NotContains(t, state.Data, "task")
 }

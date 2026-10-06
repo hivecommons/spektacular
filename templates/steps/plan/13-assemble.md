@@ -27,12 +27,12 @@ Assemble all three scaffolds from the per-section working files — no placehold
 - `milestones.md` + `tasks_plan.md` → `## Milestones & Tasks`
 - `open_questions.md` → `## Open Questions`
 - `out_of_scope.md` → `## Out of Scope`
-- `## Overview` ← derive from the spec you read in step 01 and your `.spektacular/working-context.md` notes.
+- `## Overview` ← derive from the spec you read in step 01 and your `{{working_context_path}}` notes.
 
 **The plan's context.md** ← files under `.spektacular/work/{{plan_name}}/`:
 - `tasks_context.md` → `## Per-Task Technical Notes`
 - `testing_approach.md` → `## Testing Strategy` (recast at per-task granularity)
-- `## Current State Analysis`, `## Project References`, `## Token Management Strategy`, `## Migration Notes`, `## Performance Considerations` ← your research findings in `research.md` and `.spektacular/working-context.md`.
+- `## Current State Analysis`, `## Project References`, `## Token Management Strategy`, `## Migration Notes`, `## Performance Considerations` ← your research findings in `research.md` and `{{working_context_path}}`.
 
 **research.md** ← files under `.spektacular/work/{{plan_name}}/`:
 - `research.md` → the research sections it maps directly onto (alternatives through rehydration cues)
@@ -60,16 +60,16 @@ If a required working file is missing, the matching gathering step was not compl
 
 ### Step 4: Stage each assembled document to scratch
 
-Using your own `Write` tool, write each assembled document to its scratch path under `.spektacular/tmp/`. These staged files are what the verification step reads and what the write steps commit — **nothing is written to the plan store in this step**:
+Using your own `Write` tool, write each assembled document to its scratch path under `.spektacular/tmp/{{plan_name}}/`, a folder of this plan's own so plans running side by side never overwrite each other's staged files. These staged files are what the verification step reads and what the write steps commit — **nothing is written to the plan store in this step**:
 
-- plan.md → `.spektacular/tmp/plan_template.md`
-- the plan's `context.md` → `.spektacular/tmp/context_template.md`
-- research.md → `.spektacular/tmp/research_template.md`
+- plan.md → `.spektacular/tmp/{{plan_name}}/plan_template.md`
+- the plan's `context.md` → `.spektacular/tmp/{{plan_name}}/context_template.md`
+- research.md → `.spektacular/tmp/{{plan_name}}/research_template.md`
 
 Staging to `.spektacular/tmp/` with your own `Write` tool is correct here. Do **not** run `{{config.command}} plan file write` yet — committing to the plan store happens in the write steps.
 
 Then advance:
 
 ```
-{{config.command}} plan goto --data '{"step":"{{next_step}}"}'
+{{config.command}} plan goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```

@@ -305,8 +305,10 @@ func TestMilestoneCommit_CompletionCommitsOnlyWhatChangedSince(t *testing.T) {
 // milestone. Either refusal names the file to write and the exact command to
 // re-run, commits nothing, and leaves the workflow where it was.
 func TestMilestoneCommit_RefusesAMessageThatDoesNotNameTheMilestone(t *testing.T) {
-	const wantNextAction = `write the git commit message to .spektacular/tmp/git-commit-message.md, ` +
-		`then run: spektacular implement goto --data '{"step":"analyze","commit_message_from":".spektacular/tmp/git-commit-message.md"}'`
+	// An implement refusal names the spec in its goto and stages the message
+	// in that spec's own scratch folder.
+	const wantNextAction = `write the git commit message to .spektacular/tmp/billing/git-commit-message.md, ` +
+		`then run: spektacular implement goto --data '{"step":"analyze","name":"billing","commit_message_from":".spektacular/tmp/billing/git-commit-message.md"}'`
 
 	requireRefused := func(t *testing.T, fx gitFixture, stdout string, code int, wantCode, wantMessage string) {
 		t.Helper()

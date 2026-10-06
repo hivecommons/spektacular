@@ -10,6 +10,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/stepkit"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/templates"
 	"github.com/stretchr/testify/require"
 )
 
@@ -118,6 +119,60 @@ func TestGatheringStepsProceedWithoutApprovalGates(t *testing.T) {
 				require.NotContains(t, out, phrase,
 					"%s step must not contain the wait-for-approval phrasing %q", tc.name, phrase)
 			}
+		})
+	}
+}
+
+// contradictionStopRule is the opening sentence of the contradiction stop in
+// templates/partials/proceed-unless-blocked.md, hand-copied so a rewording of
+// the rule is a deliberate test change.
+const contradictionStopRule = "**A choice that would contradict a decision the user recorded for this spec, or a knowledge entry, is always the user's to make.**"
+
+// TestGatheringStepsStopOnContradictingRecordedDecision asserts every plan
+// drafting step carries on without interruption except to stop and ask when a
+// choice would contradict a recorded decision or a knowledge entry, and that
+// the wording comes from the one shared partial rather than a per-step copy.
+func TestGatheringStepsStopOnContradictingRecordedDecision(t *testing.T) {
+	const include = "{{> partials/proceed-unless-blocked}}"
+
+	steps := []struct {
+		name     string
+		cb       workflow.StepCallback
+		template string
+	}{
+		{"discovery", discovery(), "steps/plan/02-discovery.md"},
+		{"architecture", architecture(), "steps/plan/03-architecture.md"},
+		{"components", components(), "steps/plan/04-components.md"},
+		{"data_structures", dataStructures(), "steps/plan/05-data_structures.md"},
+		{"implementation_detail", implementationDetail(), "steps/plan/06-implementation_detail.md"},
+		{"dependencies", dependencies(), "steps/plan/07-dependencies.md"},
+		{"testing_approach", testingApproach(), "steps/plan/08-testing_approach.md"},
+		{"milestones", milestones(), "steps/plan/09-milestones.md"},
+		{"tasks", tasks(), "steps/plan/10-tasks.md"},
+		{"open_questions", openQuestions(), "steps/plan/11-open_questions.md"},
+		{"out_of_scope", outOfScope(), "steps/plan/12-out_of_scope.md"},
+	}
+
+	for _, tc := range steps {
+		t.Run(tc.name, func(t *testing.T) {
+			out := renderStep(t, tc.cb)
+			require.Equal(t, 1, strings.Count(out, "contradict a decision the user recorded"),
+				"%s step must carry the contradiction stop exactly once", tc.name)
+			require.Contains(t, out, contradictionStopRule)
+			require.Contains(t, out, "STOP and ask the user before going further")
+			require.Contains(t, out, "Never record such a contradiction as a drafting assumption, a `human` task, an open question or a note left for the review.")
+			require.Equal(t, 1, strings.Count(out, "Otherwise proceed without interruption."),
+				"%s step must carry the proceed-unless-blocked rule exactly once", tc.name)
+
+			raw, err := templates.FS.ReadFile(tc.template)
+			require.NoError(t, err)
+			src := string(raw)
+			require.Equal(t, 1, strings.Count(src, include),
+				"%s must include the shared proceed-unless-blocked partial exactly once", tc.template)
+			require.NotContains(t, src, "**Proceed unless genuinely blocked.**",
+				"%s must not keep its own copy of the proceed-unless-blocked rule", tc.template)
+			require.NotContains(t, src, "contradict a decision the user recorded",
+				"%s must not keep its own copy of the contradiction stop", tc.template)
 		})
 	}
 }
@@ -555,7 +610,7 @@ func TestWriteStep_CommitsOwnDocument(t *testing.T) {
 	// plan.md absent from the store — the step must instruct the commit.
 	_, err := writePlan()(data, writer, st, cfg)
 	require.NoError(t, err)
-	require.Contains(t, writer.result.Instruction, "--from .spektacular/tmp/plan_template.md",
+	require.Contains(t, writer.result.Instruction, "--from .spektacular/tmp/test/plan_template.md",
 		"write_plan must instruct committing plan.md from its scratch file when it is not yet in the store")
 
 	// A committed, filled plan.md — no commit command, reports done.
@@ -564,8 +619,63 @@ func TestWriteStep_CommitsOwnDocument(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, writer.result.Instruction, "already been committed",
 		"write_plan must report plan.md is already committed once it is in the store")
-	require.NotContains(t, writer.result.Instruction, "--from .spektacular/tmp/plan_template.md",
+	require.NotContains(t, writer.result.Instruction, "--from .spektacular/tmp/test/plan_template.md",
 		"write_plan must not re-instruct the commit once plan.md is in the store")
+}
+
+// TestWriteSteps_StageInTheSpecsOwnFolder asserts each write step, while its
+// document is not yet in the store, commits it from — and removes — a scratch
+// file in the spec's own folder under .spektacular/tmp, never a scratch file
+// shared by every spec.
+func TestWriteSteps_StageInTheSpecsOwnFolder(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cb   workflow.StepCallback
+		doc  string
+	}{
+		{"write_plan", writePlan(), "plan"},
+		{"write_context", writeContext(), "context"},
+		{"write_research", writeResearch(), "research"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := store.NewFileStore(t.TempDir(), "project")
+			writer := &captureWriter{}
+			data := &testData{values: map[string]any{"name": "000007_billing"}}
+			cfg := workflow.Config{Command: "spektacular", Kind: "plan", PlanDir: "plans", SpecDir: "specs"}
+
+			_, err := tc.cb(data, writer, st, cfg)
+			require.NoError(t, err)
+			out := writer.result.Instruction
+
+			own := ".spektacular/tmp/000007_billing/" + tc.doc + "_template.md"
+			require.Contains(t, out, "plan file write 000007_billing "+tc.doc+" --from "+own)
+			require.Contains(t, out, "rm "+own)
+			require.NotContains(t, out, ".spektacular/tmp/"+tc.doc+"_template.md",
+				"%s must not stage its document at a scratch path shared by every spec", tc.name)
+			require.Contains(t, out, `"name":"000007_billing"`, "%s must advance with the spec named", tc.name)
+		})
+	}
+}
+
+// TestFinishedStep_IncompletePlanCommitsFromTheSpecsOwnFolder asserts the
+// finished step's recovery path, shown when plan documents are missing from
+// the store, commits and removes the scratch files in the spec's own folder.
+func TestFinishedStep_IncompletePlanCommitsFromTheSpecsOwnFolder(t *testing.T) {
+	st := store.NewFileStore(t.TempDir(), "project")
+	writer := &captureWriter{}
+	data := &testData{values: map[string]any{"name": "000007_billing"}}
+	cfg := workflow.Config{Command: "spektacular", Kind: "plan", PlanDir: "plans", SpecDir: "specs"}
+
+	_, err := finished()(data, writer, st, cfg)
+	require.NoError(t, err)
+	out := writer.result.Instruction
+
+	for _, doc := range []string{"plan", "context", "research"} {
+		own := ".spektacular/tmp/000007_billing/" + doc + "_template.md"
+		require.Contains(t, out, "--from "+own)
+		require.NotContains(t, out, ".spektacular/tmp/"+doc+"_template.md")
+	}
+	require.Contains(t, out, "rm .spektacular/tmp/000007_billing/plan_template.md")
 }
 
 // --- Phase 4.2: workflows and skills go cross-repo ---
@@ -675,18 +785,26 @@ func TestTasksStepTeachesTheTaskFormat(t *testing.T) {
 		require.Contains(t, out, want)
 	}
 
-	// The four criteria for a human task, hand-copied from the design.
+	// The three criteria for a human task: work a person must do, never a
+	// review a person only looks at.
 	for _, criterion := range []string{
 		"secrets or access an agent will not have",
 		"action outside the repo",
-		"judgement that must be a person's",
-		"verification only a person can do",
+		"physical work only a person can do",
 	} {
 		require.Contains(t, out, criterion)
 	}
+	for _, review := range []string{"design sign-off", "visual or UX review", "verification only a person can do"} {
+		require.NotContains(t, out, review, "a review is not a reason for a human task")
+	}
+	require.Contains(t, out, "**A review or a manual check is never a task.**")
+	require.Contains(t, out, "Record it instead as a manual item in the Testing Approach, flagged **Manual — captured in the implementation test plan**, by adding it to `.spektacular/work/test/testing_approach.md`.")
 	require.Contains(t, out, "Split mixed work", "work needing both an agent and a person is split")
 	require.Contains(t, out, "depends on the agent's", "the person's task depends on the agent's")
 	require.Contains(t, out, "Never invent an id")
+	require.Contains(t, out, "Every entry begins with the file's path in backticks",
+		"every file change starts with its backticked path")
+	require.Contains(t, out, "`` `<repo>:path:line` ``")
 }
 
 // TestVerificationChecksTaskLines asserts verification checks every task's
@@ -696,6 +814,18 @@ func TestVerificationChecksTaskLines(t *testing.T) {
 	for _, want := range []string{"## Milestones & Tasks", "## Per-Task Technical Notes", "**Id:**", "**Repo:**", "**Depends on:**", "**Execution:**"} {
 		require.Contains(t, out, want)
 	}
+}
+
+// A review is never left as a human task: the testing approach lists it as a
+// manual item and verification moves any review task there.
+func TestReviewsGoToTheTestPlanNotHumanTasks(t *testing.T) {
+	approach := renderStep(t, testingApproach())
+	require.Contains(t, approach, "### Account for manual reviews")
+	require.Contains(t, approach, "Flag each with the same phrase, **Manual — captured in the implementation test plan**")
+	require.Contains(t, approach, "These are never plan tasks: a review left as a task is never ticked.")
+
+	verify := renderStep(t, verification())
+	require.Contains(t, verify, "No `human` task only reviews, signs off or checks something by hand: move each such check to the Testing Approach as a manual item;")
 }
 
 // TestWalkthroughNamesHumanTasks asserts the walkthrough names every human
@@ -768,4 +898,80 @@ func TestDependenciesStepNamesEveryDesignDocument(t *testing.T) {
 		require.Equalf(t, 1, strings.Count(out, tc.anchor),
 			"%s (expected %q exactly once)", tc.why, tc.anchor)
 	}
+}
+
+// --- Plans are checked against recorded decisions and knowledge ---
+
+// TestDiscoveryStepNamesTheRecordedDecisions asserts discovery lists which
+// recorded decisions the plan must not contradict, reads the spec's interview
+// notes only when they still exist, and always asks on a contradiction. The
+// expected strings are hand-copied from templates/steps/plan/02-discovery.md,
+// with the plan name rendered.
+func TestDiscoveryStepNamesTheRecordedDecisions(t *testing.T) {
+	out := renderStep(t, discovery())
+
+	require.Equal(t, 1, strings.Count(out, "**Recorded decisions.**"),
+		"discovery must carry the recorded-decisions paragraph exactly once")
+	for _, want := range []string{
+		"the spec's Requirements, Constraints, Technical Approach, Non-Goals and Acceptance Criteria",
+		"every design the spec references",
+		"the spec's interview notes at `.spektacular/work/test/interview.md`, read only if it exists",
+		"their absence is normal and nothing to report",
+		"a choice that would contradict one of them is a STOP to ask the user, never a judgement call to record",
+		"always ask when what you found would make the plan contradict a recorded decision or a knowledge entry",
+	} {
+		require.Contains(t, out, want)
+	}
+	require.NotContains(t, out, "{{plan_name}}", "the interview notes path must render the plan name")
+}
+
+// TestArchitectureStepChecksRecordedDecisionsBeforeRecording asserts the
+// architecture step compares its direction with the recorded decisions and
+// knowledge entries before recording it, and stops to ask on a contradiction.
+func TestArchitectureStepChecksRecordedDecisionsBeforeRecording(t *testing.T) {
+	out := renderStep(t, architecture())
+
+	check := "Before recording anything, check the direction against the spec's recorded decisions and the knowledge entries loaded in the discovery step."
+	stop := "If the direction would contradict a recorded decision or a knowledge entry, that is not a choice to record: STOP and ask the user, and pick a direction only once they have answered."
+	require.Equal(t, 1, strings.Count(out, check))
+	require.Contains(t, out, stop)
+	require.Less(t, strings.Index(out, check), strings.Index(out, "Pick the best-grounded direction yourself"),
+		"the check must come before the direction is chosen and recorded")
+}
+
+// TestVerificationChecksTheStagedPlanAgainstRecordedDecisions asserts the
+// verification quality check compares the staged plan with the spec's
+// sections, referenced designs, interview notes where they exist and the
+// loaded knowledge entries, and stops to ask before re-staging.
+func TestVerificationChecksTheStagedPlanAgainstRecordedDecisions(t *testing.T) {
+	out := renderStep(t, verification())
+
+	for _, want := range []string{
+		"**Recorded decisions and knowledge**",
+		"check the staged plan against the spec's recorded decisions (its sections, every design it references, and its interview notes only if they still exist) and against the knowledge entries loaded in discovery",
+		"STOP and ask the user before Step 3 re-stages",
+		"do not record it as an assumption, a `human` task or an open question",
+	} {
+		require.Contains(t, out, want)
+	}
+}
+
+// TestTasksStepNeverMakesAContradictionAHumanTask asserts a contradiction with
+// a recorded decision or a knowledge entry is asked about now, never handed to
+// a person as a task.
+func TestTasksStepNeverMakesAContradictionAHumanTask(t *testing.T) {
+	out := renderStep(t, tasks())
+	require.Contains(t, out, "A contradiction with a recorded decision or a knowledge entry is **never a `human` task**, not even as \"a stakeholder decision\".")
+	require.Contains(t, out, "Stop and ask the user now, while planning, and plan to their answer.")
+}
+
+// TestOpenQuestionsStepNeverParksAContradiction asserts the open-questions
+// step lists a departure from the spec's decisions among what does not belong
+// there, and sends it to the user now.
+func TestOpenQuestionsStepNeverParksAContradiction(t *testing.T) {
+	out := renderStep(t, openQuestions())
+	example := "- \"This plan departs from the spec's chosen interface\" → never parked as an open question: stop and ask the user now"
+	require.Contains(t, out, example)
+	require.Less(t, strings.Index(out, "Examples of what does NOT belong here:"), strings.Index(out, example),
+		"the example must sit in the does-NOT-belong list")
 }

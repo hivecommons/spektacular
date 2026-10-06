@@ -12,5 +12,8 @@ func init() {
 		kind:  artifact.KindSpec,
 		short: "Read and write specs in the spec store",
 		dir:   func(c config.Config) string { return c.Spec.Config.Directory },
+		// A spec an epic still lists cannot be deleted: the epic would name
+		// a spec that is not there.
+		preDelete: refuseIfInEpic,
 	}))
 }

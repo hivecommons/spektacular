@@ -51,6 +51,8 @@ type Plan struct {
 	// openPhases counts unticked legacy phase headings in the section,
 	// whether or not a milestone heading precedes them.
 	openPhases int
+	// phases counts every legacy phase heading in the section, ticked or not.
+	phases int
 }
 
 // Milestone is one "### Milestone N:" group and the completion of the work
@@ -185,6 +187,7 @@ func Parse(markdown []byte) Plan {
 		if m := legacyHeading.FindStringSubmatch(line); m != nil {
 			closeBlock()
 			sawLegacy = true
+			p.phases++
 			if m[1] == " " {
 				p.openPhases++
 			}
@@ -338,6 +341,16 @@ func (p Plan) OpenItems() int {
 		return len(p.OpenTasks())
 	}
 	return p.openPhases
+}
+
+// Items counts every work item in the section, ticked or not: tasks in a
+// task-format plan, or phase headings in an older plan. With OpenItems it
+// gives a plan's progress whatever its format.
+func (p Plan) Items() int {
+	if p.Format == FormatTasks {
+		return len(p.Tasks)
+	}
+	return p.phases
 }
 
 // CompletedMilestones returns the numbers of milestones that have work items

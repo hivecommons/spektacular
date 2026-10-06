@@ -6,4 +6,4 @@ This spec is the source of truth for the plan's scope, requirements, constraints
 
 Once you have read and understood the spec, advance to the next step:
 
-{{config.command}} plan goto --data '{"step":"{{next_step}}"}'
+{{config.command}} plan goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'

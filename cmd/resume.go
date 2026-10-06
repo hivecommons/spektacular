@@ -24,19 +24,41 @@ import (
 // command is the CLI invocation prefix (workflow.Config.Command), rendered into
 // the template via {{config.command}} to match the convention used by every
 // other runtime-rendered step template, and as {{command}} for shared partials.
-func resumeInstruction(command, kind, name, currentStep, task string) (string, error) {
+//
+// orchestrated marks a lane's report: its notes file is the lane's own, and
+// starting it fresh keeps it orchestrated.
+func resumeInstruction(command, kind, name, currentStep, task string, orchestrated bool) (string, error) {
 	templatePath := "steps/resume.md"
 	if kind == "implement" {
 		templatePath = "steps/resume_implement.md"
+	}
+	notesPath := ".spektacular/working-context.md"
+	if orchestrated {
+		notesPath = workflow.LaneNotesRel(kind, name)
 	}
 	return stepkit.RenderTemplate(templatePath, map[string]any{
 		"config":       map[string]any{"command": command},
 		"command":      command,
 		"kind":         kind,
 		"name":         name,
+		"goto_name":    resumeGotoName(kind, name),
 		"current_step": currentStep,
 		"task":         task,
+		"notes_path":   notesPath,
+		// The plan-documents partial names the working context by this key,
+		// as step instructions do.
+		"working_context_path": notesPath,
+		"orchestrated":         orchestrated,
 	})
+}
+
+// resumeGotoName is the name a resume goto carries: the spec name for plan
+// and implement, whose gotos route by it, and nothing for other kinds.
+func resumeGotoName(kind, name string) string {
+	if kind == "plan" || kind == "implement" {
+		return name
+	}
+	return ""
 }
 
 // mismatchInstruction renders the cross-kind resume-prompt template. It is used
@@ -53,6 +75,7 @@ func mismatchInstruction(command, kind, requestedKind, name, currentStep string)
 		"kind":           kind,
 		"requested_kind": requestedKind,
 		"name":           name,
+		"goto_name":      resumeGotoName(kind, name),
 		"current_step":   currentStep,
 	})
 }
@@ -81,7 +104,8 @@ func emitResumeReport(command, expectedKind string, state *workflow.State) error
 	}
 
 	task, _ := state.Data["task"].(string)
-	instruction, err := resumeInstruction(command, state.Kind, name, state.CurrentStep, task)
+	orchestrated, _ := state.Data["orchestrated"].(bool)
+	instruction, err := resumeInstruction(command, state.Kind, name, state.CurrentStep, task, orchestrated)
 	if err != nil {
 		return err
 	}

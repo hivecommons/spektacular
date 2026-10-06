@@ -4,10 +4,10 @@
 ⚠️ One or more plan documents are missing from the plan store, or still hold the empty scaffold. Before telling the user the workflow is done, commit the missing documents through the CLI and remove the scratch files:
 
 ```
-{{config.command}} plan file write {{plan_name}} plan     --from .spektacular/tmp/plan_template.md
-{{config.command}} plan file write {{plan_name}} context  --from .spektacular/tmp/context_template.md
-{{config.command}} plan file write {{plan_name}} research --from .spektacular/tmp/research_template.md
-rm .spektacular/tmp/plan_template.md .spektacular/tmp/context_template.md .spektacular/tmp/research_template.md
+{{config.command}} plan file write {{plan_name}} plan     --from .spektacular/tmp/{{plan_name}}/plan_template.md
+{{config.command}} plan file write {{plan_name}} context  --from .spektacular/tmp/{{plan_name}}/context_template.md
+{{config.command}} plan file write {{plan_name}} research --from .spektacular/tmp/{{plan_name}}/research_template.md
+rm .spektacular/tmp/{{plan_name}}/plan_template.md .spektacular/tmp/{{plan_name}}/context_template.md .spektacular/tmp/{{plan_name}}/research_template.md
 ```
 
 If a scratch file under `.spektacular/tmp/` is gone (that path is git-ignored and does not survive a crash), re-assemble the affected document from the per-section working files under `.spektacular/work/{{plan_name}}/` before committing — they are the durable source.
@@ -23,5 +23,10 @@ The plan workflow is complete. Three documents are now in the plan store under t
 
 Read any of them back with `{{config.command}} plan file read {{plan_name}} <doc>`.
 
+{{^orchestrated}}
 The user signed off on the plan during the walkthrough, and the documents are now marked final. Inform the user that the plan workflow is finished and the plan is approved and ready for implementation.
+{{/orchestrated}}
+{{#orchestrated}}
+The documents are now marked final. This run is orchestrated, so do not report to the user: end your run with a final message for your orchestrator whose first line is exactly `DONE: {{plan_name}}`, followed by the plan summary you prepared in the walkthrough step (approach, milestones and tasks with any `human` tasks, out of scope, drafting assumptions, project-wide rules, manual checks) and any durable discovery worth saving to the knowledge base.
+{{/orchestrated}}
 {{/plan_incomplete}}

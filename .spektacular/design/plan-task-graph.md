@@ -57,11 +57,15 @@ The planner marks a task `human` when completing it needs any of:
 
 - secrets or access an agent will not have (production credentials, cloud consoles, signing keys);
 - action outside the repo (deploying, releasing, DNS, purchasing or approving something);
-- judgement that must be a person's (legal or licensing, design sign-off, a stakeholder decision);
-- verification only a person can do (visual or UX review, physical hardware).
+- physical work only a person can do (connecting, flashing or setting up hardware).
 
 Anything else is `agent`. A task that would need both is split: the human part becomes its own
 task depending on the agent task. The plan walkthrough names every human task and its reason.
+
+A review is never a task. A design or UX review, a sign-off, or checking behaviour by hand is
+something a person looks at rather than work that makes the change exist, and as a task it would
+never be ticked, so the plan would never count as implemented. The planner lists each review in the
+Testing Approach as a manual item, and the implement workflow writes it into the test plan.
 
 ### Validation on write
 

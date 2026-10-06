@@ -16,6 +16,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/workingcontext"
 	"github.com/hivecommons/spektacular/templates"
 )
 
@@ -57,14 +58,14 @@ type ResultBuilder func(stepName, instanceName, primaryPath, instruction string)
 // every step instruction that has a next step.
 const workingContextFooterPath = "partials/working-context-footer.md"
 
+// orchestratedPartialPath is the shared fragment WriteStepResult appends to
+// every step of an orchestrated workflow, telling the agent to hand its
+// stops back to the orchestrator that started it rather than ask the user.
+const orchestratedPartialPath = "partials/orchestrated-stop.md"
+
 // gitCommitPartialPath is the shared fragment WriteStepResult appends to the
 // steps that lead into an automatic git commit.
 const gitCommitPartialPath = "partials/git-commit-message.md"
-
-// commitMessageTmpPath is where a step tells the agent to stage the git
-// commit message. It is project-relative and lives under the scratch
-// directory agents may write with their own tools.
-const commitMessageTmpPath = ".spektacular/tmp/git-commit-message.md"
 
 // WriteStepResult renders the step's template, builds a workflow-specific
 // result via the supplied builder, and writes it to the output writer.
@@ -102,11 +103,22 @@ func WriteStepResult(
 	}
 	pathVars := req.Strategy.PathVars(instanceName, storeRoot)
 
+	// An orchestrated workflow is a lane: its working notes are its own, and
+	// its stops go back to the orchestrator that started it.
+	orchestrated, _ := data.Get("orchestrated")
+	isOrchestrated, _ := orchestrated.(bool)
+	workingContextPath := workingcontext.RelPath
+	if isOrchestrated {
+		workingContextPath = workflow.LaneNotesRel(cfg.Kind, instanceName)
+	}
+
 	vars := map[string]any{
-		"step":      req.StepName,
-		"title":     StepTitle(req.StepName),
-		"next_step": req.NextStep,
-		"config":    map[string]any{"command": cfg.Command},
+		"orchestrated":         isOrchestrated,
+		"working_context_path": workingContextPath,
+		"step":                 req.StepName,
+		"title":                StepTitle(req.StepName),
+		"next_step":            req.NextStep,
+		"config":               map[string]any{"command": cfg.Command},
 		// command is the spelling shared fragments use, so one fragment
 		// renders identically here and in install-time skills.
 		"command": cfg.Command,
@@ -117,6 +129,13 @@ func WriteStepResult(
 	instruction, err := RenderTemplate(req.TemplatePath, vars)
 	if err != nil {
 		return err
+	}
+	if isOrchestrated {
+		partial, err := RenderTemplate(orchestratedPartialPath, vars)
+		if err != nil {
+			return err
+		}
+		instruction = strings.TrimRight(instruction, "\n") + "\n\n---\n\n" + partial
 	}
 	// The git-commit instruction goes before the working-context footer, so
 	// the footer stays last on every continuing step exactly as before.
@@ -130,7 +149,10 @@ func WriteStepResult(
 			"may_close_milestone": point == autocommit.PointCompletion && cfg.AutoCommit == config.AutoCommitFull && req.StepName == "update_changelog",
 			"kind":                cfg.Kind,
 			"spec_name":           instanceName,
-			"tmp_path":            commitMessageTmpPath,
+			"tmp_path":            autocommit.MessageTmpPath(instanceName),
+			// Plan and implement gotos carry the spec name, which routes them
+			// to the right workflow; a spec goto takes none.
+			"goto_name": gotoName(cfg.Kind, instanceName),
 		}
 		partial, err := RenderTemplate(gitCommitPartialPath, commitVars)
 		if err != nil {
@@ -147,6 +169,15 @@ func WriteStepResult(
 	}
 
 	return out.WriteResult(build(req.StepName, instanceName, req.Strategy.PrimaryLocation(instanceName), instruction))
+}
+
+// gotoName is the name a goto for this workflow kind carries: the spec name
+// for plan and implement, which route by it, and nothing for any other kind.
+func gotoName(kind, name string) string {
+	if kind == "plan" || kind == "implement" {
+		return name
+	}
+	return ""
 }
 
 // StepTitle converts a snake_case step name like "acceptance_criteria" into

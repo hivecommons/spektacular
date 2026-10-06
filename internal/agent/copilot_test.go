@@ -43,7 +43,7 @@ func TestCopilotInstall(t *testing.T) {
 	require.Equal(t, "copilot", a.Name())
 	require.NoError(t, a.Install(root, cfg, io.Discard))
 	first := copilotSnapshot(t, root)
-	require.Len(t, first, 7, "only six skills and AGENTS.md")
+	require.Len(t, first, 9, "only eight skills and AGENTS.md")
 	require.NoError(t, a.Install(root, cfg, io.Discard))
 	require.Equal(t, first, copilotSnapshot(t, root), "install is idempotent")
 	for _, name := range []string{"claude", "bob", "codex"} {

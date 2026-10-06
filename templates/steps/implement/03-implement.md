@@ -39,5 +39,5 @@ Do not silently adapt — visible drift must be acknowledged.
 Once the code for the current task compiles:
 
 ```
-{{config.command}} implement goto --data '{"step":"{{next_step}}"}'
+{{config.command}} implement goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```

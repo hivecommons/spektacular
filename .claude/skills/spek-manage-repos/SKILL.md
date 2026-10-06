@@ -3,9 +3,9 @@ name: spek-manage-repos
 description: Add a repo to the current Spektacular project through a guided conversation, inspect the registry, and repair a repo's footprint.
 ---
 
-> **Version check first.** Before running any other command, run `go run . version check`.
+> **Version check first.** Before running any other command, run `spektacular version check`.
 > - On `status: "match"`, continue with the skill and produce no version-related output.
-> - On `"mismatch"`, `"missing"` or `"upgrade_needed"`, the project's settings or installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to run `go run . migrate` (they can preview it with `go run . migrate --dry-run`), and wait for their decision before continuing.
+> - On `"mismatch"`, `"missing"` or `"upgrade_needed"`, the project's settings or installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to run `spektacular migrate` (they can preview it with `spektacular migrate --dry-run`), and wait for their decision before continuing.
 > - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
 > - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
@@ -14,7 +14,7 @@ description: Add a repo to the current Spektacular project through a guided conv
 
 # What this skill does
 
-This skill covers the `go run . repo` surface: adding a repo to the current project, inspecting what is already registered, and repairing a repo whose footprint is missing or broken.
+This skill covers the `spektacular repo` surface: adding a repo to the current project, inspecting what is already registered, and repairing a repo whose footprint is missing or broken.
 
 Adding a repo is a **multi-step interactive workflow** owned by the CLI, not a playbook you improvise from. The CLI is the state machine and you are the executor. On each turn it returns JSON containing an `instruction` field describing exactly one step. You must:
 
@@ -56,13 +56,13 @@ Descriptive metadata (`description`, `role`, `tags`) lives in `repo.yaml`, never
 Start the guided add by running:
 
 ```
-go run . repo new
+spektacular repo new
 ```
 
 If the user already named the repo, pass the folder its code lives in and the flow will not ask for it again:
 
 ```
-go run . repo new --data '{"location":"<the folder the repo's code is in>"}'
+spektacular repo new --data '{"location":"<the folder the repo's code is in>"}'
 ```
 
 From there, follow the loop above: do what the instruction says, then run the `goto` it names to get the next one. Do not invent step names. Every instruction ends with the exact command to run next.
@@ -75,13 +75,13 @@ From there, follow the loop above: do what the instruction says, then run the `g
 2. **To resume**, first read `.spektacular/working-context.md` with your own file tools, for the cross-cutting learnings and the answers the user gave you. Unlike a spec or a plan, an add has no per-section working files to read back: every answer already agreed travels inside the workflow itself and comes back with it. Then run the resume command using the report's `current_step`:
 
    ```
-   go run . repo goto --data '{"step":"<current_step>"}'
+   spektacular repo goto --data '{"step":"<current_step>"}'
    ```
 
 3. **To start fresh**, discarding the in-progress add, re-run with `--force`:
 
    ```
-   go run . repo new --force
+   spektacular repo new --force
    ```
 
 Nothing is written to the user's repo or to the project until the confirmation step has been passed, so an add abandoned partway through leaves no trace to clean up.
@@ -89,7 +89,7 @@ Nothing is written to the user's repo or to the project until the confirmation s
 **The single-command form is still there** for a caller that already knows every detail and wants no conversation:
 
 ```
-go run . repo add --data '{"name":"<name>","location":"<folder>","description":"<description>","role":"<role>","tags":["<tag>"]}'
+spektacular repo add --data '{"name":"<name>","location":"<folder>","description":"<description>","role":"<role>","tags":["<tag>"]}'
 ```
 
 Prefer the guided add when a person is involved. Use the direct form when scripting, or when every value is already known and settled.
@@ -104,7 +104,7 @@ Prefer the guided add when a person is involved. Use the direct form when script
 # Inspecting the registry
 
 ```
-go run . repo list
+spektacular repo list
 ```
 
 Each entry reports:
@@ -127,7 +127,7 @@ Listing does not clone: a repo whose git source has not been materialized yet re
 
 # Footprint repair
 
-Touching a registered repo whose `repo.yaml` is missing or invalid produces a structured error offering repair, never a silent failure: `repo_footprint_missing` from `repo list`, and `repo_footprint` from the knowledge and store-file commands. To repair, either re-run `repo add` with the repo's name and its code location (the registration is preserved; only the footprint is recreated), or re-run `go run . init <agent>`, which cascades over every registered repo and repairs their footprints.
+Touching a registered repo whose `repo.yaml` is missing or invalid produces a structured error offering repair, never a silent failure: `repo_footprint_missing` from `repo list`, and `repo_footprint` from the knowledge and store-file commands. To repair, either re-run `repo add` with the repo's name and its code location (the registration is preserved; only the footprint is recreated), or re-run `spektacular init <agent>`, which cascades over every registered repo and repairs their footprints.
 
 If the reported path is wrong rather than missing, the fix is the registry, not the footprint: correct that repo's `location` in the project's `config.yaml`.
 

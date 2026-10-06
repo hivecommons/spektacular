@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hivecommons/spektacular/internal/identifier"
+	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/steps/spec"
 	"github.com/hivecommons/spektacular/internal/store"
@@ -65,19 +67,6 @@ var resultOutputSchema = &schemaObj{
 	},
 }
 
-var statusOutputSchema = &schemaObj{
-	Type: "object",
-	Properties: map[string]*schemaProp{
-		"spec_name":       {Type: "string"},
-		"spec_path":       {Type: "string", Description: "the spec's location relative to the folder holding config.yaml"},
-		"current_step":    {Type: "string"},
-		"completed_steps": {Type: "array", Items: &schemaProp{Type: "string"}},
-		"total_steps":     {Type: "integer"},
-		"progress":        {Type: "string"},
-		"steps":           {Type: "array"},
-	},
-}
-
 var specCmd = &cobra.Command{
 	Use:   "spec",
 	Short: "Manage spek workflow",
@@ -94,13 +83,6 @@ var specGotoCmd = &cobra.Command{
 	Use:   "goto",
 	Short: "Jump to a named step",
 	RunE:  runSpecGoto,
-}
-
-var specStatusCmd = &cobra.Command{
-	Use:   "status [name]",
-	Short: "Show current workflow progress",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runSpecStatus,
 }
 
 var specStepsCmd = &cobra.Command{
@@ -166,6 +148,10 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 				Properties: map[string]*schemaProp{
 					"name": {Type: "string", Pattern: identifierInputPattern, MaxLen: identifier.MaxPartLength},
 					"id":   {Type: "string", Pattern: identifierInputPattern, MaxLen: identifier.MaxPartLength},
+					"sources": {Type: "array", Items: specSourceItemSchema,
+						Description: "what directly seeded the spec; each needs a uri, and the CLI stamps retrieved_date with today"},
+					"epic":                   {Type: "string", Description: "an existing epic the spec joins from the start; omit for a standalone spec"},
+					"confirm_completed_epic": {Type: "boolean", Description: "true only after the user agrees to add the spec to an epic whose specs are all implemented"},
 				},
 				Required: []string{"name"},
 			},
@@ -214,14 +200,45 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 			WithNextAction(`specify the spek name with --data '{"name":"<spec_name>"}'; to see existing speks, run "spec file list"`)
 	}
 	var input struct {
-		Name string `json:"name"`
-		ID   string `json:"id"`
+		Name    string `json:"name"`
+		ID      string `json:"id"`
+		Sources []struct {
+			URI string `json:"uri"`
+		} `json:"sources"`
+		Epic                 string `json:"epic"`
+		ConfirmCompletedEpic bool   `json:"confirm_completed_epic"`
 	}
 	if err := json.Unmarshal([]byte(dataStr), &input); err != nil {
 		return fmt.Errorf("parsing --data: %w", err)
 	}
 
 	st := store.NewSourceStore(root, "project")
+
+	// Sources and the epic are checked before startGate, so a refusal of
+	// either writes nothing at all.
+	var sources []metadata.SourceRef
+	if len(input.Sources) > 0 {
+		in := make([]sourceInput, len(input.Sources))
+		for i, s := range input.Sources {
+			in[i] = sourceInput{URI: s.URI}
+		}
+		if sources, err = stampSources(cfg, in, time.Now().UTC()); err != nil {
+			return err
+		}
+	}
+	joinEpic := ""
+	if input.Epic != "" {
+		if joinEpic, err = epicName(cfg.Command, []string{input.Epic}); err != nil {
+			return err
+		}
+		if _, _, err := readEpic(cfg, st, joinEpic); err != nil {
+			return err
+		}
+		retry := fmt.Sprintf("the same `%s spec new` with \"confirm_completed_epic\": true added to --data", cfg.Command)
+		if err := refuseCompletedEpic(cfg, st, joinEpic, input.ConfirmCompletedEpic, retry); err != nil {
+			return err
+		}
+	}
 	extraData := workflowDataBuffer{}
 	if err := readInputIntoWorkflow(cmd, extraData); err != nil {
 		return err
@@ -256,9 +273,27 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 		clearState(statePath)
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "spec", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
+	wfCfg := workflow.Config{Command: cfg.Command, Kind: "spec", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, EpicDir: cfg.Epic.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
 	steps := spec.Steps()
-	out := output.New(cmd.OutOrStdout(), globalFields)
+
+	// A spec started in an epic joins it once the new step has written the
+	// spec, through the same link writer `epic write` uses. The spec's path
+	// is remembered in the transaction first (as absent), so a failed join
+	// removes the spec as well as restoring the epic, and the new step's
+	// result is held back until the join has succeeded.
+	joining := joinEpic != "" && !dryRun
+	var txn *docTxn
+	var held bytes.Buffer
+	resultDst := cmd.OutOrStdout()
+	if joining {
+		txn = newDocTxn(st)
+		if err := txn.remember(spec.SpecFilePath(cfg.Spec.Config.Directory, resolved.Name)); err != nil {
+			return err
+		}
+		resultDst = &held
+	}
+
+	out := output.New(resultDst, globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, st, out)
 	for k, v := range extraData {
 		if k != "name" {
@@ -266,12 +301,33 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	wf.SetData("name", resolved.Name)
+	if len(sources) > 0 {
+		wf.SetData("sources", sources)
+	}
+	if joinEpic != "" {
+		wf.SetData("epic", joinEpic)
+	}
 
 	if err := wf.Next(); err != nil {
 		return err
 	}
+	if joining {
+		if err := joinSpecToEpic(txn, cfg, joinEpic, resolved.Name); err != nil {
+			clearState(statePath)
+			return err
+		}
+		if _, err := cmd.OutOrStdout().Write(held.Bytes()); err != nil {
+			return err
+		}
+	}
 	return nil
 }
+
+// specSourceItemSchema is one source spec new accepts: a link only, since
+// the CLI stamps the retrieval date itself.
+var specSourceItemSchema = &schemaProp{Type: "object", Properties: map[string]*schemaProp{
+	"uri": {Type: "string"},
+}}
 
 func runSpecGoto(cmd *cobra.Command, _ []string) error {
 	if schema, _ := cmd.Flags().GetBool("schema"); schema {
@@ -326,70 +382,9 @@ func runSpecGoto(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "spec", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
+	wfCfg := workflow.Config{Command: cfg.Command, Kind: "spec", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, EpicDir: cfg.Epic.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
 	return gotoWithAutoCommit(cmd, cfg, root, stateFilePath(dataDir), "spec",
 		spec.Steps(), wfCfg, input, stepVal, "")
-}
-
-func runSpecStatus(cmd *cobra.Command, args []string) error {
-	if schema, _ := cmd.Flags().GetBool("schema"); schema {
-		if len(args) == 1 {
-			s := commandSchema{Input: nil, Output: artifactStatusOutputSchema}
-			return output.Write(cmd.OutOrStdout(), s, "")
-		}
-		s := commandSchema{Input: nil, Output: statusOutputSchema}
-		return output.Write(cmd.OutOrStdout(), s, "")
-	}
-
-	dataDir, err := dataDir()
-	if err != nil {
-		return err
-	}
-	root, err := projectRoot()
-	if err != nil {
-		return err
-	}
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
-	steps := spec.Steps()
-
-	if len(args) == 1 {
-		st := store.NewSourceStore(root, "project")
-		return runArtifactStatus(cmd, "spec", args[0], spec.SpecFilePath(cfg.Spec.Config.Directory, args[0]), stateFilePath(dataDir), cfg.Command, steps, st, nil, nil)
-	}
-
-	// Refuse to report on an in-progress workflow of a different kind — its
-	// steps and counts would be meaningless under the spec step list.
-	if handled, err := guardKind(stateFilePath(dataDir), cfg.Command, "spec"); err != nil {
-		return err
-	} else if handled {
-		return err
-	}
-
-	wf := workflow.New(steps, stateFilePath(dataDir), workflow.Config{}, nil, nil)
-	st := wf.State()
-
-	specName, _ := wf.GetData("name")
-	specPath := reportedLocation(centralLocationBase, spec.SpecFilePath(cfg.Spec.Config.Directory, fmt.Sprintf("%v", specName)))
-
-	stepInfos := wf.StepStatus()
-	entries := make([]spec.StepEntry, len(stepInfos))
-	for i, info := range stepInfos {
-		entries[i] = spec.StepEntry{Name: info.Name, Status: info.Status}
-	}
-
-	out := output.New(cmd.OutOrStdout(), globalFields)
-	return out.WriteResult(spec.StatusResult{
-		SpecName:       fmt.Sprintf("%v", specName),
-		SpecPath:       specPath,
-		CurrentStep:    wf.Current(),
-		CompletedSteps: st.CompletedSteps,
-		TotalSteps:     len(steps),
-		Progress:       fmt.Sprintf("%d/%d", len(st.CompletedSteps), len(steps)),
-		Steps:          entries,
-	})
 }
 
 func runSpecSteps(cmd *cobra.Command, _ []string) error {
@@ -423,5 +418,5 @@ func init() {
 	specGotoCmd.Flags().String("stdin", "", "Read stdin and store it in workflow data under this key")
 	specGotoCmd.Flags().String("file", "", "Read a file at <path> (relative to cwd) and store its contents under the filename's basename (without extension)")
 
-	specCmd.AddCommand(specNewCmd, specGotoCmd, specStatusCmd, specStepsCmd)
+	specCmd.AddCommand(specNewCmd, specGotoCmd, specStepsCmd)
 }
