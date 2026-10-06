@@ -9,6 +9,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/testutil/gittest"
+	"github.com/hivecommons/spektacular/internal/worktree"
 	"github.com/stretchr/testify/require"
 )
 
@@ -137,6 +138,17 @@ func TestEpicWorktree_CreatesThenReturnsTheSameWorktrees(t *testing.T) {
 	require.Equal(t, f.wt("docs"), first.Repos[1].Path)
 	require.Equal(t, "spek/alpha", gittest.RunGit(t, f.wt("docs"), "rev-parse", "--abbrev-ref", "HEAD"))
 
+	// The main project's record names each repo's code root at the paths
+	// the command reported.
+	rec, ok, err := worktree.ReadRecord(f.proj, "alpha")
+	require.NoError(t, err)
+	require.True(t, ok)
+	reported := map[string]string{}
+	for _, r := range first.Repos {
+		reported[r.Repo] = r.Path
+	}
+	require.Equal(t, reported, rec.Repos)
+
 	second := runEpicWorktreeCmd(t)
 	require.False(t, second.Created)
 	first.Created = false
@@ -207,6 +219,9 @@ func TestEpicMerge_CleanMergeReportsMergedAndRemoved(t *testing.T) {
 	require.NoDirExists(t, f.wt("testproj"))
 	require.NoDirExists(t, f.wt("docs"))
 	require.Empty(t, gittest.RunGit(t, f.site, "branch", "--list", "spek/alpha"))
+	_, ok, err := worktree.ReadRecord(f.proj, "alpha")
+	require.NoError(t, err)
+	require.False(t, ok, "the worktree record outlived the merge")
 }
 
 // Criterion 5, through the command: a conflict in the sibling alone is
@@ -234,6 +249,32 @@ func TestEpicMerge_ConflictIsRefusedAndNothingMerges(t *testing.T) {
 	require.Equal(t, siteHead, gittest.RunGit(t, f.site, "rev-parse", "HEAD"))
 	require.Empty(t, gittest.RunGit(t, f.proj, "status", "--porcelain"))
 	require.Empty(t, gittest.RunGit(t, f.site, "status", "--porcelain"))
+	require.DirExists(t, f.wt("docs"))
+}
+
+// Through the command: a spec branch that writes under the sibling's
+// .spektacular directory is refused as epic_merge_touches_spektacular naming
+// the path, and neither repo moves.
+func TestEpicMerge_SpektacularChangeIsRefused(t *testing.T) {
+	f := worktreeProject(t, true)
+	runEpicWorktreeCmd(t)
+	wtWriteFile(t, f.wt("testproj"), "main.txt", "main v2\n")
+	wtCommitAll(t, f.wt("testproj"), "project work")
+	wtWriteFile(t, f.wt("docs"), ".spektacular/knowledge/x.md", "a stray entry\n")
+	wtCommitAll(t, f.wt("docs"), "docs knowledge")
+	projHead := gittest.RunGit(t, f.proj, "rev-parse", "HEAD")
+	siteHead := gittest.RunGit(t, f.site, "rev-parse", "HEAD")
+
+	er := refuseEpic(t, "merge", "--data", `{"spec":"alpha"}`)
+	require.Equal(t, "epic_merge_touches_spektacular", er.Code)
+	require.Equal(t, "alpha", er.Resource)
+	require.Contains(t, er.Message, "docs: .spektacular/knowledge/x.md")
+	require.Contains(t, er.NextAction, "spek/alpha")
+	require.Contains(t, er.NextAction, f.wt("docs"))
+
+	require.Equal(t, projHead, gittest.RunGit(t, f.proj, "rev-parse", "HEAD"))
+	require.Equal(t, siteHead, gittest.RunGit(t, f.site, "rev-parse", "HEAD"))
+	require.DirExists(t, f.wt("testproj"))
 	require.DirExists(t, f.wt("docs"))
 }
 

@@ -61,6 +61,21 @@ type SpecWorktrees struct {
 	Repos []RepoWorktree
 }
 
+// RecordFile is the name of a spec's worktree record, kept in the main
+// project beside the spec's worktrees.
+const RecordFile = "record.json"
+
+// Record is a spec's worktree record: every touched repo's code root inside
+// the spec's worktrees. It lives in the main project, under the folder
+// holding the spec's worktrees, which is already kept out of git; nothing
+// about it is ever written inside a worktree.
+type Record struct {
+	Spec string `json:"spec"`
+	// Repos maps each registered repo name to the absolute directory holding
+	// its code inside the spec's worktrees.
+	Repos map[string]string `json:"repos"`
+}
+
 // MergeResult is the outcome of merging a spec back.
 type MergeResult struct {
 	Spec   string
@@ -237,10 +252,46 @@ func (m Manager) worktreeRoot(spec string) string {
 	return filepath.Join(m.ProjectRoot, ".spektacular", Dir, spec)
 }
 
+// recordPath is where spec's worktree record lives under projectRoot.
+func recordPath(projectRoot, spec string) string {
+	return filepath.Join(projectRoot, ".spektacular", Dir, spec, RecordFile)
+}
+
+// ReadRecord loads spec's worktree record from the main project at
+// projectRoot, without running git. ok is false when the spec has no
+// record. Only absolute code roots are kept.
+func ReadRecord(projectRoot, spec string) (Record, bool, error) {
+	raw, err := os.ReadFile(recordPath(projectRoot, spec))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return Record{}, false, nil
+		}
+		return Record{}, false, err
+	}
+	var r Record
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return Record{}, false, fmt.Errorf("reading the worktree record for %s: %w", spec, err)
+	}
+	roots := map[string]string{}
+	for name, root := range r.Repos {
+		if filepath.IsAbs(root) {
+			roots[name] = filepath.Clean(root)
+		}
+	}
+	r.Repos = roots
+	return r, true, nil
+}
+
+// Record loads spec's worktree record; see ReadRecord.
+func (m Manager) Record(spec string) (Record, bool, error) {
+	return ReadRecord(m.ProjectRoot, spec)
+}
+
 // Ensure gives spec a worktree in the project's repo and in every repo of
 // touched, returning them; the bool is true when any was created. Existing
 // worktrees are reused, so a resumed run finds its own. It also keeps the
-// worktrees and the overlay out of the project's git, and writes the overlay.
+// worktrees and the overlay out of the project's git, writes the overlay,
+// and writes the spec's worktree record in the main project.
 func (m Manager) Ensure(spec string, touched []string) (SpecWorktrees, bool, error) {
 	cos, err := m.checkouts(touched)
 	if err != nil {
@@ -262,6 +313,7 @@ func (m Manager) Ensure(spec string, touched []string) (SpecWorktrees, bool, err
 	result := SpecWorktrees{Spec: spec}
 	created := false
 	overlay := repo.Overlay{Spec: spec, Repos: map[string]string{}}
+	record := Record{Spec: spec, Repos: map[string]string{}}
 
 	for i, co := range cos {
 		dirName := "project"
@@ -295,6 +347,17 @@ func (m Manager) Ensure(spec string, touched []string) (SpecWorktrees, bool, err
 			}
 			overlay.Repos[name] = filepath.Join(path, rel)
 		}
+		// Each repo's code, relative to its own checkout, re-rooted in the
+		// worktree.
+		for _, name := range co.repos {
+			if root, ok := m.codeRootIn(co.top, path, name); ok {
+				record.Repos[name] = root
+			}
+		}
+	}
+
+	if err := writeRecord(filepath.Join(base, RecordFile), record); err != nil {
+		return SpecWorktrees{}, false, err
 	}
 
 	raw, err := json.MarshalIndent(overlay, "", "  ")
@@ -309,6 +372,36 @@ func (m Manager) Ensure(spec string, touched []string) (SpecWorktrees, bool, err
 		return SpecWorktrees{}, false, err
 	}
 	return result, created, nil
+}
+
+// codeRootIn re-roots repo name's code, which lives in the main checkout
+// top, into that checkout's worktree at path.
+func (m Manager) codeRootIn(top, path, name string) (string, bool) {
+	src, ok := m.Repos.LocalSource(name)
+	if !ok {
+		return "", false
+	}
+	src, err := filepath.EvalSymlinks(src)
+	if err != nil {
+		return "", false
+	}
+	rel, err := filepath.Rel(top, src)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return "", false
+	}
+	return filepath.Join(path, rel), true
+}
+
+// writeRecord writes a spec's worktree record to path.
+func writeRecord(path string, r Record) error {
+	raw, err := json.MarshalIndent(r, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(raw, '\n'), 0o644)
 }
 
 // ensureOne makes sure top has a worktree for spec at path, on its branch.
@@ -502,7 +595,8 @@ func (m Manager) Find(spec string) (SpecWorktrees, bool, error) {
 // Merge merges spec's branch into every touched repo's current branch, as one
 // unit. It first checks every repo: none may have a merge in progress, a
 // spec worktree with uncommitted work, or uncommitted changes in its main
-// copy that the merge would touch, and a dry run must merge cleanly. When
+// copy that the merge would touch; the branch may change nothing under a
+// .spektacular directory in any repo; and a dry run must merge cleanly. When
 // any repo would conflict, nothing is merged anywhere and the conflicts are
 // returned per repo. Otherwise each repo is merged with --no-ff, and every
 // worktree and branch of the spec is removed.
@@ -538,6 +632,10 @@ func (m Manager) Merge(spec string) (MergeResult, error) {
 			return result, failed(fmt.Sprintf("uncommitted changes in %s (repo %s) would be overwritten by merging %s: %s", rw.Top, rw.Repo, spec, strings.Join(overlap, ", ")),
 				"commit or stash those changes, then retry")
 		}
+	}
+
+	if err := m.refuseSpektacularChanges(sw); err != nil {
+		return result, err
 	}
 
 	conflicts := map[string][]string{}
@@ -586,9 +684,55 @@ func (m Manager) Merge(spec string) (MergeResult, error) {
 			return result, err
 		}
 	}
+	if err := os.Remove(recordPath(m.ProjectRoot, spec)); err != nil && !os.IsNotExist(err) {
+		return result, err
+	}
 	_ = os.Remove(m.worktreeRoot(spec))
 	result.Removed = true
 	return result, nil
+}
+
+// spektacularPathspec matches every path under a .spektacular directory at
+// any depth of a checkout, the checkout's top included.
+const spektacularPathspec = ":(glob)**/.spektacular/**"
+
+// refuseSpektacularChanges refuses a merge when the spec's branch changes
+// anything under a .spektacular directory in any repo. Spektacular's files
+// are only ever written in the project itself, so such a change is a
+// mistake to undo, never something to merge. Every repo is checked first,
+// so the refusal names all the offending paths at once.
+func (m Manager) refuseSpektacularChanges(sw SpecWorktrees) error {
+	branch := Branch(sw.Spec)
+	var parts []string
+	var first RepoWorktree
+	for _, rw := range sw.Repos {
+		out, err := m.git(rw.Top, "diff", "--name-only", "HEAD..."+branch, "--", spektacularPathspec)
+		if err != nil {
+			return err
+		}
+		var paths []string
+		for _, p := range strings.Split(out, "\n") {
+			if p = strings.TrimSpace(p); p != "" {
+				paths = append(paths, p)
+			}
+		}
+		if len(paths) == 0 {
+			continue
+		}
+		if len(parts) == 0 {
+			first = rw
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s", rw.Repo, strings.Join(paths, ", ")))
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	return output.NewError("epic_merge_touches_spektacular",
+		fmt.Sprintf("%s's branch changes Spektacular's files, which are only ever written in the project, so nothing was merged in any repo: %s",
+			sw.Spec, strings.Join(parts, "; "))).
+		WithResource(sw.Spec).
+		WithNextAction(fmt.Sprintf("undo those commits on %s in the spec's worktrees (for example `git -C %s revert <commit>`), record the change through `%s` from the project root instead, then retry `%s epic merge --data '{\"spec\":%q}'`",
+			branch, first.Path, m.Config.Command, m.Config.Command, sw.Spec))
 }
 
 // dirtyOverlap lists uncommitted paths in top's main copy that branch

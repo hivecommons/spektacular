@@ -354,6 +354,9 @@ func TestEnsure_WorktreesStayOutOfTheMainCopy(t *testing.T) {
 	_, _, err = m.Ensure("beta", []string{"docs"})
 	require.NoError(t, err)
 
+	// The record is on disk in the main project, yet git does not list it.
+	require.FileExists(t, filepath.Join(f.proj, ".spektacular", "worktrees", "alpha", "record.json"))
+	require.FileExists(t, filepath.Join(f.proj, ".spektacular", "worktrees", "beta", "record.json"))
 	require.Empty(t, gittest.RunGit(t, f.proj, "status", "--porcelain", "--untracked-files=all"))
 	// The overlay inside the project worktree is ignored there too.
 	require.Empty(t, gittest.RunGit(t, f.wt("alpha", "testproj"), "status", "--porcelain", "--untracked-files=all"))
@@ -363,11 +366,86 @@ func TestEnsure_WorktreesStayOutOfTheMainCopy(t *testing.T) {
 	require.NotContains(t, staged, "160000", "a worktree was staged as an embedded repository")
 	require.NotContains(t, staged, ".spektacular/worktrees")
 	require.NotContains(t, staged, repo.OverlayFile)
+	require.NotContains(t, staged, "record.json")
 
 	exclude := readFile(t, filepath.Join(f.proj, ".git", "info", "exclude"))
 	require.Equal(t, 1, strings.Count(exclude, "/.spektacular/worktrees/\n"), exclude)
 	require.Equal(t, 1, strings.Count(exclude, "/**/.spektacular/worktree-repos.json\n"), exclude)
 	require.Equal(t, 1, strings.Count(exclude, "# Spektacular epic worktrees\n"), exclude)
+}
+
+// --- Record -----------------------------------------------------------------
+
+// After Ensure, the main project holds a record naming every touched repo's
+// code root inside the spec's worktrees. Both repos' repo.yaml put the code at
+// the .spektacular folder's parent, so each code root is the repo's worktree.
+func TestEnsure_WritesRecordOfCodeRootsInTheMainProject(t *testing.T) {
+	f := newFixture(t)
+	m := f.manager(t)
+	_, _, err := m.Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+
+	want := Record{Spec: "alpha", Repos: map[string]string{
+		"testproj": filepath.Join(f.proj, ".spektacular", "worktrees", "alpha", "testproj"),
+		"docs":     filepath.Join(f.proj, ".spektacular", "worktrees", "alpha", "docs"),
+	}}
+
+	// The file sits in the main project, beside the worktree folders.
+	var onDisk Record
+	require.NoError(t, json.Unmarshal([]byte(readFile(t, filepath.Join(f.proj, ".spektacular", "worktrees", "alpha", "record.json"))), &onDisk))
+	require.Equal(t, want, onDisk)
+
+	got, ok, err := ReadRecord(f.proj, testSpec)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, want, got)
+
+	got, ok, err = m.Record(testSpec)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, want, got)
+
+	// Nothing about the record is written inside a worktree.
+	require.NoFileExists(t, filepath.Join(f.wt("alpha", "testproj"), ".spektacular", "worktrees", "alpha", "record.json"))
+}
+
+// A spec with no worktrees has no record.
+func TestReadRecord_UnknownSpecReportsNone(t *testing.T) {
+	f := newFixture(t)
+	_, _, err := f.manager(t).Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+
+	got, ok, err := ReadRecord(f.proj, "nonesuch")
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Equal(t, Record{}, got)
+}
+
+// ReadRecord needs no git at all: it reads a hand-written record from a plain
+// directory, keeping absolute roots and dropping relative ones.
+func TestReadRecord_WorksWithoutGitAndDropsRelativeRoots(t *testing.T) {
+	dir := t.TempDir()
+	// No git anywhere: PATH holds nothing, so any git call would fail.
+	t.Setenv("PATH", "")
+	writeFile(t, dir, ".spektacular/worktrees/alpha/record.json",
+		`{"spec":"alpha","repos":{"testproj":"/abs/proj/./code","docs":"relative/docs"}}`)
+
+	got, ok, err := ReadRecord(dir, "alpha")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, Record{Spec: "alpha", Repos: map[string]string{"testproj": "/abs/proj/code"}}, got)
+
+	_, ok, err = ReadRecord(dir, "beta")
+	require.NoError(t, err)
+	require.False(t, ok)
+}
+
+// A malformed record is an error, not silently absent.
+func TestReadRecord_MalformedIsAnError(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, ".spektacular/worktrees/alpha/record.json", "not json")
+	_, _, err := ReadRecord(dir, "alpha")
+	require.Error(t, err)
 }
 
 // --- Merge ------------------------------------------------------------------
@@ -403,10 +481,15 @@ func TestMerge_CleanMergeLandsEverywhereAndCleansUp(t *testing.T) {
 	require.NoDirExists(t, projWT)
 	require.NoDirExists(t, docsWT)
 	require.NoDirExists(t, filepath.Join(f.proj, ".spektacular", "worktrees", "alpha"))
+	require.NoFileExists(t, filepath.Join(f.proj, ".spektacular", "worktrees", "alpha", "record.json"))
 
 	_, ok, err := m.Find(testSpec)
 	require.NoError(t, err)
 	require.False(t, ok)
+
+	_, ok, err = m.Record(testSpec)
+	require.NoError(t, err)
+	require.False(t, ok, "the record outlived the merge")
 }
 
 // Criterion 5: a conflict in one repo merges nothing anywhere and reports the
@@ -472,6 +555,91 @@ func TestMerge_OverlappingMainCopyChangesAreRefused(t *testing.T) {
 	require.Contains(t, er.Message, "main.txt")
 	require.Equal(t, projHead, head(t, f.proj))
 	require.Equal(t, "local edit\n", readFile(t, filepath.Join(f.proj, "main.txt")))
+}
+
+// requireSpektacularRefusal merges alpha, asserts the epic_merge_touches_spektacular
+// refusal, and that neither main line moved and the worktrees remain.
+func requireSpektacularRefusal(t *testing.T, f fixture, m Manager) *output.ErrorResponse {
+	t.Helper()
+	projHead, siteHead := head(t, f.proj), head(t, f.site)
+
+	_, err := m.Merge(testSpec)
+	er := requireRefusal(t, err, "epic_merge_touches_spektacular")
+	require.Equal(t, "alpha", er.Resource)
+	require.Contains(t, er.NextAction, "spek/alpha")
+	require.Contains(t, er.NextAction, "revert <commit>")
+	require.Contains(t, er.NextAction, `epic merge --data '{"spec":"alpha"}'`)
+
+	require.Equal(t, projHead, head(t, f.proj))
+	require.Equal(t, siteHead, head(t, f.site))
+	for _, top := range []string{f.proj, f.site} {
+		require.Empty(t, gittest.RunGit(t, top, "status", "--porcelain"))
+		require.NoFileExists(t, filepath.Join(top, ".git", "MERGE_HEAD"))
+	}
+	_, ok, err := m.Find(testSpec)
+	require.NoError(t, err)
+	require.True(t, ok, "the worktrees stay for the user")
+	return er
+}
+
+// A spec branch that changes the project's own .spektacular directory is
+// refused before anything merges, even alongside a clean code change.
+func TestMerge_ProjectSpektacularChangeIsRefused(t *testing.T) {
+	f := newFixture(t)
+	m := f.manager(t)
+	_, _, err := m.Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+	projWT := f.wt("alpha", "testproj")
+	writeFile(t, projWT, "main.txt", "main v2\n")
+	writeFile(t, projWT, ".spektacular/plans/alpha/plan.md", planBody+"\nticked in the worktree\n")
+	commitAll(t, projWT, "project work and a plan edit")
+
+	er := requireSpektacularRefusal(t, f, m)
+	require.Contains(t, er.Message, "testproj: .spektacular/plans/alpha/plan.md")
+	require.NotContains(t, er.Message, "main.txt")
+	require.NotContains(t, er.Message, "docs:")
+	require.Contains(t, er.NextAction, "git -C "+projWT+" revert")
+	require.Equal(t, "main v1\n", readFile(t, filepath.Join(f.proj, "main.txt")))
+}
+
+// A spec branch that adds a file under a sibling repo's .spektacular
+// directory is refused the same way.
+func TestMerge_SiblingSpektacularChangeIsRefused(t *testing.T) {
+	f := newFixture(t)
+	m := f.manager(t)
+	_, _, err := m.Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+	projWT, docsWT := f.wt("alpha", "testproj"), f.wt("alpha", "docs")
+	writeFile(t, projWT, "main.txt", "main v2\n")
+	commitAll(t, projWT, "project work")
+	writeFile(t, docsWT, ".spektacular/knowledge/x.md", "a stray entry\n")
+	commitAll(t, docsWT, "docs knowledge")
+
+	er := requireSpektacularRefusal(t, f, m)
+	require.Contains(t, er.Message, "docs: .spektacular/knowledge/x.md")
+	require.NotContains(t, er.Message, "testproj:")
+	require.Contains(t, er.NextAction, "git -C "+docsWT+" revert")
+	require.NoFileExists(t, filepath.Join(f.site, ".spektacular", "knowledge", "x.md"))
+}
+
+// When both repos offend, the refusal lists each repo's paths, in the order
+// the worktrees are held, and points the example at the first.
+func TestMerge_SpektacularChangesInBothReposAreAllListed(t *testing.T) {
+	f := newFixture(t)
+	m := f.manager(t)
+	_, _, err := m.Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+	projWT, docsWT := f.wt("alpha", "testproj"), f.wt("alpha", "docs")
+	writeFile(t, projWT, ".spektacular/specs/alpha.md", "---\ncreated_date: 2026-07-01\n---\n\n# Alpha edited\n")
+	commitAll(t, projWT, "spec edit")
+	writeFile(t, docsWT, ".spektacular/knowledge/x.md", "a stray entry\n")
+	commitAll(t, docsWT, "docs knowledge")
+
+	er := requireSpektacularRefusal(t, f, m)
+	require.Equal(t,
+		"alpha's branch changes Spektacular's files, which are only ever written in the project, so nothing was merged in any repo: testproj: .spektacular/specs/alpha.md; docs: .spektacular/knowledge/x.md",
+		er.Message)
+	require.Contains(t, er.NextAction, "git -C "+projWT+" revert")
 }
 
 func TestMerge_NoWorktreesIsRefused(t *testing.T) {

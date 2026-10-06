@@ -158,7 +158,7 @@ Implement steps expose it to templates as `has_worktree_roots` (bool) and `workt
 
 **Validation point**: Worktree and epic command tests show the refusal for a project-repo and a sibling-repo `.spektacular/` change, with nothing merged. They also show the record written on `epic worktree`, readable without git, and removed on merge. the full test suite passes.
 
-#### - [ ] Task: Record spec worktree code roots in the main project
+#### - [x] Task: Record spec worktree code roots in the main project
 **Id:** 839eaf80-d6a0-43ef-9249-2b8ca986b3b8
 **Repo:** spektacular
 **Depends on:** none
@@ -169,12 +169,12 @@ When a spec's worktrees are created, write a small record in the main project, b
 *Technical detail:* [context.md#task-record-spec-worktree-code-roots-in-the-main-project](./context.md#task-record-spec-worktree-code-roots-in-the-main-project)
 
 **Acceptance criteria**:
-- [ ] After `epic worktree`, the main project holds a record for the spec naming every touched repo's code root inside the spec's worktrees.
-- [ ] The record is readable without any git call, and reading it for a spec with no worktrees reports that there is none.
-- [ ] After `epic merge`, the record is gone along with the worktrees.
-- [ ] The record is never committed to git in the main project.
+- [x] After `epic worktree`, the main project holds a record for the spec naming every touched repo's code root inside the spec's worktrees.
+- [x] The record is readable without any git call, and reading it for a spec with no worktrees reports that there is none.
+- [x] After `epic merge`, the record is gone along with the worktrees.
+- [x] The record is never committed to git in the main project.
 
-#### - [ ] Task: Refuse to merge a spec branch that changes the Spektacular directory
+#### - [x] Task: Refuse to merge a spec branch that changes the Spektacular directory
 **Id:** e3691070-ff05-46e8-b5b0-0869e793c220
 **Repo:** spektacular
 **Depends on:** none
@@ -185,10 +185,10 @@ Add a check to `epic merge` that runs for every repo before anything is merged. 
 *Technical detail:* [context.md#task-refuse-to-merge-a-spec-branch-that-changes-the-spektacular-directory](./context.md#task-refuse-to-merge-a-spec-branch-that-changes-the-spektacular-directory)
 
 **Acceptance criteria**:
-- [ ] A spec branch that commits a change under the project's Spektacular directory is refused, with the path named, and no repo's main line moves.
-- [ ] A spec branch that commits a change under a sibling repo's Spektacular directory is refused the same way.
-- [ ] A branch that changes only code still merges exactly as before.
-- [ ] The refusal carries a concrete next action.
+- [x] A spec branch that commits a change under the project's Spektacular directory is refused, with the path named, and no repo's main line moves.
+- [x] A spec branch that commits a change under a sibling repo's Spektacular directory is refused the same way.
+- [x] A branch that changes only code still merges exactly as before.
+- [x] The refusal carries a concrete next action.
 
 ### Milestone 2: Epic children build each spec from the project, with the standard implement workflow
 
@@ -333,3 +333,31 @@ None. Every design question was resolved during planning and recorded in the ass
 - Migrating epic runs in progress under the old model. They are finished or restarted by hand (spec non-goal).
 - A harbor end-to-end suite for epic runs. The orchestrator is covered by skill-phrase contract tests, the cmd-level flow test, and one manual epic run.
 - Changing how worktrees are created, how code is isolated between specs, or how the all-or-nothing merge works, beyond the new `.spektacular/` refusal.
+
+## Changelog
+
+### 2026-10-06 — Task: Record spec worktree code roots in the main project
+
+**What was done**: `epic worktree` now writes a per-spec worktree record to `<project>/.spektacular/worktrees/<spec>/record.json` in the main project, mapping every repo in the spec's worktrees to its code root there. `worktree.ReadRecord` (and `Manager.Record`) reads it back with a plain file read and no git, and `epic merge` deletes it before removing the spec's worktree folder. The in-worktree overlay is still written for now.
+
+**Deviations**: The record maps each repo to its **code root** (its source, re-rooted into the worktree), not to its registered `.spektacular` location as the overlay did. With code roots, nothing ever has to read `repo.yaml` inside a worktree, which the spec forbids. As a result, the spec-scoped repo view in the next task overrides code sources rather than locations.
+
+**Files changed**:
+- `spektacular: internal/worktree/worktree.go`
+- `spektacular: internal/worktree/worktree_test.go`
+- `spektacular: cmd/epic_worktree_test.go`
+
+**Discoveries**: `go test ./...` fails in this repo because a root-owned harbor job directory under `tests/harbor/jobs/` cannot be read. Run `go test . ./cmd/... ./internal/... ./templates/...` instead. Every fixture's code root equals its repo's worktree root (repo.yaml `source: ..`), so re-rooting a subfolder source is not exercised by the tests.
+
+### 2026-10-06 — Task: Refuse to merge a spec branch that changes the Spektacular directory
+
+**What was done**: `epic merge` now runs one more check across all repos before the dry run. For each repo it lists the paths the spec's branch changes under any `.spektacular` directory (`git diff --name-only HEAD...spek/<spec> -- ':(glob)**/.spektacular/**'`). If any repo has such paths, the merge is refused with the new code `epic_merge_touches_spektacular`. The refusal names the paths for each repo and gives a revert-and-retry next action, and nothing is merged.
+
+**Deviations**: The plan called for a separate project-relative pathspec as well as the glob. Only the single glob pathspec is used, because `**/` also matches a `.spektacular` folder at the top of a checkout, which covers the project and sibling repos alike.
+
+**Files changed**:
+- `spektacular: internal/worktree/worktree.go`
+- `spektacular: internal/worktree/worktree_test.go`
+- `spektacular: cmd/epic_worktree_test.go`
+
+**Discoveries**: The three-dot diff compares against the merge base. A `.spektacular` change the branch makes and later reverts therefore nets out and does not block the merge.
