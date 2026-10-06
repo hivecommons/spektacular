@@ -634,6 +634,7 @@ func TestStatus_EpicReportCarriesTheRunView(t *testing.T) {
 	require.Equal(t, map[string]any{"done": float64(2), "in_progress": float64(0), "ready": float64(1), "blocked": float64(0), "awaiting_merge": float64(0), "remaining": float64(1)}, run["plan"])
 	require.Equal(t, map[string]any{"done": float64(1), "in_progress": float64(0), "ready": float64(1), "blocked": float64(1), "awaiting_merge": float64(0), "remaining": float64(2)}, run["implement"])
 	require.Equal(t, false, run["dirty"])
+	require.Equal(t, []any{}, run["dirty_repos"], "clean runs expose an empty repo list, not null")
 	problems := run["problems"].([]any)
 	require.Len(t, problems, 1)
 	require.Equal(t, "epic_unplanned", problems[0].(map[string]any)["code"])
@@ -668,7 +669,7 @@ func TestStatus_SchemaDescribesTheRunView(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(stdout), &schema))
 	epicRun := schema.Output.Properties["epic"].Properties["run"]
 	require.NotNil(t, epicRun)
-	for _, k := range []string{"order", "plan", "implement", "dirty", "problems"} {
+	for _, k := range []string{"order", "plan", "implement", "dirty", "dirty_repos", "problems"} {
 		require.Contains(t, epicRun.Properties, k)
 	}
 	specRun := schema.Output.Properties["specs"].Items.Properties["run"]

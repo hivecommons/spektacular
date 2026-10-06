@@ -80,10 +80,11 @@ var statusRunCountsSchema = &schemaProp{Type: "object", Properties: map[string]*
 
 // statusEpicRunSchema is where an epic stands for planning and implementing.
 var statusEpicRunSchema = &schemaProp{Type: "object", Description: "present when an epic is named", Properties: map[string]*schemaProp{
-	"order":     {Type: "array", Items: &schemaProp{Type: "string"}, Description: "dependency order; ties follow the epic's list order"},
-	"plan":      statusRunCountsSchema,
-	"implement": statusRunCountsSchema,
-	"dirty":     {Type: "boolean", Description: "a registered repo has uncommitted changes"},
+	"order":       {Type: "array", Items: &schemaProp{Type: "string"}, Description: "dependency order; ties follow the epic's list order"},
+	"plan":        statusRunCountsSchema,
+	"implement":   statusRunCountsSchema,
+	"dirty":       {Type: "boolean", Description: "a repo touched by this epic's plans has uncommitted changes"},
+	"dirty_repos": {Type: "array", Items: &schemaProp{Type: "string"}, Description: "names of touched repos with uncommitted changes; match against each spec's run.implement.repos"},
 	"problems": {Type: "array", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
 		"code":    {Type: "string", Enum: []string{"epic_unplanned", "epic_dependency_cycle", "epic_dependency_outside"}},
 		"specs":   {Type: "array", Items: &schemaProp{Type: "string"}},
@@ -209,7 +210,7 @@ func init() {
 
 // statusRunSource is what the run view reads beyond the project store: the
 // spec worktrees, each worktree's own store, the repos each plan touches,
-// and whether any registered repo has uncommitted changes. status reports
+// and which touched repos have uncommitted changes. status reports
 // and never refuses, so anything it cannot read — no git, an unregistered
 // repo — is simply absent from the view.
 func statusRunSource(cfg config.Config, root string, st store.Reader) *status.RunSource {
@@ -225,13 +226,31 @@ func statusRunSource(cfg config.Config, root string, st store.Reader) *status.Ru
 			}
 			return names
 		},
-		Dirty: func() bool {
-			targets, err := autocommit.Targets(cfg, root, autoCommitGit)
+		Dirty: func(names []string) []string {
+			touched := map[string]bool{}
+			for _, name := range names {
+				touched[name] = true
+			}
+			filtered := cfg
+			filtered.Repos = nil
+			for _, entry := range cfg.Repos {
+				if touched[entry.Name] {
+					filtered.Repos = append(filtered.Repos, entry)
+				}
+			}
+			targets, err := autocommit.Targets(filtered, root, autoCommitGit)
 			if err != nil {
-				return false
+				return nil
 			}
 			dirty, err := autocommit.DirtyTargets(targets, autoCommitGit)
-			return err == nil && len(dirty) > 0
+			if err != nil {
+				return nil
+			}
+			var result []string
+			for _, target := range dirty {
+				result = append(result, target.Repos...)
+			}
+			return result
 		},
 	}
 	if set, err := repo.New(cfg, root, repoGit); err == nil {

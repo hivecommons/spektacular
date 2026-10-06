@@ -192,6 +192,11 @@ func TestEpicMerge_CleanMergeReportsMergedAndRemoved(t *testing.T) {
 	wtWriteFile(t, f.wt("docs"), "lib.txt", "lib v2\n")
 	wtCommitAll(t, f.wt("docs"), "docs work")
 
+	// Children wrote only in their worktrees: every main checkout stays clean.
+	for _, root := range []string{f.proj, f.site} {
+		require.Empty(t, gittest.RunGit(t, root, "status", "--porcelain", "--untracked-files=all"))
+	}
+
 	stdout, code := runEpic(t, "merge", "--data", `{"spec":"alpha"}`)
 	require.Equalf(t, 0, code, "epic merge failed: %s", stdout)
 	var got map[string]any
@@ -207,6 +212,10 @@ func TestEpicMerge_CleanMergeReportsMergedAndRemoved(t *testing.T) {
 	require.NoDirExists(t, f.wt("testproj"))
 	require.NoDirExists(t, f.wt("docs"))
 	require.Empty(t, gittest.RunGit(t, f.site, "branch", "--list", "spek/alpha"))
+	// Merging changes HEAD, but must not leave modified or untracked files.
+	for _, root := range []string{f.proj, f.site} {
+		require.Empty(t, gittest.RunGit(t, root, "status", "--porcelain", "--untracked-files=all"))
+	}
 }
 
 // Criterion 5, through the command: a conflict in the sibling alone is
