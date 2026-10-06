@@ -1,0 +1,6 @@
+- Removing the Spektacular directory from worktrees, or excluding it from their checkout. It stays as tracked files that are never read or written (spec non-goal).
+- Changing how epic planning runs. Planning uses no worktrees (spec non-goal).
+- Adding new store providers (spec non-goal).
+- Migrating epic runs in progress under the old model. They are finished or restarted by hand (spec non-goal).
+- A harbor end-to-end suite for epic runs. The orchestrator is covered by skill-phrase contract tests, the cmd-level flow test, and one manual epic run.
+- Changing how worktrees are created, how code is isolated between specs, or how the all-or-nothing merge works, beyond the new `.spektacular/` refusal.

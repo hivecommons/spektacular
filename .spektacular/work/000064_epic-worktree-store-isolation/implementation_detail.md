@@ -1,0 +1,10 @@
+- **Implicit becomes explicit.** Today, the directory an agent runs from silently decides which repos and stores it sees: the overlay is picked up whenever one exists under the cwd. After this change, the cwd is always the main project, and a spec's worktree view is something code asks for by name. It comes from a spec-scoped repo-set constructor fed by the worktree record. Someone reading the code sees every place a worktree is involved: the worktree package, the implement commands, implement auto-commit and status. No ambient file can redirect anything else.
+- **Existing patterns followed.**
+  - Per-spec lanes are reused unchanged for implement.
+  - Orchestrated plan lanes already take a path-scoped commit under the commit lock, and epic implement lanes now use the same pattern for artifacts.
+  - Runtime-only workflow config feeding a step template follows the `EpicDir` precedent.
+  - List rendering in step templates follows the `dependency_override` precedent.
+  - The merge guard is one more per-repo precheck in the existing precheck-then-dry-run loop, keeping all-or-nothing semantics.
+- **Two-form template blocks.** The read-plan and feature-changelog step templates each gain a mustache section that renders the worktree code roots when present. An inverted section keeps today's `repo list` wording otherwise. Standalone implement renders byte-for-byte as before, so the existing template-contract tests and the harbor implement suite stay valid. Root paths reach the agent unescaped (triple-brace), per the mustache escaping gotcha.
+- **Removal, not deprecation.** The in-worktree overlay file and its exclude pattern are deleted outright, along with the forced worktree removal that only existed because of it. There is no compatibility shim. In-flight runs are out of scope.
+- **Skills stay thin.** The orchestrator's child prompt loses its location instructions, and the implement skill loses its worktree framing. The knowledge of where code lives moves from skill prose into CLI output.

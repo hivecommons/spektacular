@@ -1,0 +1,8 @@
+- **Store files are written through the CLI, never with file tools** — the whole feature exists to make epic children honour this; artifact writes must reach the main project's stores through Spektacular, and no code may build a store path by hand.
+- **Error messages must describe the problem and suggest remediation** — the new merge refusal for `.spektacular/` changes must carry a concrete `next_action`.
+- **A plan never changes the active skills and configuration** — this plan edits skill and step templates; verification uses Go tests and throwaway projects, never a re-init or migrate of this repo.
+- **Tests must not depend on execution order** — new cmd tests that execute `rootCmd` go through `resetRootCmd`/`runRootCmd`, and real-git fixtures pin identity.
+- **Passing tests are required before calling work done** — the full Go test suite must pass at the end of every task.
+- **docs: No em dashes** — the epics page update in the docs repo uses no em dashes.
+- **docs: MDX authoring conventions** — the epics page edit stays prose and lists only, with no layout HTML; the site build and type check verify it.
+- **docs: Plans must sketch content structure** — the docs task carries a content example for the changed bullets.
