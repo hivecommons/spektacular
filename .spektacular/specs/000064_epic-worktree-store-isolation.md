@@ -12,21 +12,21 @@ When an epic is implemented, each spec is built in its own isolated copy of the 
 
 ## Requirements
 
-- [ ] **Project artifacts are written to the project, never to a spec's isolated copy**
+- [x] **Project artifacts are written to the project, never to a spec's isolated copy**
   While an epic is being implemented, every change Spektacular makes to a spec, plan, changelog record, knowledge entry, design document or epic is made in the project's own stores. None of these changes is made in a spec's isolated copy of the code.
-- [ ] **Isolated copies are used only for code**
+- [x] **Isolated copies are used only for code**
   During an epic run, a spec's isolated copies receive code changes, tests and commits only. They receive no changes to Spektacular-managed content.
-- [ ] **Plan progress is visible in the project while the epic runs**
+- [x] **Plan progress is visible in the project while the epic runs**
   As a child agent ticks tasks and records changes in a spec's plan, a user reading that plan from the project sees each update straight away, without waiting for the spec to be merged.
-- [ ] **Each spec's implement progress is kept in the project**
+- [x] **Each spec's implement progress is kept in the project**
   A spec's in-progress workflow state and working notes are kept in the project, keyed to that spec. Specs running at the same time keep separate records and never overwrite each other's.
-- [ ] **The implement workflow tells the agent where to change code**
+- [x] **The implement workflow tells the agent where to change code**
   When a spec being implemented has isolated copies, the implement workflow tells the agent to make code changes, run tests and verify in those copies, one for each repo the spec touches. When it has none, the workflow points the agent at each repo's registered location, as it does today.
-- [ ] **Merging refuses a branch that changes the Spektacular directory**
+- [x] **Merging refuses a branch that changes the Spektacular directory**
   Merging a finished spec back is refused when the spec's branch changes anything under the Spektacular directory in any repo. The refusal names the offending paths, and nothing is merged in any repo.
-- [ ] **Status and resume read the project's records**
+- [x] **Status and resume read the project's records**
   Epic status reports each spec's implement state, step and isolated-copy locations from the records held in the project. Repeating "implement this epic" after an interruption resumes each in-progress spec from those records.
-- [ ] **Documentation describes the new model**
+- [x] **Documentation describes the new model**
   The public epic documentation says that each spec's isolated copies hold only code, and that specs, plans and progress stay in the project and can be followed there while the run is going.
 
 ## Constraints
@@ -42,29 +42,29 @@ When an epic is implemented, each spec is built in its own isolated copy of the 
 
 ## Acceptance Criteria
 
-- [ ] **Plan ticks appear in the project mid-run**
+- [x] **Plan ticks appear in the project mid-run**
   During an epic run, after a child agent finishes a task in a spec's plan, reading that plan through Spektacular from the project shows the task ticked. The spec has not been merged yet.
-- [ ] **Other artifacts land in the project mid-run**
+- [x] **Other artifacts land in the project mid-run**
   A knowledge entry or design document a child records during an epic run can be read through Spektacular from the project before the spec is merged.
-- [ ] **Changelog records land in the project**
+- [x] **Changelog records land in the project**
   After a spec finishes in an epic run, its changelog record can be listed and read through Spektacular from the project, before and after the merge, and the record is identical either way.
 - [ ] **Isolated copies' Spektacular directory is untouched**
   After an epic run that implements at least two specs, finished or stopped part-way, the Spektacular directory in every spec's isolated copy is byte-for-byte identical to the commit the copy was created from, and has no untracked files.
-- [ ] **Merged branches carry no Spektacular directory changes**
+- [x] **Merged branches carry no Spektacular directory changes**
   After each spec is merged, the merge brings in no changes under the Spektacular directory in any repo.
-- [ ] **Epic children change code only in their copies**
+- [x] **Epic children change code only in their copies**
   When an epic run completes, each spec's code changes appear only on its own branch in its isolated copies, and its artifact changes appear only in the project.
-- [ ] **Parallel specs keep separate progress**
+- [x] **Parallel specs keep separate progress**
   With two independent specs implemented at the same time, the epic status shows each one's own current step, and each spec's working notes contain only that spec's work.
-- [ ] **Implement output names the isolated copies for an epic spec**
+- [x] **Implement output names the isolated copies for an epic spec**
   When the implement workflow runs for a spec that has isolated copies, its instructions name those copies' locations as where the code for each touched repo lives, not the registered locations.
-- [ ] **Implement output is unchanged for a standalone spec**
+- [x] **Implement output is unchanged for a standalone spec**
   When the implement workflow runs for a spec with no isolated copies, its instructions name the registered locations, exactly as before this change.
-- [ ] **Merge refuses Spektacular directory changes**
+- [x] **Merge refuses Spektacular directory changes**
   When a spec's branch contains a commit that changes a file under the Spektacular directory, merging that spec is refused. The refusal names the file, and no repo's main line changes.
-- [ ] **Resume after interruption**
+- [x] **Resume after interruption**
   When an epic run is interrupted while a spec is in progress, repeating "implement this epic" resumes that spec at the step its record in the project shows, in the same isolated copy, without starting it over.
-- [ ] **Docs updated**
+- [x] **Docs updated**
   The public epics page describes isolated copies as holding only code, and says plans and progress can be followed in the project during a run. It no longer says that, inside a spec's isolated copy, repos point to that copy's own checkout.
 
 ## Technical Approach
