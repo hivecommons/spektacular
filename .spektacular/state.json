@@ -1,29 +1,23 @@
 {
-  "kind": "implement",
+  "kind": "spec",
   "current_step": "finished",
   "completed_steps": [
     "new",
-    "read_plan",
-    "analyze",
-    "implement",
-    "test",
-    "verify",
-    "update_plan",
-    "update_changelog",
-    "test_plan",
-    "update_feature_changelog",
-    "reconcile_spec",
+    "interview",
+    "overview",
+    "requirements",
+    "acceptance_criteria",
+    "constraints",
+    "technical_approach",
+    "success_metrics",
+    "non_goals",
+    "verification",
+    "split",
     "finished"
   ],
-  "created_at": "2026-10-04T14:07:47.171696106Z",
-  "updated_at": "2026-10-04T14:40:46.482260937Z",
+  "created_at": "2026-10-06T14:21:26.187056877Z",
+  "updated_at": "2026-10-06T14:43:32.705118808Z",
   "data": {
-    "committed_milestones": [
-      1,
-      2,
-      3,
-      4
-    ],
-    "name": "000063_epic-planning-summary-and-reordering"
+    "name": "000064_epic-worktree-store-isolation"
   }
 }
