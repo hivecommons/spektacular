@@ -838,3 +838,91 @@ func TestTestPlanStepCollectsManualReviews(t *testing.T) {
 	require.Contains(t, out, "For every manual review, write what the reviewer looks at")
 	require.Contains(t, out, "list one procedure per metric and one per review")
 }
+
+// renderStepWithConfig drives a step callback the way renderStep does but
+// with a caller-supplied workflow config, for steps whose rendering depends
+// on runtime-only config such as a spec's worktree code roots.
+func renderStepWithConfig(t *testing.T, cb workflow.StepCallback, cfg workflow.Config) string {
+	t.Helper()
+	data := &testData{values: map[string]any{"name": "test"}}
+	writer := &captureWriter{}
+	st := store.NewFileStore(t.TempDir(), "project")
+	_, err := cb(data, writer, st, cfg)
+	require.NoError(t, err)
+	return writer.result.Instruction
+}
+
+func worktreeCodeRoots() []workflow.CodeRoot {
+	return []workflow.CodeRoot{
+		{Repo: "core", Root: "/work/trees/core-test"},
+		{Repo: "api", Root: "/work/trees/api&co-test"},
+	}
+}
+
+// A spec built in its own worktrees: read_plan names each repo's worktree
+// code root as where its code lives, instead of sending the agent to repo
+// list for it.
+func TestReadPlanNamesWorktreeCodeRoots(t *testing.T) {
+	out := renderStepWithConfig(t, readPlan(), workflow.Config{Command: "spektacular", CodeRoots: worktreeCodeRoots()})
+
+	require.Contains(t, out, "**Where the code lives.** This spec is built in its own worktrees, and each repo's code lives at the `root` listed below.",
+		"read_plan must say the spec's code lives in its worktrees")
+	require.Contains(t, out, "- `core`: `/work/trees/core-test`", "read_plan must list core's worktree root")
+	require.Contains(t, out, "- `api`: `/work/trees/api&co-test`", "read_plan must list api's worktree root unescaped")
+	require.NotContains(t, out, "&amp;", "a worktree root must render unescaped")
+	require.Contains(t, out, "Run every `spektacular` command from the directory you started in, never from inside a worktree",
+		"read_plan must keep spektacular commands out of the worktrees")
+	require.Contains(t, out, "never read or change anything under a worktree's `.spektacular` directory",
+		"read_plan must keep the agent out of a worktree's .spektacular")
+	require.Contains(t, out, "the roots listed above say where", "the drift check must point at the listed roots")
+	require.NotContains(t, out, "Run `spektacular repo list` now if you have not already",
+		"read_plan must not send a worktree spec to repo list for its code roots")
+	require.NotContains(t, out, "{{", "read_plan must leave no unrendered mustache")
+}
+
+// A spec built in its own worktrees: update_feature_changelog lists each
+// repo's worktree code root.
+func TestUpdateFeatureChangelogNamesWorktreeCodeRoots(t *testing.T) {
+	out := renderStepWithConfig(t, updateFeatureChangelog(), workflow.Config{Command: "spektacular", CodeRoots: worktreeCodeRoots()})
+
+	require.Contains(t, out, "This spec was built in its own worktrees, where each repo's code lives at the `root` listed below.",
+		"update_feature_changelog must say the spec's code lives in its worktrees")
+	require.Contains(t, out, "- `core`: `/work/trees/core-test`", "update_feature_changelog must list core's worktree root")
+	require.Contains(t, out, "- `api`: `/work/trees/api&co-test`", "update_feature_changelog must list api's worktree root unescaped")
+	require.NotContains(t, out, "&amp;", "a worktree root must render unescaped")
+	require.NotContains(t, out, "`spektacular repo list` reports the registered repos, with the `root` each one's code lives at.",
+		"update_feature_changelog must not point a worktree spec at repo list for code roots")
+	require.NotContains(t, out, "{{", "update_feature_changelog must leave no unrendered mustache")
+}
+
+// A spec without worktrees renders exactly as before: an empty CodeRoots
+// slice renders identically to none at all, and the original repo list
+// direction is intact with no trace of the worktree variant.
+func TestStepsWithoutWorktreeRootsRenderUnchanged(t *testing.T) {
+	for name, cb := range map[string]workflow.StepCallback{
+		"read_plan":                readPlan(),
+		"update_feature_changelog": updateFeatureChangelog(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			plain := renderStepWithConfig(t, cb, workflow.Config{Command: "spektacular"})
+			empty := renderStepWithConfig(t, cb, workflow.Config{Command: "spektacular", CodeRoots: []workflow.CodeRoot{}})
+			require.Equal(t, plain, empty, "%s must render the same with no code roots as with an empty list", name)
+			require.Equal(t, renderStep(t, cb), plain, "%s must render as the standard helper does", name)
+
+			require.NotContains(t, plain, "built in its own worktrees", "%s must not mention worktrees without code roots", name)
+			require.NotContains(t, plain, "has_worktree_roots", "%s must not leak the section variable", name)
+			require.NotContains(t, plain, "worktree_roots", "%s must not leak the roots variable", name)
+			require.NotContains(t, plain, "{{", "%s must leave no unrendered mustache", name)
+		})
+	}
+
+	readPlanOut := renderStepWithConfig(t, readPlan(), workflow.Config{Command: "spektacular"})
+	require.Contains(t, readPlanOut, "**Where the code lives.** Run `spektacular repo list` now if you have not already: it reports each registered repo and the `root` its code lives at.",
+		"read_plan must keep its original code-location paragraph")
+	require.Contains(t, readPlanOut, "a `<repo-name>: ` prefix says which; `spektacular repo list` says where)",
+		"read_plan's drift check must keep pointing at repo list")
+
+	changelogOut := renderStepWithConfig(t, updateFeatureChangelog(), workflow.Config{Command: "spektacular"})
+	require.Contains(t, changelogOut, "### Step 2: Identify affected repos\n\n`spektacular repo list` reports the registered repos, with the `root` each one's code lives at.",
+		"update_feature_changelog must keep its original repo list sentence directly under its heading")
+}

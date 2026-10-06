@@ -2,7 +2,6 @@ package status
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/hivecommons/spektacular/internal/artifact"
@@ -38,9 +37,6 @@ type RunSource struct {
 	ProjectRoot string
 	// Worktrees lists the project's spec worktrees.
 	Worktrees func() ([]worktree.SpecWorktrees, error)
-	// StoreAt opens the project store of the project rooted at root — a
-	// spec's project worktree.
-	StoreAt func(root string) store.Reader
 	// Touched lists the registered repos a spec's plan touches.
 	Touched func(spec string) []string
 	// Dirty reports whether any registered repo has uncommitted changes.
@@ -338,19 +334,22 @@ func implementPart(opts Options, s SpecStatus, worktrees map[string]worktree.Spe
 	if implDone[s.Name] {
 		return RunPart{State: RunDone}
 	}
+	sw, hasWorktrees := worktrees[s.Name]
 	if wf := implementWorkflow(opts, s.Name); wf != nil {
-		return RunPart{State: RunInProgress, CurrentStep: wf.CurrentStep, Root: opts.Run.ProjectRoot}
-	}
-	if sw, ok := worktrees[s.Name]; ok {
-		wtState := filepath.Join(sw.Project, ".spektacular")
-		if lane, _ := workflow.ReadLane(wtState, "implement", s.Name); lane != nil && lane.InProgress() {
-			return RunPart{State: RunInProgress, CurrentStep: lane.CurrentStep, Root: sw.Project}
+		// The run is always recorded in the project; a spec built in its
+		// own worktrees reports them as where its code is.
+		root := opts.Run.ProjectRoot
+		if hasWorktrees {
+			root = sw.Project
 		}
-		if finishedIn(opts, s.Name, sw.Project) {
+		return RunPart{State: RunInProgress, CurrentStep: wf.CurrentStep, Root: root}
+	}
+	if hasWorktrees {
+		if finishedInProject(opts, s.Name) {
 			return RunPart{State: RunAwaitingMerge, Root: sw.Project}
 		}
-		// A worktree with no live lane and unfinished work: the run was
-		// interrupted, and resumes in the worktree.
+		// A worktree with no live run and unfinished work: the run was
+		// interrupted, and resumes from its record in the project.
 		return RunPart{State: RunInProgress, Root: sw.Project}
 	}
 
@@ -373,19 +372,18 @@ func implementPart(opts Options, s SpecStatus, worktrees map[string]worktree.Spe
 	return RunPart{State: RunReady}
 }
 
-// finishedIn reports whether the spec's implementation is complete inside its
-// project worktree: every task ticked and its changelog record final, read
-// from the worktree's own stores.
-func finishedIn(opts Options, name, root string) bool {
-	if opts.Run.StoreAt == nil {
+// finishedInProject reports whether the spec's implementation is complete,
+// read from the project's own stores, as every implement run records it:
+// every task ticked and its changelog record final. Nothing inside a spec's
+// worktrees is read.
+func finishedInProject(opts Options, name string) bool {
+	if opts.Store == nil {
 		return false
 	}
-	st := opts.Run.StoreAt(root)
 	inner := withoutRun(opts)
-	inner.Store = st
 	inner.State = nil
 	inner.Lane = nil
-	return buildSpec(inner, name, nil, nil).State == StateImplemented && changelogFinal(opts, st, name)
+	return buildSpec(inner, name, nil, nil).State == StateImplemented && changelogFinal(opts, opts.Store, name)
 }
 
 func isOrAre(n int) string {

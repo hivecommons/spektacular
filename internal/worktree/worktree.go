@@ -3,14 +3,15 @@
 //
 // A spec gets one worktree in every repo its plan touches — the project's own
 // repo, plus each registered repo a task names — all on branch spek/<spec>,
-// under <project>/.spektacular/worktrees/<spec>/<repo>. Inside the project
-// worktree a repo overlay maps every touched repo to its worktree, so every
-// repo resolves there and never to the shared checkouts. Merging is all or
-// nothing across repos: a dry run in every repo first, and nothing merged
-// when any would conflict.
+// under <project>/.spektacular/worktrees/<spec>/<repo>. The worktrees hold
+// only code: Spektacular always runs from the main project, and a record
+// beside the worktrees (record.json) maps each repo to its code root inside
+// them, for the implement workflow to name. Merging is all or nothing across
+// repos: a dry run in every repo first, and nothing merged when any would
+// conflict or when the branch changes Spektacular's own files.
 //
 // Locations and branch names are fixed conventions, so `status` can find a
-// spec's worktrees again without any stored record.
+// spec's worktrees again from git alone.
 package worktree
 
 import (
@@ -55,7 +56,7 @@ type RepoWorktree struct {
 type SpecWorktrees struct {
 	Spec string
 	// Project is the project root inside the project repo's worktree: where
-	// the spec's implement lane runs.
+	// the project's own code for the spec is changed.
 	Project string
 	// Repos lists every touched repo's worktree, the project repo first.
 	Repos []RepoWorktree
@@ -290,8 +291,8 @@ func (m Manager) Record(spec string) (Record, bool, error) {
 // Ensure gives spec a worktree in the project's repo and in every repo of
 // touched, returning them; the bool is true when any was created. Existing
 // worktrees are reused, so a resumed run finds its own. It also keeps the
-// worktrees and the overlay out of the project's git, writes the overlay,
-// and writes the spec's worktree record in the main project.
+// worktrees out of the project's git, and writes the spec's worktree record
+// in the main project. Nothing is ever written inside a worktree.
 func (m Manager) Ensure(spec string, touched []string) (SpecWorktrees, bool, error) {
 	cos, err := m.checkouts(touched)
 	if err != nil {
@@ -312,7 +313,6 @@ func (m Manager) Ensure(spec string, touched []string) (SpecWorktrees, bool, err
 	base := filepath.Join(root, ".spektacular", Dir, spec)
 	result := SpecWorktrees{Spec: spec}
 	created := false
-	overlay := repo.Overlay{Spec: spec, Repos: map[string]string{}}
 	record := Record{Spec: spec, Repos: map[string]string{}}
 
 	for i, co := range cos {
@@ -330,23 +330,6 @@ func (m Manager) Ensure(spec string, touched []string) (SpecWorktrees, bool, err
 		if i == 0 {
 			result.Project = filepath.Join(path, projRel)
 		}
-		// Each repo's location, relative to its own checkout, re-rooted in
-		// the worktree.
-		for _, name := range co.repos {
-			loc, ok := m.Repos.LocalRoot(name)
-			if !ok {
-				continue
-			}
-			loc, err = filepath.EvalSymlinks(loc)
-			if err != nil {
-				continue
-			}
-			rel, err := filepath.Rel(co.top, loc)
-			if err != nil || strings.HasPrefix(rel, "..") {
-				continue
-			}
-			overlay.Repos[name] = filepath.Join(path, rel)
-		}
 		// Each repo's code, relative to its own checkout, re-rooted in the
 		// worktree.
 		for _, name := range co.repos {
@@ -360,17 +343,6 @@ func (m Manager) Ensure(spec string, touched []string) (SpecWorktrees, bool, err
 		return SpecWorktrees{}, false, err
 	}
 
-	raw, err := json.MarshalIndent(overlay, "", "  ")
-	if err != nil {
-		return SpecWorktrees{}, false, err
-	}
-	overlayPath := filepath.Join(result.Project, ".spektacular", repo.OverlayFile)
-	if err := os.MkdirAll(filepath.Dir(overlayPath), 0o755); err != nil {
-		return SpecWorktrees{}, false, err
-	}
-	if err := os.WriteFile(overlayPath, append(raw, '\n'), 0o644); err != nil {
-		return SpecWorktrees{}, false, err
-	}
 	return result, created, nil
 }
 
@@ -431,10 +403,9 @@ func (m Manager) ensureOne(top, path, spec string) (bool, error) {
 	return true, nil
 }
 
-// excludeFromProject lists the worktree folder and the overlay in the
-// project repository's info/exclude, so the nested worktrees are never swept
-// into the main copy's commits as embedded repositories, and the overlay is
-// never committed. It is idempotent, and works for projects whose
+// excludeFromProject lists the worktree folder in the project repository's
+// info/exclude, so the nested worktrees, and the spec records beside them,
+// are never swept into the main copy's commits. It is idempotent, and works for projects whose
 // .gitignore predates worktrees without rewriting any tracked file.
 func (m Manager) excludeFromProject() error {
 	top, rel, err := m.projectTop()
@@ -454,7 +425,6 @@ func (m Manager) excludeFromProject() error {
 	}
 	want := []string{
 		prefix + ".spektacular/" + Dir + "/",
-		"/**/.spektacular/" + repo.OverlayFile,
 	}
 	path := filepath.Join(common, "info", "exclude")
 	current, err := os.ReadFile(path)
@@ -675,8 +645,9 @@ func (m Manager) Merge(spec string) (MergeResult, error) {
 	result.Merged = true
 
 	for _, rw := range sw.Repos {
-		// Forced, because the worktree still holds ignored files such as the
-		// overlay; its committed work was checked clean above and is merged.
+		// Forced, because the worktree may still hold ignored files such as
+		// build output; its committed work was checked clean above and is
+		// merged.
 		if _, err := m.git(rw.Top, "worktree", "remove", "--force", rw.Path); err != nil {
 			return result, err
 		}

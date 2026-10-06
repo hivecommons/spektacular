@@ -10,20 +10,18 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/hivecommons/spektacular/internal/epic"
-	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/hivecommons/spektacular/internal/worktree"
 )
 
-// newRunEnv is newEnv with a changelog store and the run view switched on:
-// no worktrees, and each worktree's store opened as a file store at its root.
+// newRunEnv is newEnv with a changelog store and the run view switched on,
+// with no worktrees.
 func newRunEnv(t *testing.T) *env {
 	t.Helper()
 	e := newEnv(t)
 	e.opts.Config.Changelog.Config.Directory = "changelog"
 	e.opts.Run = &RunSource{
 		ProjectRoot: e.root,
-		StoreAt:     func(root string) store.Reader { return store.NewFileStore(root, "project") },
 	}
 	return e
 }
@@ -35,7 +33,7 @@ func (e *env) changelog(name, docStatus string) {
 }
 
 // worktreeOf adds a spec worktree for name to the run source and returns an
-// env rooted at its project directory, for writing the worktree's own store.
+// env rooted at its project directory, for writing files inside it.
 func (e *env) worktreeOf(name string) *env {
 	e.t.Helper()
 	wt := &env{t: e.t, root: e.t.TempDir()}
@@ -160,8 +158,8 @@ func TestRun_ImplementWaitsForAMerge(t *testing.T) {
 	require.Equal(t, RunPart{State: RunBlocked, WaitingOn: []string{"A"}}, specByName(t, r, "B").Run.Implement)
 }
 
-// A live lane, in the project or in the spec's worktree, is in progress at
-// its current step and root.
+// A live lane in the project is in progress at its current step; a spec
+// with worktrees reports its worktree as the root.
 func TestRun_LiveLanesAreInProgress(t *testing.T) {
 	e := newRunEnv(t)
 	e.epic("E", members("A", "B", "C", "D"))
@@ -173,14 +171,15 @@ func TestRun_LiveLanesAreInProgress(t *testing.T) {
 	e.plan("B", "final", false)
 	e.plan("C", "final", false)
 	e.plan("D", "final", false)
+	// C's lane is in the project, though C's code is in its worktree.
 	e.opts.Lane = lanes(map[string]*workflow.State{
 		"plan-A":      {Kind: "plan", CurrentStep: "discovery", Data: map[string]any{"name": "A", "orchestrated": true}},
 		"implement-B": {Kind: "implement", CurrentStep: "analyze", Data: map[string]any{"name": "B", "orchestrated": true}},
+		"implement-C": {Kind: "implement", CurrentStep: "implement_task", Data: map[string]any{"name": "C", "orchestrated": true}},
 	})
 	// D runs in the shared state.json.
 	e.opts.State = &workflow.State{Kind: "implement", CurrentStep: "verify", Data: map[string]any{"name": "D"}}
 	wt := e.worktreeOf("C")
-	wt.implementLane("C", "implement_task")
 
 	r := buildRunReport(t, e, "E")
 	require.Equal(t, RunPart{State: RunInProgress, CurrentStep: "discovery", Root: e.root}, specByName(t, r, "A").Run.Plan)
@@ -193,25 +192,20 @@ func TestRun_LiveLanesAreInProgress(t *testing.T) {
 	require.Equal(t, []string{"A"}, problemByCode(t, r.Epic.Run, ProblemUnplanned).Specs)
 }
 
-// A worktree whose own store shows the work finished is awaiting merge; one
-// with no live lane and unfinished work is an interrupted run, in progress
-// with no step.
+// A spec with worktrees whose project record shows the work finished is
+// awaiting merge; one with no live lane and unfinished work is an
+// interrupted run, in progress with no step. Both report the worktree root.
 func TestRun_FinishedButUnmergedIsAwaitingMerge(t *testing.T) {
 	e := newRunEnv(t)
 	e.epic("E", members("A", "B"))
 	e.spec("A", "E")
 	e.spec("B", "E")
-	e.plan("A", "final", false)
-	e.plan("B", "final", false)
+	e.plan("A", "final", true, true)
+	e.changelog("A", "final")
+	e.plan("B", "final", true, false)
 
 	done := e.worktreeOf("A")
-	done.spec("A", "E")
-	done.plan("A", "final", true, true)
-	done.changelog("A", "final")
-
 	half := e.worktreeOf("B")
-	half.spec("B", "E")
-	half.plan("B", "final", true, false)
 
 	r := buildRunReport(t, e, "E")
 	require.Equal(t, RunPart{State: RunAwaitingMerge, Root: done.root}, specByName(t, r, "A").Run.Implement)
@@ -221,6 +215,44 @@ func TestRun_FinishedButUnmergedIsAwaitingMerge(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, RenderPretty(&buf, r))
 	require.Contains(t, buf.String(), "  implementing: 0 done, 1 in progress, 1 awaiting merge, 0 ready, 0 blocked\n")
+}
+
+// Nothing under a worktree's own .spektacular affects the run view: a stray
+// implement lane there is not a live run, so the spec is an interrupted run
+// with no step.
+func TestRun_WorktreeLaneIsIgnored(t *testing.T) {
+	e := newRunEnv(t)
+	e.epic("E", members("A"))
+	e.spec("A", "E")
+	e.plan("A", "final", false)
+	wt := e.worktreeOf("A")
+	wt.implementLane("A", "implement_task")
+
+	r := buildRunReport(t, e, "E")
+	require.Equal(t, RunPart{State: RunInProgress, Root: wt.root}, specByName(t, r, "A").Run.Implement)
+}
+
+// A ticked plan and final changelog only inside the worktree's own
+// .spektacular do not make the spec awaiting merge: only the project's
+// record counts, and there the work is unfinished.
+func TestRun_WorktreeStoreDoesNotFinishTheSpec(t *testing.T) {
+	e := newRunEnv(t)
+	e.epic("E", members("A"))
+	e.spec("A", "E")
+	e.plan("A", "final", false, false)
+
+	// Seed the finished record both at the worktree's root and under its
+	// .spektacular, wherever a worktree store might be looked for.
+	wt := e.worktreeOf("A")
+	for _, w := range []*env{wt, {t: t, root: filepath.Join(wt.root, ".spektacular")}} {
+		w.spec("A", "E")
+		w.plan("A", "final", true, true)
+		w.changelog("A", "final")
+	}
+
+	r := buildRunReport(t, e, "E")
+	require.Equal(t, RunPart{State: RunInProgress, Root: wt.root}, specByName(t, r, "A").Run.Implement)
+	require.Equal(t, RunCounts{InProgress: 1, Remaining: 1}, r.Epic.Run.Implement)
 }
 
 func problemByCode(t *testing.T, run *EpicRun, code string) Problem {

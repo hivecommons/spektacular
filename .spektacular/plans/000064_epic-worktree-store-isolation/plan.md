@@ -196,7 +196,7 @@ Add a check to `epic merge` that runs for every repo before anything is merged. 
 
 **Validation point**: cmd-level tests with a real worktree fixture show four things. The instruction names the worktree roots. A plan tick written from the main root is readable in the project before merge. The worktree's `.spektacular/` is byte-identical to its base. Commits split between the worktree (code) and the main checkout (that spec's artifacts only). Status tests show `in_progress` and `awaiting_merge` from main-project records. Template-contract tests pass with the new wording, standalone implement renders exactly as before, and the full test suite passes.
 
-#### - [ ] Task: Make the worktree repo view explicit and stop writing into worktrees
+#### - [x] Task: Make the worktree repo view explicit and stop writing into worktrees
 **Id:** 8345c4e2-cf84-4f80-b757-54813e6cc116
 **Repo:** spektacular
 **Depends on:**
@@ -208,11 +208,11 @@ Building the repo set no longer picks up an overlay from the current directory. 
 *Technical detail:* [context.md#task-make-the-worktree-repo-view-explicit-and-stop-writing-into-worktrees](./context.md#task-make-the-worktree-repo-view-explicit-and-stop-writing-into-worktrees)
 
 **Acceptance criteria**:
-- [ ] After `epic worktree`, the Spektacular directory inside every one of the spec's worktrees is identical to its base commit, with no untracked files.
-- [ ] `repo list` run from the main project reports registered locations, even while a spec has worktrees.
-- [ ] The spec-scoped repo view relocates only the repos the spec's record maps.
+- [x] After `epic worktree`, the Spektacular directory inside every one of the spec's worktrees is identical to its base commit, with no untracked files.
+- [x] `repo list` run from the main project reports registered locations, even while a spec has worktrees.
+- [x] The spec-scoped repo view relocates only the repos the spec's record maps.
 
-#### - [ ] Task: Tell the implement workflow where spec code lives
+#### - [x] Task: Tell the implement workflow where spec code lives
 **Id:** dd8d60be-3216-4c99-9fdf-9545084bfd6c
 **Repo:** spektacular
 **Depends on:**
@@ -224,11 +224,11 @@ Building the repo set no longer picks up an overlay from the current directory. 
 *Technical detail:* [context.md#task-tell-the-implement-workflow-where-spec-code-lives](./context.md#task-tell-the-implement-workflow-where-spec-code-lives)
 
 **Acceptance criteria**:
-- [ ] For a spec with worktrees, the first implement instruction names each touched repo's worktree code root as where its code lives.
-- [ ] For a spec without worktrees, every implement instruction is exactly what it was before this change.
-- [ ] `implement new` and `implement goto` still make no git calls and persist no repo roster.
+- [x] For a spec with worktrees, the first implement instruction names each touched repo's worktree code root as where its code lives.
+- [x] For a spec without worktrees, every implement instruction is exactly what it was before this change.
+- [x] `implement new` and `implement goto` still make no git calls and persist no repo roster.
 
-#### - [ ] Task: Split implement auto-commits between worktree code and project artifacts
+#### - [x] Task: Split implement auto-commits between worktree code and project artifacts
 **Id:** 8616db31-f8c5-4488-b51e-0f07b275c83f
 **Repo:** spektacular
 **Depends on:**
@@ -240,12 +240,12 @@ When an implement run's spec has worktrees, auto-commit commits code in the spec
 *Technical detail:* [context.md#task-split-implement-auto-commits-between-worktree-code-and-project-artifacts](./context.md#task-split-implement-auto-commits-between-worktree-code-and-project-artifacts)
 
 **Acceptance criteria**:
-- [ ] Code changed during an epic implement run is committed on the spec's branch in its worktree, never on the main checkout's branch.
-- [ ] The spec's plan ticks and changelog records are committed in the main checkout, and nothing belonging to another spec or to the user is swept into that commit.
-- [ ] Two specs committing at the same time queue on the lock rather than fail.
-- [ ] Implementing a spec without worktrees commits exactly as before.
+- [x] Code changed during an epic implement run is committed on the spec's branch in its worktree, never on the main checkout's branch.
+- [x] The spec's plan ticks and changelog records are committed in the main checkout, and nothing belonging to another spec or to the user is swept into that commit.
+- [x] Two specs committing at the same time queue on the lock rather than fail.
+- [x] Implementing a spec without worktrees commits exactly as before.
 
-#### - [ ] Task: Read epic implement progress from the main project
+#### - [x] Task: Read epic implement progress from the main project
 **Id:** f2f15f68-42a6-4759-bf09-d6d900160fa1
 **Repo:** spektacular
 **Depends on:** none
@@ -256,11 +256,11 @@ When an implement run's spec has worktrees, auto-commit commits code in the spec
 *Technical detail:* [context.md#task-read-epic-implement-progress-from-the-main-project](./context.md#task-read-epic-implement-progress-from-the-main-project)
 
 **Acceptance criteria**:
-- [ ] A spec with worktrees and an in-progress implement lane in the main project is reported `in_progress`, with its current step and its worktree as root.
-- [ ] A spec with worktrees whose plan tasks are all ticked and whose changelog is final in the main project is reported `awaiting_merge`.
-- [ ] Nothing under a worktree's Spektacular directory affects what status reports.
+- [x] A spec with worktrees and an in-progress implement lane in the main project is reported `in_progress`, with its current step and its worktree as root.
+- [x] A spec with worktrees whose plan tasks are all ticked and whose changelog is final in the main project is reported `awaiting_merge`.
+- [x] Nothing under a worktree's Spektacular directory affects what status reports.
 
-#### - [ ] Task: Point epic children at the project root in the skills
+#### - [x] Task: Point epic children at the project root in the skills
 **Id:** 432621d7-62ab-4a6c-997f-b2e4d89cfb2b
 **Repo:** spektacular
 **Depends on:**
@@ -272,11 +272,11 @@ Rewrite the epic implement skill's child prompt so the child runs every Spektacu
 *Technical detail:* [context.md#task-point-epic-children-at-the-project-root-in-the-skills](./context.md#task-point-epic-children-at-the-project-root-in-the-skills)
 
 **Acceptance criteria**:
-- [ ] The epic implement skill tells each child to run Spektacular from the project root, and no longer tells it to work from, or resolve repos inside, a worktree.
-- [ ] The implement skill's orchestrated section no longer mentions worktrees.
-- [ ] The `epic worktree` help text no longer says repos resolve inside the project worktree.
+- [x] The epic implement skill tells each child to run Spektacular from the project root, and no longer tells it to work from, or resolve repos inside, a worktree.
+- [x] The implement skill's orchestrated section no longer mentions worktrees.
+- [x] The `epic worktree` help text no longer says repos resolve inside the project worktree.
 
-#### - [ ] Task: Prove epic spec artifacts stay in the project end to end
+#### - [x] Task: Prove epic spec artifacts stay in the project end to end
 **Id:** 6eb73340-282e-43b2-93e7-6b26e9ba24c7
 **Repo:** spektacular
 **Depends on:**
@@ -295,9 +295,9 @@ Add a cmd-level test that drives one epic spec through worktree creation, an imp
 *Technical detail:* [context.md#task-prove-epic-spec-artifacts-stay-in-the-project-end-to-end](./context.md#task-prove-epic-spec-artifacts-stay-in-the-project-end-to-end)
 
 **Acceptance criteria**:
-- [ ] One test shows a plan tick readable in the main project before merge, and identical after it.
-- [ ] The same test shows every worktree's Spektacular directory byte-identical to its base commit at the end of the run.
-- [ ] The same test shows the merge changes nothing under any Spektacular directory, and needs no manual reconciliation.
+- [x] One test shows a plan tick readable in the main project before merge, and identical after it.
+- [x] The same test shows every worktree's Spektacular directory byte-identical to its base commit at the end of the run.
+- [x] The same test shows the merge changes nothing under any Spektacular directory, and needs no manual reconciliation.
 
 ### Milestone 3: The epic documentation describes the new model
 
@@ -361,3 +361,94 @@ None. Every design question was resolved during planning and recorded in the ass
 - `spektacular: cmd/epic_worktree_test.go`
 
 **Discoveries**: The three-dot diff compares against the merge base. A `.spektacular` change the branch makes and later reverts therefore nets out and does not block the merge.
+
+### 2026-10-06 — Task: Make the worktree repo view explicit and stop writing into worktrees
+
+**What was done**: `repo.New` no longer applies an overlay from the current directory, so every ordinary consumer sees each repo's registered location. A new `repo.NewWithCodeRoots` builds a spec's view of the repos from a worktree record by moving only the mapped repos' code. `LocalSource` and `Resolve().Source` point into the worktree, and each repo's root, `repo.yaml`, knowledge and changelog stay at the registered location. `epic worktree` no longer writes the overlay, and the overlay's file name, type, reader and info/exclude line are gone. Nothing Spektacular does now writes inside a worktree.
+
+**Deviations**: The plan named the constructor `NewWithLocations`, overriding registered locations. It is `NewWithCodeRoots` instead and overrides code sources only, following the code-root record from Task 1. Relocating locations would mean reading `repo.yaml` from inside a worktree's `.spektacular`, which the spec forbids. The `worktree-repos.json` line in the init template `templates/.spektacular/.gitignore` was kept. It is harmless, and removing it would change installed files for existing projects.
+
+**Files changed**:
+- `spektacular: internal/repo/set.go`
+- `spektacular: internal/repo/set_test.go`
+- `spektacular: internal/worktree/worktree.go`
+- `spektacular: internal/worktree/worktree_test.go`
+- `spektacular: cmd/epic_worktree_test.go`
+
+**Discoveries**: Before this change, knowledge sources and repo-routed changelog stores followed the overlay into a worktree when run from inside it. Now they always resolve in the main project, which is what the spec intends.
+
+### 2026-10-06 — Task: Tell the implement workflow where spec code lives
+
+**What was done**: `implement new` and `implement goto` read the spec's worktree record from the main project with a plain file read, then pass each recorded repo's code root, in registry order, to the workflow as the runtime-only `workflow.Config.CodeRoots`. The implement steps receive them as `has_worktree_roots` and `worktree_roots`. The read-plan step's "Where the code lives." block, its drift-check pointer, and the feature-changelog step's repo sentence each render one of two forms. A spec with a record gets its worktree roots, unescaped, plus a direction to run every command from the starting directory and never touch a worktree's `.spektacular`. A spec without one gets today's `repo list` wording.
+
+**Deviations**: None. A standalone `implement new` was also checked byte for byte against a binary built from the previous commit, and its output is identical.
+
+**Files changed**:
+- `spektacular: internal/workflow/workflow.go`
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/implement_test.go`
+- `spektacular: internal/steps/implement/steps.go`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: templates/steps/implement/01-read_plan.md`
+- `spektacular: templates/steps/implement/10-update_feature_changelog.md`
+
+**Discoveries**: Mustache section tags on their own lines are standalone and leave no blank lines behind. The two-form blocks can therefore wrap an existing paragraph without changing a single byte of the standalone rendering.
+
+### 2026-10-06 — Task: Split implement auto-commits between worktree code and project artifacts
+
+**What was done**: When an implement run's spec has a worktree record, auto-commit now runs the new `commitImplementLane` in place of the whole-tree commit. Code is committed in the spec's worktrees on `spek/<spec>`, through the new `autocommit.TargetsWithCodeRoots`, filtered to targets under the spec's worktree folder. In the main checkouts, under the project commit lock, only the spec's own files are committed path-scoped: plan folder, spec, project changelog record, `work/<spec>`, `tmp/<spec>`, workflow state and notes, plus each registered repo's repo-routed changelog record at its registered location, grouped by git top level. Without a record, auto-commit is unchanged.
+
+**Deviations**: Code targets come from the record's code roots (`TargetsWithCodeRoots`) rather than a location-overriding `TargetsWithLocations`, following the Task 1 decision. Each repo's git top is resolved from the repo's root, not from its record's folder. A repo the spec did not change has no record folder, and asking git for the top level of a missing folder fails. The test sub-agent found that bug, and a test now covers it.
+
+**Files changed**:
+- `spektacular: internal/autocommit/targets.go`
+- `spektacular: cmd/autocommit.go`
+- `spektacular: cmd/autocommit_test.go`
+- `spektacular: cmd/epic_worktree_test.go`
+
+**Discoveries**: The worktree code commits happen before the lock is taken. If the main-checkout commit then fails (for example, a lock timeout), the code commits stand while the workflow rolls back a step. A retry is still correct, because the worktrees are clean by then, but the two halves are not atomic.
+
+### 2026-10-06 — Task: Read epic implement progress from the main project
+
+**What was done**: `status` now takes a spec's implement progress only from the main project. A live implement run there, whether a lane or the shared workflow, is reported `in_progress` with its step, and the spec's worktree is named as root whenever it has one. With worktrees and no live run, the spec is reported `awaiting_merge` when its tasks are all ticked and its changelog is final in the main project's stores, and as an interrupted `in_progress` otherwise. The read of a lane inside the worktree and the `RunSource.StoreAt` hook that opened a worktree's store are both removed.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: internal/status/run.go`
+- `spektacular: internal/status/run_test.go`
+- `spektacular: cmd/status.go`
+
+**Discoveries**: The status unit tests replace the project's lanes with a fake (`opts.Lane`). The real reader therefore gets no cmd-level check from this task, but the end-to-end task exercises it with real worktrees.
+
+### 2026-10-06 — Task: Point epic children at the project root in the skills
+
+**What was done**: The epic implement skill now gives each child the project root to run every Spektacular command from, and relies on the implement workflow's own instructions to name the worktree code roots. It no longer sends the child into a worktree, or to `repo list` there. The overview, resume, start and question hand-back wording follow the same change. The implement skill's orchestrated section no longer mentions worktrees ("from the project root you were given"). The `epic worktree` help says the worktrees hold only code, and the `epic merge` help mentions the `.spektacular` refusal. Contract tests pin the new phrases and guard against the old ones.
+
+**Deviations**: The epic skill's uncommitted-work bullet was also corrected. It said a spec whose plan is uncommitted cannot start in its worktree, which is no longer true now that plans are read from the project. The plan did not list that line.
+
+**Files changed**:
+- `spektacular: templates/skills/workflows/spek-implement-epic/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: cmd/epic_worktree.go`
+- `spektacular: templates/implement_epic_skill_test.go`
+- `spektacular: templates/orchestrated_skill_section_test.go`
+- `spektacular: cmd/epic_worktree_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-06 — Task: Prove epic spec artifacts stay in the project end to end
+
+**What was done**: Added `cmd/epic_flow_test.go`, which drives one epic spec end to end from the main root, using real git with a sibling repo. The flow runs `epic worktree`, then an orchestrated `implement new` whose instruction lists both worktree code roots, then code edits in both worktrees. Plan ticks and the changelog are written through the CLI, then implement walks to `finished` with auto-commit on, then `status` reports `awaiting_merge` with the worktree as root, then `epic merge`. The test asserts three things:
+- the ticks are readable in the project before the merge, and the plan, changelog and spec are byte-identical after it;
+- every worktree's `.spektacular` matches its base commit, with nothing untracked or ignored;
+- each repo's merge commit changes only the code file, and both main checkouts are clean.
+
+A second test hits the `.spektacular` merge guard partway through the same flow.
+
+**Deviations**: The fixture uses `spec.id_method: external`, because `plan file write` and `changelog file write` refuse an unprefixed spec name under the default id method. Repo-level changelog records were not written in this flow; Task 5's tests cover them.
+
+**Files changed**:
+- `spektacular: cmd/epic_flow_test.go`
+
+**Discoveries**: None.

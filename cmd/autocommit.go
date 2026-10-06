@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hivecommons/spektacular/internal/artifact"
+	"github.com/hivecommons/spektacular/internal/repo"
+	"github.com/hivecommons/spektacular/internal/worktree"
 	"os"
 	"path/filepath"
 	"sort"
@@ -198,6 +201,32 @@ func gotoWithAutoCommit(
 		return nil
 	}
 
+	// An implement run on a spec built in its own worktrees commits the
+	// code there, on the spec's branch, and only the spec's own files in the
+	// project, beside whatever other specs and the user have in progress.
+	if kind == "implement" {
+		rec, ok, err := worktree.ReadRecord(root, specName)
+		if err != nil {
+			restore()
+			return output.NewError("auto_commit_failed", err.Error()).
+				WithNextAction(commitRetryAction(cfg.Command, kind, stepVal, specName))
+		}
+		if ok {
+			if err := commitImplementLane(cfg, root, statePath, specName, rec, message); err != nil {
+				restore()
+				er := output.NewError("auto_commit_failed", err.Error()).
+					WithNextAction(commitRetryAction(cfg.Command, kind, stepVal, specName))
+				var commitErr *autocommit.CommitError
+				if errors.As(err, &commitErr) {
+					er = er.WithResource(strings.Join(commitErr.Target.Repos, ", "))
+				}
+				return er
+			}
+			flushBuffer(cmd, &buf)
+			return nil
+		}
+	}
+
 	targets, err := autocommit.Targets(cfg, root, autoCommitGit)
 	if err != nil {
 		restore()
@@ -266,6 +295,118 @@ func commitPlanLane(cfg config.Config, root, statePath, name, message string) er
 		laneNotesFor(statePath),
 	}
 	return autoCommitGit.CommitPaths(top, paths, message)
+}
+
+// commitImplementLane commits an implement run on a spec built in its own
+// worktrees, split by where each change belongs. The code is committed in
+// the spec's worktrees, on its branch. In the main checkouts only the spec's
+// own files are committed: its plan documents, spec, changelog records
+// (the project's and each registered repo's), its scratch and working
+// folders, and the workflow's state and notes. Everything else changed
+// there, by another spec or by the user, stays uncommitted. The main-checkout
+// commits are taken under the project commit lock, so specs finishing
+// together queue rather than contend for git's index.
+func commitImplementLane(cfg config.Config, root, statePath, name string, rec worktree.Record, message string) error {
+	base, err := filepath.EvalSymlinks(filepath.Join(root, ".spektacular", worktree.Dir, name))
+	if err != nil {
+		return err
+	}
+	targets, err := autocommit.TargetsWithCodeRoots(cfg, root, autoCommitGit, rec.Repos)
+	if err != nil {
+		return err
+	}
+	var code []autocommit.Target
+	for _, t := range targets {
+		if strings.HasPrefix(t.Dir, base+string(filepath.Separator)) {
+			code = append(code, t)
+		}
+	}
+	if _, err := autocommit.CommitDirty(code, message, autoCommitGit); err != nil {
+		return err
+	}
+
+	release, err := autocommit.AcquireLock(filepath.Join(root, ".spektacular"))
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	paths := []string{
+		filepath.Join(root, filepath.Dir(implement.PlanFilePath(cfg.Plan.Config.Directory, name))),
+		filepath.Join(root, artifact.Address{Kind: artifact.KindSpec, Feature: name}.StorePath(cfg.Spec.Config.Directory)),
+		filepath.Join(root, artifact.Address{Kind: artifact.KindChangelog, Feature: name}.StorePath(cfg.Changelog.Config.Directory)),
+		filepath.Join(root, ".spektacular", "work", name),
+		filepath.Join(root, ".spektacular", "tmp", name),
+		statePath,
+		laneNotesFor(statePath),
+	}
+	byTop := map[string][]string{}
+	var tops []string
+	add := func(top string, p ...string) {
+		if _, seen := byTop[top]; !seen {
+			tops = append(tops, top)
+		}
+		byTop[top] = append(byTop[top], p...)
+	}
+	projTop, ok, err := autoCommitGit.TopLevel(root)
+	if err != nil {
+		return err
+	}
+	if ok {
+		add(projTop, paths...)
+	}
+	for _, rc := range repoChangelogPaths(cfg, root, name) {
+		top, ok, err := autoCommitGit.TopLevel(rc.repoRoot)
+		if err != nil {
+			return err
+		}
+		if ok {
+			add(top, rc.path)
+		}
+	}
+	for _, top := range tops {
+		if err := autoCommitGit.CommitPaths(top, byTop[top], message); err != nil {
+			return &autocommit.CommitError{Target: autocommit.Target{Dir: top}, Cause: err}
+		}
+	}
+	return nil
+}
+
+// repoChangelog is where one registered repo keeps a spec's repo-routed
+// changelog record: the repo's root, which is on disk, and the record's
+// path under it, which need not be yet.
+type repoChangelog struct {
+	repoRoot string
+	path     string
+}
+
+// repoChangelogPaths lists where each registered repo keeps the spec's
+// repo-routed changelog record, at the repo's registered location — never
+// inside a worktree. A repo that is not on disk, or whose footprint cannot be
+// read, has nothing to commit and is skipped; a repo the spec did not change
+// has no record, which CommitPaths skips.
+func repoChangelogPaths(cfg config.Config, root, name string) []repoChangelog {
+	set, err := repo.New(cfg, root, nil)
+	if err != nil {
+		return nil
+	}
+	var out []repoChangelog
+	for _, e := range set.Entries() {
+		repoRoot, ok := set.LocalRoot(e.Name)
+		if !ok {
+			continue
+		}
+		rc, err := config.RepoConfigFromYAMLFile(filepath.Join(repoRoot, config.RepoConfigFileName))
+		if err != nil {
+			continue
+		}
+		dir := filepath.Join(rc.Changelog.Config.Directory, cfg.Name)
+		out = append(out, repoChangelog{
+			repoRoot: repoRoot,
+			path:     filepath.Join(repoRoot, artifact.Address{Kind: artifact.KindChangelog, Feature: name}.StorePath(dir)),
+		})
+	}
+	return out
 }
 
 // startGate is the shared uncommitted-changes check the three `new` commands

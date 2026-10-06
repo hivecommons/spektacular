@@ -61,7 +61,7 @@ func writeStep(stepName, nextStep, templatePath string, data workflow.Data, out 
 			NextStep:     nextStep,
 			TemplatePath: templatePath,
 			Strategy:     strategy{planDir: cfg.PlanDir},
-			Extra:        extra,
+			Extra:        withCodeRoots(cfg, extra),
 		},
 		data, out, st, cfg,
 		buildResult,
@@ -334,5 +334,27 @@ func withDependencyOverride(data workflow.Data, extra map[string]any) map[string
 	}
 	out["has_dependency_override"] = true
 	out["dependency_override"] = deps
+	return out
+}
+
+// withCodeRoots adds the spec's worktree code roots to a step's template
+// variables, as "worktree_roots" (each entry's repo and root) and
+// "has_worktree_roots", when the spec is built in its own worktrees. extra
+// is returned unchanged otherwise, so a spec without worktrees renders
+// exactly as before.
+func withCodeRoots(cfg workflow.Config, extra map[string]any) map[string]any {
+	if len(cfg.CodeRoots) == 0 {
+		return extra
+	}
+	roots := make([]map[string]any, 0, len(cfg.CodeRoots))
+	for _, r := range cfg.CodeRoots {
+		roots = append(roots, map[string]any{"repo": r.Repo, "root": r.Root})
+	}
+	out := make(map[string]any, len(extra)+2)
+	for k, v := range extra {
+		out[k] = v
+	}
+	out["has_worktree_roots"] = true
+	out["worktree_roots"] = roots
 	return out
 }

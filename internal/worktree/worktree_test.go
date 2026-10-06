@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hivecommons/spektacular/internal/autocommit"
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/repo"
@@ -26,9 +25,9 @@ import (
 //	<base>/website   the sibling repo, registered as "docs"
 //
 // The sibling's folder name deliberately differs from its registry name, so
-// that its location, resolved relative to a project worktree without the
-// overlay, would land on a folder that does not exist rather than
-// coincidentally on the spec's docs worktree.
+// that its location, resolved relative to a project worktree, would land on a
+// folder that does not exist rather than coincidentally on the spec's docs
+// worktree.
 
 const testSpec = "alpha"
 
@@ -287,62 +286,59 @@ func TestEnsure_TouchedRepoNotOnDiskIsRefused(t *testing.T) {
 	require.Contains(t, er.Message, `"gone"`)
 }
 
-// Criterion 2: the overlay maps every touched repo into the spec's worktrees,
-// and every reader built on the registry follows it from inside the project
-// worktree — code roots, knowledge and changelog roots, and commit targets.
+// Criterion 2: the record maps every touched repo's code into the spec's
+// worktrees, and the spec-scoped view built from it relocates only that code
+// — each repo's root stays at its registered location. Nothing is written
+// inside any worktree's .spektacular.
 func TestEnsure_ReposResolveIntoTheSpecWorktrees(t *testing.T) {
 	f := newFixture(t)
-	sw, _, err := f.manager(t).Ensure(testSpec, []string{"testproj", "docs"})
+	_, _, err := f.manager(t).Ensure(testSpec, []string{"testproj", "docs"})
 	require.NoError(t, err)
 	projWT, docsWT := f.wt("alpha", "testproj"), f.wt("alpha", "docs")
 
-	var overlay repo.Overlay
-	require.NoError(t, json.Unmarshal([]byte(readFile(t, filepath.Join(projWT, ".spektacular", repo.OverlayFile))), &overlay))
-	require.Equal(t, repo.Overlay{Spec: "alpha", Repos: map[string]string{
-		"testproj": filepath.Join(projWT, ".spektacular"),
-		"docs":     filepath.Join(docsWT, ".spektacular"),
-	}}, overlay)
+	record, ok, err := ReadRecord(f.proj, testSpec)
+	require.NoError(t, err)
+	require.True(t, ok)
 
-	cfg := loadConfig(t, sw.Project)
-	set, err := repo.New(cfg, sw.Project, nil)
+	cfg := loadConfig(t, f.proj)
+	set, err := repo.NewWithCodeRoots(cfg, f.proj, nil, record.Repos)
 	require.NoError(t, err)
 
-	root, ok := set.LocalRoot("testproj")
-	require.True(t, ok)
-	require.Equal(t, filepath.Join(projWT, ".spektacular"), root)
 	src, ok := set.LocalSource("testproj")
 	require.True(t, ok)
 	require.Equal(t, projWT, src)
-
-	root, ok = set.LocalRoot("docs")
+	root, ok := set.LocalRoot("testproj")
 	require.True(t, ok)
-	require.Equal(t, filepath.Join(docsWT, ".spektacular"), root)
+	require.Equal(t, filepath.Join(f.proj, ".spektacular"), root)
+
 	src, ok = set.LocalSource("docs")
 	require.True(t, ok)
 	require.Equal(t, docsWT, src)
+	root, ok = set.LocalRoot("docs")
+	require.True(t, ok)
+	require.Equal(t, filepath.Join(f.site, ".spektacular"), root)
 
-	// Resolve is what the changelog and knowledge stores are rooted at.
 	r, err := set.Resolve("docs")
 	require.NoError(t, err)
-	require.Equal(t, filepath.Join(docsWT, ".spektacular"), r.Root)
+	require.Equal(t, filepath.Join(f.site, ".spektacular"), r.Root)
 	require.Equal(t, docsWT, r.Source)
 
-	targets, err := autocommit.Targets(cfg, sw.Project, autocommit.NewGit())
-	require.NoError(t, err)
-	require.Equal(t, []autocommit.Target{
-		{Repos: []string{"testproj"}, Dir: projWT},
-		{Repos: []string{"docs"}, Dir: docsWT},
-	}, targets)
-
-	// From the main checkout, nothing changed.
-	mainSet, err := repo.New(loadConfig(t, f.proj), f.proj, nil)
+	// Without the record, nothing changed.
+	mainSet, err := repo.New(cfg, f.proj, nil)
 	require.NoError(t, err)
 	src, ok = mainSet.LocalSource("docs")
 	require.True(t, ok)
 	require.Equal(t, f.site, src)
+
+	// No overlay, and nothing else untracked or ignored, lands in either
+	// worktree's .spektacular.
+	for _, wt := range []string{projWT, docsWT} {
+		require.NoFileExists(t, filepath.Join(wt, ".spektacular", "worktree-repos.json"))
+		require.Empty(t, gittest.RunGit(t, wt, "status", "--porcelain", "--ignored", "--", ".spektacular"), wt)
+	}
 }
 
-// Criterion 3: the worktrees and the overlay never reach the main copy's
+// Criterion 3: the worktrees and the record never reach the main copy's
 // commits, and the exclude lines are written once.
 func TestEnsure_WorktreesStayOutOfTheMainCopy(t *testing.T) {
 	f := newFixture(t)
@@ -358,19 +354,18 @@ func TestEnsure_WorktreesStayOutOfTheMainCopy(t *testing.T) {
 	require.FileExists(t, filepath.Join(f.proj, ".spektacular", "worktrees", "alpha", "record.json"))
 	require.FileExists(t, filepath.Join(f.proj, ".spektacular", "worktrees", "beta", "record.json"))
 	require.Empty(t, gittest.RunGit(t, f.proj, "status", "--porcelain", "--untracked-files=all"))
-	// The overlay inside the project worktree is ignored there too.
+	// The project worktree is clean too.
 	require.Empty(t, gittest.RunGit(t, f.wt("alpha", "testproj"), "status", "--porcelain", "--untracked-files=all"))
 
 	gittest.RunGit(t, f.proj, "add", "-A")
 	staged := gittest.RunGit(t, f.proj, "ls-files", "-s")
 	require.NotContains(t, staged, "160000", "a worktree was staged as an embedded repository")
 	require.NotContains(t, staged, ".spektacular/worktrees")
-	require.NotContains(t, staged, repo.OverlayFile)
 	require.NotContains(t, staged, "record.json")
 
 	exclude := readFile(t, filepath.Join(f.proj, ".git", "info", "exclude"))
 	require.Equal(t, 1, strings.Count(exclude, "/.spektacular/worktrees/\n"), exclude)
-	require.Equal(t, 1, strings.Count(exclude, "/**/.spektacular/worktree-repos.json\n"), exclude)
+	require.NotContains(t, exclude, "worktree-repos.json")
 	require.Equal(t, 1, strings.Count(exclude, "# Spektacular epic worktrees\n"), exclude)
 }
 

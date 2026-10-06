@@ -354,3 +354,84 @@ func TestImplementNewAndGoto_PersistNoRosterAndRunNoGit(t *testing.T) {
 	require.NoError(t, rootCmd.Execute())
 	assertNoRoster("implement goto")
 }
+
+// A spec built in its own worktrees has a worktree record in the project.
+// implement new and implement goto read it as a plain file: they still run no
+// git and persist no repo roster, while the rendered instructions name each
+// recorded repo's worktree code root as where its code lives.
+func TestImplementNewAndGoto_WorktreeRecordNamesCodeRootsWithoutGit(t *testing.T) {
+	resetRootCmd(t)
+	dir := t.TempDir()
+	t.Chdir(dir)
+	dataDir := filepath.Join(dir, ".spektacular")
+	writeSpecCommandConfig(t, dir,
+		"repos:\n"+
+			"  - name: core\n"+
+			"    location: .\n"+
+			"  - name: api\n"+
+			"    location: ../repos/api/.spektacular\n")
+	writeFixturePlan(t, dataDir, "fixture")
+
+	coreCfg := config.NewDefaultRepoConfig()
+	coreCfg.Source = config.DefaultRepoSource
+	require.NoError(t, coreCfg.ToYAMLFile(
+		filepath.Join(dataDir, config.RepoConfigFileName)))
+
+	apiLocation := filepath.Join(dir, "repos", "api")
+	require.NoError(t, os.MkdirAll(filepath.Join(apiLocation, ".spektacular"), 0o755))
+	apiCfg := config.NewDefaultRepoConfig()
+	apiCfg.Source = config.GitSource("https://example.com/api.git")
+	require.NoError(t, apiCfg.ToYAMLFile(
+		filepath.Join(apiLocation, ".spektacular", config.RepoConfigFileName)))
+
+	// The spec's worktree record, written by hand as the worktree manager
+	// would leave it: each registered repo mapped to an absolute code root.
+	wtBase := t.TempDir()
+	coreRoot := filepath.Join(wtBase, "core-fixture")
+	apiRoot := filepath.Join(wtBase, "api-fixture")
+	recordDir := filepath.Join(dataDir, "worktrees", "fixture")
+	require.NoError(t, os.MkdirAll(recordDir, 0o755))
+	record := `{"spec":"fixture","repos":{"core":"` + coreRoot + `","api":"` + apiRoot + `"}}`
+	require.NoError(t, os.WriteFile(filepath.Join(recordDir, "record.json"), []byte(record), 0o644))
+
+	git := &stubGit{}
+	swapRepoGit(t, git)
+
+	assertNoGitNoRoster := func(after string) {
+		t.Helper()
+		raw, err := os.ReadFile(filepath.Join(dataDir, "state.json"))
+		require.NoError(t, err, "state.json must exist after %s", after)
+		var st workflow.State
+		require.NoError(t, json.Unmarshal(raw, &st))
+		_, ok := st.Data["repos"]
+		require.False(t, ok, "state.json must carry no repo roster after %s", after)
+		_, ok = st.Data["worktree_roots"]
+		require.False(t, ok, "state.json must not persist the worktree code roots after %s", after)
+		require.Empty(t, git.clones, "%s must not clone", after)
+		require.Zero(t, git.calls, "%s must not run git at all", after)
+	}
+
+	assertNamesRoots := func(out, after string) {
+		t.Helper()
+		require.Contains(t, out, "built in its own worktrees",
+			"%s must say the spec is built in its own worktrees", after)
+		require.Contains(t, out, "- `core`: `"+coreRoot+"`",
+			"%s must name core's worktree code root", after)
+		require.Contains(t, out, "- `api`: `"+apiRoot+"`",
+			"%s must name api's worktree code root", after)
+	}
+
+	stdout, _ := setupImplementCmd(t)
+	rootCmd.SetArgs([]string{"implement", "new", "--data", `{"name":"fixture"}`})
+	require.NoError(t, rootCmd.Execute())
+	assertNoGitNoRoster("implement new")
+	assertNamesRoots(stdout.String(), "implement new")
+	require.NotContains(t, stdout.String(), "Run `spektacular repo list` now if you have not already",
+		"implement new must not send a worktree spec to repo list for its code roots")
+
+	stdout, _ = setupImplementCmd(t)
+	rootCmd.SetArgs([]string{"implement", "goto", "--data", `{"step":"read_plan"}`})
+	require.NoError(t, rootCmd.Execute())
+	assertNoGitNoRoster("implement goto read_plan")
+	assertNamesRoots(stdout.String(), "implement goto read_plan")
+}

@@ -25,9 +25,17 @@ type Target struct {
 // disk yet, a directory that has since gone missing, and a directory that
 // is not inside a git work tree.
 func Targets(cfg config.Config, projectRoot string, git Git) ([]Target, error) {
+	return TargetsWithCodeRoots(cfg, projectRoot, git, nil)
+}
+
+// TargetsWithCodeRoots resolves targets as Targets does, with the code of
+// each repo named in codeRoots taken from the given directory instead: a
+// spec's view of the repos while it is built in its own worktrees (see
+// repo.NewWithCodeRoots).
+func TargetsWithCodeRoots(cfg config.Config, projectRoot string, git Git, codeRoots map[string]string) ([]Target, error) {
 	// A nil GitRunner is safe here: LocalSource resolves from the registry,
 	// repo.yaml and the filesystem, and never invokes git.
-	set, err := repo.New(cfg, projectRoot, nil)
+	set, err := repo.NewWithCodeRoots(cfg, projectRoot, nil, codeRoots)
 	if err != nil {
 		return nil, err
 	}

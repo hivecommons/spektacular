@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -59,71 +58,45 @@ type Set struct {
 	projectRoot string
 	git         GitRunner
 	entries     []config.RepoEntry // defaults applied, registry order
+	// codeRoots overrides where a repo's code is, by name; see
+	// NewWithCodeRoots.
+	codeRoots map[string]string
 }
 
 // New builds the registry from the project configuration. Unknown providers
 // fail fast here, before any entry is resolved, mirroring knowledge.NewSet's
-// contract.
-//
-// Inside a spec's worktree, a repo overlay (OverlayFile) maps each repo the
-// spec touches to its location inside that spec's own worktree. New applies
-// it here, the one place registered locations are resolved, so every reader
-// built on the Set — repo roots and sources, each repo's knowledge and
-// changelog stores, and the auto-commit targets — follows the spec's
-// worktrees and never the shared checkouts. Unmapped repos, and a project
-// with no overlay, resolve exactly as configured.
+// contract. Every repo resolves to its registered location, whatever
+// directory the caller runs from.
 func New(cfg config.Config, projectRoot string, git GitRunner) (*Set, error) {
-	overlay, err := readOverlay(projectRoot)
-	if err != nil {
-		return nil, err
-	}
+	return NewWithCodeRoots(cfg, projectRoot, git, nil)
+}
+
+// NewWithCodeRoots builds the registry as New does, then points the code of
+// each repo named in codeRoots at the given directory: a spec's view of the
+// repos while it is built in its own worktrees. Only the code moves — each
+// repo's root, and so its repo.yaml, knowledge and changelog, stays at its
+// registered location — so nothing inside a worktree's .spektacular is ever
+// read. Unmapped repos, and relative directories, are left as registered.
+func NewWithCodeRoots(cfg config.Config, projectRoot string, git GitRunner, codeRoots map[string]string) (*Set, error) {
 	entries := make([]config.RepoEntry, 0, len(cfg.Repos))
 	for _, e := range cfg.Repos {
 		e = e.WithDefaults()
 		if e.Provider != config.ProviderGit {
 			return nil, fmt.Errorf("repo %q: provider %q is not supported (only %q)", e.Name, e.Provider, config.ProviderGit)
 		}
-		if loc, ok := overlay[e.Name]; ok {
-			e.Location = loc
-		}
 		entries = append(entries, e)
 	}
-	return &Set{projectRoot: projectRoot, git: git, entries: entries}, nil
-}
-
-// OverlayFile is the repo overlay's name inside a project's .spektacular
-// directory. `epic worktree` writes it into a spec's project worktree, and
-// keeps it out of git.
-const OverlayFile = "worktree-repos.json"
-
-// Overlay is the repo overlay: the spec whose worktrees it describes, and
-// each touched repo's absolute location inside its worktree.
-type Overlay struct {
-	Spec  string            `json:"spec"`
-	Repos map[string]string `json:"repos"`
-}
-
-// readOverlay loads the repo overlay under projectRoot; no file is no
-// overlay. Only absolute locations are honoured.
-func readOverlay(projectRoot string) (map[string]string, error) {
-	raw, err := os.ReadFile(filepath.Join(projectRoot, ".spektacular", OverlayFile))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
+	var code map[string]string
+	for name, dir := range codeRoots {
+		if !filepath.IsAbs(dir) {
+			continue
 		}
-		return nil, err
-	}
-	var o Overlay
-	if err := json.Unmarshal(raw, &o); err != nil {
-		return nil, fmt.Errorf("reading the repo overlay %s: %w", OverlayFile, err)
-	}
-	repos := map[string]string{}
-	for name, loc := range o.Repos {
-		if filepath.IsAbs(loc) {
-			repos[name] = filepath.Clean(loc)
+		if code == nil {
+			code = map[string]string{}
 		}
+		code[name] = filepath.Clean(dir)
 	}
-	return repos, nil
+	return &Set{projectRoot: projectRoot, git: git, entries: entries, codeRoots: code}, nil
 }
 
 // Entries returns the registry entries in configuration order, with
@@ -182,6 +155,12 @@ func (s *Set) LocalRoot(name string) (string, bool) {
 // repo.yaml falls back to the root, mirroring DescriptiveMetadata's
 // tolerance.
 func (s *Set) LocalSource(name string) (string, bool) {
+	if dir, ok := s.codeRoots[name]; ok {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir, true
+		}
+		return "", false
+	}
 	root, ok := s.LocalRoot(name)
 	if !ok {
 		return "", false
@@ -303,6 +282,10 @@ func (s *Set) resolve(e config.RepoEntry) (ResolvedRepo, error) {
 	cfg, err := s.loadFootprint(r)
 	if err != nil {
 		return r, err
+	}
+	if dir, ok := s.codeRoots[e.Name]; ok {
+		r.Source = dir
+		return r, nil
 	}
 
 	kind, v, err := cfg.ParseSource(r.Root)

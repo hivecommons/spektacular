@@ -64,7 +64,7 @@ var statusRunPartSchema = &schemaProp{Type: "object", Properties: map[string]*sc
 	"state":        {Type: "string", Enum: []string{"done", "in_progress", "awaiting_merge", "ready", "blocked"}, Description: "awaiting_merge is for implementing only"},
 	"waiting_on":   {Type: "array", Items: &schemaProp{Type: "string"}, Description: "blocked only: the specs it waits on"},
 	"current_step": {Type: "string", Description: "in_progress only: the live workflow's step"},
-	"root":         {Type: "string", Description: "where the work runs: the project, or the spec's project worktree"},
+	"root":         {Type: "string", Description: "where the work runs: the project, or the spec's worktree for its code"},
 	"repos":        {Type: "array", Items: &schemaProp{Type: "string"}, Description: "implementing only: the registered repos the plan touches"},
 }}
 
@@ -208,16 +208,13 @@ func init() {
 }
 
 // statusRunSource is what the run view reads beyond the project store: the
-// spec worktrees, each worktree's own store, the repos each plan touches,
+// spec worktrees, the repos each plan touches,
 // and whether any registered repo has uncommitted changes. status reports
 // and never refuses, so anything it cannot read — no git, an unregistered
 // repo — is simply absent from the view.
 func statusRunSource(cfg config.Config, root string, st store.Reader) *status.RunSource {
 	src := &status.RunSource{
 		ProjectRoot: root,
-		StoreAt: func(r string) store.Reader {
-			return store.NewSourceStore(r, "project")
-		},
 		Touched: func(spec string) []string {
 			names, err := worktree.TouchedRepos(cfg, st, spec)
 			if err != nil {

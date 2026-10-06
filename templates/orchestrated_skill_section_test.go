@@ -40,8 +40,8 @@ var orchestratedSkillCases = []orchestratedSkillCase{
 	{
 		path: "skills/workflows/spek-implement/SKILL.md",
 		phrases: []string{
-			"The `spek-implement-epic` skill implements a whole epic by starting one agent per spec, each running this skill in the spec's own worktree.",
-			"`{{command}} implement new --data '{\"name\":\"<spec_name>\",\"orchestrated\":true}'`, from the worktree you were given.",
+			"The `spek-implement-epic` skill implements a whole epic by starting one agent per spec, each running this skill for one spec.",
+			"`{{command}} implement new --data '{\"name\":\"<spec_name>\",\"orchestrated\":true}'`, from the project root you were given.",
 			"skips the uncommitted-changes question",
 			"Running the same command again resumes the lane.",
 			"Every `goto` carries `\"name\":\"<spec_name>\"`",
@@ -74,6 +74,18 @@ func TestPerSpecSkillsExplainOrchestratedStart(t *testing.T) {
 				"%s's orchestrated section lost a load-bearing phrase", c.path)
 		}
 	}
+}
+
+// An orchestrated implement run starts from the project root it was given, not
+// from a worktree: the implement workflow itself names where each repo's code
+// lives, so the skill's orchestrated section must not mention worktrees at all.
+func TestImplementOrchestratedSectionDoesNotMentionWorktrees(t *testing.T) {
+	const path = "skills/workflows/spek-implement/SKILL.md"
+	_, section := splitOrchestratedSection(t, path)
+	require.Containsf(t, section, "from the project root you were given",
+		"%s's orchestrated section must start the run from the project root", path)
+	require.NotContainsf(t, strings.ToLower(section), "worktree",
+		"%s's orchestrated section must not tell the child to work in a worktree", path)
 }
 
 // The orchestrated section is the skill's final section and the only place the

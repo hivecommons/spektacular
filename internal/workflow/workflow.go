@@ -33,6 +33,17 @@ type Config struct {
 	// "workflow" or "full"). Like the rest of this config it is not
 	// persisted: it is read from the project settings on every invocation.
 	AutoCommit string
+	// CodeRoots lists where each repo's code lives when the workflow's spec
+	// is built in its own worktrees, read from the spec's worktree record
+	// on every invocation. Empty otherwise. Like the rest of this config it
+	// is never persisted.
+	CodeRoots []CodeRoot
+}
+
+// CodeRoot is one repo's code root inside a spec's worktrees.
+type CodeRoot struct {
+	Repo string
+	Root string
 }
 
 // ResultWriter is implemented by the output writer and passed into step callbacks.

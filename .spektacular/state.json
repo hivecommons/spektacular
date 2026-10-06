@@ -12,10 +12,11 @@
     "update_changelog"
   ],
   "created_at": "2026-10-06T19:57:58.292935014Z",
-  "updated_at": "2026-10-06T20:04:01.283800956Z",
+  "updated_at": "2026-10-06T20:21:54.997420668Z",
   "data": {
     "committed_milestones": [
-      1
+      1,
+      2
     ],
     "name": "000064_epic-worktree-store-isolation"
   }

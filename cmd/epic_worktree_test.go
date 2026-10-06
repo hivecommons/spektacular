@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hivecommons/spektacular/internal/config"
@@ -18,9 +19,9 @@ import (
 // itself as "testproj", and a sibling at <base>/website registered as "docs"
 // with a location relative to the project's .spektacular folder — the shape
 // of a project with a separate docs site. The sibling's folder name differs
-// from its registry name on purpose, so a location that missed the overlay
-// would resolve to a folder that does not exist instead of coincidentally to
-// the spec's docs worktree.
+// from its registry name on purpose, so a location resolved from the wrong
+// place would land on a folder that does not exist instead of coincidentally
+// on the spec's docs worktree.
 
 const worktreeTestSpec = "alpha"
 
@@ -85,6 +86,13 @@ func wtCommitAll(t *testing.T, dir, msg string) {
 // the project. withPlan false leaves the spec unplanned.
 func worktreeProject(t *testing.T, withPlan bool) worktreeFixture {
 	t.Helper()
+	return worktreeProjectWith(t, withPlan, "")
+}
+
+// worktreeProjectWith is worktreeProject with extra config.yaml lines (an
+// auto_commit mode, say) placed ahead of the repo registry.
+func worktreeProjectWith(t *testing.T, withPlan bool, extraConfig string) worktreeFixture {
+	t.Helper()
 	gittest.RequireGit(t)
 	pinGitIdentity(t)
 	base := tempWorkTree(t)
@@ -101,7 +109,7 @@ func worktreeProject(t *testing.T, withPlan bool) worktreeFixture {
 
 	require.NoError(t, os.MkdirAll(f.proj, 0o755))
 	gittest.RunGit(t, f.proj, "init", "-q", "-b", "main")
-	writeSpecCommandConfig(t, f.proj, "repos:\n  - name: testproj\n    location: .\n  - name: docs\n    location: ../../website/.spektacular\n")
+	writeSpecCommandConfig(t, f.proj, extraConfig+"repos:\n  - name: testproj\n    location: .\n  - name: docs\n    location: ../../website/.spektacular\n")
 	wtWriteFile(t, f.proj, "main.txt", "main v1\n")
 	wtWriteFile(t, f.proj, ".spektacular/specs/alpha.md", epicTestSpecFixed)
 	if withPlan {
@@ -158,13 +166,25 @@ func TestEpicWorktree_CreatesThenReturnsTheSameWorktrees(t *testing.T) {
 	require.Empty(t, gittest.RunGit(t, f.proj, "status", "--porcelain", "--untracked-files=all"))
 }
 
-// Criterion 2: run from inside the spec's project worktree, `repo list`
-// reports every touched repo's code in the spec's worktrees, and each repo's
-// knowledge store resolves there too.
-func TestEpicWorktree_ReposResolveIntoWorktreesFromInside(t *testing.T) {
+// After `epic worktree`, the .spektacular folder inside every one of the
+// spec's worktrees is identical to its base commit: nothing modified, and no
+// untracked or ignored file written there.
+func TestEpicWorktree_LeavesEveryWorktreesSpektacularDirUntouched(t *testing.T) {
 	f := worktreeProject(t, true)
-	res := runEpicWorktreeCmd(t)
-	t.Chdir(res.Project)
+	runEpicWorktreeCmd(t)
+
+	for _, wt := range []string{f.wt("testproj"), f.wt("docs")} {
+		require.Empty(t, gittest.RunGit(t, wt, "status", "--porcelain", "--ignored", "--", ".spektacular"), wt)
+		require.Empty(t, gittest.RunGit(t, wt, "diff", "HEAD", "--", ".spektacular"), wt)
+		require.NoFileExists(t, filepath.Join(wt, ".spektacular", "worktree-repos.json"))
+	}
+}
+
+// `repo list` run from the main project reports each repo's registered
+// location, even while the spec has worktrees.
+func TestEpicWorktree_RepoListFromMainProjectReportsRegisteredRoots(t *testing.T) {
+	f := worktreeProject(t, true)
+	runEpicWorktreeCmd(t)
 
 	resetRootCmd(t)
 	out, errOut, code := runRootCmd(t, "repo", "list")
@@ -181,18 +201,7 @@ func TestEpicWorktree_ReposResolveIntoWorktreesFromInside(t *testing.T) {
 	for _, r := range listed.Repos {
 		roots[r.Name] = r.Root
 	}
-	require.Equal(t, map[string]string{"testproj": f.wt("testproj"), "docs": f.wt("docs")}, roots)
-
-	cfg, err := loadConfig()
-	require.NoError(t, err)
-	sources, err := aggregateKnowledgeSources(cfg, res.Project)
-	require.NoError(t, err)
-	locations := map[string]string{}
-	for _, s := range sources {
-		locations[s.Name] = s.Config.Location
-	}
-	require.Equal(t, filepath.Join(f.wt("docs"), ".spektacular", "knowledge"), locations["docs"])
-	require.Equal(t, filepath.Join(f.wt("testproj"), ".spektacular", "knowledge"), locations["testproj"])
+	require.Equal(t, map[string]string{"testproj": f.proj, "docs": f.site}, roots)
 }
 
 // Criterion 4, through the command.
@@ -337,4 +346,21 @@ func TestEpicWorktreeSchema_PublishesInputAndOutput(t *testing.T) {
 			require.ElementsMatch(t, outKeys, keys)
 		})
 	}
+}
+
+// The `epic worktree` help says the worktrees hold only code and that
+// Spektacular runs from the project; it no longer says registered repos
+// resolve inside the spec's project worktree.
+func TestEpicWorktreeHelp_SaysWorktreesHoldOnlyCode(t *testing.T) {
+	long := strings.Join(strings.Fields(epicWorktreeCmd.Long), " ")
+	require.Contains(t, long, "The worktrees hold only code",
+		"epic worktree help must say the worktrees hold only code")
+	require.Contains(t, long, "Spektacular itself always runs from the project",
+		"epic worktree help must say Spektacular runs from the project")
+	require.NotContains(t, long, "resolves to the spec's worktrees",
+		"epic worktree help must not say repos resolve inside the project worktree")
+
+	merge := strings.Join(strings.Fields(epicMergeCmd.Long), " ")
+	require.Contains(t, merge, "or if the branch changes anything under a .spektacular directory",
+		"epic merge help must say a branch changing .spektacular is refused")
 }

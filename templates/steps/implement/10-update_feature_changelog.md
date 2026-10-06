@@ -20,7 +20,16 @@ From the spec, take the Overview/Requirements — the "why it matters" framing f
 
 ### Step 2: Identify affected repos
 
+{{^has_worktree_roots}}
 `{{config.command}} repo list` reports the registered repos, with the `root` each one's code lives at.
+{{/has_worktree_roots}}
+{{#has_worktree_roots}}
+This spec was built in its own worktrees, where each repo's code lives at the `root` listed below. `{{config.command}} repo list`, run from the directory you started in, reports every registered repo; record changelog entries through `{{config.command}}` from there, never from inside a worktree.
+
+{{#worktree_roots}}
+- `{{repo}}`: `{{{root}}}`
+{{/worktree_roots}}
+{{/has_worktree_roots}}
 
 
 If a repo you changed is missing from that roster, or you need its materialization state, run `{{config.command}} repo list`.

@@ -76,7 +76,8 @@ func TestImplementEpicSkillRendersLikeAnInstalledSkill(t *testing.T) {
 		"`spekx changelog file`",
 		"`spekx epic list`",
 		"`spekx epic write`",
-		"`spekx repo list`",
+		"the project root to run every `spekx` command from",
+		"it never runs `spekx` from inside a worktree",
 	)
 }
 
@@ -106,6 +107,10 @@ func TestImplementEpicSkillRunsSpecsInWorktreesAndMergesBeforeDependents(t *test
 		"on branch `spek/<spec>`, under `.spektacular/worktrees/<spec>/`",
 		"specs that do not depend on each other are implemented side by side without touching each other's files",
 		"you merge it back into every repo's main line before anything that depends on it starts",
+		"The worktrees hold only code: every child runs `"+installedCommand+"` from the project root",
+		"the implement workflow itself tells it where each repo's code lives in its spec's worktrees",
+		"Specs, plans, changelogs and progress stay in the project",
+		"their progress can be followed in the project while they run",
 		"It never implements the epic itself",
 	)
 
@@ -116,7 +121,7 @@ func TestImplementEpicSkillRunsSpecsInWorktreesAndMergesBeforeDependents(t *test
 		"For each spec that is `awaiting_merge`, merge it now (Step 5).",
 		"For each spec that is `ready`, create its worktrees:",
 		installedCommand+" epic worktree --data '{\"spec\":\"<spec>\"}'",
-		"Then start a child to **start** it in the returned `project` path.",
+		"Then start a child to **start** it.",
 		"specs that are `blocked` wait for the specs in their `waiting_on`, which must be implemented **and merged** first.",
 		"independent specs are implemented in overlapping time",
 		"Start every ready spec; there is no limit on how many run at once.",
@@ -178,7 +183,8 @@ func TestImplementEpicSkillAsksNothingBetweenSpecs(t *testing.T) {
 		"If `epic.run.dirty` is true",
 		"Ask the user once whether to commit it first",
 		"Apart from settling which epic is meant, this is the only start-of-run question.",
-		"If they decline, go ahead, and say that the uncommitted work will not be in any spec's worktree",
+		"If they decline, go ahead, and say that uncommitted code will not be in any spec's worktree.",
+		"Specs, plans and progress are read from the project itself, so they need no commit to be seen.",
 	)
 
 	relay := flat(section(t, skill, "# Step 6: Handling a hand-back"))
@@ -231,13 +237,13 @@ func TestImplementEpicSkillResumesOnARepeatedRequest(t *testing.T) {
 	what := flat(section(t, skill, "# What this skill does"))
 	requirePhrases(t, "What this skill does", what,
 		"repeating the request after an interruption picks up exactly where the epic stands",
-		"implemented specs are skipped, an interrupted spec resumes in its worktree, and a finished one is merged",
+		"implemented specs are skipped, an interrupted spec resumes from its record in the project, with its code in the same worktrees, and a finished one is merged",
 		"When the request is repeated, read them back first",
 	)
 
 	loop := flat(section(t, skill, "# Step 3: The loop"))
 	requirePhrases(t, "The loop", loop,
-		"For each spec that is `in_progress` and has no child running, start a child to **resume** it in its `root`, the spec's project worktree.",
+		"For each spec that is `in_progress` and has no child running, start a child to **resume** it (its `root` is the spec's worktree, where its code lives).",
 		"Specs that are `done` are skipped",
 	)
 
@@ -310,7 +316,9 @@ func TestImplementEpicSkillCarriesNotesStoreAccessProgressAndReport(t *testing.T
 
 	child := flat(section(t, skill, "# Step 4: The child prompt"))
 	requirePhrases(t, "The child prompt", child,
-		"the spec name, and the root to work in: the spec's project worktree.",
+		"the spec name, and the project root to run every `"+installedCommand+"` command from.",
+		"The implement workflow's own instructions name where each repo's code lives in the spec's worktrees;",
+		"it never runs `"+installedCommand+"` from inside a worktree and never touches a worktree's `.spektacular` directory;",
 		"the store-access rule above, word for word;",
 	)
 
@@ -325,4 +333,34 @@ func TestImplementEpicSkillCarriesNotesStoreAccessProgressAndReport(t *testing.T
 		"End every run, finished or stopped",
 		"**Completed in this run:**", "**Skipped:**", "**Still outstanding:**", "**Worktrees left behind:**",
 	)
+}
+
+// Each child runs Spektacular from the project root; the worktrees hold only
+// code. The old model, where a child worked from its spec's project worktree
+// and resolved every repo inside it, must not come back.
+func TestImplementEpicSkillRunsSpektacularFromTheProjectRoot(t *testing.T) {
+	skill := flat(installedImplementEpicSkill(t))
+
+	child := flat(section(t, installedImplementEpicSkill(t), "# Step 4: The child prompt"))
+	requirePhrases(t, "The child prompt", child,
+		"the project root to run every `"+installedCommand+"` command from",
+	)
+
+	handling := flat(section(t, installedImplementEpicSkill(t), "# Step 6: Handling a hand-back"))
+	requirePhrases(t, "Handling a hand-back", handling,
+		"start a fresh child on the same spec with the answer included in its prompt; it resumes from its lane.",
+	)
+
+	for _, old := range []string{
+		"repo list`, run from there",
+		"the root to work in: the spec's project worktree",
+		"resolves to that spec's worktrees",
+		"in the returned `project` path",
+		"repo list",
+		"resumes in its worktree",
+		"in the same worktree.",
+	} {
+		require.NotContainsf(t, skill, old,
+			"the skill must not tell a child to work from, or resolve repos inside, a worktree (found %q)", old)
+	}
 }

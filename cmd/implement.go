@@ -14,6 +14,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/steps/implement"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/worktree"
 	"github.com/spf13/cobra"
 )
 
@@ -170,7 +171,11 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 		clearState(statePath)
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
+	codeRoots, err := codeRootsFor(root, cfg, input.Name)
+	if err != nil {
+		return err
+	}
+	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode(), CodeRoots: codeRoots}
 	steps := implement.Steps()
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, projectStore, out)
@@ -259,16 +264,37 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	wf := workflow.New(implement.Steps(), slot.StatePath, workflow.Config{}, nil, nil)
+	var codeRoots []workflow.CodeRoot
 	if nameVal, ok := wf.GetData("name"); ok {
 		projectStore := store.NewSourceStore(root, "project")
 		if err := refuseStalePlan(cfg, projectStore, fmt.Sprintf("%v", nameVal)); err != nil {
 			return err
 		}
+		if codeRoots, err = codeRootsFor(root, cfg, fmt.Sprintf("%v", nameVal)); err != nil {
+			return err
+		}
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
+	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode(), CodeRoots: codeRoots}
 	return gotoWithAutoCommit(cmd, cfg, root, slot.StatePath, "implement",
 		implement.Steps(), wfCfg, input, stepVal, "no active implement workflow found — run 'implement new' first")
+}
+
+// codeRootsFor reads the spec's worktree record from the project and lists
+// each recorded repo's code root, in registry order. A spec built without
+// worktrees has no record, and so no code roots. It never runs git.
+func codeRootsFor(root string, cfg config.Config, spec string) ([]workflow.CodeRoot, error) {
+	rec, ok, err := worktree.ReadRecord(root, spec)
+	if err != nil || !ok {
+		return nil, err
+	}
+	var roots []workflow.CodeRoot
+	for _, e := range cfg.Repos {
+		if dir, ok := rec.Repos[e.Name]; ok {
+			roots = append(roots, workflow.CodeRoot{Repo: e.Name, Root: dir})
+		}
+	}
+	return roots, nil
 }
 
 func refuseStalePlan(cfg config.Config, st store.Store, planName string) error {
