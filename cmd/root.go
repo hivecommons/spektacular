@@ -16,6 +16,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/migrate"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/sessionlog"
+	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/spf13/cobra"
 )
 
@@ -103,11 +104,13 @@ func runRoot() int {
 	var orig io.Writer
 	var buf *bytes.Buffer
 	var stateBefore *sessionlog.StateSnapshot
+	var snapshotPath string
 
 	if debugEnabled {
 		argv = os.Args[1:]
 		start = time.Now()
-		stateBefore = readStateSnapshot()
+		snapshotPath = snapshotStatePath(argv)
+		stateBefore = readStateSnapshot(snapshotPath)
 		orig = rootCmd.OutOrStdout()
 		buf = &bytes.Buffer{}
 		rootCmd.SetOut(io.MultiWriter(orig, buf))
@@ -122,10 +125,16 @@ func runRoot() int {
 	}
 
 	if debugEnabled {
-		stateAfter := readStateSnapshot()
+		stateAfter := readStateSnapshot(snapshotPath)
 		advanced := stateAdvanced(stateBefore, stateAfter)
 		if dir, pathErr := sessionLogDir(); pathErr == nil {
 			sessionID := sessionlog.SessionID(stateAfter)
+			// A lane's files are removed when it finishes, so its last
+			// command is filed under the lane it drove, not under no
+			// workflow at all.
+			if stateAfter == nil && stateBefore != nil {
+				sessionID = sessionlog.SessionID(stateBefore)
+			}
 			isStart := isWorkflowStart(executedCmd, exitCode)
 			logPath := sessionlog.LogFilePath(dir, cfg.Agent, sessionID, isStart, start)
 			sessionlog.Record(logPath, sessionlog.Event{
@@ -189,17 +198,71 @@ type stateSnapshotFile struct {
 	Data           map[string]any `json:"data"`
 }
 
-// readStateSnapshot reads .spektacular/state.json and returns the small
-// view of it a session record needs, or nil if no workflow has run yet (no
-// state file exists) or it can't be read/parsed — never an error, since a
-// snapshot read can never be allowed to affect the command's own outcome.
-func readStateSnapshot() *sessionlog.StateSnapshot {
+// snapshotStatePath is the state file a command's session record follows:
+// the lane of an orchestrated plan or implement workflow the command names —
+// an orchestrated `new`, or a `goto` naming a spec that has a lane — and
+// .spektacular/state.json otherwise. It is decided once, before the command
+// runs, so both snapshots read the same file. "" means none can be found.
+func snapshotStatePath(argv []string) string {
 	dir, err := dataDir()
 	if err != nil {
+		return ""
+	}
+	shared := stateFilePath(dir)
+
+	var kind, verb, data string
+	for i := 0; i < len(argv); i++ {
+		a := argv[i]
+		switch {
+		case a == "--data" || a == "-d":
+			if i+1 < len(argv) {
+				data = argv[i+1]
+				i++
+			}
+		case strings.HasPrefix(a, "--data="):
+			data = strings.TrimPrefix(a, "--data=")
+		case a == "--fields" || a == "--stdin" || a == "--file":
+			i++ // these take a value, which is not a subcommand
+		case strings.HasPrefix(a, "-"):
+		case kind == "":
+			kind = a
+		case verb == "":
+			verb = a
+		}
+	}
+	if kind != "plan" && kind != "implement" {
+		return shared
+	}
+	var input struct {
+		Name         string `json:"name"`
+		Orchestrated bool   `json:"orchestrated"`
+	}
+	if json.Unmarshal([]byte(data), &input) != nil || input.Name == "" || !nameRegexp.MatchString(input.Name) {
+		return shared
+	}
+	lane := workflow.LaneStatePath(dir, kind, input.Name)
+	switch verb {
+	case "new":
+		if input.Orchestrated {
+			return lane
+		}
+	case "goto":
+		if _, err := os.Stat(lane); err == nil {
+			return lane
+		}
+	}
+	return shared
+}
+
+// readStateSnapshot reads the workflow state file at path and returns the
+// small view of it a session record needs, or nil if no workflow has run yet
+// (no state file exists) or it can't be read/parsed — never an error, since a
+// snapshot read can never be allowed to affect the command's own outcome.
+func readStateSnapshot(path string) *sessionlog.StateSnapshot {
+	if path == "" {
 		return nil
 	}
-
-	data, err := os.ReadFile(stateFilePath(dir))
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil
 	}
@@ -355,8 +418,10 @@ func init() {
 	rootCmd.AddCommand(planCmd)
 	rootCmd.AddCommand(changelogCmd)
 	rootCmd.AddCommand(implementCmd)
+	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(knowledgeCmd)
 	rootCmd.AddCommand(designCmd)
+	rootCmd.AddCommand(epicCmd)
 	rootCmd.AddCommand(repoCmd)
 	rootCmd.AddCommand(skillCmd)
 	rootCmd.AddCommand(initCmd)

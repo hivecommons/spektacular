@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -63,16 +64,66 @@ type Set struct {
 // New builds the registry from the project configuration. Unknown providers
 // fail fast here, before any entry is resolved, mirroring knowledge.NewSet's
 // contract.
+//
+// Inside a spec's worktree, a repo overlay (OverlayFile) maps each repo the
+// spec touches to its location inside that spec's own worktree. New applies
+// it here, the one place registered locations are resolved, so every reader
+// built on the Set — repo roots and sources, each repo's knowledge and
+// changelog stores, and the auto-commit targets — follows the spec's
+// worktrees and never the shared checkouts. Unmapped repos, and a project
+// with no overlay, resolve exactly as configured.
 func New(cfg config.Config, projectRoot string, git GitRunner) (*Set, error) {
+	overlay, err := readOverlay(projectRoot)
+	if err != nil {
+		return nil, err
+	}
 	entries := make([]config.RepoEntry, 0, len(cfg.Repos))
 	for _, e := range cfg.Repos {
 		e = e.WithDefaults()
 		if e.Provider != config.ProviderGit {
 			return nil, fmt.Errorf("repo %q: provider %q is not supported (only %q)", e.Name, e.Provider, config.ProviderGit)
 		}
+		if loc, ok := overlay[e.Name]; ok {
+			e.Location = loc
+		}
 		entries = append(entries, e)
 	}
 	return &Set{projectRoot: projectRoot, git: git, entries: entries}, nil
+}
+
+// OverlayFile is the repo overlay's name inside a project's .spektacular
+// directory. `epic worktree` writes it into a spec's project worktree, and
+// keeps it out of git.
+const OverlayFile = "worktree-repos.json"
+
+// Overlay is the repo overlay: the spec whose worktrees it describes, and
+// each touched repo's absolute location inside its worktree.
+type Overlay struct {
+	Spec  string            `json:"spec"`
+	Repos map[string]string `json:"repos"`
+}
+
+// readOverlay loads the repo overlay under projectRoot; no file is no
+// overlay. Only absolute locations are honoured.
+func readOverlay(projectRoot string) (map[string]string, error) {
+	raw, err := os.ReadFile(filepath.Join(projectRoot, ".spektacular", OverlayFile))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var o Overlay
+	if err := json.Unmarshal(raw, &o); err != nil {
+		return nil, fmt.Errorf("reading the repo overlay %s: %w", OverlayFile, err)
+	}
+	repos := map[string]string{}
+	for name, loc := range o.Repos {
+		if filepath.IsAbs(loc) {
+			repos[name] = filepath.Clean(loc)
+		}
+	}
+	return repos, nil
 }
 
 // Entries returns the registry entries in configuration order, with

@@ -24,6 +24,8 @@ const (
 	KindSpec      Kind = "spec"
 	KindPlan      Kind = "plan"
 	KindChangelog Kind = "changelog"
+	// KindEpic is addressed by a bare name, like a spec.
+	KindEpic Kind = "epic"
 )
 
 // artifact error codes. Each refusal built from one of these carries a next

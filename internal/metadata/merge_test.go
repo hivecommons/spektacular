@@ -218,3 +218,177 @@ func TestMerge_DocumentStatusTransitionCarriesSpecs(t *testing.T) {
 		"closed_date must still be stamped on the transition, got %s", meta.ClosedDate)
 	require.True(t, meta.CreatedDate.Equal(time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)))
 }
+
+// draftWithEpicAndSources is an existing spec that already carries testEpic
+// and the twoSourceRefs list, for the Merge cases that must preserve, replace
+// or clear them.
+const draftWithEpicAndSources = "---\n" +
+	"created_date: 2026-07-01\n" +
+	"document_status: draft\n" +
+	"epic: " + testEpic + "\n" +
+	twoSourceRefsYAML +
+	"---\n\n" +
+	"# Existing body\n"
+
+// epicPtr returns a pointer to epic, since UpdateOptions.Epic is *string: nil
+// means "no change", and only a non-nil pointer replaces the stored value.
+func epicPtr(epic string) *string { return &epic }
+
+// sourceRefsPtr returns a pointer to refs, since UpdateOptions.Sources is
+// *[]SourceRef: nil means "no change", and only a non-nil pointer replaces
+// the stored list.
+func sourceRefsPtr(refs []SourceRef) *[]SourceRef { return &refs }
+
+// TestMerge_BodyOnlyRewritePreservesEpicAndSources is the durability case the
+// pointer semantics exist for: the spec workflow rewrites the whole body and
+// passes no Epic or Sources update, and the epic membership and sources
+// already on the spec must survive the body being replaced wholesale.
+func TestMerge_BodyOnlyRewritePreservesEpicAndSources(t *testing.T) {
+	got, err := Merge([]byte(draftWithEpicAndSources), []byte("# Updated body\n"), UpdateOptions{Today: fixedToday()})
+	require.NoError(t, err)
+
+	meta, body, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Equal(t, testEpic, meta.Epic, "a nil opts.Epic must preserve the stored epic")
+	require.Equal(t, twoSourceRefs(), meta.Sources, "a nil opts.Sources must preserve the stored sources")
+	require.Equal(t, "# Updated body\n", string(body))
+}
+
+// TestMerge_NonNilEpicReplacesValue asserts a non-nil opts.Epic replaces the
+// stored epic and leaves the sources untouched.
+func TestMerge_NonNilEpicReplacesValue(t *testing.T) {
+	got, err := Merge([]byte(draftWithEpicAndSources), []byte("# Existing body\n"), UpdateOptions{
+		Today: fixedToday(),
+		Epic:  epicPtr("000072_checkout-epic"),
+	})
+	require.NoError(t, err)
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Equal(t, "000072_checkout-epic", meta.Epic)
+	require.Equal(t, twoSourceRefs(), meta.Sources)
+}
+
+// TestMerge_EmptyEpicClearsValue asserts a pointer to "" is the explicit
+// "clear" signal, and that a cleared epic leaves no epic key behind in the
+// rendered block.
+func TestMerge_EmptyEpicClearsValue(t *testing.T) {
+	got, err := Merge([]byte(draftWithEpicAndSources), []byte("# Existing body\n"), UpdateOptions{
+		Today: fixedToday(),
+		Epic:  epicPtr(""),
+	})
+	require.NoError(t, err)
+
+	require.NotContains(t, string(got), "epic",
+		"a cleared epic must be physically absent from the block, not an empty key")
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Empty(t, meta.Epic)
+	require.Equal(t, twoSourceRefs(), meta.Sources)
+}
+
+// TestMerge_NonNilSourcesReplacesList asserts a non-nil opts.Sources replaces
+// the stored list wholesale rather than merging into it, and leaves the epic
+// untouched.
+func TestMerge_NonNilSourcesReplacesList(t *testing.T) {
+	replacement := []SourceRef{{URI: "https://example.com/rfc", RetrievedDate: "2026-07-02"}}
+
+	got, err := Merge([]byte(draftWithEpicAndSources), []byte("# Existing body\n"), UpdateOptions{
+		Today:   fixedToday(),
+		Sources: sourceRefsPtr(replacement),
+	})
+	require.NoError(t, err)
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Equal(t, replacement, meta.Sources)
+	require.Equal(t, testEpic, meta.Epic)
+}
+
+// TestMerge_EmptySourcesClearsList asserts a non-nil but empty opts.Sources
+// is the explicit "clear" signal, and that a cleared list leaves no sources
+// key behind in the rendered block.
+func TestMerge_EmptySourcesClearsList(t *testing.T) {
+	got, err := Merge([]byte(draftWithEpicAndSources), []byte("# Existing body\n"), UpdateOptions{
+		Today:   fixedToday(),
+		Sources: sourceRefsPtr([]SourceRef{}),
+	})
+	require.NoError(t, err)
+
+	require.NotContains(t, string(got), "sources",
+		"a cleared list must be physically absent from the block, not an empty key")
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Empty(t, meta.Sources)
+	require.Equal(t, testEpic, meta.Epic)
+}
+
+// TestMerge_FreshWriteRecordsEpicAndSources asserts the first-write branch
+// records the epic and sources and still applies the usual first-write stamp.
+func TestMerge_FreshWriteRecordsEpicAndSources(t *testing.T) {
+	got, err := Merge(nil, []byte("# New body\n"), UpdateOptions{
+		Today:   fixedToday(),
+		Epic:    epicPtr(testEpic),
+		Sources: sourceRefsPtr(twoSourceRefs()),
+	})
+	require.NoError(t, err)
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Equal(t, testEpic, meta.Epic)
+	require.Equal(t, twoSourceRefs(), meta.Sources)
+	require.True(t, meta.CreatedDate.Equal(fixedToday()),
+		"created_date must be stamped on a fresh write, got %s", meta.CreatedDate)
+	require.Equal(t, StatusDraft, meta.DocumentStatus)
+}
+
+// TestMerge_FreshWriteWithClearingEpicAndSourcesOmitsKeys asserts the clear
+// signal is harmless on a first write: a pointer to "" and a pointer to an
+// empty list record nothing, and neither key appears in the block.
+func TestMerge_FreshWriteWithClearingEpicAndSourcesOmitsKeys(t *testing.T) {
+	got, err := Merge(nil, []byte("# New body\n"), UpdateOptions{
+		Today:   fixedToday(),
+		Epic:    epicPtr(""),
+		Sources: sourceRefsPtr([]SourceRef{}),
+	})
+	require.NoError(t, err)
+
+	require.NotContains(t, string(got), "epic")
+	require.NotContains(t, string(got), "sources")
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Empty(t, meta.Epic)
+	require.Empty(t, meta.Sources)
+}
+
+// TestMerge_DocumentStatusTransitionCarriesEpicAndSources covers the
+// interaction between the epic, sources and the pre-existing merge
+// invariants: a transition to a closed status stamps closed_date as it always
+// did, and carries both fields through unchanged on the same write.
+func TestMerge_DocumentStatusTransitionCarriesEpicAndSources(t *testing.T) {
+	got, err := Merge([]byte(draftWithEpicAndSources), []byte("# Existing body\n"), UpdateOptions{
+		Today:          fixedToday(),
+		DocumentStatus: documentStatusPtr(StatusFinal),
+	})
+	require.NoError(t, err)
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Equal(t, testEpic, meta.Epic)
+	require.Equal(t, twoSourceRefs(), meta.Sources)
+	require.Equal(t, StatusFinal, meta.DocumentStatus)
+	require.True(t, meta.ClosedDate.Equal(fixedToday()),
+		"closed_date must still be stamped on the transition, got %s", meta.ClosedDate)
+	require.True(t, meta.CreatedDate.Equal(time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)))
+}

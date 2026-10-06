@@ -12,6 +12,10 @@ Report to the user:
 - That the feature-level wrap-up (test plan, feature changelog, spec reconciliation) runs in the implement run that completes the plan's last open task.
 
 This is the terminal state of this implement run. Do **not** emit a `goto` command — no further steps exist.
+{{#orchestrated}}
+
+This run is orchestrated, so report to your orchestrator rather than the user: end your run with a final message whose first line is exactly `DONE: {{plan_name}}`, followed by the report above and any durable discovery worth saving to the knowledge base.
+{{/orchestrated}}
 {{/task_run}}
 {{^task_run}}
 The implement workflow is complete for `{{plan_name}}`.
@@ -34,4 +38,8 @@ Report to the user:
 - The specification's completion status: read the spec with `{{config.command}} spec file read {{plan_name}}`, and tell the user which Requirements/Acceptance-Criteria items are now checked, and for any still unchecked, the reason recorded during `reconcile_spec` (deferred, descoped, or not attempted).
 
 This is the terminal state of the implement workflow. Do **not** emit a `goto` command — no further steps exist.
+{{#orchestrated}}
+
+This run is orchestrated, so report to your orchestrator rather than the user: end your run with a final message whose first line is exactly `DONE: {{plan_name}}`, followed by the report above and any durable discovery worth saving to the knowledge base.
+{{/orchestrated}}
 {{/task_run}}

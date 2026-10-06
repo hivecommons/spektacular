@@ -27,7 +27,7 @@ type transition struct {
 // completionPoints are the transitions that end a workflow. They commit in
 // both workflow and full mode.
 var completionPoints = map[transition]bool{
-	{kind: "spec", from: "verification", to: "finished"}:        true,
+	{kind: "spec", from: "split", to: "finished"}:               true,
 	{kind: "plan", from: "walkthrough", to: "finished"}:         true,
 	{kind: "implement", from: "reconcile_spec", to: "finished"}: true,
 	// A single-task run that leaves tasks open for later runs finishes

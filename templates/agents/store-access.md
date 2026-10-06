@@ -6,18 +6,19 @@
 
 Every file Spektacular manages is reached through its CLI, never with your own
 file tools. This covers specs, plans, their context and research documents,
-test plans, changelog records, knowledge entries and design documents.
+test plans, changelog records, knowledge entries, design documents and epics.
 
 Never use the `Write` or `Edit` tool on a file under a store directory, and
 never build a store path by hand. Use `{{command}} spec file`,
-`{{command}} plan file`, `{{command}} changelog file`, `{{command}} knowledge`
-and `{{command}} design` instead. A write supplies its body with
+`{{command}} plan file`, `{{command}} changelog file`, `{{command}} knowledge`,
+`{{command}} design` and `{{command}} epic` instead. A write supplies its body with
 `--from <path>`, never on stdin and never as prose on the command line.
 
 Removal is a CLI verb too. Deleting a managed file with `rm`, or with any
 equivalent of your own, is never correct — not for a knowledge entry, not for
 a design document, and not for anything else a store holds. Use
-`{{command}} knowledge delete` and `{{command}} design delete`, alongside the
+`{{command}} knowledge delete`, `{{command}} design delete` and
+`{{command}} epic delete`, alongside the
 `delete` each of `{{command}} spec file`, `{{command}} plan file` and
 `{{command}} changelog file` already offers. Going around the tool is how a
 spec is left pointing at a design that is not there, and it stops working

@@ -171,7 +171,7 @@ func TestGotoFromWalkthroughHintsAtFileWriteForRevisions(t *testing.T) {
 	require.Equal(t, "invalid_transition", errResp.Code)
 	require.Contains(t, errResp.NextAction, "go run . plan file write 000045_config-file-migration <doc> --from <scratch>")
 	require.Contains(t, errResp.NextAction, "do not try to goto backward")
-	require.Contains(t, errResp.NextAction, `run: go run . plan goto --data '{"step":"finished"}'`)
+	require.Contains(t, errResp.NextAction, `run: go run . plan goto --data '{"step":"finished","name":"000045_config-file-migration"}'`)
 }
 
 // TestGotoInvalidStepFromNonWalkthroughStepOmitsRevisionHint asserts the
@@ -190,6 +190,36 @@ func TestGotoInvalidStepFromNonWalkthroughStepOmitsRevisionHint(t *testing.T) {
 	require.True(t, errors.As(err, &errResp), "expected *output.ErrorResponse, got %T: %v", err, err)
 	require.NotContains(t, errResp.NextAction, "file write")
 	require.Equal(t, `run: go run . plan goto --data '{"step":"one"}'`, errResp.NextAction)
+}
+
+// TestGotoInvalidTransitionHintNamesTheSpecForPlanAndImplement asserts the
+// goto a rejected transition advertises names the spec for a plan or
+// implement workflow that has one — so it routes to that spec's workflow when
+// several are in progress — and carries no name for any other kind, even one
+// whose data holds a name.
+func TestGotoInvalidTransitionHintNamesTheSpecForPlanAndImplement(t *testing.T) {
+	tests := []struct {
+		kind string
+		want string
+	}{
+		{kind: "plan", want: `run: go run . plan goto --data '{"step":"one","name":"000045_config-file-migration"}'`},
+		{kind: "implement", want: `run: go run . implement goto --data '{"step":"one","name":"000045_config-file-migration"}'`},
+		{kind: "spec", want: `run: go run . spec goto --data '{"step":"one"}'`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.kind, func(t *testing.T) {
+			sp := filepath.Join(t.TempDir(), "state.json")
+			wf := New(testSteps, sp, Config{Command: "go run .", Kind: tt.kind}, nil, nil)
+			wf.SetData("name", "000045_config-file-migration")
+
+			err := wf.Goto("nonexistent")
+			require.Error(t, err)
+
+			var errResp *output.ErrorResponse
+			require.True(t, errors.As(err, &errResp), "expected *output.ErrorResponse, got %T: %v", err, err)
+			require.Equal(t, tt.want, errResp.NextAction)
+		})
+	}
 }
 
 func TestAutoSaveOnTransition(t *testing.T) {

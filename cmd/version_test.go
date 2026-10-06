@@ -22,7 +22,7 @@ import (
 
 // currentConfigYAML is a config.yaml already at the current settings format
 // with the running build's skills recorded and no registered repos.
-const currentConfigYAML = `schema: 3
+const currentConfigYAML = `schema: 4
 written_by: 0.20.0
 skills_version: 0.20.0
 name: proj
@@ -83,7 +83,7 @@ func TestVersionCheck_Match(t *testing.T) {
 func TestVersionCheck_MismatchIsReadOnlyAndNamesMigrate(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSettingsFile(t, dir, "config.yaml", `schema: 3
+	writeSettingsFile(t, dir, "config.yaml", `schema: 4
 written_by: 9.9.9
 skills_version: 9.9.9
 name: proj
@@ -107,7 +107,7 @@ agent: claude
 func TestVersionCheck_ActionUsesConfiguredCommand(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSettingsFile(t, dir, "config.yaml", `schema: 3
+	writeSettingsFile(t, dir, "config.yaml", `schema: 4
 skills_version: 9.9.9
 name: proj
 command: go run .
@@ -125,7 +125,7 @@ agent: claude
 func TestVersionCheck_NoRecordedSkillsVersionIsMissing(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSettingsFile(t, dir, "config.yaml", `schema: 3
+	writeSettingsFile(t, dir, "config.yaml", `schema: 4
 name: proj
 command: spektacular
 agent: claude
@@ -195,7 +195,7 @@ func TestVersionCheck_ReadsLegacyVersionFile(t *testing.T) {
 	t.Run("current config, legacy file matches", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
-		writeSettingsFile(t, dir, "config.yaml", `schema: 3
+		writeSettingsFile(t, dir, "config.yaml", `schema: 4
 name: proj
 command: spektacular
 agent: claude
@@ -211,7 +211,7 @@ agent: claude
 	t.Run("current config, legacy file stale", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
-		writeSettingsFile(t, dir, "config.yaml", `schema: 3
+		writeSettingsFile(t, dir, "config.yaml", `schema: 4
 name: proj
 command: spektacular
 agent: claude
@@ -243,7 +243,7 @@ agent: claude
 func TestVersionCheck_DifferentWrittenByIsStillMatch(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSettingsFile(t, dir, "config.yaml", `schema: 3
+	writeSettingsFile(t, dir, "config.yaml", `schema: 4
 written_by: 7.7.7
 skills_version: 0.20.0
 name: proj

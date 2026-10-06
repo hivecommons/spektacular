@@ -3,6 +3,7 @@ package autocommit
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/hivecommons/spektacular/internal/testutil/gittest"
@@ -207,4 +208,129 @@ func TestIntegration_TopLevelOfSubdirectoryIsWorkTreeRoot(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, dir, top)
+}
+
+// commitPathsTree extends newWorkTree with two committed lanes' files, so a
+// path-scoped commit has a whole tracked directory to delete and another
+// lane's files to leave alone.
+func commitPathsTree(t *testing.T) string {
+	t.Helper()
+	dir := newWorkTree(t)
+	writeFile(t, dir, "lanes/a/state.json", "{}\n")
+	writeFile(t, dir, "lanes/a/notes.md", "a notes\n")
+	writeFile(t, dir, "lanes/b/state.json", "{}\n")
+	gittest.RunGit(t, dir, "add", ".")
+	gittest.RunGit(t, dir, "commit", "-m", "lanes")
+	return dir
+}
+
+// CommitPaths commits additions and the deletion of a whole tracked directory
+// under the given paths, and nothing else: a modified file, an untracked file
+// and an already-staged deletion outside the paths are all left exactly as
+// they were, the staged one still staged. A path that neither exists nor is
+// tracked is skipped rather than failing the pathspec.
+func TestIntegration_CommitPathsCommitsOnlyTheGivenPaths(t *testing.T) {
+	gittest.RequireGit(t)
+	pinIdentity(t)
+	dir := commitPathsTree(t)
+
+	writeFile(t, dir, "mine/plan.md", "my plan\n")
+	require.NoError(t, os.RemoveAll(filepath.Join(dir, "lanes", "a")))
+	writeFile(t, dir, "lanes/b/state.json", "{\"step\":\"tasks\"}\n")
+	writeFile(t, dir, "tracked.txt", "modified\n")
+	writeFile(t, dir, "theirs/plan.md", "their plan\n")
+	gittest.RunGit(t, dir, "rm", "-q", "doomed.txt")
+
+	paths := []string{
+		filepath.Join(dir, "mine"),
+		filepath.Join(dir, "lanes", "a"),
+		filepath.Join(dir, "never-created"),
+	}
+	require.NoError(t, NewGit().CommitPaths(dir, paths, "commit mine"))
+
+	require.Equal(t, "3", gittest.RunGit(t, dir, "rev-list", "--count", "HEAD"))
+	require.Equal(t, "commit mine", gittest.RunGit(t, dir, "log", "-1", "--format=%B"))
+	require.Equal(t,
+		"D\tlanes/a/notes.md\nD\tlanes/a/state.json\nA\tmine/plan.md",
+		gittest.RunGit(t, dir, "diff-tree", "--no-commit-id", "--name-status", "-r", "HEAD"))
+	require.Equal(t,
+		"D  doomed.txt\n M lanes/b/state.json\n M tracked.txt\n?? theirs/",
+		gittest.RunGit(t, dir, "status", "--porcelain"))
+}
+
+// With every path either unchanged or absent, CommitPaths makes no commit and
+// reports no error, though the rest of the tree is dirty.
+func TestIntegration_CommitPathsWithNothingToCommitMakesNoCommit(t *testing.T) {
+	gittest.RequireGit(t)
+	pinIdentity(t)
+	dir := commitPathsTree(t)
+	writeFile(t, dir, "tracked.txt", "modified\n")
+
+	git := NewGit()
+	require.NoError(t, git.CommitPaths(dir, []string{filepath.Join(dir, "lanes", "a")}, "unchanged"))
+	require.NoError(t, git.CommitPaths(dir, []string{filepath.Join(dir, "never-created")}, "absent"))
+
+	require.Equal(t, "2", gittest.RunGit(t, dir, "rev-list", "--count", "HEAD"))
+	// RunGit trims the output, so the leading space of " M" is gone.
+	require.Equal(t, "M tracked.txt", gittest.RunGit(t, dir, "status", "--porcelain"))
+}
+
+// Two path-scoped commits started at the same moment against one work tree,
+// each under the commit lock, both succeed one after the other, and each
+// commit holds only its own files.
+func TestIntegration_ConcurrentCommitPathsUnderTheLockBothSucceed(t *testing.T) {
+	gittest.RequireGit(t)
+	pinIdentity(t)
+	dir := newWorkTree(t)
+	dataDir := filepath.Join(dir, ".spektacular")
+	writeFile(t, dir, "alpha/plan.md", "alpha\n")
+	writeFile(t, dir, "beta/plan.md", "beta\n")
+
+	git := NewGit()
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	for i, name := range []string{"alpha", "beta"} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			release, err := AcquireLock(dataDir)
+			if err != nil {
+				errs[i] = err
+				return
+			}
+			defer release()
+			errs[i] = git.CommitPaths(dir, []string{filepath.Join(dir, name)}, "commit "+name)
+		}()
+	}
+	wg.Wait()
+	require.NoError(t, errs[0])
+	require.NoError(t, errs[1])
+
+	require.Equal(t, "3", gittest.RunGit(t, dir, "rev-list", "--count", "HEAD"))
+	for _, name := range []string{"alpha", "beta"} {
+		rev := gittest.RunGit(t, dir, "log", "-1", "--format=%H", "--grep", "commit "+name)
+		require.Equal(t, name+"/plan.md",
+			gittest.RunGit(t, dir, "diff-tree", "--no-commit-id", "--name-only", "-r", rev))
+	}
+	require.Empty(t, gittest.RunGit(t, dir, "status", "--porcelain"), "the lock is released after both")
+}
+
+// A deletion already staged under a path — what a commit attempt a hook
+// refused leaves behind, since the path was added before git commit ran — is
+// still a change under that path, and a retry commits it rather than skipping
+// the path as unknown and leaving the deletion staged.
+func TestIntegration_CommitPathsCommitsADeletionAlreadyStaged(t *testing.T) {
+	gittest.RequireGit(t)
+	pinIdentity(t)
+	dir := commitPathsTree(t)
+
+	require.NoError(t, os.RemoveAll(filepath.Join(dir, "lanes", "a")))
+	gittest.RunGit(t, dir, "add", "-A", "--", "lanes/a")
+
+	require.NoError(t, NewGit().CommitPaths(dir, []string{filepath.Join(dir, "lanes", "a")}, "retry"))
+
+	require.Equal(t, "3", gittest.RunGit(t, dir, "rev-list", "--count", "HEAD"))
+	require.Equal(t, "D\tlanes/a/notes.md\nD\tlanes/a/state.json",
+		gittest.RunGit(t, dir, "diff-tree", "--no-commit-id", "--name-status", "-r", "HEAD"))
+	require.Empty(t, gittest.RunGit(t, dir, "status", "--porcelain"))
 }

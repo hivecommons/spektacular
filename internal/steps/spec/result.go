@@ -10,23 +10,6 @@ type Result struct {
 	Instruction string `json:"instruction"`
 }
 
-// StepEntry holds a step name and its current status.
-type StepEntry struct {
-	Name   string `json:"name"`
-	Status string `json:"status"`
-}
-
-// StatusResult is returned by the status subcommand.
-type StatusResult struct {
-	SpecName       string      `json:"spec_name"`
-	SpecPath       string      `json:"spec_path"`
-	CurrentStep    string      `json:"current_step"`
-	CompletedSteps []string    `json:"completed_steps"`
-	TotalSteps     int         `json:"total_steps"`
-	Progress       string      `json:"progress"`
-	Steps          []StepEntry `json:"steps"`
-}
-
 // StepsResult is returned by the steps subcommand.
 type StepsResult struct {
 	Steps []string `json:"steps"`

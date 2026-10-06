@@ -19,7 +19,7 @@ import (
 // NextAction) and that this shape round-trips through JSON, since it flows
 // all the way to stdout via that encoding in production.
 func TestEmitResumeReport_JSONCarriesWorkflowIdentityAndInstruction(t *testing.T) {
-	instruction, err := resumeInstruction("spektacular", "spec", "000024_resume", "overview", "")
+	instruction, err := resumeInstruction("spektacular", "spec", "000024_resume", "overview", "", false)
 	require.NoError(t, err)
 	require.NotEmpty(t, instruction)
 
@@ -57,7 +57,7 @@ func TestEmitResumeReport_JSONCarriesWorkflowIdentityAndInstruction(t *testing.T
 }
 
 func TestResumeInstruction_AsksResumeVsNewWithBothCommands(t *testing.T) {
-	out, err := resumeInstruction("spektacular", "spec", "000024_resume", "overview", "")
+	out, err := resumeInstruction("spektacular", "spec", "000024_resume", "overview", "", false)
 	require.NoError(t, err)
 
 	require.NotContains(t, out, "{{")
@@ -99,7 +99,7 @@ func TestResumeInstruction_InterpolatesAcrossKinds(t *testing.T) {
 			kind:        "plan",
 			instance:    "000024_resume",
 			currentStep: "tasks",
-			wantGoto:    `spek plan goto --data '{"step":"tasks"}'`,
+			wantGoto:    `spek plan goto --data '{"step":"tasks","name":"000024_resume"}'`,
 			wantNew:     "spek plan new --force",
 		},
 		{
@@ -108,14 +108,14 @@ func TestResumeInstruction_InterpolatesAcrossKinds(t *testing.T) {
 			kind:        "implement",
 			instance:    "000024_resume",
 			currentStep: "execute",
-			wantGoto:    `spektacular implement goto --data '{"step":"execute"}'`,
+			wantGoto:    `spektacular implement goto --data '{"step":"execute","name":"000024_resume"}'`,
 			wantNew:     "spektacular implement new --force",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			out, err := resumeInstruction(tt.command, tt.kind, tt.instance, tt.currentStep, "")
+			out, err := resumeInstruction(tt.command, tt.kind, tt.instance, tt.currentStep, "", false)
 			require.NoError(t, err)
 
 			require.NotContains(t, out, "{{")
@@ -125,8 +125,63 @@ func TestResumeInstruction_InterpolatesAcrossKinds(t *testing.T) {
 			require.Contains(t, out, tt.wantGoto)
 			require.Contains(t, out, tt.wantNew)
 			require.Contains(t, out, ".spektacular/working-context.md")
+			if tt.kind == "spec" {
+				require.NotContains(t, out, `"name":`, "a spec resume goto must not carry a name")
+			}
+			require.NotContains(t, out, `"orchestrated"`, "a non-orchestrated resume must not offer orchestrated --force data")
 		})
 	}
+}
+
+// TestResumeInstruction_OrchestratedNamesLaneNotesAndForceData asserts an
+// orchestrated plan resume (one running in its own lane) points the agent at
+// that lane's notes file rather than the shared working context, resumes with
+// the spec named, and offers a --force that re-founds the same orchestrated
+// lane rather than a bare `new --force`.
+func TestResumeInstruction_OrchestratedNamesLaneNotesAndForceData(t *testing.T) {
+	out, err := resumeInstruction("spektacular", "plan", "000024_resume", "tasks", "", true)
+	require.NoError(t, err)
+
+	require.NotContains(t, out, "{{")
+	require.Contains(t, out, "Read `.spektacular/workflows/plan-000024_resume.md`")
+	require.NotContains(t, out, ".spektacular/working-context.md",
+		"an orchestrated resume must not send the agent to the shared working context")
+	require.Contains(t, out, `spektacular plan goto --data '{"step":"tasks","name":"000024_resume"}'`)
+	require.Contains(t, out,
+		`spektacular plan new --force --data '{"name":"000024_resume","orchestrated":true}'`)
+}
+
+// TestResumeInstruction_OrchestratedImplementNamesLaneNotes is the implement
+// counterpart: its own resume template names the implement lane's notes file
+// and the orchestrated --force data.
+func TestResumeInstruction_OrchestratedImplementNamesLaneNotes(t *testing.T) {
+	out, err := resumeInstruction("spektacular", "implement", "000024_resume", "analyze", "", true)
+	require.NoError(t, err)
+
+	require.NotContains(t, out, "{{")
+	require.Contains(t, out, "Read `.spektacular/workflows/implement-000024_resume.md`")
+	require.Contains(t, out, `spektacular implement goto --data '{"step":"analyze","name":"000024_resume"}'`)
+	require.Contains(t, out,
+		`spektacular implement new --force --data '{"name":"000024_resume","orchestrated":true}'`)
+}
+
+// TestEmitResumeReport_OrchestratedStateRendersLaneResume asserts the report
+// built from a stored state carries its "orchestrated" flag through to the
+// rendered resume instruction.
+func TestEmitResumeReport_OrchestratedStateRendersLaneResume(t *testing.T) {
+	state := &workflow.State{
+		Kind:        "plan",
+		CurrentStep: "discovery",
+		Data:        map[string]any{"name": "000024_resume", "orchestrated": true},
+	}
+
+	reportErr := emitResumeReport("spektacular", "plan", state)
+	er, ok := reportErr.(*output.ErrorResponse)
+	require.True(t, ok, "emitResumeReport must return an *output.ErrorResponse")
+	require.Equal(t, "workflow_in_progress", er.Code)
+	require.Contains(t, er.NextAction, "`.spektacular/workflows/plan-000024_resume.md`")
+	require.Contains(t, er.NextAction, `spektacular plan goto --data '{"step":"discovery","name":"000024_resume"}'`)
+	require.Contains(t, er.NextAction, `"orchestrated":true`)
 }
 
 // implementResumeSteps is a hand-maintained list of every implement workflow
@@ -158,7 +213,7 @@ func TestResumeImplement_ReadsPlanFirstAtEveryStep(t *testing.T) {
 
 	for _, step := range implementResumeSteps {
 		t.Run(step, func(t *testing.T) {
-			out, err := resumeInstruction(command, "implement", "demo-feature", step, "")
+			out, err := resumeInstruction(command, "implement", "demo-feature", step, "", false)
 			require.NoError(t, err)
 
 			require.Contains(t, normalizeIndent(out), block,
@@ -169,7 +224,7 @@ func TestResumeImplement_ReadsPlanFirstAtEveryStep(t *testing.T) {
 			// The partial also names the working-context path, so anchor on
 			// the numbered item that tells the agent to read it.
 			workingContext := "\n2. Read `.spektacular/working-context.md`"
-			gotoCmd := command + ` implement goto --data '{"step":"` + step + `"}'`
+			gotoCmd := command + ` implement goto --data '{"step":"` + step + `","name":"demo-feature"}'`
 
 			planIdx := strings.Index(out, planRead)
 			wcIdx := strings.Index(out, workingContext)
@@ -201,12 +256,19 @@ func TestResumeImplement_ReadsPlanFirstAtEveryStep(t *testing.T) {
 func TestResumeNonImplementUsesSharedTemplate(t *testing.T) {
 	for _, kind := range []string{"spec", "plan", "repo"} {
 		t.Run(kind, func(t *testing.T) {
-			out, err := resumeInstruction("spekx", kind, "demo-feature", "overview", "")
+			out, err := resumeInstruction("spekx", kind, "demo-feature", "overview", "", false)
 			require.NoError(t, err)
 
 			require.Contains(t, out, "spekx repo list")
 			require.Contains(t, out, ".spektacular/work/demo-feature/")
 			require.NotContains(t, out, "Read the plan before anything else")
+			gotoName := `spekx ` + kind + ` goto --data '{"step":"overview","name":"demo-feature"}'`
+			if kind == "plan" {
+				require.Contains(t, out, gotoName, "a plan resume must name the spec")
+			} else {
+				require.Contains(t, out, `spekx `+kind+` goto --data '{"step":"overview"}'`,
+					"a %s resume goto must not carry a name", kind)
+			}
 		})
 	}
 }

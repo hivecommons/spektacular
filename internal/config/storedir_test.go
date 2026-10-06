@@ -30,6 +30,19 @@ func storeDirsFixture(spec, plan, changelog string) string {
 		"    location: ..\n")
 }
 
+// epicDirFixture is a valid config.yaml body whose epic directory is the
+// given file-form value.
+func epicDirFixture(epic string) string {
+	return withProjectSchema("name: testproj\n" +
+		"epic:\n" +
+		"  provider: file\n" +
+		"  config:\n" +
+		"    directory: " + epic + "\n" +
+		"repos:\n" +
+		"  - name: testproj\n" +
+		"    location: ..\n")
+}
+
 // Store folders: a relative directory in config.yaml is resolved from the
 // folder holding the file, so `x` in <root>/.spektacular/config.yaml puts
 // that store in <root>/.spektacular/x.
@@ -142,6 +155,7 @@ func TestToYAMLFile_NewDefaultWritesSettingsRelativeStoreDirs(t *testing.T) {
 	require.Contains(t, string(raw), "directory: specs\n")
 	require.Contains(t, string(raw), "directory: plans\n")
 	require.Contains(t, string(raw), "directory: changelog\n")
+	require.Contains(t, string(raw), "directory: epics\n")
 	require.NotContains(t, string(raw), ".spektacular/")
 }
 
@@ -179,4 +193,61 @@ func TestRepoConfigFromYAMLFile_ChangelogAboveSettingsFolderIsAccepted(t *testin
 	cfg, err := RepoConfigFromYAMLFile(path)
 	require.NoError(t, err)
 	require.Equal(t, "../changelog", cfg.Changelog.Config.Directory)
+}
+
+// Store folders: the epic directory is resolved from the folder holding
+// config.yaml, like the other store folders, and written back in file form.
+func TestFromYAMLFile_EpicDirResolvesFromSettingsFolderAndRoundTrips(t *testing.T) {
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(epicDirFixture("ex")), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, ".spektacular/ex", cfg.Epic.Config.Directory)
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "directory: ex\n")
+	require.NotContains(t, string(raw), ".spektacular/", "the in-memory project-rooted form must never be written")
+
+	reloaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, ".spektacular/ex", reloaded.Epic.Config.Directory)
+}
+
+// Store folders: an epic directory changed in memory is written back
+// re-derived from its new location.
+func TestToYAMLFile_ChangedEpicDirIsRewrittenInFileForm(t *testing.T) {
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(epicDirFixture("ex")), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	cfg.Epic.Config.Directory = "docs/epics"
+	require.NoError(t, cfg.ToYAMLFile(path))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "directory: ../docs/epics\n")
+	require.NotContains(t, string(raw), "directory: ex\n")
+
+	reloaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "docs/epics", reloaded.Epic.Config.Directory)
+}
+
+// Store folders: an epic directory resolving outside the project root is
+// refused with config_invalid and a next action naming the epic key.
+func TestFromYAMLFile_EpicDirOutsideProjectIsRefused(t *testing.T) {
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(epicDirFixture("../../outside")), 0644))
+
+	_, err := FromYAMLFile(path)
+	require.Error(t, err)
+	var er *output.ErrorResponse
+	require.ErrorAs(t, err, &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Equal(t, `epic.config.directory "../../outside" is outside the project`, er.Message)
+	require.Equal(t, "set `epic.config.directory` to a folder inside the project, relative to the folder holding config.yaml (e.g. `epics`)", er.NextAction)
 }

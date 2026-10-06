@@ -15,6 +15,7 @@ import (
 const repo1to2Desc = "record format version"
 const project1to2Desc = "split legacy single-file settings and record installed skills version"
 const project2to3Desc = "resolve spec, plan and changelog folders from the settings file"
+const project3to4Desc = "add the epic store and epic_split_threshold"
 
 func applyOpts(root string) Options {
 	return Options{ProjectRoot: root, BinaryVersion: testVersion}
@@ -32,10 +33,14 @@ func TestInspect_UnversionedProjectReportsPendingSteps(t *testing.T) {
 	require.True(t, rep.DryRun)
 	require.True(t, rep.Pending())
 	require.Equal(t, []FileReport{
-		{Path: cfgPath(root, "config.yaml"), Kind: KindProject, From: 1, To: 3, Steps: []string{project1to2Desc, project2to3Desc}, Actions: []Action{
+		{Path: cfgPath(root, "config.yaml"), Kind: KindProject, From: 1, To: 4, Steps: []string{project1to2Desc, project2to3Desc, project3to4Desc}, Actions: []Action{
 			{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "spec.config.directory", To: "specs"},
 			{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "plan.config.directory", To: "plans"},
 			{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "changelog.config.directory", To: "changelog"},
+			{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "epic_split_threshold", To: "moderate"},
+			{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "epic.provider", To: "file"},
+			{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "epic.strict_dependencies", To: "false"},
+			{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "epic.config.directory", To: "epics"},
 		}},
 		{Path: cfgPath(root, "repo.yaml"), Kind: KindRepo, From: 1, To: 2, Steps: []string{repo1to2Desc}, Actions: []Action{}},
 	}, rep.Files)
@@ -54,11 +59,11 @@ func TestInspect_LegacySingleFileReportsActions(t *testing.T) {
 	fr := rep.Files[0]
 	require.Equal(t, cfgPath(root, "config.yaml"), fr.Path)
 	require.Equal(t, 1, fr.From)
-	require.Equal(t, 3, fr.To)
-	require.Equal(t, []string{project1to2Desc, project2to3Desc}, fr.Steps)
+	require.Equal(t, 4, fr.To)
+	require.Equal(t, []string{project1to2Desc, project2to3Desc, project3to4Desc}, fr.Steps)
 	require.Empty(t, fr.Backup)
 
-	require.Len(t, fr.Actions, 7)
+	require.Len(t, fr.Actions, 11)
 	require.Equal(t, "create", fr.Actions[0].Op)
 	require.Equal(t, cfgPath(root, "repo.yaml"), fr.Actions[0].Path)
 	require.Equal(t, golden(t, "legacy_single", "repo.yaml"), string(fr.Actions[0].Content))
@@ -68,6 +73,10 @@ func TestInspect_LegacySingleFileReportsActions(t *testing.T) {
 	require.Equal(t, Action{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "spec.config.directory", To: "specs"}, fr.Actions[4])
 	require.Equal(t, Action{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "plan.config.directory", To: "plans"}, fr.Actions[5])
 	require.Equal(t, Action{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "changelog.config.directory", To: "changelog"}, fr.Actions[6])
+	require.Equal(t, Action{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "epic_split_threshold", To: "moderate"}, fr.Actions[7])
+	require.Equal(t, Action{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "epic.provider", To: "file"}, fr.Actions[8])
+	require.Equal(t, Action{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "epic.strict_dependencies", To: "false"}, fr.Actions[9])
+	require.Equal(t, Action{Op: "set", Path: cfgPath(root, "config.yaml"), Key: "epic.config.directory", To: "epics"}, fr.Actions[10])
 
 	require.Equal(t, SkillsReport{Installed: "0.0.9", Current: "0.1.0", Status: "mismatch", Agent: "claude", Reinstall: true}, rep.Skills)
 }
@@ -187,7 +196,7 @@ func TestApply_UnnamedLegacyProjectTakesNameFromFolder(t *testing.T) {
 	_, err := Apply(applyOpts(root))
 	require.NoError(t, err)
 
-	want := "schema: 3\n" +
+	want := "schema: 4\n" +
 		"written_by: 0.1.0\n" +
 		"agent: claude\n" +
 		"name: my-project\n" +
@@ -203,7 +212,13 @@ func TestApply_UnnamedLegacyProjectTakesNameFromFolder(t *testing.T) {
 		"        directory: plans\n" +
 		"changelog:\n" +
 		"    config:\n" +
-		"        directory: changelog\n"
+		"        directory: changelog\n" +
+		"epic_split_threshold: moderate\n" +
+		"epic:\n" +
+		"    provider: file\n" +
+		"    strict_dependencies: false\n" +
+		"    config:\n" +
+		"        directory: epics\n"
 	require.Equal(t, want, string(readFile(t, cfgPath(root, "config.yaml"))))
 }
 
@@ -403,7 +418,7 @@ func TestApply_FailingInstallerLeavesSkillsVersionUntouched(t *testing.T) {
 }
 
 func TestApply_MissingAgentReturnsErrNoAgent(t *testing.T) {
-	root := writeProject(t, "schema: 3\nwritten_by: 0.1.0\nname: noagent\nskills_version: 0.0.9\n")
+	root := writeProject(t, "schema: 4\nwritten_by: 0.1.0\nname: noagent\nskills_version: 0.0.9\n")
 	before := snapshotDir(t, root)
 	inst := &fakeInstaller{}
 	opts := applyOpts(root)
@@ -451,29 +466,29 @@ func TestApply_SyntheticStepIsPickedUp(t *testing.T) {
 	root := newProject(t, "current")
 	synthetic := Step{
 		Kind:        KindProject,
-		From:        3,
-		Description: "synthetic 3 to 4",
+		From:        4,
+		Description: "synthetic 4 to 5",
 		Run: func(sc *StepContext, doc *yaml.Node) ([]Action, error) {
 			setScalar(docRoot(doc), "synthetic", "added")
 			return []Action{{Op: "set", Path: filepath.Join(sc.FileDir, "config.yaml"), Key: "synthetic", To: "added"}}, nil
 		},
 	}
-	withSteps(t, KindProject, []Step{project1to2, project2to3, synthetic}, 4)
+	withSteps(t, KindProject, []Step{project1to2, project2to3, project3to4, synthetic}, 5)
 
 	preview, err := Inspect(root, testVersion)
 	require.NoError(t, err)
 	require.Equal(t, "upgrade_needed", preview.Status)
 	require.Len(t, preview.Files, 1)
-	require.Equal(t, 3, preview.Files[0].From)
-	require.Equal(t, 4, preview.Files[0].To)
-	require.Equal(t, []string{"synthetic 3 to 4"}, preview.Files[0].Steps)
+	require.Equal(t, 4, preview.Files[0].From)
+	require.Equal(t, 5, preview.Files[0].To)
+	require.Equal(t, []string{"synthetic 4 to 5"}, preview.Files[0].Steps)
 
 	rep, err := Apply(applyOpts(root))
 	require.NoError(t, err)
 	require.Equal(t, "upgraded", rep.Status)
-	require.Equal(t, cfgPath(root, "config.yaml.v3.old"), rep.Files[0].Backup)
+	require.Equal(t, cfgPath(root, "config.yaml.v4.old"), rep.Files[0].Backup)
 
-	want := "schema: 4\n" +
+	want := "schema: 5\n" +
 		"written_by: 0.1.0\n" +
 		"name: current\n" +
 		"agent: claude\n" +
@@ -490,6 +505,12 @@ func TestApply_SyntheticStepIsPickedUp(t *testing.T) {
 		"repos:\n" +
 		"    - name: current\n" +
 		"      location: .\n" +
+		"epic_split_threshold: moderate\n" +
+		"epic:\n" +
+		"    provider: file\n" +
+		"    strict_dependencies: false\n" +
+		"    config:\n" +
+		"        directory: epics\n" +
 		"synthetic: added\n"
 	require.Equal(t, want, string(readFile(t, cfgPath(root, "config.yaml"))))
 }

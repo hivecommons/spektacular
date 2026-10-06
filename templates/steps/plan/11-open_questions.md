@@ -17,6 +17,7 @@ Examples of what does NOT belong here:
 - "What is the current shape of the API?" → read the code now
 - "How should we name the new field?" → decide now
 - "Is there a test already covering this?" → check now
+- "This plan departs from the spec's chosen interface" → never parked as an open question: stop and ask the user now
 
 ### What to produce
 
@@ -35,8 +36,8 @@ Before advancing, save this section to its working file. Using your own `Write` 
 - **Rejected**: alternatives considered and why not
 ```
 
-**Proceed unless genuinely blocked.** Do not stop to present this section for review or approval. Only when a decision has no reasonable default — mutually exclusive directions you cannot responsibly choose between, or information only the user holds — STOP and present the options to the user in one block, and do not advance past the point that depends on the answer until they respond. Otherwise proceed without interruption.
+{{> partials/proceed-unless-blocked}}
 
 Once the drafted list is saved and correctly scoped, advance:
 
-{{config.command}} plan goto --data '{"step":"{{next_step}}"}'
+{{config.command}} plan goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'

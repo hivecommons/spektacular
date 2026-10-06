@@ -161,7 +161,7 @@ func TestStartGate_CommitExistingTrueCommitsTheUsersWorkFirst(t *testing.T) {
 
 	// Run the workflow out to its own completion commit and read the history
 	// back: the user's commit sits below the workflow's, above the baseline.
-	walkSpecToVerification(t)
+	walkSpecToSplit(t)
 	stageCommitMessage(t, fx, "Specify "+fixtureSpecName+"\n\nThe billing spec is written and verified.\n")
 	_, _, code = runRootCmd(t, "spec", "goto", "--data", finishWithMessage)
 	require.Equal(t, 0, code)
@@ -186,7 +186,7 @@ func TestStartGate_CommitExistingFalseFoldsTheChangeIntoTheWorkflowsCommit(t *te
 	require.FileExists(t, statePathOf(fx), "the workflow must have started")
 	require.Equal(t, "1", commitCount(t, fx.root), "continuing must not commit anything at the start")
 
-	walkSpecToVerification(t)
+	walkSpecToSplit(t)
 	stageCommitMessage(t, fx, "Specify "+fixtureSpecName+"\n\nThe billing spec is written and verified.\n")
 	_, _, code = runRootCmd(t, "spec", "goto", "--data", finishWithMessage)
 	require.Equal(t, 0, code)

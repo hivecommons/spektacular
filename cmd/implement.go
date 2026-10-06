@@ -10,6 +10,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/plantask"
+	"github.com/hivecommons/spektacular/internal/status"
 	"github.com/hivecommons/spektacular/internal/steps/implement"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
@@ -27,22 +28,6 @@ var implementResultOutputSchema = &schemaObj{
 	},
 }
 
-var implementStatusOutputSchema = &schemaObj{
-	Type: "object",
-	Properties: map[string]*schemaProp{
-		"plan_name":        {Type: "string"},
-		"plan_document":    {Type: "string", Description: `the plan's document name, always "plan"`},
-		"plan_path":        {Type: "string", Description: "the plan's location relative to the folder holding config.yaml"},
-		"current_step":     {Type: "string"},
-		"completed_steps":  {Type: "array", Items: &schemaProp{Type: "string"}},
-		"total_steps":      {Type: "integer"},
-		"progress":         {Type: "string"},
-		"steps":            {Type: "array"},
-		"unchecked_phases": {Type: "integer"},
-		"task":             {Type: "string"},
-	},
-}
-
 var implementCmd = &cobra.Command{
 	Use:   "implement",
 	Short: "Manage implement workflow",
@@ -51,7 +36,7 @@ var implementCmd = &cobra.Command{
 
 var implementNewCmd = &cobra.Command{
 	Use:   "new",
-	Short: "Create a new implement workflow against an existing plan",
+	Short: "Create a new implement workflow for an existing spec",
 	RunE:  runImplementNew,
 }
 
@@ -59,12 +44,6 @@ var implementGotoCmd = &cobra.Command{
 	Use:   "goto",
 	Short: "Jump to a named step",
 	RunE:  runImplementGoto,
-}
-
-var implementStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show current workflow progress",
-	RunE:  runImplementStatus,
 }
 
 var implementStepsCmd = &cobra.Command{
@@ -79,8 +58,10 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 			Input: &schemaObj{
 				Type: "object",
 				Properties: map[string]*schemaProp{
-					"name": {Type: "string", Pattern: "^[a-z0-9_-]+$", MaxLen: 64},
-					"task": {Type: "string"},
+					"name":                  {Type: "string", Pattern: "^[a-z0-9_-]+$", MaxLen: 64, Description: "the spec to implement (its plan shares the name)"},
+					"task":                  {Type: "string"},
+					"orchestrated":          {Type: "boolean", Description: "true when an epic orchestrator starts the run: it keeps its own lane under .spektacular/workflows/ and skips the uncommitted-changes question"},
+					"override_dependencies": {Type: "boolean", Description: "start even though a spec this one depends on in its epic is not implemented yet; set only after the user agrees, and refused under epic.strict_dependencies"},
 				},
 				Required: []string{"name"},
 			},
@@ -110,6 +91,15 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	// spec new so the driving agent can offer resume without first
 	// prompting the user for a plan name.
 	statePath := stateFilePath(dataDir)
+	laneName, orchestrated, err := orchestratedStart(dataStr)
+	if err != nil {
+		return err
+	}
+	if orchestrated {
+		// An orchestrated run keeps its own lane, so it probes only that lane
+		// for a resume: a standalone workflow never blocks it.
+		statePath = workflow.LaneStatePath(dataDir, "implement", laneName)
+	}
 	if dryRun {
 		statePath += ".dryrun-tmp"
 	} else {
@@ -124,18 +114,24 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 
 	// No workflow to resume — starting fresh requires a name.
 	if dataStr == "" {
-		return output.NewError("name_required", "no plan name was provided").
-			WithNextAction(`specify the plan to implement with --data '{"name":"<plan_name>"}'; to see existing plans, run "plan file list"`)
+		return output.NewError("name_required", "no spec name was provided").
+			WithNextAction(`specify the spec to implement with --data '{"name":"<spec_name>"}'; the spec must have a plan, so if it has none run "plan new" for it first; to see existing specs, run "spec file list"`)
 	}
 	var input struct {
-		Name string `json:"name"`
-		Task string `json:"task"`
+		Name                 string `json:"name"`
+		Task                 string `json:"task"`
+		OverrideDependencies bool   `json:"override_dependencies"`
 	}
 	if err := json.Unmarshal([]byte(dataStr), &input); err != nil {
 		return fmt.Errorf("parsing --data: %w", err)
 	}
 	if input.Name == "" || !nameRegexp.MatchString(input.Name) || len(input.Name) > 64 {
 		return fmt.Errorf("name must match ^[a-z0-9_-]+$ and be at most 64 characters")
+	}
+	if !orchestrated && !dryRun {
+		if err := refuseLaneInProgress(dataDir, cfg.Command, "implement", input.Name); err != nil {
+			return err
+		}
 	}
 
 	// Precondition: the plan file must exist before an implement workflow
@@ -145,7 +141,7 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	projectStore := store.NewSourceStore(root, "project")
 	planRel := implement.PlanFilePath(cfg.Plan.Config.Directory, input.Name)
 	if _, statErr := projectStore.Stat(planRel); statErr != nil {
-		return fmt.Errorf("plan file not found at %s — run 'plan new' first or check the name", filepath.Join(root, planRel))
+		return fmt.Errorf("spec %q has no plan at %s — run 'plan new' for it first, or check the spec name", input.Name, filepath.Join(root, planRel))
 	}
 	if err := refuseStalePlan(cfg, projectStore, input.Name); err != nil {
 		return err
@@ -155,12 +151,20 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 	}
+	override, err := refuseUnmetDependencies(cfg, projectStore, input.Name, dataStr, input.OverrideDependencies)
+	if err != nil {
+		return err
+	}
 
 	// The uncommitted-changes gate runs once the plan is known to exist, so a
 	// refusal here never precedes a plan-not-found error, and before
 	// clearState — the first thing this command writes.
-	if err := startGate(cfg, root, "implement", input.Name, dataStr, dryRun); err != nil {
-		return err
+	// An orchestrated run skips it: the orchestrator raises uncommitted work
+	// once, at the start of the whole run.
+	if !orchestrated {
+		if err := startGate(cfg, root, "implement", input.Name, dataStr, dryRun); err != nil {
+			return err
+		}
 	}
 	if !dryRun {
 		clearState(statePath)
@@ -171,8 +175,14 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, projectStore, out)
 	wf.SetData("name", input.Name)
+	if orchestrated {
+		wf.SetData("orchestrated", true)
+	}
 	if input.Task != "" {
 		wf.SetData("task", input.Task)
+	}
+	if len(override) > 0 {
+		wf.SetData("dependency_override", override)
 	}
 
 	if err := readInputIntoWorkflow(cmd, wf); err != nil {
@@ -192,6 +202,7 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 				Type: "object",
 				Properties: map[string]*schemaProp{
 					"step": {Type: "string", Enum: workflow.New(implement.Steps(), "", workflow.Config{}, nil, nil).StepNames()},
+					"name": {Type: "string", Pattern: "^[a-z0-9_-]+$", MaxLen: 64, Description: "the spec whose workflow to advance; routes to its orchestrated lane when it has one"},
 				},
 				Required: []string{"step"},
 			},
@@ -232,12 +243,22 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 
 	// Refuse to operate on an in-progress workflow of a different kind (e.g. a
 	// spec or plan); resuming it from here would apply implement steps to it.
-	if handled, err := guardKind(stateFilePath(dataDir), cfg.Command, "implement"); err != nil {
+	// The spec name routes the goto to that spec's workflow — its lane, or
+	// the shared record when that holds it. It is a routing key, never
+	// workflow data, so it is removed before the rest is copied in.
+	gotoName, _ := input["name"].(string)
+	delete(input, "name")
+	slot, err := resolveGotoSlot(dataDir, cfg.Command, "implement", gotoName)
+	if err != nil {
+		return err
+	}
+
+	if handled, err := guardKind(slot.StatePath, cfg.Command, "implement"); err != nil {
 		return err
 	} else if handled {
 		return err
 	}
-	wf := workflow.New(implement.Steps(), stateFilePath(dataDir), workflow.Config{}, nil, nil)
+	wf := workflow.New(implement.Steps(), slot.StatePath, workflow.Config{}, nil, nil)
 	if nameVal, ok := wf.GetData("name"); ok {
 		projectStore := store.NewSourceStore(root, "project")
 		if err := refuseStalePlan(cfg, projectStore, fmt.Sprintf("%v", nameVal)); err != nil {
@@ -246,7 +267,7 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 	}
 
 	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
-	return gotoWithAutoCommit(cmd, cfg, root, stateFilePath(dataDir), "implement",
+	return gotoWithAutoCommit(cmd, cfg, root, slot.StatePath, "implement",
 		implement.Steps(), wfCfg, input, stepVal, "no active implement workflow found — run 'implement new' first")
 }
 
@@ -262,13 +283,86 @@ func refuseStalePlan(cfg config.Config, st store.Store, planName string) error {
 	if err != nil {
 		return err
 	}
-	if !strictPlanIsStale(cfg, st, planName, fm) {
+	if !status.PlanIsStale(cfg, st, planName, fm) {
 		return nil
 	}
 	return output.NewError("plan_stale",
 		fmt.Sprintf("plan %q is stale because its spek changed after approval", planName)).
 		WithResource(planName).
 		WithNextAction("re-run the plan workflow against the updated spek and approve the fresh plan before implementing")
+}
+
+// refuseUnmetDependencies checks the spec's direct dependencies in its epic
+// before implementation starts. A standalone spec, or one whose dependencies
+// are all implemented, passes silently. An unmet dependency refuses the run
+// unless the caller asked to override it, and epic.strict_dependencies refuses
+// even then. It runs before any workflow state is written, so a refusal
+// starts nothing. On an accepted override it returns the unmet dependencies
+// and their states, for the workflow to record in the changelog.
+func refuseUnmetDependencies(cfg config.Config, st store.Store, specName, dataStr string, override bool) ([]map[string]any, error) {
+	deps, err := status.DependenciesOf(status.Options{Config: cfg, Store: st}, specName)
+	if err != nil {
+		return nil, err
+	}
+	unmet := deps.Unmet()
+	if len(unmet) == 0 {
+		return nil, nil
+	}
+
+	lines := make([]string, len(unmet))
+	for i, dep := range unmet {
+		lines[i] = fmt.Sprintf("%s depends on %s, which is %s", specName, dep.Name, dep.Description)
+	}
+	message := strings.Join(lines, "; ")
+
+	implementReady := "no unmet dependency is ready to implement yet, because each still waits on its own dependencies; run `" + cfg.Command + " status " + specName + "` to see the epic's order"
+	for _, dep := range unmet {
+		if dep.Ready {
+			implementReady = fmt.Sprintf(`implement the first ready dependency instead: %s implement new --data '{"name":"%s"}'`, cfg.Command, dep.Name)
+			break
+		}
+	}
+
+	if cfg.Epic.StrictDependencies {
+		if override {
+			return nil, output.NewError("dependency_override_refused",
+				message+"; epic.strict_dependencies is on, so implementation cannot start past an unmet dependency").
+				WithResource(specName).
+				WithNextAction("tell the user each unmet dependency and its state; " + implementReady)
+		}
+		return nil, output.NewError("dependencies_unmet", message).
+			WithResource(specName).
+			WithNextAction("tell the user each unmet dependency and its state; epic.strict_dependencies is on, so this spec cannot be implemented until they are; " + implementReady)
+	}
+
+	if !override {
+		return nil, output.NewError("dependencies_unmet", message).
+			WithResource(specName).
+			WithNextAction(fmt.Sprintf("tell the user each unmet dependency and its state, and ask whether to continue anyway; if they choose to continue, re-run %s implement new --data '%s'; otherwise %s",
+				cfg.Command, withOverride(dataStr), implementReady))
+	}
+
+	recorded := make([]map[string]any, len(unmet))
+	for i, dep := range unmet {
+		recorded[i] = map[string]any{"name": dep.Name, "state": dep.Description}
+	}
+	return recorded, nil
+}
+
+// withOverride returns the implement new --data payload with
+// "override_dependencies": true added, keeping every other field the caller
+// sent.
+func withOverride(dataStr string) string {
+	var fields map[string]any
+	if err := json.Unmarshal([]byte(dataStr), &fields); err != nil || fields == nil {
+		fields = map[string]any{}
+	}
+	fields["override_dependencies"] = true
+	raw, err := json.Marshal(fields)
+	if err != nil {
+		return dataStr
+	}
+	return string(raw)
 }
 
 // refuseUnstartableTask refuses a single-task run whose task cannot start:
@@ -289,7 +383,7 @@ func refuseUnstartableTask(cfg config.Config, st store.Store, planName, taskID s
 		return err
 	}
 
-	listTasks := fmt.Sprintf("run `%s plan export %s` to see the plan's tasks and their ids", cfg.Command, planName)
+	listTasks := fmt.Sprintf("run `%s status %s --format json` to see the spec's tasks and their ids", cfg.Command, planName)
 	task, ok := p.Task(taskID)
 	if !ok {
 		return output.NewError("task_not_found", fmt.Sprintf("plan %q has no task with id %s", planName, taskID)).
@@ -327,77 +421,6 @@ func refuseUnstartableTask(cfg config.Config, st store.Store, planName, taskID s
 	return nil
 }
 
-func runImplementStatus(cmd *cobra.Command, _ []string) error {
-	if schema, _ := cmd.Flags().GetBool("schema"); schema {
-		s := commandSchema{Input: nil, Output: implementStatusOutputSchema}
-		return output.Write(cmd.OutOrStdout(), s, "")
-	}
-
-	dataDir, err := dataDir()
-	if err != nil {
-		return err
-	}
-	root, err := projectRoot()
-	if err != nil {
-		return err
-	}
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
-
-	// Refuse to report on an in-progress workflow of a different kind — its
-	// steps and counts would be meaningless under the implement step list.
-	if handled, err := guardKind(stateFilePath(dataDir), cfg.Command, "implement"); err != nil {
-		return err
-	} else if handled {
-		return err
-	}
-
-	steps := implement.Steps()
-	wf := workflow.New(steps, stateFilePath(dataDir), workflow.Config{}, nil, nil)
-	st := wf.State()
-
-	nameVal, ok := wf.GetData("name")
-	if !ok {
-		return fmt.Errorf("no active implement workflow found — run 'implement new' first")
-	}
-	planName := fmt.Sprintf("%v", nameVal)
-	planRel := implement.PlanFilePath(cfg.Plan.Config.Directory, planName)
-	planPath := reportedLocation(centralLocationBase, planRel)
-	task := ""
-	if v, ok := wf.GetData("task"); ok {
-		task = fmt.Sprintf("%v", v)
-	}
-
-	stepInfos := wf.StepStatus()
-	entries := make([]implement.StepEntry, len(stepInfos))
-	for i, info := range stepInfos {
-		entries[i] = implement.StepEntry{Name: info.Name, Status: info.Status}
-	}
-
-	// unchecked_phases keeps its name so existing readers keep working; it
-	// counts open tasks in a task-format plan and open phases in an older one.
-	uncheckedPhases := 0
-	if content, readErr := store.NewSourceStore(root, "project").Read(planRel); readErr == nil {
-		uncheckedPhases = plantask.Parse(content).OpenItems()
-	}
-
-	out := output.New(cmd.OutOrStdout(), globalFields)
-	return out.WriteResult(implement.StatusResult{
-		PlanName:        planName,
-		PlanDocument:    "plan",
-		PlanPath:        planPath,
-		CurrentStep:     wf.Current(),
-		CompletedSteps:  st.CompletedSteps,
-		TotalSteps:      len(steps),
-		Progress:        fmt.Sprintf("%d/%d", len(st.CompletedSteps), len(steps)),
-		Steps:           entries,
-		UncheckedPhases: uncheckedPhases,
-		Task:            task,
-	})
-}
-
 func runImplementSteps(cmd *cobra.Command, _ []string) error {
 	if schema, _ := cmd.Flags().GetBool("schema"); schema {
 		s := commandSchema{
@@ -429,5 +452,5 @@ func init() {
 	implementGotoCmd.Flags().String("stdin", "", "Read stdin and store it in workflow data under this key")
 	implementGotoCmd.Flags().String("file", "", "Read a file at <path> (relative to cwd) and store its contents under the filename's basename (without extension)")
 
-	implementCmd.AddCommand(implementNewCmd, implementGotoCmd, implementStatusCmd, implementStepsCmd)
+	implementCmd.AddCommand(implementNewCmd, implementGotoCmd, implementStepsCmd)
 }

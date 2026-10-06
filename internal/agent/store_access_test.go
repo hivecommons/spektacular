@@ -100,12 +100,14 @@ func TestRenderedStoreAccessSectionNamesEveryStoreCommand(t *testing.T) {
 		"go run . changelog file",
 		"go run . knowledge",
 		"go run . design",
+		"go run . epic",
 		"--from <path>",
 		// Removal is a CLI verb too. Without these two, the section names
 		// read and write for every store and is silent on removal, which is
 		// the silence that made reaching for `rm` look permissible.
 		"go run . knowledge delete",
 		"go run . design delete",
+		"go run . epic delete",
 	} {
 		require.Containsf(t, rendered, needle,
 			"the rendered store-access section must name %q", needle)

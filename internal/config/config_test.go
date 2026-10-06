@@ -32,6 +32,10 @@ func TestNewDefault_HasExpectedDefaults(t *testing.T) {
 	require.Equal(t, AutoCommitOff, cfg.AutoCommit)
 	require.Empty(t, cfg.Name)
 	require.Empty(t, cfg.Knowledge.Sources)
+	require.Equal(t, "moderate", cfg.EpicSplitThreshold)
+	require.Equal(t, "file", cfg.Epic.Provider)
+	require.False(t, cfg.Epic.StrictDependencies)
+	require.Equal(t, ".spektacular/epics", cfg.Epic.Config.Directory)
 }
 
 func TestFromYAMLFile_LoadsAndExpandsEnvVars(t *testing.T) {
@@ -306,6 +310,10 @@ repos:
 	require.Equal(t, ".spektacular/plans", cfg.Plan.Config.Directory)
 	require.Equal(t, ProviderFile, cfg.Changelog.Provider)
 	require.Equal(t, ".spektacular/changelog", cfg.Changelog.Config.Directory)
+	require.Equal(t, "file", cfg.Epic.Provider)
+	require.False(t, cfg.Epic.StrictDependencies)
+	require.Equal(t, ".spektacular/epics", cfg.Epic.Config.Directory)
+	require.Equal(t, "moderate", cfg.EpicSplitThreshold)
 	// The project-level knowledge list holds only project-owned sources and is
 	// empty by default; the repo's own store lives in RepoConfig.
 	require.Empty(t, cfg.Knowledge.Sources)
@@ -390,6 +398,111 @@ repos:
 	_, err = FromYAMLFile(path)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "changelog.config.directory")
+}
+
+// Epic settings: an unsupported epic.provider is refused with config_invalid,
+// and the message and next action name the only allowed value.
+func TestFromYAMLFile_UnknownEpicProviderReturnsError(t *testing.T) {
+	yaml := `name: testproj
+epic:
+  provider: bogus
+  config:
+    directory: epics
+repos:
+  - name: testproj
+    location: ..`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	_, err := FromYAMLFile(path)
+	require.Error(t, err)
+	var er *output.ErrorResponse
+	require.ErrorAs(t, err, &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Equal(t, `epic.provider "bogus" is not supported (only "file")`, er.Message)
+	require.Equal(t, "set epic.provider in .spektacular/config.yaml to file", er.NextAction)
+}
+
+// Epic settings: an empty epic directory is refused.
+func TestFromYAMLFile_EmptyEpicDirectoryReturnsError(t *testing.T) {
+	yaml := `name: testproj
+epic:
+  provider: file
+  config:
+    directory: ""
+repos:
+  - name: testproj
+    location: ..`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	_, err := FromYAMLFile(path)
+	require.Error(t, err)
+	var er *output.ErrorResponse
+	require.ErrorAs(t, err, &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Equal(t, "epic.config.directory must not be empty", er.Message)
+}
+
+// Epic settings: an unknown epic_split_threshold is refused with
+// config_invalid, and the message and next action name the allowed values.
+func TestFromYAMLFile_UnknownEpicSplitThresholdReturnsError(t *testing.T) {
+	yaml := `name: testproj
+epic_split_threshold: unsupported
+repos:
+  - name: testproj
+    location: ..`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	_, err := FromYAMLFile(path)
+	require.Error(t, err)
+	var er *output.ErrorResponse
+	require.ErrorAs(t, err, &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Equal(t, `epic_split_threshold must be one of "strict", "moderate", or "lenient"`, er.Message)
+	require.Equal(t, "set epic_split_threshold in .spektacular/config.yaml to strict, moderate or lenient (or remove the key to use moderate)", er.NextAction)
+}
+
+// Epic settings: each epic_split_threshold value loads verbatim.
+func TestFromYAMLFile_EachEpicSplitThresholdValueLoads(t *testing.T) {
+	for _, want := range []string{"strict", "moderate", "lenient"} {
+		t.Run(want, func(t *testing.T) {
+			yaml := "name: testproj\n" +
+				"epic_split_threshold: " + want + "\n" +
+				"repos:\n" +
+				"  - name: testproj\n" +
+				"    location: ..\n"
+			_, path := projectConfigPath(t)
+			require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+			cfg, err := FromYAMLFile(path)
+			require.NoError(t, err)
+			require.Equal(t, want, cfg.EpicSplitThreshold)
+		})
+	}
+}
+
+// Epic settings: strict_dependencies: true loads, alongside the rest of the
+// epic section.
+func TestFromYAMLFile_EpicStrictDependenciesLoads(t *testing.T) {
+	yaml := `name: testproj
+epic:
+  provider: file
+  strict_dependencies: true
+  config:
+    directory: epics
+repos:
+  - name: testproj
+    location: ..`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "file", cfg.Epic.Provider)
+	require.True(t, cfg.Epic.StrictDependencies)
+	require.Equal(t, ".spektacular/epics", cfg.Epic.Config.Directory)
 }
 
 // Criterion 3: a knowledge source missing its required location is rejected.
@@ -809,12 +922,12 @@ func TestToYAMLFile_ProjectDesignSourcesRoundTrip(t *testing.T) {
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Contains(t, string(raw), "design:\n")
-	require.Contains(t, string(raw), "schema: 3\n", "a design block does not bump the settings format version")
+	require.Contains(t, string(raw), "schema: 4\n", "a design block does not bump the settings format version")
 
 	loaded, err := FromYAMLFile(path)
 	require.NoError(t, err)
 	require.Equal(t, cfg.Design, loaded.Design)
-	require.Equal(t, 3, loaded.Schema)
+	require.Equal(t, 4, loaded.Schema)
 }
 
 // Phase 1.1 criterion 2: a project that declares no design sources loads as
@@ -1078,12 +1191,12 @@ func TestToYAMLFile_StampsSchemaAndWriter(t *testing.T) {
 
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
-	require.Contains(t, string(raw), "schema: 3\n")
+	require.Contains(t, string(raw), "schema: 4\n")
 	require.Contains(t, string(raw), "written_by: test-x\n")
 
 	loaded, err := FromYAMLFile(path)
 	require.NoError(t, err)
-	require.Equal(t, 3, loaded.Schema)
+	require.Equal(t, 4, loaded.Schema)
 	require.Equal(t, "test-x", loaded.WrittenBy)
 }
 
@@ -1093,7 +1206,7 @@ func TestToYAMLFile_StampsSchemaAndWriter(t *testing.T) {
 func TestToYAMLFile_PreservesSkillsVersion(t *testing.T) {
 	pinWriterVersion(t, "test-x")
 
-	body := "schema: 3\n" +
+	body := "schema: 4\n" +
 		"written_by: 0.9.0\n" +
 		"skills_version: 0.9.0\n" +
 		"name: testproj\n" +

@@ -9,7 +9,7 @@ Tell the user a **{{kind}}** workflow is in progress, and ask which they want.
 Switch to the **{{kind}}** skill and resume it where it stopped:
 
 ```
-{{config.command}} {{kind}} goto --data '{"step":"{{current_step}}"}'
+{{config.command}} {{kind}} goto --data '{"step":"{{current_step}}"{{#goto_name}},"name":"{{goto_name}}"{{/goto_name}}}'
 ```
 
 ### To discard it and start a new {{requested_kind}} workflow

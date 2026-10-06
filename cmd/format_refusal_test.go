@@ -52,7 +52,7 @@ func TestFormatRefusal_UnversionedProjectIsGatedUpgradeRequired(t *testing.T) {
 	require.Equal(t, "upgrade_required", er.Code)
 	require.Equal(t, cfgPath, er.Resource)
 	require.Equal(t,
-		"this project's settings are out of date for this Spektacular: "+cfgPath+" (format 1, needs 3)",
+		"this project's settings are out of date for this Spektacular: "+cfgPath+" (format 1, needs 4)",
 		er.Message)
 	require.Equal(t,
 		"run `spektacular migrate` to upgrade (preview the changes with `spektacular migrate --dry-run`); nothing is changed until you do",

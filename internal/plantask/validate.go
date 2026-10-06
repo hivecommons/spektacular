@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hivecommons/spektacular/internal/depgraph"
 	"github.com/hivecommons/spektacular/internal/output"
 )
 
@@ -50,12 +51,18 @@ func Validate(p Plan, registeredRepos []string) error {
 		}
 	}
 
-	if cycle := findCycle(p.Tasks, byID); cycle != nil {
+	order := make([]string, len(p.Tasks))
+	deps := make(map[string][]string, len(p.Tasks))
+	for i, t := range p.Tasks {
+		order[i] = t.ID
+		deps[t.ID] = t.DependsOn
+	}
+	if cycle := depgraph.FindCycle(order, deps); cycle != nil {
 		titles := make([]string, len(cycle))
-		for i, t := range cycle {
-			titles[i] = fmt.Sprintf("%q", t.Title)
+		for i, id := range cycle {
+			titles[i] = fmt.Sprintf("%q", byID[id].Title)
 		}
-		return invalid(cycle[0], "is part of a dependency cycle: "+strings.Join(titles, " -> "),
+		return invalid(byID[cycle[0]], "is part of a dependency cycle: "+strings.Join(titles, " -> "),
 			"remove one of the **Depends on:** entries in the cycle so the tasks can be ordered")
 	}
 	return nil
@@ -111,56 +118,6 @@ func invalid(t Task, rule, next string) error {
 	return output.NewError(CodeTaskInvalid, name+" "+rule).
 		WithResource(resource).
 		WithNextAction(next)
-}
-
-// findCycle returns the tasks of the first dependency cycle found, in
-// dependency order, with the first task repeated at the end; nil when the
-// graph is acyclic. The search visits tasks in plan order, so the report is
-// stable for a given plan.
-func findCycle(tasks []Task, byID map[string]Task) []Task {
-	const (
-		white = iota
-		grey
-		black
-	)
-	colour := map[string]int{}
-	var stack []Task
-	var found []Task
-
-	var visit func(t Task) bool
-	visit = func(t Task) bool {
-		colour[t.ID] = grey
-		stack = append(stack, t)
-		for _, dep := range t.DependsOn {
-			next, ok := byID[dep]
-			if !ok {
-				continue
-			}
-			switch colour[dep] {
-			case grey:
-				for i, s := range stack {
-					if s.ID == dep {
-						found = append(append([]Task{}, stack[i:]...), next)
-						return true
-					}
-				}
-			case white:
-				if visit(next) {
-					return true
-				}
-			}
-		}
-		stack = stack[:len(stack)-1]
-		colour[t.ID] = black
-		return false
-	}
-
-	for _, t := range tasks {
-		if colour[t.ID] == white && visit(t) {
-			return found
-		}
-	}
-	return nil
 }
 
 // RequireTasks refuses a plan that does not describe its work as tasks. The

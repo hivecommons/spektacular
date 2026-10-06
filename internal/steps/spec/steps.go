@@ -1,11 +1,13 @@
 package spec
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
 
 	"github.com/hivecommons/spektacular/internal/artifact"
+	"github.com/hivecommons/spektacular/internal/epic"
 	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/stepkit"
 	"github.com/hivecommons/spektacular/internal/store"
@@ -35,7 +37,8 @@ func Steps() []workflow.StepConfig {
 		{Name: "success_metrics", Src: []string{"technical_approach"}, Dst: "success_metrics", Callback: successMetrics()},
 		{Name: "non_goals", Src: []string{"success_metrics"}, Dst: "non_goals", Callback: nonGoals()},
 		{Name: "verification", Src: []string{"non_goals"}, Dst: "verification", Callback: verification()},
-		{Name: "finished", Src: []string{"verification"}, Dst: "finished", Callback: finished()},
+		{Name: "split", Src: []string{"verification"}, Dst: "split", Callback: split()},
+		{Name: "finished", Src: []string{"split"}, Dst: "finished", Callback: finished()},
 	}
 }
 
@@ -80,7 +83,15 @@ func new() workflow.StepCallback {
 		if err != nil {
 			return "", err
 		}
-		merged, err := metadata.Merge(nil, []byte(rendered), metadata.UpdateOptions{})
+		sources, err := sourcesFrom(data)
+		if err != nil {
+			return "", err
+		}
+		var opts metadata.UpdateOptions
+		if len(sources) > 0 {
+			opts.Sources = &sources
+		}
+		merged, err := metadata.Merge(nil, []byte(rendered), opts)
 		if err != nil {
 			return "", err
 		}
@@ -102,8 +113,56 @@ func new() workflow.StepCallback {
 
 func interview() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
-		return "", writeStep("interview", "overview", "steps/spec/00b-interview.md", data, out, st, cfg, nil)
+		extra, err := interviewExtra(data)
+		if err != nil {
+			return "", err
+		}
+		return "", writeStep("interview", "overview", "steps/spec/00b-interview.md", data, out, st, cfg, extra)
 	}
+}
+
+// interviewExtra is what the interview template is given beyond the standard
+// variables: the links the spec was seeded from and the epic it joined, so the
+// template can open a seeded interview. Both are empty for a plain spec.
+func interviewExtra(data workflow.Data) (map[string]any, error) {
+	sources, err := sourcesFrom(data)
+	if err != nil {
+		return nil, err
+	}
+	uris := make([]string, len(sources))
+	for i, s := range sources {
+		uris[i] = s.URI
+	}
+	return map[string]any{
+		"sources": uris,
+		// seeded gates the template's seeded branch: a mustache section
+		// over the list itself would repeat the branch once per source.
+		"seeded": len(uris) > 0,
+		"epic":   stepkit.GetString(data, "epic"),
+	}, nil
+}
+
+// sourcesFrom reads the stamped sources spec new stored in the workflow data.
+// In the process that started the workflow they are []metadata.SourceRef; once
+// state.json has round-tripped them they come back as []any of map[string]any,
+// so both shapes are decoded through JSON. Absent sources yield nil.
+func sourcesFrom(data workflow.Data) ([]metadata.SourceRef, error) {
+	v, ok := data.Get("sources")
+	if !ok || v == nil {
+		return nil, nil
+	}
+	if refs, ok := v.([]metadata.SourceRef); ok {
+		return refs, nil
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("reading sources from workflow data: %w", err)
+	}
+	var refs []metadata.SourceRef
+	if err := json.Unmarshal(raw, &refs); err != nil {
+		return nil, fmt.Errorf("reading sources from workflow data: %w", err)
+	}
+	return refs, nil
 }
 
 func overview() workflow.StepCallback {
@@ -155,10 +214,57 @@ func verification() workflow.StepCallback {
 		if err != nil {
 			return "", err
 		}
-		return "", writeStep("verification", "finished", "steps/spec/08-verification.md", data, out, st, cfg, map[string]any{
+		return "", writeStep("verification", "split", "steps/spec/08-verification.md", data, out, st, cfg, map[string]any{
 			"spec_template": scaffold,
 		})
 	}
+}
+
+// split runs the split check once on the complete spec, and acts on a split
+// the user asked for earlier in the workflow. It tells the template the epic
+// the spec already belongs to, if any, so a split extends that epic.
+func split() workflow.StepCallback {
+	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
+		var extra map[string]any
+		if !cfg.DryRun && st != nil {
+			if name := specEpic(st, cfg, stepkit.GetString(data, "name")); name != "" {
+				extra = map[string]any{"epic_name": name}
+			}
+		}
+		return "", writeStep("split", "finished", "steps/spec/08b-split.md", data, out, st, cfg, extra)
+	}
+}
+
+// specEpic reads the epic the stored spec names, or "" when it names none or
+// cannot be read.
+func specEpic(st store.Store, cfg workflow.Config, name string) string {
+	raw, err := st.Read(SpecFilePath(cfg.SpecDir, name))
+	if err != nil {
+		return ""
+	}
+	fm, _, err := metadata.Split(raw)
+	if err != nil || fm == nil {
+		return ""
+	}
+	return fm.Epic
+}
+
+// epicSourceURIs reads the links of the sources the named epic records, for
+// the chaining offer. An epic that cannot be read yields none.
+func epicSourceURIs(st store.Store, cfg workflow.Config, name string) []string {
+	raw, err := st.Read(artifact.Address{Kind: artifact.KindEpic, Feature: name}.StorePath(cfg.EpicDir))
+	if err != nil {
+		return nil
+	}
+	e, err := epic.Parse(raw)
+	if err != nil {
+		return nil
+	}
+	uris := make([]string, 0, len(e.Sources))
+	for _, s := range e.Sources {
+		uris = append(uris, s.URI)
+	}
+	return uris
 }
 
 func finished() workflow.StepCallback {
@@ -178,6 +284,13 @@ func finished() workflow.StepCallback {
 			} else {
 				if err := metadata.Close(st, SpecFilePath(cfg.SpecDir, stepkit.GetString(data, "name")), metadata.StatusFinal); err != nil && !errors.Is(err, store.ErrNotFound) {
 					return "", err
+				}
+				// A spec in an epic gets the chaining offer: the template
+				// is told the epic and the sources it was started from, so
+				// the agent can look for a source item with no spec yet.
+				if name := specEpic(st, cfg, stepkit.GetString(data, "name")); name != "" {
+					sources := epicSourceURIs(st, cfg, name)
+					extra = map[string]any{"epic_name": name, "epic_sources": sources, "epic_has_sources": len(sources) > 0}
 				}
 			}
 		}

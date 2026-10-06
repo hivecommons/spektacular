@@ -43,6 +43,12 @@ func gotoStep(t *testing.T, step string) (string, int) {
 	return stdout, code
 }
 
+// gotoJSON is the --data an implement instruction advertises for step: every
+// plan and implement goto names the spec it belongs to.
+func gotoJSON(step string) string {
+	return `{"step":"` + step + `","name":"` + taskPlanName + `"}`
+}
+
 func TestTaskRun_WrapUpHappensOnlyOnTheLastTask(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -60,9 +66,9 @@ func TestTaskRun_WrapUpHappensOnlyOnTheLastTask(t *testing.T) {
 	stdout, code := gotoStep(t, "update_changelog")
 	require.Equal(t, 0, code, stdout)
 	instr := instructionOf(t, stdout)
-	require.Contains(t, instr, `{"step":"finished"}`)
-	require.NotContains(t, instr, `{"step":"test_plan"}`)
-	require.NotContains(t, instr, `{"step":"analyze"}`)
+	require.Contains(t, instr, gotoJSON("finished"))
+	require.NotContains(t, instr, `"step":"test_plan"`)
+	require.NotContains(t, instr, `"step":"analyze"`)
 
 	stdout, code = gotoStep(t, "finished")
 	require.Equal(t, 0, code, stdout)
@@ -77,8 +83,8 @@ func TestTaskRun_WrapUpHappensOnlyOnTheLastTask(t *testing.T) {
 	stdout, code = gotoStep(t, "update_changelog")
 	require.Equal(t, 0, code, stdout)
 	instr = instructionOf(t, stdout)
-	require.Contains(t, instr, `{"step":"test_plan"}`)
-	require.NotContains(t, instr, `{"step":"finished"}`)
+	require.Contains(t, instr, gotoJSON("test_plan"))
+	require.NotContains(t, instr, `"step":"finished"`)
 
 	// Skipping the wrap-up on the last task is refused: the feature
 	// changelog is required again.
@@ -108,9 +114,9 @@ func TestWholePlanRun_UpdateChangelogExitsAreUnchanged(t *testing.T) {
 	stdout, code := gotoStep(t, "update_changelog")
 	require.Equal(t, 0, code)
 	instr := instructionOf(t, stdout)
-	require.Contains(t, instr, `{"step":"analyze"}`)
-	require.Contains(t, instr, `{"step":"test_plan"}`)
-	require.NotContains(t, instr, `{"step":"finished"}`)
+	require.Contains(t, instr, gotoJSON("analyze"))
+	require.Contains(t, instr, gotoJSON("test_plan"))
+	require.NotContains(t, instr, `"step":"finished"`)
 
 	// A whole-plan run cannot skip the wrap-up by jumping to finished.
 	stdout, code = gotoStep(t, "finished")
@@ -152,7 +158,7 @@ func TestTaskRun_EarlyFinishIsCommitted(t *testing.T) {
 			require.Equal(t, 0, code)
 			instr := instructionOf(t, stdout)
 			require.Contains(t, instr, "Automatic git commit")
-			require.Contains(t, instr, `"step":"finished","commit_message_from"`)
+			require.Contains(t, instr, `"step":"finished","name":"`+milestoneSpecName+`","commit_message_from"`)
 			dirtyOtherRepo(t, fx)
 
 			if mode == config.AutoCommitFull {

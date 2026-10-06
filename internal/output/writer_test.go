@@ -9,7 +9,7 @@ import (
 )
 
 // stepResult is a representative success value, modeled on the small result
-// structs cmd/ passes to Writer.WriteResult (e.g. StepsResult, StatusResult).
+// structs cmd/ passes to Writer.WriteResult (e.g. StepsResult, Result).
 type stepResult struct {
 	Step        string `json:"step"`
 	Instruction string `json:"instruction"`

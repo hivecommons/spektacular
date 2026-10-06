@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// Export is a plan's task graph as `plan export` reports it. Field names and
-// nesting are fixed by the plan-task-graph design; consumers such as Hive
-// decode them directly.
+// Export is a plan's task graph, the per-task fields `status` reports under
+// each plan's tasks. Field names and nesting are fixed by the plan-task-graph
+// design; consumers such as Hive decode them directly.
 type Export struct {
 	Kind           string       `json:"kind"` // always "plan"
 	Name           string       `json:"name"`
@@ -65,15 +65,10 @@ func NewExport(name, documentStatus string, p Plan, location func(repo string) s
 // dependencies by title.
 func RenderPretty(w io.Writer, e Export) error {
 	done := 0
-	titleW, repoW := 0, 0
-	titles := make(map[string]string, len(e.Tasks))
 	for _, t := range e.Tasks {
 		if t.Completed {
 			done++
 		}
-		titleW = max(titleW, len(t.Title))
-		repoW = max(repoW, len(t.Repo.Name))
-		titles[t.ID] = t.Title
 	}
 
 	status := e.DocumentStatus
@@ -82,12 +77,41 @@ func RenderPretty(w io.Writer, e Export) error {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s  (%s)  %d/%d tasks complete\n", e.Name, status, done, len(e.Tasks))
+	writeTasks(&b, e.Tasks, "", true, true)
+
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+// WriteTasks writes tasks grouped by milestone in plan order, each line
+// indented by indent: a "Milestone N" heading, then each task's completion,
+// title, repo and executor, its id beneath when ids is set, and its
+// dependencies by title. It is the task-list half of RenderPretty, shared with
+// any view that nests a plan's tasks under something else.
+func WriteTasks(w io.Writer, tasks []ExportTask, indent string, ids bool) error {
+	var b strings.Builder
+	writeTasks(&b, tasks, indent, ids, false)
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+func writeTasks(b *strings.Builder, tasks []ExportTask, indent string, ids, blankBeforeMilestone bool) {
+	titleW, repoW := 0, 0
+	titles := make(map[string]string, len(tasks))
+	for _, t := range tasks {
+		titleW = max(titleW, len(t.Title))
+		repoW = max(repoW, len(t.Repo.Name))
+		titles[t.ID] = t.Title
+	}
 
 	milestone := -1
-	for _, t := range e.Tasks {
+	for _, t := range tasks {
 		if t.Milestone != milestone {
 			milestone = t.Milestone
-			fmt.Fprintf(&b, "\nMilestone %d\n", milestone)
+			if blankBeforeMilestone {
+				b.WriteString("\n")
+			}
+			fmt.Fprintf(b, "%sMilestone %d\n", indent, milestone)
 		}
 		box := " "
 		if t.Completed {
@@ -97,8 +121,10 @@ func RenderPretty(w io.Writer, e Export) error {
 		if t.Execution.Reason != "" {
 			exec += ": " + t.Execution.Reason
 		}
-		fmt.Fprintf(&b, "  [%s] %-*s   %-*s   %s\n", box, titleW, t.Title, repoW, t.Repo.Name, exec)
-		fmt.Fprintf(&b, "      %s\n", t.ID)
+		fmt.Fprintf(b, "%s  [%s] %-*s   %-*s   %s\n", indent, box, titleW, t.Title, repoW, t.Repo.Name, exec)
+		if ids {
+			fmt.Fprintf(b, "%s      %s\n", indent, t.ID)
+		}
 		if len(t.DependsOn) > 0 {
 			names := make([]string, len(t.DependsOn))
 			for i, id := range t.DependsOn {
@@ -107,10 +133,7 @@ func RenderPretty(w io.Writer, e Export) error {
 					names[i] = id
 				}
 			}
-			fmt.Fprintf(&b, "      depends on: %s\n", strings.Join(names, ", "))
+			fmt.Fprintf(b, "%s      depends on: %s\n", indent, strings.Join(names, ", "))
 		}
 	}
-
-	_, err := io.WriteString(w, b.String())
-	return err
 }

@@ -3,9 +3,9 @@ name: spek-design
 description: Author, bring in, revise or reference a design document.
 ---
 
-> **Version check first.** Before running any other command, run `go run . version check`.
+> **Version check first.** Before running any other command, run `spektacular version check`.
 > - On `status: "match"`, continue with the skill and produce no version-related output.
-> - On `"mismatch"`, `"missing"` or `"upgrade_needed"`, the project's settings or installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to run `go run . migrate` (they can preview it with `go run . migrate --dry-run`), and wait for their decision before continuing.
+> - On `"mismatch"`, `"missing"` or `"upgrade_needed"`, the project's settings or installed Spektacular files are out of date: relay the response's `action` message to the user, ask them to run `spektacular migrate` (they can preview it with `spektacular migrate --dry-run`), and wait for their decision before continuing.
 > - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
 > - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
@@ -17,7 +17,7 @@ recording a reference to one already stored. Unlike `spek-new`, `spek-plan` and 
 it does not drive an interactive CLI state machine — it is a static playbook. That is deliberate
 and load-bearing: a state machine could not run inside a spec workflow, and design conversation
 happens during one. The agent recognises which situation the user is in, picks one of four
-branches, and calls the matching `go run . design` command directly.
+branches, and calls the matching `spektacular design` command directly.
 
 Two classes of design document exist and the difference matters at every branch. A design the
 project already had is stored exactly as supplied and never gains anything. A design Spektacular
@@ -37,9 +37,9 @@ One skill handles all four intents. Discriminate by what the user actually said.
 unclear whether they already have the document written, ask that one question — it is the only
 thing separating the author branch from the bring-in branch.
 
-Before any branch that names a source, run `go run . design sources` to see the declared
+Before any branch that names a source, run `spektacular design sources` to see the declared
 sources and their locations. Choose only from the names it returns, never a name you inferred.
-`go run . design list` shows what those sources already hold, including which documents carry a
+`spektacular design list` shows what those sources already hold, including which documents carry a
 lifecycle record and which do not.
 
 # Intent: author
@@ -81,7 +81,7 @@ Then:
 2. Stage it under `.spektacular/tmp/<slug>.md` with your own `Write` tool.
 3. Write it:
    ```
-   go run . design author --data '{"source":"<name>","path":"<path>"}' --from .spektacular/tmp/<slug>.md
+   spektacular design author --data '{"source":"<name>","path":"<path>"}' --from .spektacular/tmp/<slug>.md
    ```
    Add `--spec <spec name>` when the conversation belonged to a spec, which records where the
    design came from. Add `--document-status <draft|final|superseded|archived>` to set its
@@ -89,7 +89,7 @@ Then:
 4. `rm .spektacular/tmp/<slug>.md`.
 5. **Only if a spec exists**, record the reference on it:
    ```
-   go run . design ref add --data '{"spec":"<spec>","source":"<name>","path":"<path>"}'
+   spektacular design ref add --data '{"spec":"<spec>","source":"<name>","path":"<path>"}'
    ```
    A design can be authored before any spec exists. When there is no spec, stop after step 4 —
    there is nothing to reference it from yet, and that is a complete outcome rather than a
@@ -103,12 +103,12 @@ the document exists, and the work is to store it without disturbing it.
 1. Confirm with the user which declared source it belongs in and the path within it.
 2. Write it:
    ```
-   go run . design write --data '{"source":"<name>","path":"<path>"}' --from <path to their file>
+   spektacular design write --data '{"source":"<name>","path":"<path>"}' --from <path to their file>
    ```
    This stores the bytes exactly as supplied. Nothing is added, removed, reordered or
    reformatted, and the document gains no frontmatter, so it reads back byte for byte identical.
    That guarantee is the whole point of this branch: a design the team wrote stays theirs.
-3. Record the reference with `go run . design ref add` if a spec should point at it.
+3. Record the reference with `spektacular design ref add` if a spec should point at it.
 
 Do not use `design author` here. Authoring stamps a lifecycle record, and a document the user
 handed over is not one Spektacular wrote.
@@ -117,18 +117,18 @@ handed over is not one Spektacular wrote.
 
 Triggered when a design that already exists has changed.
 
-1. Read the current document: `go run . design read --data '{"source":"<name>","path":"<path>"}'`.
+1. Read the current document: `spektacular design read --data '{"source":"<name>","path":"<path>"}'`.
 2. Establish what changed. If the conversation has already settled it, do not re-interview; if it
    has not, run the author branch's interview on the delta alone rather than on the whole design.
 3. Present the revised document to the user in full and get their explicit agreement.
-4. Rewrite it with `go run . design author`, exactly as in the author branch. For a document
+4. Rewrite it with `spektacular design author`, exactly as in the author branch. For a document
    Spektacular authored this is an update in place: it keeps the document's original capture date
    and the specs already referencing it, so existing references keep resolving. Pass
    `--document-status superseded` if the design has been replaced rather than amended.
 
 If the document is one the project already had, and so carries no lifecycle record, revise it with
-`go run . design write` instead, which again stores the bytes exactly as supplied.
-`go run . design list` tells the two apart: a document Spektacular authored reports its status
+`spektacular design write` instead, which again stores the bytes exactly as supplied.
+`spektacular design list` tells the two apart: a document Spektacular authored reports its status
 and capture date, one the project already had reports only a source and a path.
 
 # Intent: reference only
@@ -137,13 +137,13 @@ Triggered when the document is already in a declared source and all that is miss
 from a spec.
 
 ```
-go run . design ref add --data '{"spec":"<spec>","source":"<name>","path":"<path>"}'
+spektacular design ref add --data '{"spec":"<spec>","source":"<name>","path":"<path>"}'
 ```
 
 Recording a reference keeps both documents in agreement: the spec gains the reference, and a design
 Spektacular authored gains the spec in its own record. A design the project already had takes part
-without being touched. `go run . design ref list --data '{"spec":"<spec>"}'` reports what a spec
-already references and whether each reference resolves, and `go run . design ref remove` drops
+without being touched. `spektacular design ref list --data '{"spec":"<spec>"}'` reports what a spec
+already references and whether each reference resolves, and `spektacular design ref remove` drops
 one from both sides.
 
 # Decline handling
@@ -152,7 +152,7 @@ Nothing is written without the user's explicit agreement. Every branch that writ
 document or its proposal first and waits.
 
 If the user declines, asks for changes, or expresses uncertainty at any propose-then-confirm
-checkpoint, **do not invoke `go run . design author` or `go run . design write`**. Either
+checkpoint, **do not invoke `spektacular design author` or `spektacular design write`**. Either
 loop back and refine the draft, or stop and leave the source untouched. Remove any staged scratch
 file at `.spektacular/tmp/<slug>.md` either way; a half-finished proposal should not linger on
 disk.

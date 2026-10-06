@@ -41,5 +41,5 @@ If any verification command fails, STOP. Report the failures to the user as the 
 Once verification is green (or the user has explicitly authorized proceeding past a failure):
 
 ```
-{{config.command}} implement goto --data '{"step":"{{next_step}}"}'
+{{config.command}} implement goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```

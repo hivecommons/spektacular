@@ -73,6 +73,7 @@ func TestStepsOrderMatchesExpected(t *testing.T) {
 		"success_metrics",
 		"non_goals",
 		"verification",
+		"split",
 		"finished",
 	}
 	got := Steps()
@@ -107,6 +108,7 @@ func TestFSMWalkFromNewToFinished(t *testing.T) {
 		"success_metrics",
 		"non_goals",
 		"verification",
+		"split",
 		"finished",
 	}
 
@@ -697,4 +699,58 @@ func TestConstraintsStepClaimsTheDesignReference(t *testing.T) {
 	// The content stays in the document; only the pointer is recorded.
 	require.Contains(t, out, "duplicating its content here is what the document exists to avoid",
 		"constraints must forbid copying the design's content into the spec")
+}
+
+// The interview step hands the template the seeded sources' links and the
+// epic, whether the sources are still the stamped refs spec new stored or
+// have round-tripped through state.json as plain maps.
+func TestInterviewExtra_CarriesSourcesAndEpic(t *testing.T) {
+	refs := []metadata.SourceRef{{URI: "https://example.com/a", RetrievedDate: "2026-10-01"}, {URI: "https://example.com/b", RetrievedDate: "2026-10-01"}}
+	roundTripped := []any{
+		map[string]any{"uri": "https://example.com/a", "retrieved_date": "2026-10-01"},
+		map[string]any{"uri": "https://example.com/b", "retrieved_date": "2026-10-01"},
+	}
+	for name, sources := range map[string]any{"in process": refs, "after state round trip": roundTripped} {
+		t.Run(name, func(t *testing.T) {
+			extra, err := interviewExtra(&testData{values: map[string]any{"name": "s", "sources": sources, "epic": "000050_rollout"}})
+			require.NoError(t, err)
+			require.Equal(t, []string{"https://example.com/a", "https://example.com/b"}, extra["sources"])
+			require.Equal(t, "000050_rollout", extra["epic"])
+		})
+	}
+
+	t.Run("a plain spec has neither", func(t *testing.T) {
+		extra, err := interviewExtra(&testData{values: map[string]any{"name": "s"}})
+		require.NoError(t, err)
+		require.Equal(t, []string{}, extra["sources"])
+		require.Equal(t, "", extra["epic"])
+	})
+
+	t.Run("the interview step still renders with them", func(t *testing.T) {
+		instruction := renderStepWithData(t, interview(), map[string]any{"name": "s", "sources": refs, "epic": "000050_rollout"})
+		require.NotEmpty(t, instruction)
+	})
+}
+
+// new() records the seeded sources on the scaffold's frontmatter, and writes
+// no sources key when none were given.
+func TestNewStep_WritesSources(t *testing.T) {
+	tmp := setupNewStepEnv(t)
+	st := store.NewFileStore(tmp, "project")
+	cfg := workflow.Config{Command: "spektacular", SpecDir: "specs"}
+
+	refs := []any{map[string]any{"uri": "https://example.com/a", "retrieved_date": "2026-10-01"}}
+	_, err := new()(&testData{values: map[string]any{"name": "seeded", "sources": refs}}, &captureWriter{}, st, cfg)
+	require.NoError(t, err)
+	raw, err := st.Read(SpecFilePath("specs", "seeded"))
+	require.NoError(t, err)
+	meta, _, err := metadata.Split(raw)
+	require.NoError(t, err)
+	require.Equal(t, []metadata.SourceRef{{URI: "https://example.com/a", RetrievedDate: "2026-10-01"}}, meta.Sources)
+
+	_, err = new()(&testData{values: map[string]any{"name": "plain"}}, &captureWriter{}, st, cfg)
+	require.NoError(t, err)
+	raw, err = st.Read(SpecFilePath("specs", "plain"))
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "sources:")
 }

@@ -1,10 +1,11 @@
-schema: 3
-written_by: 0.23.0
-skills_version: 0.23.0
+schema: 4
+written_by: dev
+skills_version: dev
 name: spektacular
-command: go run .
+command: spektacular
 agent: claude
 spec_trigger_threshold: moderate
+epic_split_threshold: moderate
 auto_commit: full
 debug:
     enabled: true
@@ -24,6 +25,11 @@ changelog:
     provider: file
     config:
         directory: changelog
+epic:
+    provider: file
+    strict_dependencies: false
+    config:
+        directory: epics
 design:
     sources:
         - name: design

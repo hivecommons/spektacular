@@ -2,9 +2,9 @@
 
 The three plan documents were assembled and staged in the previous step at:
 
-- `.spektacular/tmp/plan_template.md`
-- `.spektacular/tmp/context_template.md`
-- `.spektacular/tmp/research_template.md`
+- `.spektacular/tmp/{{plan_name}}/plan_template.md`
+- `.spektacular/tmp/{{plan_name}}/context_template.md`
+- `.spektacular/tmp/{{plan_name}}/research_template.md`
 
 Verify them here. This step **only checks correctness** — it writes nothing to the plan store (the write steps that follow do that). If a scratch file is missing (the `.spektacular/tmp/` path is git-ignored and does not survive a crash), re-assemble it from the per-section working files under `.spektacular/work/{{plan_name}}/` before verifying.
 
@@ -53,12 +53,13 @@ A common failure mode is silently dropping a section when assembling. Check each
   - an `**Id:**` line holding an id issued by `{{config.command}} plan task-id`, unique in the plan;
   - a `**Repo:**` line naming exactly one registered repo. In a project with more than one registered repo, confirm the line is actually present on every single task, not just the tasks that read as obviously cross-repo — this is the check most likely to be skipped;
   - a `**Depends on:**` line, either `none` or one `- <id> — <title>` entry per dependency, each id belonging to a task in this plan, with no dependency cycle;
-  - an `**Execution:**` line, `agent` or `human — <reason>`, decided against the criteria in the tasks step, with any work that needs both an agent and a person split into two tasks;
+  - an `**Execution:**` line, `agent` or `human — <reason>`, decided against the criteria in the tasks step, with any work that needs both an agent and a person split into two tasks. No `human` task only reviews, signs off or checks something by hand: move each such check to the Testing Approach as a manual item;
   - a summary paragraph, a `*Technical detail:*` link, and outcome-based acceptance criteria.
 
   `{{config.command}} plan file write` enforces the structural rules above and refuses a plan.md that breaks them, naming the task. If a write step is refused, fix the named task in `tasks_plan.md`, re-assemble and retry.
 - **The plan's context.md** — per-task technical notes under headings matching plan.md's `*Technical detail:*` anchors.
 - **research.md** — alternatives considered and rejected with citations. Dense enough to rehydrate a cold session.
+- **Recorded decisions and knowledge** — check the staged plan against the spec's recorded decisions (its sections, every design it references, and its interview notes only if they still exist) and against the knowledge entries loaded in discovery. If anything in the plan contradicts one of them, STOP and ask the user before Step 3 re-stages; do not record it as an assumption, a `human` task or an open question.
 
 ### Step 3: Fix and re-stage
 
@@ -69,5 +70,5 @@ This step does not touch the plan store. Never write or edit the plan documents 
 Then advance:
 
 ```
-{{config.command}} plan goto --data '{"step":"{{next_step}}"}'
+{{config.command}} plan goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```

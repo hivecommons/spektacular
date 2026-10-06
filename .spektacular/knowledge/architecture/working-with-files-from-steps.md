@@ -41,7 +41,7 @@ Instead, output names the document by its address and the CLI command that reads
 
 In templates that means the address variables (`{{spec_name}}`, `{{plan_name}}`) inside a CLI read, never a path variable.
 
-Where output also reports *where* a document is stored, such as a list's `path` or a status `plan_path`, that location is relative to the folder holding the configuration file that declares the store (for example `specs/<feature>.md`). It is informational only, never an address and never something to open.
+Where output also reports *where* a document is stored, such as a list's `path` or the `plan_path` a workflow's `new` and `goto` results report, that location is relative to the folder holding the configuration file that declares the store (for example `specs/<feature>.md`). It is informational only, never an address and never something to open.
 
 ## Why this is stricter than it looks
 
@@ -180,7 +180,7 @@ wf := workflow.New(steps, statePath, wfCfg, store.NewSourceStore(root, "project"
 Build stores through it rather than reaching for `NewFileStore` directly, so listings and searches
 honour those exclusions.
 
-Pass `nil` for workflows that only query state and never touch files (e.g. `spec status`, `spec steps`).
+Pass `nil` for workflows that only query state and never touch files (e.g. `spec steps`). `status` is not one of them: it reads every epic, spec and plan it reports through the store.
 
 ## Future Backends
 

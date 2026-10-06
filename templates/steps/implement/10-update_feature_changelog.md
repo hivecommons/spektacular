@@ -40,11 +40,21 @@ Author a self-contained Markdown record covering the entire feature, understanda
 - **Why it matters / what it enables** — drawn from the spec's framing.
 - **Deviations from the plan** — anything the entries recorded as different from what was originally planned. State "None" explicitly if there were none.
 
-Stage it with the `Write` tool at `.spektacular/tmp/changelog_project.md`, then commit it and remove the scratch file:
+{{#has_dependency_override}}
+### Record the dependency override
+
+This run started past dependencies that were not implemented yet: the user chose to continue anyway. Record it in **Deviations from the plan** of the project-level record, stating that implementation started before these dependencies were implemented, naming each and the state it was in:
+
+{{#dependency_override}}
+- `{{name}}` — {{state}}
+{{/dependency_override}}
+
+{{/has_dependency_override}}
+Stage it with the `Write` tool at `.spektacular/tmp/{{plan_name}}/changelog_project.md`, then commit it and remove the scratch file:
 
 ```
-{{config.command}} changelog file write {{plan_name}} --from .spektacular/tmp/changelog_project.md
-rm .spektacular/tmp/changelog_project.md
+{{config.command}} changelog file write {{plan_name}} --from .spektacular/tmp/{{plan_name}}/changelog_project.md
+rm .spektacular/tmp/{{plan_name}}/changelog_project.md
 ```
 
 Confirm the write with `{{config.command}} changelog file read {{plan_name}}`. This record is a required artifact — the workflow's `finished` step will error if it is missing.
@@ -58,11 +68,11 @@ For **each** affected repo identified in Step 2, including the project's own rep
 - **Why** — the same framing from the spec, tightened to why *this repo* got the change.
 - A human-readable reference line directly under the summary naming the project and the spec/plan identifier — e.g. `> Derived from project <project> (<source>), spec/plan {{plan_name}}. See the project-level record for the full feature.`
 
-Stage each record with the `Write` tool at `.spektacular/tmp/changelog_<repo>.md`, then commit it and remove the scratch file:
+Stage each record with the `Write` tool at `.spektacular/tmp/{{plan_name}}/changelog_<repo>.md`, then commit it and remove the scratch file:
 
 ```
-{{config.command}} changelog file write {{plan_name}} --repo <repo-name> --from .spektacular/tmp/changelog_<repo>.md
-rm .spektacular/tmp/changelog_<repo>.md
+{{config.command}} changelog file write {{plan_name}} --repo <repo-name> --from .spektacular/tmp/{{plan_name}}/changelog_<repo>.md
+rm .spektacular/tmp/{{plan_name}}/changelog_<repo>.md
 ```
 
 The `--repo` flag routes the write into that repo's own changelog store, under a `<project>/` subfolder (so multiple projects sharing a member repo cannot collide), and stamps the project name, source, and spec/plan identifiers into the front matter automatically — the body carries the readable reference line, the front matter carries the structured provenance.
@@ -78,5 +88,5 @@ If the feature's spec cannot be read by the name `{{plan_name}}`, or the plan's 
 Once the project-level record and every affected repo's record are written and confirmed:
 
 ```
-{{config.command}} implement goto --data '{"step":"{{next_step}}"}'
+{{config.command}} implement goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```

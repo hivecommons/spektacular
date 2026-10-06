@@ -1,4 +1,4 @@
-schema: 3
+schema: 4
 written_by: 0.1.0
 name: legacy
 # The coding agent skills are installed for.
@@ -17,3 +17,9 @@ plan:
 changelog:
     config:
         directory: changelog
+epic_split_threshold: moderate
+epic:
+    provider: file
+    strict_dependencies: false
+    config:
+        directory: epics

@@ -14,8 +14,9 @@ import (
 // the migrate package. A file with no `schema` key is format 1.
 const (
 	// CurrentProjectSchema is the config.yaml format this build reads and
-	// writes. Format 3 resolves the store folders from the settings file.
-	CurrentProjectSchema = 3
+	// writes. Format 3 resolves the store folders from the settings file;
+	// format 4 adds the epic store and epic_split_threshold.
+	CurrentProjectSchema = 4
 	// CurrentRepoSchema is the repo.yaml format this build reads and writes.
 	CurrentRepoSchema = 2
 )

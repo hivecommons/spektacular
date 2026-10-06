@@ -49,5 +49,5 @@ If any sub-agent reports that a file referenced by the task no longer exists, or
 Once analysis is complete and you have a clear picture of the files, patterns, and integration points for the current task:
 
 ```
-{{config.command}} implement goto --data '{"step":"{{next_step}}"}'
+{{config.command}} implement goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```

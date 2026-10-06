@@ -58,7 +58,7 @@ type Action struct {
 // synthetic step.
 var (
 	registry = map[Kind][]Step{
-		KindProject: {project1to2, project2to3},
+		KindProject: {project1to2, project2to3, project3to4},
 		KindRepo:    {repo1to2},
 	}
 	current = map[Kind]int{

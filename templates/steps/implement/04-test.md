@@ -41,5 +41,5 @@ If the sub-agent reports that the test conventions it discovered don't match wha
 Once tests are written and the sub-agent has returned its summary:
 
 ```
-{{config.command}} implement goto --data '{"step":"{{next_step}}"}'
+{{config.command}} implement goto --data '{"step":"{{next_step}}","name":"{{plan_name}}"}'
 ```

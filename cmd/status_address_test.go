@@ -12,54 +12,6 @@ import (
 
 const addressPlanBody = "# Plan\n\n## Milestones & Phases\n\n#### - [ ] Phase 1.1: Work\n"
 
-// runStatusIn runs `<kind> status` in the current project and decodes it.
-func runStatusIn(t *testing.T, kind string) (string, map[string]any) {
-	t.Helper()
-	stdout, _, code := runRootCmd(t, kind, "status")
-	require.Equal(t, 0, code, stdout)
-	var got map[string]any
-	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
-	return stdout, got
-}
-
-// Both workflow-status forms address the plan by name and document, and
-// report its location relative to the folder holding config.yaml rather than
-// as a host path.
-func TestWorkflowStatus_AddressesPlanByNameAndRelativePath(t *testing.T) {
-	for _, kind := range []string{"plan", "implement"} {
-		t.Run(kind, func(t *testing.T) {
-			dir := t.TempDir()
-			t.Chdir(dir)
-			writeSpecCommandConfig(t, dir, "")
-			if kind == "implement" {
-				_, code := writePlanDoc(t, taskPlanName, "plan", addressPlanBody)
-				require.Equal(t, 0, code)
-			}
-			_, _, code := runRootCmd(t, kind, "new", "--data", `{"name":"`+taskPlanName+`"}`)
-			require.Equal(t, 0, code)
-
-			stdout, got := runStatusIn(t, kind)
-			require.Equal(t, "20260709000000-feature", got["plan_name"])
-			require.Equal(t, "plan", got["plan_document"])
-			require.Equal(t, "plans/20260709000000-feature/plan.md", got["plan_path"])
-			require.NotContains(t, stdout, dir)
-		})
-	}
-}
-
-func TestWorkflowStatus_SchemaDescribesPlanAddress(t *testing.T) {
-	for _, kind := range []string{"plan", "implement"} {
-		t.Run(kind, func(t *testing.T) {
-			stdout, _, code := runRootCmd(t, kind, "status", "--schema")
-			require.Equal(t, 0, code, stdout)
-			var schema commandSchema
-			require.NoError(t, json.Unmarshal([]byte(stdout), &schema))
-			require.Contains(t, schema.Output.Properties, "plan_document")
-			require.Contains(t, schema.Output.Properties["plan_path"].Description, "relative")
-		})
-	}
-}
-
 // The name a workflow records in its state is enough, on its own, to read
 // every document the feature owns.
 func TestWorkflowStateName_AddressesEveryArtifact(t *testing.T) {
@@ -130,7 +82,6 @@ func TestWorkflowResults_ReportConfigRelativeLocation(t *testing.T) {
 		for _, args := range [][]string{
 			{"spec", "new", "--data", `{"name":"billing"}`},
 			{"spec", "goto", "--data", `{"step":"interview"}`},
-			{"spec", "status"},
 		} {
 			stdout, got := runWorkflowStep(t, args...)
 			require.Equal(t, "000001_billing", got["spec_name"], args)
