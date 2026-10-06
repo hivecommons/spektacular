@@ -305,7 +305,7 @@ Add a cmd-level test that drives one epic spec through worktree creation, an imp
 
 **Validation point**: The docs site builds and type-checks cleanly, and the "Implement this epic" section reads correctly. This is checked by hand and captured in the implementation test plan.
 
-#### - [ ] Task: Update the epics page for code-only worktrees
+#### - [x] Task: Update the epics page for code-only worktrees
 **Id:** b28acf2a-f4ea-4c1a-b1b6-43f98cf81a3c
 **Repo:** docs
 **Depends on:**
@@ -317,9 +317,9 @@ Rewrite the worktree bullet in the "Implement this epic" section of the public e
 *Technical detail:* [context.md#task-update-the-epics-page-for-code-only-worktrees](./context.md#task-update-the-epics-page-for-code-only-worktrees)
 
 **Acceptance criteria**:
-- [ ] The epics page says worktrees hold only code, and that plans and progress can be followed in the project during a run.
-- [ ] It no longer says that, inside a spek's worktrees, repos resolve to the spek's own copy.
-- [ ] It says a spek whose branch changes Spektacular's files is refused at merge.
+- [x] The epics page says worktrees hold only code, and that plans and progress can be followed in the project during a run.
+- [x] It no longer says that, inside a spek's worktrees, repos resolve to the spek's own copy.
+- [x] It says a spek whose branch changes Spektacular's files is refused at merge.
 
 ## Open Questions
 
@@ -450,5 +450,16 @@ A second test hits the `.spektacular` merge guard partway through the same flow.
 
 **Files changed**:
 - `spektacular: cmd/epic_flow_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-06 — Task: Update the epics page for code-only worktrees
+
+**What was done**: In the epics page's "Implement this epic" section, the worktree bullet now says each spek's worktrees hold only code. A new bullet says specs, plans, changelogs and progress stay in the project, where a spek's plan can be followed while the run is going. A further bullet after the merge bullets says a spek whose branch changes Spektacular's own files is not merged. The site builds and `astro check` reports 0 errors.
+
+**Deviations**: None.
+
+**Files changed**:
+- `docs: src/pages/epics.mdx`
 
 **Discoveries**: None.
