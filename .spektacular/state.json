@@ -1,29 +1,31 @@
 {
-  "kind": "spec",
+  "kind": "plan",
   "current_step": "finished",
   "completed_steps": [
     "new",
-    "interview",
     "overview",
-    "requirements",
-    "acceptance_criteria",
-    "constraints",
-    "technical_approach",
-    "success_metrics",
-    "non_goals",
+    "discovery",
+    "architecture",
+    "components",
+    "data_structures",
+    "implementation_detail",
+    "dependencies",
+    "testing_approach",
+    "milestones",
+    "tasks",
+    "open_questions",
+    "out_of_scope",
+    "assemble",
     "verification",
-    "split",
+    "write_plan",
+    "write_context",
+    "write_research",
+    "walkthrough",
     "finished"
   ],
-  "created_at": "2026-10-07T10:08:50.323328307Z",
-  "updated_at": "2026-10-07T11:03:20.484185654Z",
+  "created_at": "2026-10-07T11:06:51.463068779Z",
+  "updated_at": "2026-10-07T12:08:32.177757541Z",
   "data": {
-    "name": "000065_implement-in-worktrees",
-    "sources": [
-      {
-        "retrieved_date": "2026-10-07",
-        "uri": "https://github.com/hivecommons/spektacular/issues/78"
-      }
-    ]
+    "name": "000065_implement-in-worktrees"
   }
 }
