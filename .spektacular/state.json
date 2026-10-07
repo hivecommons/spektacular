@@ -1,28 +1,29 @@
 {
-  "kind": "implement",
+  "kind": "spec",
   "current_step": "finished",
   "completed_steps": [
     "new",
-    "read_plan",
-    "analyze",
-    "implement",
-    "test",
-    "verify",
-    "update_plan",
-    "update_changelog",
-    "test_plan",
-    "update_feature_changelog",
-    "reconcile_spec",
+    "interview",
+    "overview",
+    "requirements",
+    "acceptance_criteria",
+    "constraints",
+    "technical_approach",
+    "success_metrics",
+    "non_goals",
+    "verification",
+    "split",
     "finished"
   ],
-  "created_at": "2026-10-06T19:57:58.292935014Z",
-  "updated_at": "2026-10-06T20:23:41.961714996Z",
+  "created_at": "2026-10-07T10:08:50.323328307Z",
+  "updated_at": "2026-10-07T11:03:20.484185654Z",
   "data": {
-    "committed_milestones": [
-      1,
-      2,
-      3
-    ],
-    "name": "000064_epic-worktree-store-isolation"
+    "name": "000065_implement-in-worktrees",
+    "sources": [
+      {
+        "retrieved_date": "2026-10-07",
+        "uri": "https://github.com/hivecommons/spektacular/issues/78"
+      }
+    ]
   }
 }

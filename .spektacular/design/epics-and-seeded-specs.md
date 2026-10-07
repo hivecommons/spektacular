@@ -4,6 +4,7 @@ document_status: draft
 specs:
     - 000060_epics-and-seeded-specs
     - 000062_epic-plan-and-implement
+    - 000065_implement-in-worktrees
 ---
 
 # Epics and seeded specs
