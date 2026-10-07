@@ -191,8 +191,8 @@ func TestRenderedWorkflowSkillsAskTheUserAboutUncommittedChanges(t *testing.T) {
 	}
 }
 
-// TestUncommittedChangesTextIsIdenticalAcrossAgents asserts Claude, Bob and
-// Codex are handed the same instructions. All three install from the same
+// TestUncommittedChangesTextIsIdenticalAcrossAgents asserts every agent is
+// handed the same instructions. All of them install from the same
 // templates, but each does so into its own directory through its own Install
 // method, so nothing structurally prevents one of them drifting; the whole
 // rendered body is compared rather than only the new section, which is the
@@ -210,6 +210,7 @@ func TestUncommittedChangesTextIsIdenticalAcrossAgents(t *testing.T) {
 		"bob":    ".bob/skills",
 		"codex":  ".agents/skills",
 		"omp":    ".omp/skills",
+		"cursor": ".cursor/skills",
 	}
 	for name, dir := range skillsDirs {
 		a, err := Lookup(name)
@@ -235,6 +236,7 @@ func TestUncommittedChangesTextIsIdenticalAcrossAgents(t *testing.T) {
 			require.Equal(t, claude, codex,
 				"Codex's %s skill must be byte-identical to Claude's", tc.skill)
 			require.Equal(t, claude, readRenderedSkill(t, filepath.Join(tmp, ".omp", "skills"), tc.skill))
+			require.Equal(t, claude, readRenderedSkill(t, filepath.Join(tmp, ".cursor", "skills"), tc.skill))
 		})
 	}
 }

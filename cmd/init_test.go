@@ -277,6 +277,7 @@ func TestInit_InstallsEpicSkillsForEveryAgent(t *testing.T) {
 		"claude": ".claude/skills",
 		"bob":    ".bob/skills",
 		"codex":  ".agents/skills",
+		"cursor": ".cursor/skills",
 	}
 	for agentName, root := range skillRoots {
 		t.Run(agentName, func(t *testing.T) {
@@ -337,6 +338,7 @@ func TestInit_InvalidAgent(t *testing.T) {
 	require.Contains(t, err.Error(), "bob")
 	require.Contains(t, err.Error(), "codex")
 	require.Contains(t, err.Error(), "omp")
+	require.Contains(t, err.Error(), "cursor")
 }
 
 func TestInit_CustomCommand(t *testing.T) {
