@@ -133,7 +133,7 @@ func TestInstallHistoricalArtifactsSection_CrossAgentIdempotency(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := config.NewDefault()
 
-	for _, name := range []string{"claude", "codex", "bob", "omp"} {
+	for _, name := range []string{"claude", "codex", "bob", "omp", "cursor"} {
 		a, err := Lookup(name)
 		require.NoError(t, err, "agent %s should be registered", name)
 		require.NoError(t, a.Install(tmp, cfg, io.Discard), "Install for %s", name)
@@ -153,7 +153,7 @@ func TestInstallHistoricalArtifactsSection_CrossAgentIdempotency(t *testing.T) {
 
 	// Each agent's skill directory should still be present, confirming the
 	// shared AGENTS.md write did not displace any earlier per-agent install.
-	for _, dir := range []string{".claude/skills/spek-new", ".agents/skills/spek-new", ".bob/skills/spek-new"} {
+	for _, dir := range []string{".claude/skills/spek-new", ".agents/skills/spek-new", ".bob/skills/spek-new", ".cursor/skills/spek-new"} {
 		require.DirExists(t, filepath.Join(tmp, dir), "skills dir %s should exist after cross-agent install", dir)
 	}
 }

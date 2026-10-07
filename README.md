@@ -2,7 +2,7 @@
 
 Spektacular — **Spek** for short. The specs it produces are called **speks**.
 
-Agent-agnostic CLI tool for spec-driven development, providing skills and integrations for coding agents (Claude, Bob, Codex) to plan and implement work from a written spek.
+Agent-agnostic CLI tool for spec-driven development, providing skills and integrations for coding agents (Claude, Bob, Codex, oh-my-pi, Cursor) to plan and implement work from a written spek.
 
 > **Status:** early development — see the [releases page](https://github.com/hivecommons/spektacular/releases) for the latest version.
 
@@ -14,7 +14,7 @@ Its core competencies:
 
 - **Self-contained binary plus installed agent skills.** A single binary that, on `init`, installs the skills (and commands) your coding agent needs to run the Spek workflows.
 - **State-machine-driven workflow.** Spec, plan, and implement each run as a stepwise state machine. Spek hands the agent one per-step prompt at a time (`new` / `goto` / `steps`), so every stage is resumable — stop, inspect, edit, and resume without losing work.
-- **Agent-agnostic, multi-agent support.** Works with claude, bob, codex, and oh-my-pi (omp); pick the one your team already uses, or register your own.
+- **Agent-agnostic, multi-agent support.** Works with claude, bob, codex, oh-my-pi (omp), and cursor; pick the one your team already uses, or register your own.
 - **Project knowledge base.** A searchable, layered store of conventions, architecture, gotchas, and learnings that feeds context into planning.
 - **Project design documents.** The worked design a feature is built to (an API shape, a user-facing flow, a data format) kept wherever your team already keeps it and referenced by the spek that needs it, so speks stay readable and planning is bound to the design that was agreed.
 
@@ -71,12 +71,12 @@ brew install hivecommons/homebrew-repo/spektacular
 go install github.com/hivecommons/spektacular@latest
 ```
 
-Or download a pre-built binary from the [releases page](https://github.com/hivecommons/spektacular/releases). See the [install docs](https://spektacular.dev/install/) for apt and other methods. You also need a supported coding agent CLI (claude, bob, codex, or omp) installed and configured.
+Or download a pre-built binary from the [releases page](https://github.com/hivecommons/spektacular/releases). See the [install docs](https://spektacular.dev/install/) for apt and other methods. You also need a supported coding agent (claude, bob, codex, omp, or cursor) installed and configured.
 
 Once installed, the minimal path is initialise → spec → plan → implement:
 
 ```bash
-# 1. Initialise your project for a coding agent (claude, bob, codex, or omp)
+# 1. Initialise your project for a coding agent (claude, bob, codex, omp, or cursor)
 spektacular init claude
 
 # 2. Scaffold a spek, then fill in your requirements
@@ -96,12 +96,13 @@ Speks are plain markdown with a small set of structured sections (overview, requ
 
 ## Supported agents
 
-Spek ships with four coding-agent integrations. `spektacular init <agent>` runs the chosen agent's install step, writing its workflow skills (and, where the agent has no skill mechanism, command wrappers) into your project:
+Spek ships with five coding-agent integrations. `spektacular init <agent>` runs the chosen agent's install step, writing its workflow skills (and, where the agent has no skill mechanism, command wrappers) into your project:
 
 - **claude** — installs the workflow skills under `.claude/skills/` and ensures the project's `CLAUDE.md` imports `@AGENTS.md`, so the Spek agent rules take effect.
 - **bob** — installs skills under `.bob/skills/` and command wrappers under `.bob/commands/`.
 - **codex** — installs skills under `.agents/skills/`.
 - **omp** — installs the same six skills under `.omp/skills/`, Markdown wrappers and native input-preserving handlers under `.omp/commands/`, and eight always-applied `spek-*.md` rules under `.omp/rules/`. The rules mirror only Spektacular's sections of root `AGENTS.md`, keeping them visible even when omp selects another instruction file. Other project instructions, rules, skills and settings are left alone.
+- **cursor** — installs skills under `.cursor/skills/`. Cursor reads root `AGENTS.md` itself, so no `.cursor/rules/` files or command wrappers are written.
 
 ### Using oh-my-pi
 
@@ -120,6 +121,18 @@ In omp, start a workflow with `/spek-new add user auth to the admin pages`, or u
 **Shared projects:** `spektacular init omp` records omp as the project's agent without removing another agent's files. Migration refreshes only the recorded agent's files; the other agent's copies fall behind and omp may list both current and stale skills. After upgrading, run `spektacular init` once for **each** agent to refresh every copy. Identical skill copies are listed once by omp.
 
 Build a versioned binary with `make build`, then run the credential-free runtime regression check with `python3 tests/omp_smoke.py ./bin/spektacular` and omp on `PATH`. It checks actual command discovery, all six command inputs, instruction conflicts, deduplication, shared projects and disabled foreign providers. Verified against omp **18.6.0**; it uses isolated temporary settings and a closed local model endpoint rather than a model service.
+
+### Using Cursor
+
+Run, in the project's top folder:
+
+```bash
+spektacular init cursor
+```
+
+Then open that folder in the Cursor editor, or start the Cursor CLI there. Start a workflow from Agent chat with `/spek-new add user auth to the admin pages`; every installed skill (`spek-plan`, `spek-implement`, `spek-knowledge`, `spek-manage-repos`, `spek-design`, `spek-plan-epic`, `spek-implement-epic`) is listed in the `/` menu the same way, and Agent may also pick one up when a request matches its description. The standing rules live in root `AGENTS.md`, which Cursor applies to every Agent chat; your own `.cursor/rules/` are left alone.
+
+**Shared projects:** Cursor also loads skills from `.agents/skills/` and `.claude/skills/`, so a project initialised for codex or claude as well carries a second copy of each skill. Migration refreshes only the recorded agent's copy; after upgrading, run `spektacular init` once for **each** agent so no copy falls behind.
 
 Each integration is deliberately small: an agent implements a narrow `Agent` interface — `Name()` (its CLI identifier) and `Install()` (which writes its workflow artefacts) — and registers itself with the agent package from an `init()` function. Adding a new agent means implementing those two methods and registering the type.
 
