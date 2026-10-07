@@ -172,7 +172,7 @@ func TestWrapper_SuccessAndFailureBothStreamOnStdoutOnly(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 		dataDir := filepath.Join(dir, ".spektacular")
-		writeSpecCommandConfig(t, dir, "")
+		writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 		writeFixturePlan(t, dataDir, "fixture")
 
 		resetRootCmd(t)
@@ -334,7 +334,7 @@ func TestWrapper_ErrorDiscriminantAndExitCode(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 		dataDir := filepath.Join(dir, ".spektacular")
-		writeSpecCommandConfig(t, dir, "")
+		writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 		writeFixturePlan(t, dataDir, "fixture")
 
 		resetRootCmd(t)

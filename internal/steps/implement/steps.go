@@ -209,12 +209,20 @@ func finished() workflow.StepCallback {
 		if err != nil {
 			return "", err
 		}
+		// A spec built in its own worktrees, by a run the user started, is
+		// merged back once its plan is complete; until then the worktrees
+		// are kept for the next task run. An orchestrated run's merge is its
+		// orchestrator's to make.
+		orchestrated, _ := data.Get("orchestrated")
+		isOrchestrated, _ := orchestrated.(bool)
+		inWorktrees := !isOrchestrated && len(cfg.CodeRoots) > 0
 		if ok {
 			if open := len(p.OpenTasks()); open > 0 {
 				return "", writeStep("finished", "", "steps/implement/12-finished.md", data, out, st, cfg, map[string]any{
-					"task":       taskVars(task),
-					"task_run":   true,
-					"open_tasks": open,
+					"task":           taskVars(task),
+					"task_run":       true,
+					"open_tasks":     open,
+					"worktrees_kept": inWorktrees,
 				})
 			}
 		}
@@ -244,7 +252,9 @@ func finished() workflow.StepCallback {
 				return "", err
 			}
 		}
-		return "", writeStep("finished", "", "steps/implement/12-finished.md", data, out, st, cfg, nil)
+		return "", writeStep("finished", "", "steps/implement/12-finished.md", data, out, st, cfg, map[string]any{
+			"merge_required": inWorktrees,
+		})
 	}
 }
 

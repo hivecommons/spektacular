@@ -286,6 +286,77 @@ func TestEnsure_TouchedRepoNotOnDiskIsRefused(t *testing.T) {
 	require.Contains(t, er.Message, `"gone"`)
 }
 
+// registerSibling registers a repo named name whose code is <base>/<name>,
+// scaffolding its repo.yaml, and returns the code folder. It runs no git.
+func (f fixture) registerSibling(t *testing.T, m *Manager, name string) string {
+	t.Helper()
+	dir := filepath.Join(f.base, name)
+	writeRepoYAML(t, filepath.Join(dir, ".spektacular"))
+	m.Config.Repos = append(m.Config.Repos, config.RepoEntry{Name: name, Location: filepath.Join(dir, ".spektacular")})
+	set, err := repo.New(m.Config, f.proj, nil)
+	require.NoError(t, err)
+	m.Repos = set
+	return dir
+}
+
+// A touched repo that is not in git is refused as worktree_unavailable,
+// naming the repo and offering the opt-out, and no worktree is made.
+func TestEnsure_TouchedRepoNotInGitIsUnavailable(t *testing.T) {
+	f := newFixture(t)
+	m := f.manager(t)
+	dir := f.registerSibling(t, &m, "plain")
+
+	_, _, err := m.Ensure(testSpec, []string{"docs", "plain"})
+	er := requireRefusal(t, err, "worktree_unavailable")
+	require.Equal(t, "plain", er.Resource)
+	require.Contains(t, er.Message, dir+" is not in a git repository")
+	require.Contains(t, er.NextAction, "implement.worktrees: false")
+	require.NoDirExists(t, f.wt("alpha", "testproj"))
+	require.NoDirExists(t, f.wt("alpha", "docs"))
+}
+
+// A touched repo in git with no commits is refused as worktree_unavailable
+// before any worktree is made, so nothing is left half created.
+func TestEnsure_TouchedRepoWithNoCommitsIsUnavailable(t *testing.T) {
+	f := newFixture(t)
+	m := f.manager(t)
+	dir := f.registerSibling(t, &m, "fresh")
+	gittest.RunGit(t, dir, "init", "-q", "-b", "main")
+
+	_, _, err := m.Ensure(testSpec, []string{"docs", "fresh"})
+	er := requireRefusal(t, err, "worktree_unavailable")
+	require.Equal(t, "fresh", er.Resource)
+	require.Contains(t, er.Message, dir+" has no commits yet")
+	require.Contains(t, er.NextAction, "git init")
+	require.Contains(t, er.NextAction, "implement.worktrees: false")
+	require.NoDirExists(t, f.wt("alpha", "testproj"))
+	require.NoDirExists(t, f.wt("alpha", "docs"))
+	_, ok, err := ReadRecord(f.proj, testSpec)
+	require.NoError(t, err)
+	require.False(t, ok, "a refused Ensure writes no record")
+	require.Empty(t, gittest.RunGit(t, f.site, "branch", "--list", "spek/alpha"))
+}
+
+// A project that is not in git is refused as worktree_unavailable naming the
+// project.
+func TestEnsure_ProjectNotInGitIsUnavailable(t *testing.T) {
+	gittest.RequireGit(t)
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	proj := filepath.Join(base, "proj")
+	writeFile(t, proj, ".spektacular/config.yaml", fmt.Sprintf("schema: %d\nname: testproj\nrepos:\n  - name: testproj\n    location: .\n", config.CurrentProjectSchema))
+	writeRepoYAML(t, filepath.Join(proj, ".spektacular"))
+	cfg := loadConfig(t, proj)
+	set, err := repo.New(cfg, proj, nil)
+	require.NoError(t, err)
+	m := Manager{ProjectRoot: proj, Config: cfg, Repos: set, Git: NewRunner()}
+
+	_, _, err = m.Ensure(testSpec, []string{"testproj"})
+	er := requireRefusal(t, err, "worktree_unavailable")
+	require.Equal(t, "project", er.Resource)
+	require.Contains(t, er.NextAction, "implement.worktrees: false")
+}
+
 // Criterion 2: the record maps every touched repo's code into the spec's
 // worktrees, and the spec-scoped view built from it relocates only that code
 // — each repo's root stays at its registered location. Nothing is written

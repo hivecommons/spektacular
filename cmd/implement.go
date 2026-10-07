@@ -92,18 +92,41 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	// spec new so the driving agent can offer resume without first
 	// prompting the user for a plan name.
 	statePath := stateFilePath(dataDir)
-	laneName, orchestrated, err := orchestratedStart(dataStr)
+	laneName, lane, orchestrated, err := implementLaneStart(cfg, dataStr, dryRun)
 	if err != nil {
 		return err
 	}
-	if orchestrated {
-		// An orchestrated run keeps its own lane, so it probes only that lane
-		// for a resume: a standalone workflow never blocks it.
+	if lane {
+		// A lane run keeps its own state, so it probes only that lane for a
+		// resume: another spec's workflow never blocks it.
 		statePath = workflow.LaneStatePath(dataDir, "implement", laneName)
 	}
 	if dryRun {
 		statePath += ".dryrun-tmp"
 	} else {
+		if lane && !orchestrated {
+			// An epic orchestrator's run of this spec is its to resume, not
+			// the user's: refuse as the shared slot always has.
+			if existing, err := workflow.ReadLane(dataDir, "implement", laneName); err != nil {
+				return err
+			} else if existing != nil && existing.InProgress() {
+				if o, _ := existing.Data["orchestrated"].(bool); o && !force {
+					return refuseLaneInProgress(dataDir, cfg.Command, "implement", laneName)
+				}
+			}
+			// A run of this same spec still in the shared slot, from before
+			// worktrees were on, is resumed there rather than orphaned.
+			if shared, err := detectInProgress(stateFilePath(dataDir)); err != nil {
+				return err
+			} else if shared != nil && shared.Kind == "implement" {
+				if sharedName, _ := shared.Data["name"].(string); sharedName == laneName {
+					handled, err := probeResume(stateFilePath(dataDir), cfg.Command, "implement", force)
+					if handled || err != nil {
+						return err
+					}
+				}
+			}
+		}
 		handled, err := probeResume(statePath, cfg.Command, "implement", force)
 		if err != nil {
 			return err
@@ -115,8 +138,11 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 
 	// No workflow to resume — starting fresh requires a name.
 	if dataStr == "" {
-		return output.NewError("name_required", "no spec name was provided").
-			WithNextAction(`specify the spec to implement with --data '{"name":"<spec_name>"}'; the spec must have a plan, so if it has none run "plan new" for it first; to see existing specs, run "spec file list"`)
+		next := `specify the spec to implement with --data '{"name":"<spec_name>"}'; the spec must have a plan, so if it has none run "plan new" for it first; to see existing specs, run "spec file list"`
+		if lanes := inProgressLanes(dataDir, cfg.Command, "implement"); len(lanes) > 0 {
+			next += "; implement workflows in progress in their own lanes: " + strings.Join(lanes, ", ")
+		}
+		return output.NewError("name_required", "no spec name was provided").WithNextAction(next)
 	}
 	var input struct {
 		Name                 string `json:"name"`
@@ -129,7 +155,7 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	if input.Name == "" || !nameRegexp.MatchString(input.Name) || len(input.Name) > 64 {
 		return fmt.Errorf("name must match ^[a-z0-9_-]+$ and be at most 64 characters")
 	}
-	if !orchestrated && !dryRun {
+	if !lane && !dryRun {
 		if err := refuseLaneInProgress(dataDir, cfg.Command, "implement", input.Name); err != nil {
 			return err
 		}
@@ -171,6 +197,9 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 		clearState(statePath)
 	}
 
+	if err := ensureImplementWorktrees(root, cfg, projectStore, input.Name, orchestrated, dryRun); err != nil {
+		return err
+	}
 	codeRoots, err := codeRootsFor(root, cfg, input.Name)
 	if err != nil {
 		return err
@@ -182,6 +211,10 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	wf.SetData("name", input.Name)
 	if orchestrated {
 		wf.SetData("orchestrated", true)
+	} else if lane {
+		// A lane of its own, but an interactive run: it never hands back to
+		// an orchestrator.
+		wf.SetData("lane", true)
 	}
 	if input.Task != "" {
 		wf.SetData("task", input.Task)
@@ -278,6 +311,32 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode(), CodeRoots: codeRoots}
 	return gotoWithAutoCommit(cmd, cfg, root, slot.StatePath, "implement",
 		implement.Steps(), wfCfg, input, stepVal, "no active implement workflow found — run 'implement new' first")
+}
+
+// ensureImplementWorktrees gives a run the user starts its spec's worktrees,
+// one in every repo its plan touches, before the workflow starts, so every
+// step builds there. It does nothing for an orchestrated child, whose
+// orchestrator made them; for a dry run; with implement.worktrees off; or
+// when the spec already has a worktree record, from an earlier task run, a
+// resume or `epic worktree`. Those checks read files only, so no git runs
+// unless worktrees are actually made.
+func ensureImplementWorktrees(root string, cfg config.Config, st store.Store, spec string, orchestrated, dryRun bool) error {
+	if orchestrated || dryRun || !cfg.Implement.Worktrees {
+		return nil
+	}
+	if _, ok, err := worktree.ReadRecord(root, spec); err != nil || ok {
+		return err
+	}
+	touched, err := worktree.TouchedRepos(cfg, st, spec)
+	if err != nil {
+		return err
+	}
+	m, _, _, err := worktreeManager()
+	if err != nil {
+		return err
+	}
+	_, _, err = m.Ensure(spec, touched)
+	return err
 }
 
 // unmergedFn reports whether a spec's worktrees are still unmerged: its

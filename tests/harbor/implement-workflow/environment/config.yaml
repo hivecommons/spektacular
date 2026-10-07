@@ -14,6 +14,8 @@ changelog:
     provider: file
     config:
         directory: .spektacular/changelog
+implement:
+    worktrees: false
 repos:
     - name: auth
       location: .

@@ -12,11 +12,12 @@
     "update_changelog"
   ],
   "created_at": "2026-10-07T12:08:37.853559849Z",
-  "updated_at": "2026-10-07T12:38:49.740516655Z",
+  "updated_at": "2026-10-07T12:56:04.565389382Z",
   "data": {
     "committed_milestones": [
       1,
-      2
+      2,
+      3
     ],
     "name": "000065_implement-in-worktrees"
   }

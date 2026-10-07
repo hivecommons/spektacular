@@ -32,5 +32,5 @@ This is an orchestrated run, kept in its own lane: do not ask the user. Resume i
 This overwrites the in-progress workflow's state (recoverable via git if needed):
 
 ```
-{{config.command}} implement new --force{{#orchestrated}} --data '{"name":"{{name}}","orchestrated":true}'{{/orchestrated}}
+{{config.command}} implement new --force{{#lane}} --data '{"name":"{{name}}"{{#orchestrated}},"orchestrated":true{{/orchestrated}}}'{{/lane}}
 ```

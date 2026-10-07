@@ -336,7 +336,7 @@ Teach the single dependency classification shared by the implement check and sta
 
 **Validation point**: End-to-end command tests on a two-repo fixture show two runs in progress at once in their own lanes, worktrees only in touched repos, main checkouts clean until the merge, a clean merge with cleanup, an all-or-nothing conflict refusal, isolation between two specs, the opt-out restoring main-checkout builds while epics still use worktrees, an absent key defaulting on, and the non-git refusal. Template and skill contract tests pass, the harbor implement fixture is updated, and the full test suite passes.
 
-#### - [ ] Task: Add the implement worktrees opt-out setting
+#### - [x] Task: Add the implement worktrees opt-out setting
 **Id:** 5daa0cc5-47e5-4cf6-a2e3-e81c397be977
 **Repo:** spektacular
 **Depends on:** none
@@ -347,11 +347,11 @@ Add an `implement` section with a `worktrees` setting that is on by default. A c
 *Technical detail:* [context.md#task-add-the-implement-worktrees-opt-out-setting](./context.md#task-add-the-implement-worktrees-opt-out-setting)
 
 **Acceptance criteria**:
-- [ ] A configuration without the setting reads worktrees as on.
-- [ ] Setting it to false is written to and read back from the configuration file as false.
-- [ ] The project's settings format version is unchanged.
+- [x] A configuration without the setting reads worktrees as on.
+- [x] Setting it to false is written to and read back from the configuration file as false.
+- [x] The project's settings format version is unchanged.
 
-#### - [ ] Task: Keep each run started on its own in its own lane
+#### - [x] Task: Keep each run started on its own in its own lane
 **Id:** e74f4569-7cae-4327-bde3-a2b9a2f6793c
 **Repo:** spektacular
 **Depends on:**
@@ -363,12 +363,12 @@ With worktrees on, an implement run started on its own keeps its progress and wo
 *Technical detail:* [context.md#task-keep-each-run-started-on-its-own-in-its-own-lane](./context.md#task-keep-each-run-started-on-its-own-in-its-own-lane)
 
 **Acceptance criteria**:
-- [ ] With worktrees on, starting implement runs for two different specs succeeds for both, and each continues independently with its own progress and notes.
-- [ ] Starting a run for a spec whose own run is already in progress offers to resume that run, and a run with no name given still offers to resume a run in the shared slot.
-- [ ] A run in its own lane behaves interactively, never handing back to an orchestrator, and its lane is cleaned up when it finishes.
-- [ ] With worktrees turned off, runs use the shared slot exactly as before.
+- [x] With worktrees on, starting implement runs for two different specs succeeds for both, and each continues independently with its own progress and notes.
+- [x] Starting a run for a spec whose own run is already in progress offers to resume that run, and a run with no name given still offers to resume a run in the shared slot.
+- [x] A run in its own lane behaves interactively, never handing back to an orchestrator, and its lane is cleaned up when it finishes.
+- [x] With worktrees turned off, runs use the shared slot exactly as before.
 
-#### - [ ] Task: Create a spec's worktrees when an implement run starts on its own
+#### - [x] Task: Create a spec's worktrees when an implement run starts on its own
 **Id:** 36a74c31-cac1-4164-9f16-238652c9efa3
 **Repo:** spektacular
 **Depends on:**
@@ -381,13 +381,13 @@ When an implement run is started on its own with worktrees on, create the spec's
 *Technical detail:* [context.md#task-create-a-specs-worktrees-when-an-implement-run-starts-on-its-own](./context.md#task-create-a-specs-worktrees-when-an-implement-run-starts-on-its-own)
 
 **Acceptance criteria**:
-- [ ] A run started on its own whose plan touches two repos has a worktree on the spec's branch in each, and none in an untouched repo.
-- [ ] The run's instructions name the worktree locations, not the main checkouts.
-- [ ] With worktrees turned off, no worktree or branch is created.
-- [ ] A later run for the same spec reuses the existing worktrees.
-- [ ] A touched repo that is not a git repository, or has no commits, refuses the run with the repo named and the opt-out offered.
+- [x] A run started on its own whose plan touches two repos has a worktree on the spec's branch in each, and none in an untouched repo.
+- [x] The run's instructions name the worktree locations, not the main checkouts.
+- [x] With worktrees turned off, no worktree or branch is created.
+- [x] A later run for the same spec reuses the existing worktrees.
+- [x] A touched repo that is not a git repository, or has no commits, refuses the run with the repo named and the opt-out offered.
 
-#### - [ ] Task: Merge back at the end of a run started on its own
+#### - [x] Task: Merge back at the end of a run started on its own
 **Id:** e23fd89a-1781-474f-be06-3b4be8216caa
 **Repo:** spektacular
 **Depends on:**
@@ -400,11 +400,11 @@ When a run started on its own finishes with its plan complete and has worktrees,
 *Technical detail:* [context.md#task-merge-back-at-the-end-of-a-run-started-on-its-own](./context.md#task-merge-back-at-the-end-of-a-run-started-on-its-own)
 
 **Acceptance criteria**:
-- [ ] A complete run started on its own with worktrees is told to merge with `implement merge`, and to stop and report on a refusal.
-- [ ] An orchestrated run, a run without worktrees, and a task run with open tasks are not told to merge.
-- [ ] The implement skill states that the agent never resolves a conflict and never merges, rebases or switches branches on its own initiative.
+- [x] A complete run started on its own with worktrees is told to merge with `implement merge`, and to stop and report on a refusal.
+- [x] An orchestrated run, a run without worktrees, and a task run with open tasks are not told to merge.
+- [x] The implement skill states that the agent never resolves a conflict and never merges, rebases or switches branches on its own initiative.
 
-#### - [ ] Task: Prove runs started on their own end to end
+#### - [x] Task: Prove runs started on their own end to end
 **Id:** 541740f7-1abc-48da-adaa-93aaf306d817
 **Repo:** spektacular
 **Depends on:**
@@ -419,12 +419,12 @@ Add command-level tests that drive whole runs started on their own on a real two
 *Technical detail:* [context.md#task-prove-runs-started-on-their-own-end-to-end](./context.md#task-prove-runs-started-on-their-own-end-to-end)
 
 **Acceptance criteria**:
-- [ ] Two specs planned against the same repo, both in progress at once, get separate worktrees and separate progress, and one spec's changes appear in neither the other's worktree nor the main checkout until it merges.
-- [ ] Before the merge, no main checkout has modified or untracked files outside the project's Spektacular directory.
-- [ ] A clean two-repo run ends with both main lines holding its changes and no worktrees or branches left, including with automatic commits off.
-- [ ] A conflict in one repo moves neither main line and keeps the worktrees and branches.
-- [ ] With worktrees turned off, changes land in the main checkout and an epic in the same project still uses worktrees.
-- [ ] The harbor implement suite's project is configured so the suite still runs.
+- [x] Two specs planned against the same repo, both in progress at once, get separate worktrees and separate progress, and one spec's changes appear in neither the other's worktree nor the main checkout until it merges.
+- [x] Before the merge, no main checkout has modified or untracked files outside the project's Spektacular directory.
+- [x] A clean two-repo run ends with both main lines holding its changes and no worktrees or branches left, including with automatic commits off.
+- [x] A conflict in one repo moves neither main line and keeps the worktrees and branches.
+- [x] With worktrees turned off, changes land in the main checkout and an epic in the same project still uses worktrees.
+- [x] The harbor implement suite's project is configured so the suite still runs.
 
 ### Milestone 4: The documentation describes worktree runs, the setup command and the narrowed warning
 
@@ -600,3 +600,87 @@ None. Every uncertainty found during planning was resolved with the user (non-gi
 - `spektacular: cmd/status_test.go`
 
 **Discoveries**: `status.EpicComplete` (used by epic link) intentionally does not use the hook: an unmerged spec still counts as implemented for epic completion.
+
+### 2026-10-07 — Task: Add the implement worktrees opt-out setting
+
+**What was done**: New `implement` config section with `worktrees` (bool), set to `true` in `NewDefault()`. Configs parse over the defaults, so a config without the key reads as on. No schema bump and no migration.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: internal/config/config.go`
+- `spektacular: internal/config/config_test.go`
+
+**Discoveries**: Golden and init fixtures did not need updating for the new `implement:` block written by `ToYAMLFile`.
+
+### 2026-10-07 — Task: Keep each run started on its own in its own lane
+
+**What was done**: With `implement.worktrees` on, an implement run the user starts with a name keeps its state and notes in a per-spec lane (`.spektacular/workflows/implement-<spec>.{json,md}`), marked with workflow data `lane: true`. Being in a lane is now separate from being orchestrated: resume reports, step notes paths, lane cleanup at `finished` and the session-log resolver follow the lane, while the hand-back to an orchestrator still keys only on `orchestrated`. A start with no name probes the shared slot, and its `name_required` refusal lists in-progress lanes. With the opt-out, runs use the shared slot exactly as before.
+
+**Deviations**: Two additions beyond the plan. A lane start resumes an in-progress run of the same spec still held in the shared `state.json`, so switching the setting never orphans a run. A user start over an in-progress *orchestrated* lane of the same spec is refused as before rather than offered a resume. `refuseLaneInProgress` gained a variant for a non-orchestrated lane that does not suggest `orchestrated:true`.
+
+**Files changed**:
+- `spektacular: cmd/workflow_slot.go`
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/resume.go`
+- `spektacular: cmd/autocommit.go`
+- `spektacular: cmd/root.go`
+- `spektacular: internal/stepkit/stepkit.go`
+- `spektacular: templates/steps/resume_implement.md`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: cmd/implement_lane_test.go`
+- `spektacular: cmd/implement_test.go`
+- `spektacular: cmd/autocommit_test.go`
+- `spektacular: cmd/implement_dependencies_test.go`
+- `spektacular: cmd/implement_task_test.go`
+- `spektacular: cmd/implement_task_run_test.go`
+- `spektacular: cmd/status_address_test.go`
+- `spektacular: cmd/resume_test.go`
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: internal/agent/instruction_surface_test.go`
+
+**Discoveries**: With worktrees on, an `implement goto` with no `name` cannot reach a lane run; step instructions always carry the name, but hand-typed gotos must too. Open concern, not addressed by the plan: with auto_commit on, a second terminal's start gate (uncommitted-changes check) can see the first lane run's uncommitted project files.
+
+### 2026-10-07 — Task: Create a spec's worktrees when an implement run starts on its own
+
+**What was done**: `implement new` now calls `ensureImplementWorktrees` after the dependency check and start gate, before code roots are read. With worktrees on, a run the user starts gets the spec's worktrees in every repo its plan touches, prepared by any setup command, so every step renders the worktree roots. An orchestrated child, a dry run, the opt-out or an existing record skip it with no git. The worktree manager refuses with `worktree_unavailable` (naming the repo, offering to commit it or set `implement.worktrees: false`) when the project or a touched repo is not in git or a checkout has no commits, checked before any worktree is added.
+
+**Deviations**: The `worktree_unavailable` resource is the bare repo name ("project" for the project itself). Existing non-git fixtures got the opt-out; lane tests pre-write an empty record so they stay git-free.
+
+**Files changed**:
+- `spektacular: cmd/implement.go`
+- `spektacular: internal/worktree/worktree.go`
+- `spektacular: cmd/implement_worktrees_test.go`
+- `spektacular: cmd/implement_lane_test.go`
+- `spektacular: cmd/implement_test.go`
+- `spektacular: cmd/root_test.go`
+- `spektacular: internal/worktree/worktree_test.go`
+
+**Discoveries**: The project's checkout lists the repos registered in its own work tree, so a commit-less project is named by its first colocated repo (e.g. `testproj`) in the refusal.
+
+### 2026-10-07 — Task: Merge back at the end of a run started on its own
+
+**What was done**: The finished step now renders a "Merge the spec back" section, with `implement merge`, for a run the user started that has worktree roots and a complete plan. It says the merge is all or nothing, and that on a refusal the agent reports and stops, never resolving a conflict or merging, rebasing or switching branches itself. A single-task run that leaves tasks open is told its worktrees are kept. The implement skill gained a "Worktrees" section covering where code lives, merging at the end, the no-resolve rule and the creation refusals.
+
+**Deviations**: The skill's Worktrees section sits before "When an orchestrator starts this skill" rather than right after the cross-repo note, so it does not split "How to start".
+
+**Files changed**:
+- `spektacular: internal/steps/implement/steps.go`
+- `spektacular: templates/steps/implement/12-finished.md`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: internal/agent/instruction_surface_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-07 — Task: Prove runs started on their own end to end
+
+**What was done**: New `cmd/implement_worktree_flow_test.go` drives whole runs on a real two-repo git fixture: a clean run with auto_commit off (default config, no `implement` key) and with auto_commit workflow, both merging cleanly and cleaning up; two specs in progress at once in their own lanes and worktrees, isolated until each merges; a conflict that merges nothing and keeps everything; and the opt-out building in the main checkouts while `epic worktree` still makes worktrees. The harbor implement suite's config sets `implement.worktrees: false`, so it keeps exercising main-checkout behaviour; its oracle (which reads `state.json`) needed no change.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: cmd/implement_worktree_flow_test.go`
+- `spektacular: tests/harbor/implement-workflow/environment/config.yaml`
+
+**Discoveries**: The harbor suite's seeded `config.yaml` is still an old settings format (pre-schema), which this build refuses to load directly; that predates this feature, so the harbor run (a manual check) may need its environment migrated first.

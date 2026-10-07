@@ -42,7 +42,7 @@ func depProject(t *testing.T, extraConfig string) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, extraConfig)
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig+extraConfig)
 	data := filepath.Join(dir, ".spektacular")
 
 	write := func(rel, content string) {

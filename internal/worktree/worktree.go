@@ -122,6 +122,23 @@ func (m Manager) setupRunner() SetupRunner {
 	return m.Setup
 }
 
+// unavailableNext is the remediation for a repo that cannot hold a worktree.
+const unavailableNext = "commit the repo's current state (run `git init` and make an initial commit if it has none), then retry; or set implement.worktrees: false in .spektacular/config.yaml to build runs you start yourself in the main checkouts"
+
+// unavailable builds the worktree_unavailable refusal for the named repo
+// ("" for the project itself), which cannot hold a worktree for the reason
+// given. Nothing falls back to the main checkout silently.
+func unavailable(name, reason string) error {
+	who, resource := fmt.Sprintf("repo %q", name), name
+	if name == "" {
+		who, resource = "the project", "project"
+	}
+	return output.NewError("worktree_unavailable",
+		fmt.Sprintf("%s %s, so the spec cannot be built in its own worktree", who, reason)).
+		WithResource(resource).
+		WithNextAction(unavailableNext)
+}
+
 // failed builds the worktree_failed refusal.
 func failed(message, next string) error {
 	return output.NewError("worktree_failed", message).WithNextAction(next)
@@ -185,8 +202,7 @@ func (m Manager) projectTop() (top, rel string, err error) {
 	}
 	top, err = m.git(root, "rev-parse", "--show-toplevel")
 	if err != nil {
-		return "", "", failed(fmt.Sprintf("the project at %s is not in a git repository: %v", root, err),
-			"implementing an epic needs the project under git; run `git init` and commit it, then retry")
+		return "", "", unavailable("", fmt.Sprintf("at %s is not in a git repository", root))
 	}
 	rel, err = filepath.Rel(top, root)
 	if err != nil {
@@ -237,8 +253,7 @@ func (m Manager) checkouts(touched []string) ([]checkout, error) {
 		}
 		top, err := m.git(src, "rev-parse", "--show-toplevel")
 		if err != nil {
-			return nil, failed(fmt.Sprintf("repo %q at %s is not in a git repository: %v", name, src, err),
-				"put the repo under git and commit it, then retry")
+			return nil, unavailable(name, fmt.Sprintf("at %s is not in a git repository", src))
 		}
 		add(top, name)
 	}
@@ -328,6 +343,20 @@ func (m Manager) Ensure(spec string, touched []string) (SpecWorktrees, bool, err
 	isTouched := map[string]bool{}
 	for _, name := range touched {
 		isTouched[name] = true
+	}
+
+	// Every checkout must have a commit to branch from before any worktree
+	// is made, so a refusal leaves nothing half created.
+	for _, co := range cos {
+		if _, code, err := m.Git.Run(co.top, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
+			return SpecWorktrees{}, false, err
+		} else if code != 0 {
+			name := ""
+			if len(co.repos) > 0 {
+				name = co.repos[0]
+			}
+			return SpecWorktrees{}, false, unavailable(name, fmt.Sprintf("at %s has no commits yet", co.top))
+		}
 	}
 
 	for i, co := range cos {

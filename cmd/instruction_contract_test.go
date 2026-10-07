@@ -289,7 +289,7 @@ func workflowInstructionCorpus(t *testing.T, command, installDir string) []instr
 	}
 
 	for _, kind := range contractWorkflows {
-		body, err := resumeInstruction(command, kind, "demo-feature", "some_step", "", false)
+		body, err := resumeInstruction(command, kind, "demo-feature", "some_step", "", false, false)
 		require.NoError(t, err)
 		corpus = append(corpus, instructionSource{"steps/resume.md (" + kind + ")", body})
 

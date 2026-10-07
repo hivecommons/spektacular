@@ -65,11 +65,18 @@ func renderStepWithData(t *testing.T, cb workflow.StepCallback, values map[strin
 // changelog guard added to finished().
 func renderFinishedStep(t *testing.T) string {
 	t.Helper()
-	data := &testData{values: map[string]any{"name": "test"}}
+	return renderFinishedStepWith(t, map[string]any{"name": "test"}, workflow.Config{Command: "spektacular"})
+}
+
+// renderFinishedStepWith is renderFinishedStep with caller-supplied workflow
+// data and config, for finishes whose rendering depends on whether the run is
+// orchestrated or built in worktrees.
+func renderFinishedStepWith(t *testing.T, values map[string]any, cfg workflow.Config) string {
+	t.Helper()
+	data := &testData{values: values}
 	writer := &captureWriter{}
 	st := store.NewFileStore(t.TempDir(), "project")
 
-	cfg := workflow.Config{Command: "spektacular"}
 	seed, err := metadata.Render(metadata.Metadata{
 		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
 		DocumentStatus: metadata.StatusDraft,
@@ -1043,4 +1050,50 @@ func TestCompletionStepsKeepAutoCommitOnWordingInWorkflowModeWithWorktrees(t *te
 	require.Contains(t, out, autoCommitOnIntro)
 	require.NotContains(t, out, codeOnlyCommitIntro)
 	require.NotContains(t, out, codeOnlyMainCheckouts)
+}
+
+// A complete run the user started, built in worktrees, is told to merge the
+// spec back with implement merge, and to report and stop on a refusal.
+func TestFinishedInWorktreesTellsTheRunToMerge(t *testing.T) {
+	out := renderFinishedStepWith(t, map[string]any{"name": "test"}, workflow.Config{Command: "spektacular", CodeRoots: worktreeCodeRoots()})
+
+	require.Contains(t, out, "### Merge the spec back")
+	require.Contains(t, out, "spektacular implement merge --data '{\"name\":\"test\"}'")
+	require.Contains(t, out, "on branch `spek/test`")
+	require.Contains(t, out, "The merge is all or nothing")
+	require.Contains(t, out, "If it is refused, report the repos and conflicting paths it names to the user and stop.")
+	require.Contains(t, out, "Never resolve a conflict yourself, and never merge, rebase or switch branches on your own initiative.")
+	require.NotContains(t, out, "kept for the next task run")
+}
+
+// An orchestrated run leaves the merge to its orchestrator and still hands
+// back DONE.
+func TestFinishedOrchestratedInWorktreesDoesNotMerge(t *testing.T) {
+	out := renderFinishedStepWith(t, map[string]any{"name": "test", "orchestrated": true}, workflow.Config{Command: "spektacular", CodeRoots: worktreeCodeRoots()})
+
+	require.NotContains(t, out, "implement merge")
+	require.NotContains(t, out, "Merge the spec back")
+	require.Contains(t, out, "first line is exactly `DONE: test`")
+}
+
+// A run without worktrees has nothing to merge.
+func TestFinishedWithoutWorktreesDoesNotMerge(t *testing.T) {
+	out := renderFinishedStepWith(t, map[string]any{"name": "test"}, workflow.Config{Command: "spektacular"})
+
+	require.NotContains(t, out, "implement merge")
+	require.NotContains(t, out, "Merge the spec back")
+}
+
+// A task run that leaves tasks open is not told to merge; in worktrees it
+// reports that they are kept for the next task run.
+func TestFinishedTaskRunWithOpenTasksDoesNotMerge(t *testing.T) {
+	out := renderTaskStepWithConfig(t, finished(), workflow.Config{Command: "spektacular", CodeRoots: worktreeCodeRoots()})
+	require.Contains(t, out, "2 task(s) in the plan remain open")
+	require.NotContains(t, out, "implement merge")
+	require.Contains(t, out, "- That the spec's worktrees are kept for the next task run, and are merged back once the plan is complete.")
+
+	plain := renderTaskStep(t, finished())
+	require.Contains(t, plain, "2 task(s) in the plan remain open")
+	require.NotContains(t, plain, "implement merge")
+	require.NotContains(t, plain, "kept for the next task run")
 }

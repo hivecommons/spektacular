@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/workflow"
 )
@@ -112,13 +113,23 @@ func workflowNotFound(dataDir, command, kind, name string, shared *workflow.Stat
 			kind, name, command, kind, name))
 }
 
-// refuseLaneInProgress stops a standalone `new` for a spec whose orchestrated
-// lane is in progress: two workflows for one spec would overwrite each
-// other's plan documents.
+// refuseLaneInProgress stops a `new` in the shared slot for a spec whose lane
+// is in progress: two workflows for one spec would overwrite each other's
+// plan documents.
 func refuseLaneInProgress(dataDir, command, kind, name string) error {
 	lane, err := workflow.ReadLane(dataDir, kind, name)
 	if err != nil || lane == nil || !lane.InProgress() {
 		return err
+	}
+	if orchestrated, _ := lane.Data["orchestrated"].(bool); !orchestrated {
+		return output.NewError("workflow_in_progress",
+			fmt.Sprintf("a %s workflow for %q is in progress at step %q in its own lane (%s)",
+				kind, name, lane.CurrentStep, workflow.LaneStateRel(kind, name))).
+			WithResource(name).
+			WithState(lane.CurrentStep, nil).
+			WithNextAction(fmt.Sprintf(
+				`it was started with implement.worktrees on; continue it with: %s %s goto --data '{"step":%q,"name":%q}'`,
+				command, kind, lane.CurrentStep, name))
 	}
 	return output.NewError("workflow_in_progress",
 		fmt.Sprintf("an orchestrated %s workflow for %q is in progress at step %q in its own lane (%s)",
@@ -128,6 +139,42 @@ func refuseLaneInProgress(dataDir, command, kind, name string) error {
 		WithNextAction(fmt.Sprintf(
 			`an epic orchestrator started this workflow; continue it with: %s %s goto --data '{"step":%q,"name":%q}', or discard it and start it again with: %s %s new --force --data '{"name":%q,"orchestrated":true}'`,
 			command, kind, lane.CurrentStep, name, command, kind, name))
+}
+
+// implementLaneStart decides whether an `implement new` keeps its workflow
+// in a lane of its own. An orchestrated start always does. A start the user
+// makes with worktrees on does too, so runs on different specs can be in
+// progress side by side; it stays interactive, since lane is not
+// orchestrated. A dry run, a start with no valid name, and a start with
+// worktrees off use the shared slot as before.
+func implementLaneStart(cfg config.Config, dataStr string, dryRun bool) (name string, lane, orchestrated bool, err error) {
+	name, orchestrated, err = orchestratedStart(dataStr)
+	if err != nil || orchestrated {
+		return name, orchestrated, orchestrated, err
+	}
+	if dryRun || !cfg.Implement.Worktrees || dataStr == "" {
+		return "", false, false, nil
+	}
+	var input struct {
+		Name string `json:"name"`
+	}
+	if json.Unmarshal([]byte(dataStr), &input) != nil || input.Name == "" || !nameRegexp.MatchString(input.Name) || len(input.Name) > 64 {
+		return "", false, false, nil
+	}
+	return input.Name, true, false, nil
+}
+
+// inProgressLanes lists the in-progress lanes of kind, as resume commands, for
+// a refusal that has no name to go on.
+func inProgressLanes(dataDir, command, kind string) []string {
+	var out []string
+	for _, name := range workflow.LaneNames(dataDir, kind) {
+		if lane, err := workflow.ReadLane(dataDir, kind, name); err == nil && lane != nil && lane.InProgress() {
+			out = append(out, fmt.Sprintf(`%q at step %q (resume with: %s %s goto --data '{"step":%q,"name":%q}')`,
+				name, lane.CurrentStep, command, kind, lane.CurrentStep, name))
+		}
+	}
+	return out
 }
 
 // orchestratedStart reads a `new` command's --data for an orchestrated start.

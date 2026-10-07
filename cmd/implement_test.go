@@ -39,6 +39,11 @@ fixture
 	return planPath
 }
 
+// implementSharedSlotConfig turns implement.worktrees off, for a fixture that
+// exercises an implement run in the main checkout and the shared state.json
+// slot rather than a lane of its own.
+const implementSharedSlotConfig = "implement:\n  worktrees: false\n"
+
 // writeInProgressState marshals a workflow.State to .spektacular/state.json so a
 // `new` command's resume prologue (resumeOrClear) sees an in-progress workflow.
 func writeInProgressState(t *testing.T, dataDir string, st workflow.State) {
@@ -95,7 +100,7 @@ func TestImplementNew_SucceedsWithExistingPlan(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	dataDir := filepath.Join(dir, ".spektacular")
-	writeSpecCommandConfig(t, dir, "")
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 	writeFixturePlan(t, dataDir, "fixture")
 
 	stdout, _ := setupImplementCmd(t)
@@ -146,7 +151,7 @@ func TestImplementGoto_AdvancesThroughStep(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	dataDir := filepath.Join(dir, ".spektacular")
-	writeSpecCommandConfig(t, dir, "")
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 	writeFixturePlan(t, dataDir, "fixture")
 
 	// Start the workflow — state file is written with name=fixture.
@@ -168,7 +173,7 @@ func TestImplementGoto_UpdateFeatureChangelogInstructsChangelogWrite(t *testing.
 	dir := t.TempDir()
 	t.Chdir(dir)
 	dataDir := filepath.Join(dir, ".spektacular")
-	writeSpecCommandConfig(t, dir, "")
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 	writeFixturePlan(t, dataDir, "fixture")
 
 	setupImplementCmd(t)
@@ -302,12 +307,12 @@ func TestImplementNewAndGoto_PersistNoRosterAndRunNoGit(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	dataDir := filepath.Join(dir, ".spektacular")
-	writeSpecCommandConfig(t, dir,
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig+
 		"repos:\n"+
-			"  - name: core\n"+
-			"    location: .\n"+
-			"  - name: api\n"+
-			"    location: ../repos/api/.spektacular\n")
+		"  - name: core\n"+
+		"    location: .\n"+
+		"  - name: api\n"+
+		"    location: ../repos/api/.spektacular\n")
 	writeFixturePlan(t, dataDir, "fixture")
 
 	// The colocated repo's footprint sits in .spektacular, so its code is
@@ -364,12 +369,12 @@ func TestImplementNewAndGoto_WorktreeRecordNamesCodeRootsWithoutGit(t *testing.T
 	dir := t.TempDir()
 	t.Chdir(dir)
 	dataDir := filepath.Join(dir, ".spektacular")
-	writeSpecCommandConfig(t, dir,
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig+
 		"repos:\n"+
-			"  - name: core\n"+
-			"    location: .\n"+
-			"  - name: api\n"+
-			"    location: ../repos/api/.spektacular\n")
+		"  - name: core\n"+
+		"    location: .\n"+
+		"  - name: api\n"+
+		"    location: ../repos/api/.spektacular\n")
 	writeFixturePlan(t, dataDir, "fixture")
 
 	coreCfg := config.NewDefaultRepoConfig()

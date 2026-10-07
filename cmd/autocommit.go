@@ -100,12 +100,13 @@ func gotoWithAutoCommit(
 		return err
 	}
 
-	// An orchestrated workflow is a lane, whose files are removed once it
-	// finishes: without them, status falls back to the documents, which say
-	// the same thing, and finished lanes never pile up in the tree.
+	// A lane's files are removed once it finishes: without them, status
+	// falls back to the documents, which say the same thing, and finished
+	// lanes never pile up in the tree.
 	orchestrated := isOrchestrated(wf) && !wfCfg.DryRun
+	inLane := isLane(wf) && !wfCfg.DryRun
 	finishLane := func() {
-		if orchestrated && wf.Current() == "finished" {
+		if inLane && wf.Current() == "finished" {
 			removeLane(statePath)
 		}
 	}
@@ -186,7 +187,7 @@ func gotoWithAutoCommit(
 		if snapshotErr == nil {
 			_ = os.WriteFile(statePath, snapshot, 0o644)
 		}
-		if orchestrated && notesErr == nil {
+		if inLane && notesErr == nil {
 			_ = os.WriteFile(notesPath, notesSnapshot, 0o644)
 		}
 	}
@@ -262,6 +263,17 @@ func gotoWithAutoCommit(
 // orchestrator, and so is a lane.
 func isOrchestrated(wf *workflow.Workflow) bool {
 	v, _ := wf.GetData("orchestrated")
+	b, _ := v.(bool)
+	return b
+}
+
+// isLane reports whether the workflow keeps its state in a lane of its own:
+// an orchestrated run, or an implement run the user started with worktrees on.
+func isLane(wf *workflow.Workflow) bool {
+	if isOrchestrated(wf) {
+		return true
+	}
+	v, _ := wf.GetData("lane")
 	b, _ := v.(bool)
 	return b
 }

@@ -100,6 +100,8 @@ func gitProject(t *testing.T, autoCommit string) gitFixture {
 	// counter ids make the resolved spec name deterministic, so the commit
 	// message's oracle below can be written by hand.
 	body += "spec:\n  id_method: counter\n"
+	// Implement runs here use the main checkout and the shared state slot.
+	body += implementSharedSlotConfig
 	body += "repos:\n" +
 		"  - name: " + gitFixtureProjectRepo + "\n    location: \".\"\n" +
 		"  - name: " + gitFixtureOtherRepo + "\n    location: \"" + footprint + "\"\n"
@@ -493,7 +495,7 @@ func startImplementLaneWith(t *testing.T, docsChanged bool) implementLaneFixture
 // config.yaml lines (the auto_commit mode, or none at all).
 func startImplementLaneConfigured(t *testing.T, docsChanged bool, extraConfig string) implementLaneFixture {
 	t.Helper()
-	f := worktreeProjectWith(t, true, extraConfig)
+	f := worktreeProjectWith(t, true, implementSharedSlotConfig+extraConfig)
 	// The terminal step refuses to finish without a project changelog
 	// record; seed it in the baseline as the earlier steps would have.
 	wtWriteFile(t, f.proj, ".spektacular/changelog/alpha.md", "# alpha\n\nstarted\n")

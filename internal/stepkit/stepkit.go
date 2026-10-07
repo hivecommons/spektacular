@@ -107,8 +107,12 @@ func WriteStepResult(
 	// its stops go back to the orchestrator that started it.
 	orchestrated, _ := data.Get("orchestrated")
 	isOrchestrated, _ := orchestrated.(bool)
+	// A run the user started with worktrees on is a lane too, with notes of
+	// its own, but it is not orchestrated: it never hands back.
+	lane, _ := data.Get("lane")
+	isLane, _ := lane.(bool)
 	workingContextPath := workingcontext.RelPath
-	if isOrchestrated {
+	if isOrchestrated || isLane {
 		workingContextPath = workflow.LaneNotesRel(cfg.Kind, instanceName)
 	}
 
