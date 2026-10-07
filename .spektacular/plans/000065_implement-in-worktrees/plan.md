@@ -432,7 +432,7 @@ Add command-level tests that drive whole runs started on their own on a real two
 
 **Validation point**: The site builds and type-checks cleanly, page bodies contain no layout HTML, there are no em dashes in the new text, and a visual check of the changed sections shows the new keys and behaviour.
 
-#### - [ ] Task: Document the worktree setting and setup command in the configuration reference
+#### - [x] Task: Document the worktree setting and setup command in the configuration reference
 **Id:** 3ce7e690-c7c0-4f3d-8dcf-535e1615545c
 **Repo:** docs
 **Depends on:**
@@ -445,12 +445,12 @@ Add the `implement.worktrees` opt-out to the project configuration example and k
 *Technical detail:* [context.md#task-document-the-worktree-setting-and-setup-command-in-the-configuration-reference](./context.md#task-document-the-worktree-setting-and-setup-command-in-the-configuration-reference)
 
 **Acceptance criteria**:
-- [ ] The configuration reference describes the worktree opt-out, its default, and that epics always use worktrees.
-- [ ] The configuration reference describes the per-repo setup command, when it runs, and what happens when it fails.
-- [ ] The projects page points to the setup command as part of a repo's own configuration.
-- [ ] The site builds and type-checks, and the new text has no em dashes or layout HTML.
+- [x] The configuration reference describes the worktree opt-out, its default, and that epics always use worktrees.
+- [x] The configuration reference describes the per-repo setup command, when it runs, and what happens when it fails.
+- [x] The projects page points to the setup command as part of a repo's own configuration.
+- [x] The site builds and type-checks, and the new text has no em dashes or layout HTML.
 
-#### - [ ] Task: Document worktree runs, merging back and the narrowed warning
+#### - [x] Task: Document worktree runs, merging back and the narrowed warning
 **Id:** 1c1de5ef-50c0-481b-9685-7ac9b868f4c2
 **Repo:** docs
 **Depends on:**
@@ -464,10 +464,10 @@ Describe on the how-it-works page that every implement run builds in its own wor
 *Technical detail:* [context.md#task-document-worktree-runs-merging-back-and-the-narrowed-warning](./context.md#task-document-worktree-runs-merging-back-and-the-narrowed-warning)
 
 **Acceptance criteria**:
-- [ ] The implement stage on the how-it-works page explains worktrees for runs started on their own, the merge at the end, conflict handling and the opt-out.
-- [ ] The epics page explains the narrowed uncommitted-work warning and shows the dirty repos in the status example.
-- [ ] The site changelog has an entry for this change naming the pages updated.
-- [ ] The site builds and type-checks, and the new text has no em dashes or layout HTML.
+- [x] The implement stage on the how-it-works page explains worktrees for runs started on their own, the merge at the end, conflict handling and the opt-out.
+- [x] The epics page explains the narrowed uncommitted-work warning and shows the dirty repos in the status example.
+- [x] The site changelog has an entry for this change naming the pages updated.
+- [x] The site builds and type-checks, and the new text has no em dashes or layout HTML.
 
 ## Open Questions
 
@@ -684,3 +684,28 @@ None. Every uncertainty found during planning was resolved with the user (non-gi
 - `spektacular: tests/harbor/implement-workflow/environment/config.yaml`
 
 **Discoveries**: The harbor suite's seeded `config.yaml` is still an old settings format (pre-schema), which this build refuses to load directly; that predates this feature, so the harbor run (a manual check) may need its environment migrated first.
+
+### 2026-10-07 — Task: Document the worktree setting and setup command in the configuration reference
+
+**What was done**: The configuration reference's example `config.yaml` and project keys gained the `implement` section (`implement.worktrees`, on by default, epics always use worktrees), the key count became seventeen, and the example `repo.yaml` and repository keys gained `worktree_setup` (when it runs, what a failure does). The projects page's "How configuration is split" lists `worktree_setup` with a repository's own fields.
+
+**Deviations**: None.
+
+**Files changed**:
+- `docs: src/pages/configuration.mdx`
+- `docs: src/pages/projects.mdx`
+
+**Discoveries**: None. Verified with `npm run build` and `npx astro check` (0 errors); no em dashes or layout HTML in the new text.
+
+### 2026-10-07 — Task: Document worktree runs, merging back and the narrowed warning
+
+**What was done**: The how-it-works implement stage explains that every run builds in its own worktrees, merges back into every repo or none when the plan is complete, leaves conflicts to the user, can be turned off with `implement.worktrees: false`, and that an implemented but unmerged dependency counts as not implemented. The epics page's "Implement this epic" covers the uncommitted-work check limited to the repos the epic builds (`dirty_repos`) and the `worktree_setup` command, and the status example shows `dirty_repos`. The site changelog has a `000065_implement-in-worktrees` entry naming the pages.
+
+**Deviations**: The how-it-works paragraph also mentions unmerged dependencies, which the plan's content sketch did not.
+
+**Files changed**:
+- `docs: src/pages/how-it-works.mdx`
+- `docs: src/pages/epics.mdx`
+- `docs: CHANGELOG.md`
+
+**Discoveries**: None. Verified with `npm run build` and `npx astro check` (0 errors); no em dashes or layout HTML in the new text.
