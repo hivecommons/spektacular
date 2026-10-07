@@ -74,7 +74,11 @@ func gotoWithAutoCommit(
 	out := output.New(&buf, globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, store.NewSourceStore(root, "project"), out)
 
-	point := autocommit.PointFor(wfCfg.AutoCommit, kind, wf.Current(), stepVal)
+	// A run built in its own worktrees always commits its code at
+	// completion, so its branch holds the work to merge back.
+	worktrees := len(wfCfg.CodeRoots) > 0
+	codeOnly := autocommit.CodeOnly(wfCfg.AutoCommit, kind, worktrees)
+	point := autocommit.PointForRun(wfCfg.AutoCommit, kind, wf.Current(), stepVal, worktrees)
 	if wfCfg.DryRun {
 		point = autocommit.PointNone
 	}
@@ -211,8 +215,14 @@ func gotoWithAutoCommit(
 			return output.NewError("auto_commit_failed", err.Error()).
 				WithNextAction(commitRetryAction(cfg.Command, kind, stepVal, specName))
 		}
+		if !ok && codeOnly {
+			// No worktrees after all, and automatic commits are off: there is
+			// nothing this run may commit.
+			flushBuffer(cmd, &buf)
+			return nil
+		}
 		if ok {
-			if err := commitImplementLane(cfg, root, statePath, specName, rec, message); err != nil {
+			if err := commitImplementLane(cfg, root, statePath, specName, rec, message, codeOnly); err != nil {
 				restore()
 				er := output.NewError("auto_commit_failed", err.Error()).
 					WithNextAction(commitRetryAction(cfg.Command, kind, stepVal, specName))
@@ -299,14 +309,16 @@ func commitPlanLane(cfg config.Config, root, statePath, name, message string) er
 
 // commitImplementLane commits an implement run on a spec built in its own
 // worktrees, split by where each change belongs. The code is committed in
-// the spec's worktrees, on its branch. In the main checkouts only the spec's
+// the spec's worktrees, on its branch. When codeOnly is set, because
+// automatic commits are off, that is all: the main checkouts are left as the
+// off setting means. Otherwise, in the main checkouts only the spec's
 // own files are committed: its plan documents, spec, changelog records
 // (the project's and each registered repo's), its scratch and working
 // folders, and the workflow's state and notes. Everything else changed
 // there, by another spec or by the user, stays uncommitted. The main-checkout
 // commits are taken under the project commit lock, so specs finishing
 // together queue rather than contend for git's index.
-func commitImplementLane(cfg config.Config, root, statePath, name string, rec worktree.Record, message string) error {
+func commitImplementLane(cfg config.Config, root, statePath, name string, rec worktree.Record, message string, codeOnly bool) error {
 	base, err := filepath.EvalSymlinks(filepath.Join(root, ".spektacular", worktree.Dir, name))
 	if err != nil {
 		return err
@@ -323,6 +335,9 @@ func commitImplementLane(cfg config.Config, root, statePath, name string, rec wo
 	}
 	if _, err := autocommit.CommitDirty(code, message, autoCommitGit); err != nil {
 		return err
+	}
+	if codeOnly {
+		return nil
 	}
 
 	release, err := autocommit.AcquireLock(filepath.Join(root, ".spektacular"))

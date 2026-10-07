@@ -43,3 +43,5 @@ Plan workflow started 2026-10-07 for spec 000065_implement-in-worktrees (worktre
 - Task 98c6a685 verified: build/vet/gofmt/full go test/make lint green.
 - User chose: run all remaining tasks without asking (stop only for failures/real questions).
 - Task acc28f89: setup runs in Manager.setUp after ensureOne made=true, only for touched repos; failure -> discard worktree (+branch if created) and worktree_setup_failed; record not written. cmd var worktreeSetup wired into worktreeManager().
+- Task 182b302a: PointForRun/LeadsToCommitForRun/CodeOnly in autocommit; worktree flag = len(wfCfg.CodeRoots)>0; git-commit partial has commit.code_only wording; commitImplementLane(codeOnly) skips main-checkout artifact commit.
+- Task 7462c057: Options.Unmerged + metBy in buildTarget BlockedBy; DescribeDependency; unmergedFn(root) in cmd/implement.go wired into refuseUnmetDependencies and status. Unmerged dep next_action offers implement merge. Status has no dependency descriptions (only ready/blocked_by) — deviation noted.

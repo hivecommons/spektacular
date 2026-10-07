@@ -182,6 +182,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			s, _ := workflow.ReadLane(dir, kind, name)
 			return s
 		},
+		Unmerged: unmergedFn(root),
 	}
 	if len(args) == 1 {
 		opts.Run = statusRunSource(cfg, root, opts.Store)

@@ -588,6 +588,78 @@ func TestDependenciesOf(t *testing.T) {
 	require.Equal(t, SpecDependencies{}, deps, "a standalone spec has no dependencies")
 }
 
+// An implemented dependency whose worktrees are not merged yet is unmet: it
+// is worded "implemented but not yet merged", and its dependent is not ready.
+// Its own state stays implemented, and the epic counts it as implemented.
+func TestDependenciesOf_UnmergedDependencyIsUnmet(t *testing.T) {
+	e := newEnv(t)
+	e.standardEpic()
+	e.opts.Unmerged = func(spec string) bool { return spec == "A" }
+
+	deps, err := DependenciesOf(e.opts, "B")
+	require.NoError(t, err)
+	require.Equal(t, []Dependency{{Name: "A", State: StateImplemented, Progress: TaskCounts{2, 2}, Description: "implemented but not yet merged", Ready: true, Unmerged: true}}, deps.Dependencies)
+	require.Equal(t, deps.Dependencies, deps.Unmet())
+
+	r, err := Build(e.opts, "E")
+	require.NoError(t, err)
+	a := specByName(t, r, "A")
+	require.Equal(t, StateImplemented, a.State)
+	b := specByName(t, r, "B")
+	require.False(t, b.Ready)
+	require.Equal(t, []string{"A"}, b.BlockedBy)
+	require.Equal(t, EpicProgress{SpecsImplemented: 1, SpecsTotal: 4, TasksCompleted: 3, TasksTotal: 5}, r.Epic.Progress)
+}
+
+// The hook only matters for an implemented dependency, and a hook reporting
+// nothing unmerged leaves every implemented dependency met.
+func TestDependenciesOf_UnmergedHook(t *testing.T) {
+	t.Run("hook reports nothing unmerged", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		e.opts.Unmerged = func(string) bool { return false }
+
+		deps, err := DependenciesOf(e.opts, "B")
+		require.NoError(t, err)
+		require.Equal(t, []Dependency{{Name: "A", State: StateImplemented, Progress: TaskCounts{2, 2}, Description: "implemented", Ready: true}}, deps.Dependencies)
+		require.Empty(t, deps.Unmet())
+
+		r, err := Build(e.opts, "E")
+		require.NoError(t, err)
+		b := specByName(t, r, "B")
+		require.True(t, b.Ready)
+		require.Equal(t, []string{}, b.BlockedBy)
+	})
+
+	t.Run("nil hook", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+
+		deps, err := DependenciesOf(e.opts, "B")
+		require.NoError(t, err)
+		require.Equal(t, []Dependency{{Name: "A", State: StateImplemented, Progress: TaskCounts{2, 2}, Description: "implemented", Ready: true}}, deps.Dependencies)
+		require.Empty(t, deps.Unmet())
+	})
+
+	t.Run("a dependency that is not implemented is never unmerged", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		e.opts.Unmerged = func(string) bool { return true }
+
+		deps, err := DependenciesOf(e.opts, "C")
+		require.NoError(t, err)
+		// B itself is not ready, because the hook reports its dependency A unmerged.
+		require.Equal(t, []Dependency{{Name: "B", State: StateInProgress, Progress: TaskCounts{1, 3}, Description: "in progress (1/3 tasks complete)", Ready: false}}, deps.Dependencies)
+	})
+}
+
+func TestDescribeDependency(t *testing.T) {
+	require.Equal(t, "implemented but not yet merged", DescribeDependency(StateImplemented, TaskCounts{5, 5}, true))
+	require.Equal(t, "implemented", DescribeDependency(StateImplemented, TaskCounts{5, 5}, false))
+	require.Equal(t, "in progress (2/5 tasks complete)", DescribeDependency(StateInProgress, TaskCounts{2, 5}, true))
+	require.Equal(t, "unplanned", DescribeDependency(StateSpecified, TaskCounts{}, true))
+}
+
 func TestRenderPretty_Epic(t *testing.T) {
 	e := newEnv(t)
 	e.standardEpic()

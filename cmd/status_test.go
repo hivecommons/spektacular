@@ -145,6 +145,32 @@ func TestStatus_SpecInAnEpicReportsTheWholeEpic(t *testing.T) {
 	require.Equal(t, "finished", specs["B"]["current_step"])
 }
 
+// A's worktree record is still there, so its work is not merged yet: B is
+// not ready and blocked by A, while A itself is still reported implemented.
+// Once the record is gone, B is ready again.
+func TestStatus_UnmergedDependencyBlocksItsDependent(t *testing.T) {
+	dir := stProject(t)
+	recordDir := filepath.Join(dir, ".spektacular", "worktrees", "A")
+	require.NoError(t, os.MkdirAll(recordDir, 0o755))
+	record := `{"spec":"A","repos":{"testproj":"` + filepath.Join(t.TempDir(), "testproj-A") + `"}}`
+	require.NoError(t, os.WriteFile(filepath.Join(recordDir, "record.json"), []byte(record), 0o644))
+
+	resetRootCmd(t)
+	got := statusOf(t, "E", "--format", "json")
+	specs := statusSpecs(t, got)
+	require.Equal(t, "implemented", specs["A"]["state"])
+	require.Equal(t, false, specs["B"]["ready"])
+	require.Equal(t, []any{"A"}, specs["B"]["blocked_by"])
+	require.Equal(t, float64(1), got["epic"].(map[string]any)["progress"].(map[string]any)["specs_implemented"])
+
+	require.NoError(t, os.RemoveAll(recordDir))
+	resetRootCmd(t)
+	specs = statusSpecs(t, statusOf(t, "E", "--format", "json"))
+	require.Equal(t, "implemented", specs["A"]["state"])
+	require.Equal(t, true, specs["B"]["ready"])
+	require.Equal(t, []any{}, specs["B"]["blocked_by"])
+}
+
 func TestStatus_StandaloneSpecHasANullEpicAndOneSpec(t *testing.T) {
 	stProject(t)
 

@@ -97,6 +97,16 @@ func Describe(state SpecState, counts TaskCounts) string {
 	return string(state)
 }
 
+// DescribeDependency words a dependency's state as Describe does, except
+// that an implemented dependency whose worktrees are not merged yet is "implemented but not yet
+// merged".
+func DescribeDependency(state SpecState, counts TaskCounts, unmerged bool) string {
+	if state == StateImplemented && unmerged {
+		return "implemented but not yet merged"
+	}
+	return Describe(state, counts)
+}
+
 // Label is a state as the readable tree shows it: in_progress reads as
 // "in progress", every other state as itself.
 func Label(state SpecState) string {

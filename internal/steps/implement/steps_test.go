@@ -778,6 +778,14 @@ func TestWhereTheCodeLivesPreambleRenderedByReadPlan(t *testing.T) {
 // two tasks, the selected one and another.
 func renderTaskStep(t *testing.T, cb workflow.StepCallback) string {
 	t.Helper()
+	return renderTaskStepWithConfig(t, cb, workflow.Config{Command: "spektacular"})
+}
+
+// renderTaskStepWithConfig is renderTaskStep with a caller-supplied workflow
+// config; its PlanDir is always the one the seeded plan lives under.
+func renderTaskStepWithConfig(t *testing.T, cb workflow.StepCallback, cfg workflow.Config) string {
+	t.Helper()
+	cfg.PlanDir = "plans"
 	root := t.TempDir()
 	st := store.NewFileStore(root, "project")
 	plan := "# Plan: test\n\n## Milestones & Tasks\n\n### Milestone 1: M\n\n" +
@@ -787,7 +795,7 @@ func renderTaskStep(t *testing.T, cb workflow.StepCallback) string {
 
 	data := &testData{values: map[string]any{"name": "test", "task": "sel-1"}}
 	writer := &captureWriter{}
-	_, err := cb(data, writer, st, workflow.Config{Command: "spektacular", PlanDir: "plans"})
+	_, err := cb(data, writer, st, cfg)
 	require.NoError(t, err)
 	return writer.result.Instruction
 }
@@ -979,4 +987,60 @@ func TestSubAgentCodeStepsWithoutWorktreeRootsPointAtRepoList(t *testing.T) {
 			require.NotContains(t, plain, "{{", "%s must leave no unrendered mustache", name)
 		})
 	}
+}
+
+// The code-only wording of the git-commit instruction, and the ordinary
+// auto_commit-on wording, hand-copied from the partial.
+const (
+	codeOnlyCommitIntro   = "even though `auto_commit` is off"
+	codeOnlyMainCheckouts = "Nothing is committed in the main checkouts."
+	autoCommitOnIntro     = "This project has `auto_commit` on"
+)
+
+// With automatic commits off, an implement run built in its own worktrees is
+// still asked for a commit message at each step whose exit is a completion:
+// reconcile_spec, and update_changelog when it ends a single-task run early.
+// The instruction says only the code is committed, on the spec's branch.
+func TestCompletionStepsAskForACodeOnlyCommitInOffModeWithWorktrees(t *testing.T) {
+	cfg := workflow.Config{Command: "spektacular", Kind: "implement", AutoCommit: "off", CodeRoots: worktreeCodeRoots()}
+	for name, out := range map[string]string{
+		"reconcile_spec":               renderStepWithConfig(t, reconcileSpec(), cfg),
+		"single-task update_changelog": renderTaskStepWithConfig(t, updateChangelog(), cfg),
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.Contains(t, out, "## Automatic git commit", "%s must carry the git-commit instruction", name)
+			require.Contains(t, out, "advancing to `finished` makes a\n**git commit** of its code on the spec's branch", name)
+			require.Contains(t, out, codeOnlyCommitIntro, name)
+			require.Contains(t, out, codeOnlyMainCheckouts, name)
+			require.NotContains(t, out, autoCommitOnIntro, "%s must not claim auto_commit is on", name)
+			require.Contains(t, out, `spektacular implement goto --data '{"step":"finished","name":"test","commit_message_from":".spektacular/tmp/test/git-commit-message.md"}'`, name)
+			require.NotContains(t, out, "{{", "%s must leave no unrendered mustache", name)
+		})
+	}
+}
+
+// With automatic commits off and no worktrees, nothing is committed, so no
+// step asks for a commit message.
+func TestCompletionStepsAskForNoCommitInOffModeWithoutWorktrees(t *testing.T) {
+	cfg := workflow.Config{Command: "spektacular", Kind: "implement", AutoCommit: "off"}
+	for name, out := range map[string]string{
+		"reconcile_spec":               renderStepWithConfig(t, reconcileSpec(), cfg),
+		"single-task update_changelog": renderTaskStepWithConfig(t, updateChangelog(), cfg),
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.NotContains(t, out, "Automatic git commit", name)
+			require.NotContains(t, out, "commit_message_from", name)
+		})
+	}
+}
+
+// With automatic commits on, a run in its own worktrees keeps the ordinary
+// wording.
+func TestCompletionStepsKeepAutoCommitOnWordingInWorkflowModeWithWorktrees(t *testing.T) {
+	cfg := workflow.Config{Command: "spektacular", Kind: "implement", AutoCommit: "workflow", CodeRoots: worktreeCodeRoots()}
+	out := renderStepWithConfig(t, reconcileSpec(), cfg)
+	require.Contains(t, out, "## Automatic git commit")
+	require.Contains(t, out, autoCommitOnIntro)
+	require.NotContains(t, out, codeOnlyCommitIntro)
+	require.NotContains(t, out, codeOnlyMainCheckouts)
 }

@@ -152,7 +152,7 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 	}
-	override, err := refuseUnmetDependencies(cfg, projectStore, input.Name, dataStr, input.OverrideDependencies)
+	override, err := refuseUnmetDependencies(cfg, root, projectStore, input.Name, dataStr, input.OverrideDependencies)
 	if err != nil {
 		return err
 	}
@@ -280,6 +280,17 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 		implement.Steps(), wfCfg, input, stepVal, "no active implement workflow found — run 'implement new' first")
 }
 
+// unmergedFn reports whether a spec's worktrees are still unmerged: its
+// worktree record exists, and only a successful merge removes it. It reads a
+// file and never runs git. Every status view and the implement dependency
+// check use it, so they always agree on whether a dependency is met.
+func unmergedFn(root string) func(string) bool {
+	return func(spec string) bool {
+		_, ok, err := worktree.ReadRecord(root, spec)
+		return ok && err == nil
+	}
+}
+
 // codeRootsFor reads the spec's worktree record from the project and lists
 // each recorded repo's code root, in registry order. A spec built without
 // worktrees has no record, and so no code roots. It never runs git.
@@ -325,8 +336,8 @@ func refuseStalePlan(cfg config.Config, st store.Store, planName string) error {
 // even then. It runs before any workflow state is written, so a refusal
 // starts nothing. On an accepted override it returns the unmet dependencies
 // and their states, for the workflow to record in the changelog.
-func refuseUnmetDependencies(cfg config.Config, st store.Store, specName, dataStr string, override bool) ([]map[string]any, error) {
-	deps, err := status.DependenciesOf(status.Options{Config: cfg, Store: st}, specName)
+func refuseUnmetDependencies(cfg config.Config, root string, st store.Store, specName, dataStr string, override bool) ([]map[string]any, error) {
+	deps, err := status.DependenciesOf(status.Options{Config: cfg, Store: st, Unmerged: unmergedFn(root)}, specName)
 	if err != nil {
 		return nil, err
 	}
@@ -343,6 +354,12 @@ func refuseUnmetDependencies(cfg config.Config, st store.Store, specName, dataSt
 
 	implementReady := "no unmet dependency is ready to implement yet, because each still waits on its own dependencies; run `" + cfg.Command + " status " + specName + "` to see the epic's order"
 	for _, dep := range unmet {
+		if dep.Unmerged {
+			// Its work is done: what it needs is merging back, which is the
+			// user's call to make, not another implement run.
+			implementReady = fmt.Sprintf(`offer to merge the implemented dependency back first: %s implement merge --data '{"name":"%s"}'`, cfg.Command, dep.Name)
+			break
+		}
 		if dep.Ready {
 			implementReady = fmt.Sprintf(`implement the first ready dependency instead: %s implement new --data '{"name":"%s"}'`, cfg.Command, dep.Name)
 			break

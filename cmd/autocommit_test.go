@@ -463,6 +463,9 @@ func TestAutoCommit_OffCompletesWorkflowWithoutCommitting(t *testing.T) {
 type implementLaneFixture struct {
 	worktreeFixture
 	heads map[string]string // checkout dir -> HEAD before the commit point
+	// reconcileOut is the step result that entered reconcile_spec, the step
+	// whose exit is the completion commit.
+	reconcileOut string
 }
 
 // implementLaneSiteChangelog is where the docs repo keeps the spec's
@@ -483,7 +486,14 @@ func startImplementLane(t *testing.T) implementLaneFixture {
 // repo-level record, so not even a record folder, in its main checkout.
 func startImplementLaneWith(t *testing.T, docsChanged bool) implementLaneFixture {
 	t.Helper()
-	f := worktreeProjectWith(t, true, "auto_commit: workflow\n")
+	return startImplementLaneConfigured(t, docsChanged, "auto_commit: workflow\n")
+}
+
+// startImplementLaneConfigured is startImplementLaneWith under the given
+// config.yaml lines (the auto_commit mode, or none at all).
+func startImplementLaneConfigured(t *testing.T, docsChanged bool, extraConfig string) implementLaneFixture {
+	t.Helper()
+	f := worktreeProjectWith(t, true, extraConfig)
 	// The terminal step refuses to finish without a project changelog
 	// record; seed it in the baseline as the earlier steps would have.
 	wtWriteFile(t, f.proj, ".spektacular/changelog/alpha.md", "# alpha\n\nstarted\n")
@@ -495,9 +505,11 @@ func startImplementLaneWith(t *testing.T, docsChanged bool) implementLaneFixture
 	require.Equal(t, 0, code)
 	walkSteps(t, "implement",
 		"analyze", "implement", "test", "verify", "update_plan", "update_changelog",
-		"test_plan", "update_feature_changelog", "reconcile_spec")
+		"test_plan", "update_feature_changelog")
+	reconcileOut, _, code := runRootCmd(t, "implement", "goto", "--data", `{"step":"reconcile_spec"}`)
+	require.Equalf(t, 0, code, "implement goto reconcile_spec failed: %s", reconcileOut)
 
-	fx := implementLaneFixture{worktreeFixture: f, heads: map[string]string{}}
+	fx := implementLaneFixture{worktreeFixture: f, heads: map[string]string{}, reconcileOut: reconcileOut}
 	for _, dir := range []string{f.proj, f.site, f.wt("testproj"), f.wt("docs")} {
 		fx.heads[dir] = gittest.RunGit(t, dir, "rev-parse", "HEAD")
 	}
@@ -703,4 +715,100 @@ func TestAutoCommit_ImplementInWorktreesSkipsARepoWithNoRecord(t *testing.T) {
 	require.Equal(t, fx.heads[f.site], gittest.RunGit(t, f.site, "rev-parse", "HEAD"))
 	require.Equal(t, "?? draft.txt", gittest.RunGit(t, f.site, "status", "--porcelain", "--untracked-files=all"))
 	require.NoDirExists(t, filepath.Dir(implementLaneSiteChangelog(f)))
+}
+
+// With auto_commit off (set, or left out of config.yaml), an implement run
+// built in its own worktrees still commits its code on the spec's branch at
+// completion, leaving the worktrees clean, and the agent is asked for the
+// message on the step before. Nothing is committed in either main checkout:
+// the spec's own files and the user's stay exactly as they were, uncommitted.
+func TestAutoCommit_OffModeWorktreeRunCommitsCodeOnSpecBranchOnly(t *testing.T) {
+	for name, extra := range map[string]string{"off": "auto_commit: off\n", "key absent": ""} {
+		t.Run(name, func(t *testing.T) {
+			fx := startImplementLaneConfigured(t, true, extra)
+			f := fx.worktreeFixture
+
+			// The step before completion asks for the message, in the
+			// code-only wording.
+			require.Contains(t, fx.reconcileOut, "## Automatic git commit")
+			require.Contains(t, fx.reconcileOut, "even though `auto_commit` is off")
+			require.Contains(t, fx.reconcileOut, "Nothing is committed in the main checkouts.")
+
+			// Finishing without a message is refused, and nothing moves.
+			stdout, _, code := runRootCmd(t, "implement", "goto", "--data", `{"step":"finished"}`)
+			require.Equal(t, 1, code)
+			require.Equal(t, "commit_message_required", errorEnvelope(t, stdout).Code)
+			require.Equal(t, "reconcile_spec", currentImplementStep(t, f.proj))
+
+			stdout, code = finishImplementLane(t, f)
+			require.Equalf(t, 0, code, "implement goto finished failed: %s", stdout)
+			require.Equal(t, "finished", currentImplementStep(t, f.proj))
+
+			// The code: one commit on spek/alpha in each worktree, holding
+			// only the code, and nothing left uncommitted there.
+			for wt, want := range map[string]string{f.wt("testproj"): "main.txt", f.wt("docs"): "lib.txt"} {
+				require.Equal(t, "spek/alpha", gittest.RunGit(t, wt, "rev-parse", "--abbrev-ref", "HEAD"), wt)
+				require.Equal(t, fx.heads[wt], gittest.RunGit(t, wt, "rev-parse", "HEAD~1"), "exactly one commit in %s", wt)
+				require.Equal(t, want, changedIn(t, wt, fx.heads[wt]), wt)
+				require.Empty(t, gittest.RunGit(t, wt, "status", "--porcelain", "--untracked-files=all"), wt)
+				require.Contains(t, gittest.RunGit(t, wt, "log", "-1", "--format=%B"), "Implement alpha", wt)
+			}
+			require.Contains(t, gittest.RunGit(t, f.proj, "log", "-1", "--format=%B", "spek/alpha"), "Implement alpha")
+
+			// The main checkouts: no commit at all, and the spec's own files
+			// are left uncommitted alongside the user's.
+			require.Equal(t, fx.heads[f.proj], gittest.RunGit(t, f.proj, "rev-parse", "HEAD"))
+			require.Equal(t, fx.heads[f.site], gittest.RunGit(t, f.site, "rev-parse", "HEAD"))
+			projStatus := gittest.RunGit(t, f.proj, "status", "--porcelain", "--untracked-files=all")
+			for _, path := range []string{
+				".spektacular/changelog/alpha.md",
+				".spektacular/changelog/testproj/alpha.md",
+				".spektacular/plans/alpha/plan.md",
+				".spektacular/plans/beta/plan.md",
+				"notes.txt",
+			} {
+				require.Contains(t, projStatus, path, "%s must stay uncommitted in the main checkout", path)
+			}
+			siteStatus := gittest.RunGit(t, f.site, "status", "--porcelain", "--untracked-files=all")
+			require.Contains(t, siteStatus, ".spektacular/changelog/testproj/alpha.md")
+			require.Contains(t, siteStatus, "draft.txt")
+
+			main, err := os.ReadFile(filepath.Join(f.proj, "main.txt"))
+			require.NoError(t, err)
+			require.Equal(t, "main v1\n", string(main), "the spec's code must not reach the main checkout")
+		})
+	}
+}
+
+// With auto_commit off and no worktrees, an implement run finishes without
+// being asked for a message and commits nothing anywhere.
+func TestAutoCommit_OffModeImplementWithoutWorktreesCommitsNothing(t *testing.T) {
+	fx := gitProject(t, config.AutoCommitOff)
+	dataDir := filepath.Join(fx.root, config.ProjectConfigDirName)
+	writeFixturePlan(t, dataDir, "billing")
+
+	changelog := filepath.Join(dataDir, config.DefaultChangelogDir, "billing.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(changelog), 0o755))
+	require.NoError(t, os.WriteFile(changelog, []byte("# billing\n\nwhat was built\n"), 0o644))
+	commitFixtures(t, fx)
+
+	_, _, code := runRootCmd(t, "implement", "new", "--data", `{"name":"billing"}`)
+	require.Equal(t, 0, code)
+	walkSteps(t, "implement",
+		"analyze", "implement", "test", "verify", "update_plan", "update_changelog",
+		"test_plan", "update_feature_changelog")
+	stdout, _, code := runRootCmd(t, "implement", "goto", "--data", `{"step":"reconcile_spec"}`)
+	require.Equal(t, 0, code)
+	require.NotContains(t, stdout, "Automatic git commit", "no commit message may be asked for")
+
+	dirtyOtherRepo(t, fx)
+
+	stdout, _, code = runRootCmd(t, "implement", "goto", "--data", `{"step":"finished"}`)
+	require.Equalf(t, 0, code, "finishing must not ask for a commit message: %s", stdout)
+	require.Equal(t, "finished", currentStep(t, fx))
+	for _, dir := range []string{fx.root, fx.other} {
+		require.Equal(t, "1", commitCount(t, dir), "no commit may be made with auto_commit off")
+		require.NotEmpty(t, gittest.RunGit(t, dir, "status", "--porcelain"),
+			"the agent's work must be left uncommitted in the working tree")
+	}
 }

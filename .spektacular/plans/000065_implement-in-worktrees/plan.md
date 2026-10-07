@@ -282,7 +282,7 @@ Port the dirty-repos change from PR #79: the epic run view checks only the repos
 
 **Validation point**: Auto-commit tests show code commits on the spec branch with automatic commits off and no main-checkout commit. Command tests show `implement merge` merging two repos and cleaning up, and refusing a conflict without moving either main line. Dependency tests show an unmerged dependency reported as unmet by both `implement new` and `status`, met again after the merge. The full test suite passes.
 
-#### - [ ] Task: Always commit a worktree run's code on the spec branch
+#### - [x] Task: Always commit a worktree run's code on the spec branch
 **Id:** 182b302a-301a-4185-b07c-6d840eb995d6
 **Repo:** spektacular
 **Depends on:** none
@@ -293,12 +293,12 @@ When an implement run has worktrees and reaches a completion point, commit its c
 *Technical detail:* [context.md#task-always-commit-a-worktree-runs-code-on-the-spec-branch](./context.md#task-always-commit-a-worktree-runs-code-on-the-spec-branch)
 
 **Acceptance criteria**:
-- [ ] With automatic commits off, a completed run with worktrees leaves its code changes as commits on the spec's branch, and its worktrees have no uncommitted changes.
-- [ ] With automatic commits off, the main checkouts get no commit from that run.
-- [ ] The agent is asked for a commit message before the transition that will commit.
-- [ ] A run without worktrees and with automatic commits off commits nothing, as before.
+- [x] With automatic commits off, a completed run with worktrees leaves its code changes as commits on the spec's branch, and its worktrees have no uncommitted changes.
+- [x] With automatic commits off, the main checkouts get no commit from that run.
+- [x] The agent is asked for a commit message before the transition that will commit.
+- [x] A run without worktrees and with automatic commits off commits nothing, as before.
 
-#### - [ ] Task: Add an implement merge command
+#### - [x] Task: Add an implement merge command
 **Id:** 5f5fb7b6-4299-4ada-bc3a-1d38bc18327f
 **Repo:** spektacular
 **Depends on:** none
@@ -309,12 +309,12 @@ Add `implement merge`, which merges a spec's worktree branches back into every t
 *Technical detail:* [context.md#task-add-an-implement-merge-command](./context.md#task-add-an-implement-merge-command)
 
 **Acceptance criteria**:
-- [ ] Merging a spec that touches two repos, with no conflicts, brings its changes into both main lines and removes its worktrees and branches.
-- [ ] When one repo's main line has a conflicting change, the merge is refused naming that repo and the conflicting paths, neither main line moves, and the worktrees and branches remain.
-- [ ] The Spektacular-directory guard and the other merge prechecks apply exactly as for `epic merge`.
-- [ ] Merging a spec with no worktrees is refused with a next action.
+- [x] Merging a spec that touches two repos, with no conflicts, brings its changes into both main lines and removes its worktrees and branches.
+- [x] When one repo's main line has a conflicting change, the merge is refused naming that repo and the conflicting paths, neither main line moves, and the worktrees and branches remain.
+- [x] The Spektacular-directory guard and the other merge prechecks apply exactly as for `epic merge`.
+- [x] Merging a spec with no worktrees is refused with a next action.
 
-#### - [ ] Task: Count an implemented but unmerged dependency as unmet
+#### - [x] Task: Count an implemented but unmerged dependency as unmet
 **Id:** 7462c057-e300-4eb1-89a8-480dc62266e3
 **Repo:** spektacular
 **Depends on:** none
@@ -325,10 +325,10 @@ Teach the single dependency classification shared by the implement check and sta
 *Technical detail:* [context.md#task-count-an-implemented-but-unmerged-dependency-as-unmet](./context.md#task-count-an-implemented-but-unmerged-dependency-as-unmet)
 
 **Acceptance criteria**:
-- [ ] Starting an implement run for a spec whose dependency is complete but unmerged names that dependency as unmet and offers the usual override.
-- [ ] Under strict dependencies the same run is refused outright.
-- [ ] Status reports the dependent spec as not ready, with the same description of the dependency.
-- [ ] Once the dependency is merged, the dependent can start without a warning.
+- [x] Starting an implement run for a spec whose dependency is complete but unmerged names that dependency as unmet and offers the usual override.
+- [x] Under strict dependencies the same run is refused outright.
+- [x] Status reports the dependent spec as not ready, with the same description of the dependency.
+- [x] Once the dependency is merged, the dependent can start without a warning.
 
 ### Milestone 3: Every implement run started on its own builds in its own worktrees and merges back when it finishes
 
@@ -553,3 +553,50 @@ None. Every uncertainty found during planning was resolved with the user (non-gi
 - `spektacular: templates/implement_epic_skill_test.go`
 
 **Discoveries**: `templates/implement_epic_skill_test.go` keeps an allow-list of the sentences where the epic skill may ask the user something; rewording a question in the skill requires updating that list too.
+
+### 2026-10-07 — Task: Always commit a worktree run's code on the spec branch
+
+**What was done**: `autocommit` gained `PointForRun`, `LeadsToCommitForRun` and `CodeOnly`: an implement run with worktrees treats its completion transitions as commit points even with `auto_commit` off, committing only its code in the worktrees on the spec branch. `gotoWithAutoCommit` and stepkit both decide from `len(wfCfg.CodeRoots) > 0`, so the commit-message request and the commit cannot drift. `commitImplementLane` skips the main-checkout artifact commit in that case, and the git-commit partial has code-only wording.
+
+**Deviations**: The worktree flag is the run's code roots (read from the record by `implement goto`) rather than a second `ReadRecord` call. The commit-message partial gained a `commit.code_only` variant, since its old intro said "auto_commit on".
+
+**Files changed**:
+- `spektacular: internal/autocommit/points.go`
+- `spektacular: internal/stepkit/stepkit.go`
+- `spektacular: templates/partials/git-commit-message.md`
+- `spektacular: cmd/autocommit.go`
+- `spektacular: internal/autocommit/points_test.go`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: cmd/autocommit_test.go`
+
+**Discoveries**: None beyond the above.
+
+### 2026-10-07 — Task: Add an implement merge command
+
+**What was done**: New `implement merge --data '{"name":"<spec>"}'` merges a spec's worktree branches back through the same `worktree.Manager.Merge` that `epic merge` uses, all or nothing. Both commands now share `writeMergeResult` (merge, conflict refusal, result) and `worktreeMergeOutputSchema`. A spec with no worktree record is refused with `worktree_not_found` and a next action; an invalid name with `name_required`.
+
+**Deviations**: The success output keeps `epic merge`'s real shape, `{"spec", "merged": bool, "removed": bool}`, rather than the lists sketched in the plan. The plan's intent was "the same shape as epic merge". `mergeConflict`'s next action was already generic enough and is unchanged.
+
+**Files changed**:
+- `spektacular: cmd/implement_merge.go`
+- `spektacular: cmd/epic_worktree.go`
+- `spektacular: cmd/implement_merge_test.go`
+
+**Discoveries**: `Manager.Merge` already refuses `worktree_not_found` itself, with an epic-worded next action; `implement merge` checks the record first so its refusal names the implement path.
+
+### 2026-10-07 — Task: Count an implemented but unmerged dependency as unmet
+
+**What was done**: `status.Options` gained an `Unmerged` hook, and the single dependency classification (`DependenciesOf`, `buildTarget`) now treats an implemented dependency whose worktree record still exists as unmet, described "implemented but not yet merged" (`DescribeDependency`). The spec's own state stays `implemented`. `unmergedFn(root)` (a file read, no git) is wired into both `refuseUnmetDependencies` and `status`, so they always agree. When the unmet dependency is unmerged, the refusal offers `implement merge` for it instead of implementing it.
+
+**Deviations**: Status output has no per-dependency description field, so status reports an unmerged dependency through the dependent's `ready: false` and `blocked_by` only; the "implemented but not yet merged" wording appears in the implement refusal. User accepted ticking the criterion with this noted.
+
+**Files changed**:
+- `spektacular: internal/status/report.go`
+- `spektacular: internal/status/classify.go`
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/status.go`
+- `spektacular: internal/status/status_test.go`
+- `spektacular: cmd/implement_dependencies_test.go`
+- `spektacular: cmd/status_test.go`
+
+**Discoveries**: `status.EpicComplete` (used by epic link) intentionally does not use the hook: an unmerged spec still counts as implemented for epic completion.

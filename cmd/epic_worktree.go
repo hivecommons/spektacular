@@ -141,14 +141,7 @@ func runEpicWorktree(cmd *cobra.Command, _ []string) error {
 
 func runEpicMerge(cmd *cobra.Command, _ []string) error {
 	if schema, _ := cmd.Flags().GetBool("schema"); schema {
-		return output.Write(cmd.OutOrStdout(), commandSchema{Input: epicWorktreeInputSchema, Output: &schemaObj{
-			Type: "object",
-			Properties: map[string]*schemaProp{
-				"spec":    {Type: "string"},
-				"merged":  {Type: "boolean"},
-				"removed": {Type: "boolean", Description: "every worktree and branch of the spec was removed"},
-			},
-		}}, "")
+		return output.Write(cmd.OutOrStdout(), commandSchema{Input: epicWorktreeInputSchema, Output: worktreeMergeOutputSchema}, "")
 	}
 	m, cfg, _, err := worktreeManager()
 	if err != nil {
@@ -158,6 +151,24 @@ func runEpicMerge(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	return writeMergeResult(cmd, m, spec)
+}
+
+// worktreeMergeOutputSchema is what both merge commands, epic merge and
+// implement merge, return.
+var worktreeMergeOutputSchema = &schemaObj{
+	Type: "object",
+	Properties: map[string]*schemaProp{
+		"spec":    {Type: "string"},
+		"merged":  {Type: "boolean"},
+		"removed": {Type: "boolean", Description: "every worktree and branch of the spec was removed"},
+	},
+}
+
+// writeMergeResult merges spec back through the worktree manager and writes
+// the result, or refuses with the conflicts; shared by epic merge and
+// implement merge so the two can never report a merge differently.
+func writeMergeResult(cmd *cobra.Command, m worktree.Manager, spec string) error {
 	res, err := m.Merge(spec)
 	if err != nil {
 		return err
