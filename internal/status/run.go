@@ -39,8 +39,9 @@ type RunSource struct {
 	Worktrees func() ([]worktree.SpecWorktrees, error)
 	// Touched lists the registered repos a spec's plan touches.
 	Touched func(spec string) []string
-	// Dirty reports whether any registered repo has uncommitted changes.
-	Dirty func() bool
+	// Dirty lists the given repos that have uncommitted changes; the run view
+	// passes the repos the epic's plans touch.
+	Dirty func(repos []string) []string
 }
 
 // RunPart is one part, planning or implementing, of a spec's run.
@@ -84,8 +85,12 @@ type EpicRun struct {
 	Order     []string  `json:"order"`
 	Plan      RunCounts `json:"plan"`
 	Implement RunCounts `json:"implement"`
-	Dirty     bool      `json:"dirty"`
-	Problems  []Problem `json:"problems"`
+	// Dirty is true exactly when DirtyRepos names any repo.
+	Dirty bool `json:"dirty"`
+	// DirtyRepos names the repos the epic's plans touch that have
+	// uncommitted changes; empty, never null, when there are none.
+	DirtyRepos []string  `json:"dirty_repos"`
+	Problems   []Problem `json:"problems"`
 }
 
 // BlocksImplement reports whether any problem stops implementing.
@@ -180,8 +185,24 @@ func buildRun(opts Options, r *Report) error {
 		count(&er.Plan, s.Run.Plan.State)
 		count(&er.Implement, s.Run.Implement.State)
 	}
+	er.DirtyRepos = []string{}
 	if src.Dirty != nil {
-		er.Dirty = src.Dirty()
+		// Only the repos the epic builds matter: a dirty repo no spec touches
+		// is not in any spec's worktree either way.
+		var touched []string
+		seen := map[string]bool{}
+		for _, s := range r.Specs {
+			for _, name := range s.Run.Implement.Repos {
+				if !seen[name] {
+					seen[name] = true
+					touched = append(touched, name)
+				}
+			}
+		}
+		if dirty := src.Dirty(touched); len(dirty) > 0 {
+			er.DirtyRepos = dirty
+			er.Dirty = true
+		}
 	}
 
 	implement := []string{"implement"}

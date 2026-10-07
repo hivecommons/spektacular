@@ -19,6 +19,10 @@ import (
 // tests can swap in a fake, mirroring repoGit.
 var worktreeGit worktree.Runner = worktree.NewRunner()
 
+// worktreeSetup runs repos' worktree setup commands; a variable so tests can
+// swap in a fake, like worktreeGit.
+var worktreeSetup worktree.SetupRunner = worktree.NewSetupRunner()
+
 var epicWorktreeInputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
@@ -81,7 +85,7 @@ func worktreeManager() (worktree.Manager, config.Config, store.Store, error) {
 	if err != nil {
 		return worktree.Manager{}, config.Config{}, nil, err
 	}
-	m := worktree.Manager{ProjectRoot: root, Config: cfg, Repos: set, Git: worktreeGit}
+	m := worktree.Manager{ProjectRoot: root, Config: cfg, Repos: set, Git: worktreeGit, Setup: worktreeSetup}
 	return m, cfg, store.NewSourceStore(root, "project"), nil
 }
 

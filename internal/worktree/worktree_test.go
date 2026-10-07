@@ -443,6 +443,170 @@ func TestReadRecord_MalformedIsAnError(t *testing.T) {
 	require.Error(t, err)
 }
 
+// --- Setup ------------------------------------------------------------------
+
+// setupCall is one command a fakeSetup was asked to run.
+type setupCall struct {
+	dir, command string
+}
+
+// fakeSetup records every setup command it is asked to run and answers with
+// err, so tests can count calls and see which command ran where.
+type fakeSetup struct {
+	calls []setupCall
+	err   error
+}
+
+func (s *fakeSetup) Run(dir, command string) (string, error) {
+	s.calls = append(s.calls, setupCall{dir: dir, command: command})
+	return "", s.err
+}
+
+// declareSetup sets the worktree setup command in the repo.yaml under spekDir.
+func declareSetup(t *testing.T, spekDir, command string) {
+	t.Helper()
+	path := filepath.Join(spekDir, config.RepoConfigFileName)
+	rc, err := config.RepoConfigFromYAMLFile(path)
+	require.NoError(t, err)
+	rc.WorktreeSetup = command
+	require.NoError(t, rc.ToYAMLFile(path))
+}
+
+// Setup criterion 1: each touched repo's setup command runs, through the real
+// shell, in that repo's code root inside its new worktree, before Ensure
+// returns.
+func TestEnsure_SetupRunsInEveryTouchedRepoOfANewWorktree(t *testing.T) {
+	f := newFixture(t)
+	declareSetup(t, filepath.Join(f.proj, ".spektacular"), "echo project ready > prepared.txt")
+	declareSetup(t, filepath.Join(f.site, ".spektacular"), "echo docs ready > prepared.txt")
+	commitAll(t, f.proj, "declare project setup")
+	commitAll(t, f.site, "declare docs setup")
+
+	_, created, err := f.manager(t).Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+	require.True(t, created)
+
+	require.Equal(t, "project ready\n", readFile(t, filepath.Join(f.wt("alpha", "testproj"), "prepared.txt")))
+	require.Equal(t, "docs ready\n", readFile(t, filepath.Join(f.wt("alpha", "docs"), "prepared.txt")))
+	// The main copies are not set up.
+	require.NoFileExists(t, filepath.Join(f.proj, "prepared.txt"))
+	require.NoFileExists(t, filepath.Join(f.site, "prepared.txt"))
+}
+
+// Setup criterion 2: a repo with no setup command gets none.
+func TestEnsure_NoSetupWhenNoneIsDeclared(t *testing.T) {
+	f := newFixture(t)
+	m := f.manager(t)
+	setup := &fakeSetup{}
+	m.Setup = setup
+
+	_, created, err := m.Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+	require.True(t, created)
+	require.Empty(t, setup.calls)
+}
+
+// A repo the spec does not touch is not set up, even though the project
+// checkout's worktree is always created.
+func TestEnsure_UntouchedRepoIsNotSetUp(t *testing.T) {
+	f := newFixture(t)
+	declareSetup(t, filepath.Join(f.proj, ".spektacular"), "echo project")
+	declareSetup(t, filepath.Join(f.site, ".spektacular"), "echo docs")
+	m := f.manager(t)
+	setup := &fakeSetup{}
+	m.Setup = setup
+
+	_, _, err := m.Ensure(testSpec, []string{"docs"})
+	require.NoError(t, err)
+	require.Equal(t, []setupCall{{dir: f.wt("alpha", "docs"), command: "echo docs"}}, setup.calls)
+}
+
+// Setup criterion 2: an existing worktree is never set up again.
+func TestEnsure_ExistingWorktreeIsNotSetUpAgain(t *testing.T) {
+	f := newFixture(t)
+	declareSetup(t, filepath.Join(f.proj, ".spektacular"), "echo project")
+	declareSetup(t, filepath.Join(f.site, ".spektacular"), "echo docs")
+	m := f.manager(t)
+	setup := &fakeSetup{}
+	m.Setup = setup
+
+	_, created, err := m.Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+	require.True(t, created)
+	require.Equal(t, []setupCall{
+		{dir: f.wt("alpha", "testproj"), command: "echo project"},
+		{dir: f.wt("alpha", "docs"), command: "echo docs"},
+	}, setup.calls)
+
+	_, created, err = m.Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+	require.False(t, created)
+	require.Len(t, setup.calls, 2)
+}
+
+// The command comes from the repo's registration in the main project, not
+// from the repo.yaml copy checked out inside the new worktree.
+func TestEnsure_SetupCommandIsReadFromTheMainRegistration(t *testing.T) {
+	f := newFixture(t)
+	declareSetup(t, filepath.Join(f.site, ".spektacular"), "echo committed")
+	commitAll(t, f.site, "declare docs setup")
+	// Changed in the main copy only, so the worktree's copy still says
+	// "echo committed".
+	declareSetup(t, filepath.Join(f.site, ".spektacular"), "echo main")
+	m := f.manager(t)
+	setup := &fakeSetup{}
+	m.Setup = setup
+
+	_, _, err := m.Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+	require.Equal(t, []setupCall{{dir: f.wt("alpha", "docs"), command: "echo main"}}, setup.calls)
+	require.Contains(t, readFile(t, filepath.Join(f.wt("alpha", "docs"), ".spektacular", config.RepoConfigFileName)), "echo committed")
+}
+
+// Setup criterion 3: a failing setup command refuses creation, naming the
+// repo, the command and its output, and the failed worktree, its new branch
+// and the record are all gone, so the same call can be retried cleanly.
+func TestEnsure_FailingSetupRefusesAndRemovesTheWorktree(t *testing.T) {
+	f := newFixture(t)
+	declareSetup(t, filepath.Join(f.site, ".spektacular"), "echo cannot install >&2; exit 3")
+	m := f.manager(t)
+
+	_, _, err := m.Ensure(testSpec, []string{"testproj", "docs"})
+	er := requireRefusal(t, err, "worktree_setup_failed")
+	require.Equal(t, "docs", er.Resource)
+	require.Contains(t, er.Message, "docs")
+	require.Contains(t, er.Message, `"echo cannot install >&2; exit 3"`)
+	require.Contains(t, er.Message, "exit status 3")
+	require.Contains(t, er.Message, "cannot install")
+
+	require.NoDirExists(t, f.wt("alpha", "docs"))
+	require.NotContains(t, gittest.RunGit(t, f.site, "worktree", "list"), f.wt("alpha", "docs"))
+	require.Empty(t, gittest.RunGit(t, f.site, "branch", "--list", "spek/alpha"))
+	require.NoFileExists(t, filepath.Join(f.proj, ".spektacular", "worktrees", "alpha", "record.json"))
+
+	// Once the command is fixed, the same call succeeds and sets up afresh.
+	declareSetup(t, filepath.Join(f.site, ".spektacular"), "echo fixed > prepared.txt")
+	_, created, err := f.manager(t).Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+	require.True(t, created)
+	require.Equal(t, "fixed\n", readFile(t, filepath.Join(f.wt("alpha", "docs"), "prepared.txt")))
+}
+
+// A branch that existed before the failed run is the user's and is kept;
+// only the worktree is removed.
+func TestEnsure_FailingSetupKeepsABranchItDidNotCreate(t *testing.T) {
+	f := newFixture(t)
+	gittest.RunGit(t, f.site, "branch", "spek/beta")
+	declareSetup(t, filepath.Join(f.site, ".spektacular"), "exit 1")
+	m := f.manager(t)
+	m.Setup = &fakeSetup{err: errors.New("exit status 1")}
+
+	_, _, err := m.Ensure("beta", []string{"docs"})
+	requireRefusal(t, err, "worktree_setup_failed")
+	require.NoDirExists(t, f.wt("beta", "docs"))
+	require.Equal(t, "spek/beta", gittest.RunGit(t, f.site, "branch", "--list", "--format=%(refname:short)", "spek/beta"))
+}
+
 // --- Merge ------------------------------------------------------------------
 
 // Criterion 4: a clean merge lands in every repo's main line, then the

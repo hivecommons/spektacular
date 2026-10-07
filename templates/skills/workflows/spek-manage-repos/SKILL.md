@@ -47,6 +47,8 @@ A repo is **colocated** when its footprint sits inside its code, in a `.spektacu
 
 Descriptive metadata (`description`, `role`, `tags`) lives in `repo.yaml`, never in the project config. A repo's footprint carries no pointer back to any project, so one repo can belong to many projects.
 
+A repo may also declare `worktree_setup` in its `repo.yaml`: a shell command, such as `npm ci`, run in each new worktree of the repo before an implement run starts work there. A new worktree holds only tracked files, so dependencies and other ignored files a build needs are missing until this command prepares them. Declare one when the repo cannot build or test from a fresh checkout. A repo that builds from tracked files alone needs none. If the command fails, the run is refused with its output and the worktree is removed.
+
 # Adding a repo
 
 Start the guided add by running:
@@ -88,7 +90,7 @@ Nothing is written to the user's repo or to the project until the confirmation s
 {{command}} repo add --data '{"name":"<name>","location":"<folder>","description":"<description>","role":"<role>","tags":["<tag>"]}'
 ```
 
-Prefer the guided add when a person is involved. Use the direct form when scripting, or when every value is already known and settled.
+Prefer the guided add when a person is involved. Use the direct form when scripting, or when every value is already known and settled. The direct form also accepts `"worktree_setup":"<command>"`, which is written to the repo's `repo.yaml`. Re-adding without it leaves an existing command in place.
 
 # Rules that apply to every add
 
@@ -109,6 +111,7 @@ Each entry reports:
 - the resolved source of its code as `root`, which is the file source, the clone of a git source, or the location itself when the repo declares no source;
 - the `provider` the repo declares for its source (`file`, `git`, or absent when it declares none);
 - `description`, `role`, `tags`, and `dependencies`;
+- `worktree_setup` when the repo declares a setup command for new worktrees;
 - `materialized`, true when the root is a project-managed clone;
 - `stale_note` when a clone has fallen behind its remote;
 - `metadata_note` when the repo has no descriptive metadata set.

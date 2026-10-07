@@ -211,7 +211,7 @@ type EpicRun struct { /* … */ Dirty bool `json:"dirty"`; DirtyRepos []string `
 
 **Validation point**: Worktree tests show a declared setup command's effect in a new worktree, no setup for repos without one, and a refused, cleaned-up creation when the command fails. Step-rendering tests show the code-location and sub-agent guidance in all four code-touching steps, in both the worktree and registry forms. Status tests show `dirty_repos` naming only dirty touched repos and `dirty` unchanged in type. The full test suite passes.
 
-#### - [ ] Task: Let a repo declare a worktree setup command
+#### - [x] Task: Let a repo declare a worktree setup command
 **Id:** 98c6a685-5c90-4986-85bb-c29111055488
 **Repo:** spektacular
 **Depends on:** none
@@ -222,12 +222,12 @@ Add an optional setup command to a repo's own configuration, so it travels with 
 *Technical detail:* [context.md#task-let-a-repo-declare-a-worktree-setup-command](./context.md#task-let-a-repo-declare-a-worktree-setup-command)
 
 **Acceptance criteria**:
-- [ ] A repo's configuration file can hold a setup command, and a file without one loads exactly as before.
-- [ ] Registering a repo with a setup command records it in the repo's own configuration, and re-registering without one leaves an existing command in place.
-- [ ] Listing repos shows each repo's setup command when it has one.
-- [ ] The repo-management skill describes the setup command and when to declare one.
+- [x] A repo's configuration file can hold a setup command, and a file without one loads exactly as before.
+- [x] Registering a repo with a setup command records it in the repo's own configuration, and re-registering without one leaves an existing command in place.
+- [x] Listing repos shows each repo's setup command when it has one.
+- [x] The repo-management skill describes the setup command and when to declare one.
 
-#### - [ ] Task: Run a repo's setup command in each new worktree
+#### - [x] Task: Run a repo's setup command in each new worktree
 **Id:** acc28f89-d6e3-442f-915c-7f60900a9e83
 **Repo:** spektacular
 **Depends on:**
@@ -239,12 +239,12 @@ When a spec's worktree is newly created, run the declared setup command of every
 *Technical detail:* [context.md#task-run-a-repos-setup-command-in-each-new-worktree](./context.md#task-run-a-repos-setup-command-in-each-new-worktree)
 
 **Acceptance criteria**:
-- [ ] After a spec's worktrees are created, the effect of each touched repo's setup command is present in that repo's worktree.
-- [ ] A repo with no setup command gets no setup, and an existing worktree is never set up again.
-- [ ] A failing setup command refuses creation with a message naming the repo and the command's failure, and with a next action. The failed worktree does not remain.
-- [ ] Epic worktree creation gets the same setup.
+- [x] After a spec's worktrees are created, the effect of each touched repo's setup command is present in that repo's worktree.
+- [x] A repo with no setup command gets no setup, and an existing worktree is never set up again.
+- [x] A failing setup command refuses creation with a message naming the repo and the command's failure, and with a next action. The failed worktree does not remain.
+- [x] Epic worktree creation gets the same setup.
 
-#### - [ ] Task: Tell code-touching steps where the code lives and how to brief sub-agents
+#### - [x] Task: Tell code-touching steps where the code lives and how to brief sub-agents
 **Id:** 8fd1d9e9-60ce-4bc7-9d13-17df7552b1d2
 **Repo:** spektacular
 **Depends on:** none
@@ -255,12 +255,12 @@ Add one shared block to the steps that analyse, implement, test and verify a tas
 *Technical detail:* [context.md#task-tell-code-touching-steps-where-the-code-lives-and-how-to-brief-sub-agents](./context.md#task-tell-code-touching-steps-where-the-code-lives-and-how-to-brief-sub-agents)
 
 **Acceptance criteria**:
-- [ ] With worktrees, each of the four steps names every touched repo's worktree location and states that every sub-agent must be given those locations and work only in them.
-- [ ] With worktrees, the same steps state that a new worktree holds only tracked files and that dependencies are prepared inside it, not taken from a main checkout.
-- [ ] Without worktrees, the steps still tell the agent to pass each repo's registered location to every sub-agent.
-- [ ] Locations containing special characters reach the agent unchanged.
+- [x] With worktrees, each of the four steps names every touched repo's worktree location and states that every sub-agent must be given those locations and work only in them.
+- [x] With worktrees, the same steps state that a new worktree holds only tracked files and that dependencies are prepared inside it, not taken from a main checkout.
+- [x] Without worktrees, the steps still tell the agent to pass each repo's registered location to every sub-agent.
+- [x] Locations containing special characters reach the agent unchanged.
 
-#### - [ ] Task: Limit the epic's uncommitted-work warning to repos its plans touch
+#### - [x] Task: Limit the epic's uncommitted-work warning to repos its plans touch
 **Id:** 42d0bb3e-b6a4-4a1b-8640-b5d58418bd53
 **Repo:** spektacular
 **Depends on:** none
@@ -271,10 +271,10 @@ Port the dirty-repos change from PR #79: the epic run view checks only the repos
 *Technical detail:* [context.md#task-limit-the-epics-uncommitted-work-warning-to-repos-its-plans-touch](./context.md#task-limit-the-epics-uncommitted-work-warning-to-repos-its-plans-touch)
 
 **Acceptance criteria**:
-- [ ] An untouched registered repo with uncommitted changes does not raise the epic's warning.
-- [ ] A touched repo with uncommitted changes raises it, and the epic's status names that repo.
-- [ ] The existing flag keeps its name and type, and the list of dirty repos is empty rather than missing when nothing is dirty.
-- [ ] The epic implement skill tells the agent to name the dirty repos to the user.
+- [x] An untouched registered repo with uncommitted changes does not raise the epic's warning.
+- [x] A touched repo with uncommitted changes raises it, and the epic's status names that repo.
+- [x] The existing flag keeps its name and type, and the list of dirty repos is empty rather than missing when nothing is dirty.
+- [x] The epic implement skill tells the agent to name the dirty repos to the user.
 
 ### Milestone 2: A spec built in worktrees always has committed work to merge, can be merged on its own, and blocks its dependents until it is
 
@@ -485,3 +485,71 @@ None. Every uncertainty found during planning was resolved with the user (non-gi
 - **A settings format bump or migration.** Neither the opt-out nor the setup command needs one. Bringing this repository's own configuration or skills up to date is done by installing the built binary between workflows, not by any task here.
 - **Windows support for setup commands.** They run through a POSIX shell.
 - **A harbor suite for worktree runs or epics.** Worktree runs are covered by Go flow tests, and the harbor implement suite keeps exercising the opt-out path.
+
+## Changelog
+
+### 2026-10-07 — Task: Let a repo declare a worktree setup command
+
+**What was done**: A repo's own `repo.yaml` can now declare `worktree_setup`, a shell command for preparing a new worktree. `repo add --data` accepts it and writes it only when given, so re-registering without it keeps the existing command. `repo list` reports it. The repo-management skill explains what it is for and when to declare one.
+
+**Deviations**: None. The guided add flow (`internal/steps/repo/registration.go`) was deliberately not extended; the plan scopes the field to `repo add --data` and `repo list`.
+
+**Files changed**:
+- `spektacular: internal/config/repo.go`
+- `spektacular: internal/repo/register.go`
+- `spektacular: cmd/repo.go`
+- `spektacular: templates/skills/workflows/spek-manage-repos/SKILL.md`
+- `spektacular: internal/config/repo_test.go`
+- `spektacular: internal/repo/register_test.go`
+- `spektacular: cmd/repo_test.go`
+- `spektacular: templates/guided_add_skill_test.go`
+
+**Discoveries**: `repoConfigDescriptiveFieldsEqual` gates whether `Register` rewrites `repo.yaml`, so any new field registration writes must be added there too or a change to only that field is silently dropped. The skill text for spek-manage-repos is asserted in `templates/guided_add_skill_test.go`.
+
+### 2026-10-07 — Task: Run a repo's setup command in each new worktree
+
+**What was done**: `worktree.Manager` gained an injectable `SetupRunner` (a `sh -c` runner by default). When `Ensure` creates a new worktree, each touched repo's `worktree_setup` command, read from its main registration, runs in that repo's code root inside the worktree. A failure removes the worktree (and its branch when this call created it), writes no record, and refuses with `worktree_setup_failed`. `epic worktree` gets this through a swappable `worktreeSetup` var.
+
+**Deviations**: `worktreeManager()` sets `Setup: worktreeSetup` explicitly rather than leaving it nil, so tests can swap the runner.
+
+**Files changed**:
+- `spektacular: internal/worktree/setup.go`
+- `spektacular: internal/worktree/worktree.go`
+- `spektacular: cmd/epic_worktree.go`
+- `spektacular: internal/worktree/worktree_test.go`
+- `spektacular: cmd/epic_worktree_test.go`
+
+**Discoveries**: When setup fails in a later checkout, worktrees already created for earlier checkouts in the same `Ensure` call (with their branches) stay in place; only the failing checkout's worktree is discarded. A retry reuses them without re-running their (already successful) setup.
+
+### 2026-10-07 — Task: Tell code-touching steps where the code lives and how to brief sub-agents
+
+**What was done**: A new partial, `templates/partials/implement-code-locations.md`, renders a "Where the code lives" block in the analyze, implement, test and verify steps. With worktree roots it lists each repo's root (triple-braced), requires every sub-agent to be given those locations and work only there, and explains that a new worktree holds only tracked files and dependencies are prepared inside it. Without roots it points at `repo list` and still requires passing each root to sub-agents.
+
+**Deviations**: The partial is included at the end of each step's Step 1 (just before Step 2), not directly after `implement-current-task`, so it does not split Step 1's instructions. The 000064 test `TestWhereTheCodeLivesPreambleRenderedOnceByReadPlan`, which asserted steps 02–05 did *not* mention code locations, was inverted and renamed to `TestWhereTheCodeLivesPreambleRenderedByReadPlan`.
+
+**Files changed**:
+- `spektacular: templates/partials/implement-code-locations.md`
+- `spektacular: templates/steps/implement/02-analyze.md`
+- `spektacular: templates/steps/implement/03-implement.md`
+- `spektacular: templates/steps/implement/04-test.md`
+- `spektacular: templates/steps/implement/05-verify.md`
+- `spektacular: internal/steps/implement/steps_test.go`
+
+**Discoveries**: No harbor oracle pins the text of steps 02–05. Partials under `templates/partials/` resolve automatically by path from step templates.
+
+### 2026-10-07 — Task: Limit the epic's uncommitted-work warning to repos its plans touch
+
+**What was done**: Ported PR #79's code by hand. `status.RunSource.Dirty` now takes the epic's touched repos and returns the dirty ones; `EpicRun` gained `dirty_repos` (never null), and `dirty` is true exactly when it is non-empty. `statusRunSource` resolves only the touched repos' checkouts. The epic implement skill's uncommitted-work bullet names `dirty_repos`, written fresh for the post-000064 project-root rule.
+
+**Deviations**: `statusRunSource`'s Dirty returns nil early for an empty touched list. The PR's isolation-baseline and worktree-cwd template changes were not ported (as planned).
+
+**Files changed**:
+- `spektacular: internal/status/run.go`
+- `spektacular: cmd/status.go`
+- `spektacular: templates/skills/workflows/spek-implement-epic/SKILL.md`
+- `spektacular: cmd/status_dirty_test.go`
+- `spektacular: cmd/status_test.go`
+- `spektacular: internal/status/run_test.go`
+- `spektacular: templates/implement_epic_skill_test.go`
+
+**Discoveries**: `templates/implement_epic_skill_test.go` keeps an allow-list of the sentences where the epic skill may ask the user something; rewording a question in the skill requires updating that list too.

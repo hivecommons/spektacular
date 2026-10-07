@@ -15,6 +15,8 @@ If the section is missing, unreadable, or empty, STOP and ask the user whether t
 
 Pass the current task's acceptance criteria and its section of the plan's `context.md` to the sub-agent.
 
+{{> partials/implement-code-locations}}
+
 ### Step 2: Delegate to the follow-test-patterns skill
 
 Launch a sub-agent with the instructions from:

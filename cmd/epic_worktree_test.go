@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -164,6 +165,64 @@ func TestEpicWorktree_CreatesThenReturnsTheSameWorktrees(t *testing.T) {
 
 	// Criterion 3: the main copy sees nothing of the worktrees.
 	require.Empty(t, gittest.RunGit(t, f.proj, "status", "--porcelain", "--untracked-files=all"))
+}
+
+// declareWorktreeSetup sets the worktree setup command in the repo.yaml of
+// the repo whose .spektacular folder is spekDir.
+func declareWorktreeSetup(t *testing.T, spekDir, command string) {
+	t.Helper()
+	path := filepath.Join(spekDir, config.RepoConfigFileName)
+	rc, err := config.RepoConfigFromYAMLFile(path)
+	require.NoError(t, err)
+	rc.WorktreeSetup = command
+	require.NoError(t, rc.ToYAMLFile(path))
+}
+
+// failingSetup is a worktree.SetupRunner whose every command fails.
+type failingSetup struct{}
+
+func (failingSetup) Run(string, string) (string, error) {
+	return "no network", errors.New("exit status 2: no network")
+}
+
+// Setup criterion 4: `epic worktree` runs each touched repo's setup command
+// in that repo's new worktree, and does not run it again for an existing one.
+func TestEpicWorktree_RunsEachTouchedReposSetupCommand(t *testing.T) {
+	f := worktreeProject(t, true)
+	declareWorktreeSetup(t, filepath.Join(f.site, ".spektacular"), "echo installed >> prepared.txt")
+	wtCommitAll(t, f.site, "declare docs setup")
+
+	first := runEpicWorktreeCmd(t)
+	require.True(t, first.Created)
+	prepared, err := os.ReadFile(filepath.Join(f.wt("docs"), "prepared.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "installed\n", string(prepared))
+	require.NoFileExists(t, filepath.Join(f.wt("testproj"), "prepared.txt"))
+
+	second := runEpicWorktreeCmd(t)
+	require.False(t, second.Created)
+	// The command appends, so a second run would show a second line.
+	prepared, err = os.ReadFile(filepath.Join(f.wt("docs"), "prepared.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "installed\n", string(prepared))
+}
+
+// A failing setup command is refused through the command with
+// worktree_setup_failed naming the repo, and the failed worktree is gone.
+func TestEpicWorktree_FailingSetupIsRefused(t *testing.T) {
+	f := worktreeProject(t, true)
+	declareWorktreeSetup(t, filepath.Join(f.site, ".spektacular"), "make deps")
+	prev := worktreeSetup
+	worktreeSetup = failingSetup{}
+	t.Cleanup(func() { worktreeSetup = prev })
+
+	er := refuseEpic(t, "worktree", "--data", `{"spec":"alpha"}`)
+	require.Equal(t, "worktree_setup_failed", er.Code, er.Message)
+	require.Equal(t, "docs", er.Resource)
+	require.Contains(t, er.Message, `"make deps"`)
+	require.Contains(t, er.Message, "no network")
+	require.NoDirExists(t, f.wt("docs"))
+	require.Empty(t, gittest.RunGit(t, f.site, "branch", "--list", "spek/alpha"))
 }
 
 // After `epic worktree`, the .spektacular folder inside every one of the

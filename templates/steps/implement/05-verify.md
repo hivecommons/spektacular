@@ -13,6 +13,8 @@ Do not rely on an earlier step's output still being in your context. Read the ta
 
 If the section is missing, unreadable, or empty, STOP and ask the user whether to fix the plan's `context.md` before proceeding. This is a plan/reality mismatch — do not guess.
 
+{{> partials/implement-code-locations}}
+
 ### Step 2: Delegate to the verify-implementation skill
 
 Launch a sub-agent with the instructions from:

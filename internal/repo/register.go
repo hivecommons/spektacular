@@ -14,13 +14,16 @@ import (
 // written into the repo's own config — its descriptive metadata and, when
 // given, the source its code lives at.
 type Registration struct {
-	Name         string
-	Location     string
-	Source       string
-	Description  string
-	Role         string
-	Tags         []string
-	Dependencies []string
+	Name        string
+	Location    string
+	Source      string
+	Description string
+	Role        string
+	Tags        []string
+	// WorktreeSetup is the shell command run in each new worktree of the
+	// repo. Like the descriptive fields, it is written only when given.
+	WorktreeSetup string
+	Dependencies  []string
 }
 
 // RegistrationResult reports what registering a repo did: whether it is
@@ -137,6 +140,9 @@ func Register(cfg *config.Config, projectRoot string, git GitRunner, in Registra
 	if len(in.Tags) > 0 {
 		updated.Tags = in.Tags
 	}
+	if in.WorktreeSetup != "" {
+		updated.WorktreeSetup = in.WorktreeSetup
+	}
 	if in.Source != "" {
 		src, err := config.SourceFromInput(in.Source)
 		if err != nil {
@@ -175,10 +181,11 @@ func reposEqual(a, b config.RepoEntry) bool {
 }
 
 // repoConfigDescriptiveFieldsEqual reports whether the fields registration
-// writes — the descriptive metadata and the source — match, so the repo's
-// config is rewritten only when registration actually changed something.
+// writes — the descriptive metadata, the worktree setup command and the
+// source — match, so the repo's config is rewritten only when registration
+// actually changed something.
 func repoConfigDescriptiveFieldsEqual(a, b config.RepoConfig) bool {
-	if a.Description != b.Description || a.Role != b.Role || a.Source != b.Source {
+	if a.Description != b.Description || a.Role != b.Role || a.Source != b.Source || a.WorktreeSetup != b.WorktreeSetup {
 		return false
 	}
 	return stringSlicesEqual(a.Tags, b.Tags)

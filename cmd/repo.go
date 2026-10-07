@@ -52,13 +52,14 @@ var repoGit repo.GitRunner = repo.NewGitRunner()
 var repoAddInputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
-		"name":         {Type: "string"},
-		"location":     {Type: "string"},
-		"source":       {Type: "string"},
-		"description":  {Type: "string"},
-		"role":         {Type: "string"},
-		"tags":         {Type: "array", Items: &schemaProp{Type: "string"}},
-		"dependencies": {Type: "array", Items: &schemaProp{Type: "string"}},
+		"name":           {Type: "string"},
+		"location":       {Type: "string"},
+		"source":         {Type: "string"},
+		"description":    {Type: "string"},
+		"role":           {Type: "string"},
+		"tags":           {Type: "array", Items: &schemaProp{Type: "string"}},
+		"worktree_setup": {Type: "string"},
+		"dependencies":   {Type: "array", Items: &schemaProp{Type: "string"}},
 	},
 	Required: []string{"name", "location"},
 }
@@ -93,17 +94,18 @@ var repoListOutputSchema = &schemaObj{
 			Items: &schemaProp{
 				Type: "object",
 				Properties: map[string]*schemaProp{
-					"name":          {Type: "string"},
-					"location":      {Type: "string"},
-					"root":          {Type: "string"},
-					"provider":      {Type: "string"},
-					"description":   {Type: "string"},
-					"role":          {Type: "string"},
-					"tags":          {Type: "array", Items: &schemaProp{Type: "string"}},
-					"dependencies":  {Type: "array", Items: &schemaProp{Type: "string"}},
-					"materialized":  {Type: "boolean"},
-					"stale_note":    {Type: "string"},
-					"metadata_note": {Type: "string"},
+					"name":           {Type: "string"},
+					"location":       {Type: "string"},
+					"root":           {Type: "string"},
+					"provider":       {Type: "string"},
+					"description":    {Type: "string"},
+					"role":           {Type: "string"},
+					"tags":           {Type: "array", Items: &schemaProp{Type: "string"}},
+					"worktree_setup": {Type: "string"},
+					"dependencies":   {Type: "array", Items: &schemaProp{Type: "string"}},
+					"materialized":   {Type: "boolean"},
+					"stale_note":     {Type: "string"},
+					"metadata_note":  {Type: "string"},
 				},
 			},
 		},
@@ -115,28 +117,30 @@ var repoListOutputSchema = &schemaObj{
 // config — its descriptive metadata and, when given, the source its code
 // lives at.
 type repoAddInput struct {
-	Name         string   `json:"name"`
-	Location     string   `json:"location"`
-	Source       string   `json:"source"`
-	Description  string   `json:"description"`
-	Role         string   `json:"role"`
-	Tags         []string `json:"tags"`
-	Dependencies []string `json:"dependencies"`
+	Name          string   `json:"name"`
+	Location      string   `json:"location"`
+	Source        string   `json:"source"`
+	Description   string   `json:"description"`
+	Role          string   `json:"role"`
+	Tags          []string `json:"tags"`
+	WorktreeSetup string   `json:"worktree_setup,omitempty"`
+	Dependencies  []string `json:"dependencies"`
 }
 
 // repoInfo is the list projection agents consume for cross-repo attribution.
 type repoInfo struct {
-	Name         string   `json:"name"`
-	Location     string   `json:"location,omitempty"`
-	Root         string   `json:"root"`
-	Provider     string   `json:"provider,omitempty"`
-	Description  string   `json:"description,omitempty"`
-	Role         string   `json:"role,omitempty"`
-	Tags         []string `json:"tags,omitempty"`
-	Dependencies []string `json:"dependencies,omitempty"`
-	Materialized bool     `json:"materialized"`
-	StaleNote    string   `json:"stale_note,omitempty"`
-	MetadataNote string   `json:"metadata_note,omitempty"`
+	Name          string   `json:"name"`
+	Location      string   `json:"location,omitempty"`
+	Root          string   `json:"root"`
+	Provider      string   `json:"provider,omitempty"`
+	Description   string   `json:"description,omitempty"`
+	Role          string   `json:"role,omitempty"`
+	Tags          []string `json:"tags,omitempty"`
+	WorktreeSetup string   `json:"worktree_setup,omitempty"`
+	Dependencies  []string `json:"dependencies,omitempty"`
+	Materialized  bool     `json:"materialized"`
+	StaleNote     string   `json:"stale_note,omitempty"`
+	MetadataNote  string   `json:"metadata_note,omitempty"`
 }
 
 func runRepoAdd(cmd *cobra.Command, _ []string) error {
@@ -160,13 +164,14 @@ func runRepoAdd(cmd *cobra.Command, _ []string) error {
 	}
 
 	res, err := repo.Register(&cfg, root, repoGit, repo.Registration{
-		Name:         input.Name,
-		Location:     input.Location,
-		Source:       input.Source,
-		Description:  input.Description,
-		Role:         input.Role,
-		Tags:         input.Tags,
-		Dependencies: input.Dependencies,
+		Name:          input.Name,
+		Location:      input.Location,
+		Source:        input.Source,
+		Description:   input.Description,
+		Role:          input.Role,
+		Tags:          input.Tags,
+		WorktreeSetup: input.WorktreeSetup,
+		Dependencies:  input.Dependencies,
 	})
 	if err != nil {
 		return err
@@ -383,6 +388,7 @@ func runRepoList(cmd *cobra.Command, _ []string) error {
 		info.Description = meta.Description
 		info.Role = meta.Role
 		info.Tags = meta.Tags
+		info.WorktreeSetup = meta.WorktreeSetup
 		if repo.DescriptiveFieldsEmpty(meta) {
 			info.MetadataNote = fmt.Sprintf("repo %q has no descriptive metadata set; run 'repo add' with description/role/tags to describe it", e.Name)
 		}

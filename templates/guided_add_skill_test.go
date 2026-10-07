@@ -163,3 +163,30 @@ func TestManageReposSkillUsesNoEmDashes(t *testing.T) {
 	require.Equal(t, 0, strings.Count(body, "—"),
 		"the manage-repos skill must use no em dashes in its prose")
 }
+
+// worktreeSetupMarkers are hand-copied phrases from the skill's account of
+// `worktree_setup`: what the key is, why a new worktree needs it, when to
+// declare one, how the direct add accepts it, and that the listing reports it.
+var worktreeSetupMarkers = []string{
+	"A repo may also declare `worktree_setup` in its `repo.yaml`",
+	"run in each new worktree of the repo before an implement run starts work there",
+	"A new worktree holds only tracked files",
+	"Declare one when the repo cannot build or test from a fresh checkout.",
+	"A repo that builds from tracked files alone needs none.",
+	"The direct form also accepts `\"worktree_setup\":\"<command>\"`",
+	"Re-adding without it leaves an existing command in place.",
+	"- `worktree_setup` when the repo declares a setup command for new worktrees;",
+}
+
+// TestManageReposSkillDescribesWorktreeSetup verifies that the skill explains
+// the worktree setup command and when a repo should declare one, so an agent
+// adding a repo knows to ask about it rather than leaving fresh worktrees
+// unable to build.
+func TestManageReposSkillDescribesWorktreeSetup(t *testing.T) {
+	body := mustReadTemplate(t, manageReposSkill)
+
+	for _, marker := range worktreeSetupMarkers {
+		require.Containsf(t, body, marker,
+			"the skill must describe the worktree setup command with %q", marker)
+	}
+}

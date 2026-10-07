@@ -36,13 +36,17 @@ type RepoConfig struct {
 	Schema int `yaml:"schema"`
 	// WrittenBy is the Spektacular version that last saved this file. It is
 	// diagnostic only and never triggers an upgrade.
-	WrittenBy   string              `yaml:"written_by,omitempty"`
-	Description string              `yaml:"description,omitempty"`
-	Role        string              `yaml:"role,omitempty"`
-	Tags        []string            `yaml:"tags,omitempty"`
-	Source      RepoSourceConfig    `yaml:"source,omitempty"`
-	Knowledge   RepoKnowledgeConfig `yaml:"knowledge"`
-	Changelog   ChangelogConfig     `yaml:"changelog"`
+	WrittenBy   string   `yaml:"written_by,omitempty"`
+	Description string   `yaml:"description,omitempty"`
+	Role        string   `yaml:"role,omitempty"`
+	Tags        []string `yaml:"tags,omitempty"`
+	// WorktreeSetup is a shell command run in each new worktree of this
+	// repo before an implement run starts work, such as installing the
+	// dependencies a fresh worktree lacks. Empty means no setup.
+	WorktreeSetup string              `yaml:"worktree_setup,omitempty"`
+	Source        RepoSourceConfig    `yaml:"source,omitempty"`
+	Knowledge     RepoKnowledgeConfig `yaml:"knowledge"`
+	Changelog     ChangelogConfig     `yaml:"changelog"`
 }
 
 // NewDefaultRepoConfig returns a RepoConfig populated with default values:

@@ -17,6 +17,8 @@ If the current task is already checked, STOP and ask the user what to do.
 If every task is already checked, STOP — this should only happen if the user manually advanced the workflow past `update_changelog` without looping. Report the situation and ask the user what to do.
 {{/task}}
 
+{{> partials/implement-code-locations}}
+
 ### Step 2: Read the task's technical detail
 
 Read the plan's `context.md` through the plan store — `{{config.command}} plan file read {{plan_name}} context` — and find the section the `*Technical detail:*` link points to. Read the entire section. It should contain file:line references, complexity, token estimate, and an agent strategy.

@@ -181,7 +181,9 @@ func TestImplementEpicSkillAsksNothingBetweenSpecs(t *testing.T) {
 	check := flat(section(t, skill, "# Step 2: Check up front"))
 	requirePhrases(t, "Check up front", check,
 		"If `epic.run.dirty` is true",
-		"Ask the user once whether to commit it first",
+		"`epic.run.dirty_repos` names each one",
+		"A dirty repo the epic does not build is never reported",
+		"Name the repos in `dirty_repos` to the user and ask once whether to commit that work first",
 		"Apart from settling which epic is meant, this is the only start-of-run question.",
 		"If they decline, go ahead, and say that uncommitted code will not be in any spec's worktree.",
 		"Specs, plans and progress are read from the project itself, so they need no commit to be seen.",
@@ -203,7 +205,7 @@ func TestImplementEpicSkillAsksNothingBetweenSpecs(t *testing.T) {
 	allowed := []string{
 		"so a question the user already answered is not asked again",
 		"ask the user which epic they mean, but only when it is still ambiguous",
-		"Ask the user once whether to commit it first; the answer is theirs.",
+		"Name the repos in `dirty_repos` to the user and ask once whether to commit that work first; the answer is theirs.",
 		"tasks run one after another without asking between them",
 		"you never ask the user anything yourself",
 		"A child never asks whether to continue to its next task.",

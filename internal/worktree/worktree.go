@@ -109,6 +109,17 @@ type Manager struct {
 	Config      config.Config
 	Repos       *repo.Set
 	Git         Runner
+	// Setup runs each touched repo's worktree setup command in a newly
+	// created worktree; nil means the system shell.
+	Setup SetupRunner
+}
+
+// setupRunner is the manager's setup runner, defaulting to the system shell.
+func (m Manager) setupRunner() SetupRunner {
+	if m.Setup == nil {
+		return NewSetupRunner()
+	}
+	return m.Setup
 }
 
 // failed builds the worktree_failed refusal.
@@ -314,6 +325,10 @@ func (m Manager) Ensure(spec string, touched []string) (SpecWorktrees, bool, err
 	result := SpecWorktrees{Spec: spec}
 	created := false
 	record := Record{Spec: spec, Repos: map[string]string{}}
+	isTouched := map[string]bool{}
+	for _, name := range touched {
+		isTouched[name] = true
+	}
 
 	for i, co := range cos {
 		dirName := "project"
@@ -321,9 +336,17 @@ func (m Manager) Ensure(spec string, touched []string) (SpecWorktrees, bool, err
 			dirName = co.repos[0]
 		}
 		path := filepath.Join(base, dirName)
-		made, err := m.ensureOne(co.top, path, spec)
+		made, branchMade, err := m.ensureOne(co.top, path, spec)
 		if err != nil {
 			return SpecWorktrees{}, false, err
+		}
+		// A newly created worktree holds only tracked files, so each touched
+		// repo in it is prepared with its own setup command before it is
+		// handed out. An existing worktree was prepared when it was made.
+		if made {
+			if err := m.setUp(co, path, spec, branchMade, isTouched); err != nil {
+				return SpecWorktrees{}, false, err
+			}
 		}
 		created = created || made
 		result.Repos = append(result.Repos, RepoWorktree{Repo: dirName, Path: path, Branch: Branch(spec), Top: co.top})
@@ -376,31 +399,76 @@ func writeRecord(path string, r Record) error {
 	return os.WriteFile(path, append(raw, '\n'), 0o644)
 }
 
+// setUp runs the declared setup command of every touched repo in checkout
+// co's newly created worktree at path, in the repo's code root there. The
+// command is read from the repo's registration in the main project, never
+// from the copy inside the worktree. When one fails, the worktree is removed,
+// along with its branch when this run created it, so a retry starts clean.
+func (m Manager) setUp(co checkout, path, spec string, branchMade bool, isTouched map[string]bool) error {
+	for _, name := range co.repos {
+		if !isTouched[name] {
+			continue
+		}
+		meta, err := m.Repos.Footprint(name)
+		if err != nil {
+			return err
+		}
+		command := strings.TrimSpace(meta.WorktreeSetup)
+		if command == "" {
+			continue
+		}
+		dir, ok := m.codeRootIn(co.top, path, name)
+		if !ok {
+			continue
+		}
+		if _, err := m.setupRunner().Run(dir, command); err != nil {
+			m.discard(co.top, path, spec, branchMade)
+			return output.NewError("worktree_setup_failed",
+				fmt.Sprintf("the worktree setup command for %s (%q) failed in %s: %v", name, command, dir, err)).
+				WithResource(name).
+				WithNextAction("fix the command in that repo's repo.yaml (worktree_setup), or the repo itself, then run the same command again")
+		}
+	}
+	return nil
+}
+
+// discard removes a worktree that could not be prepared, and its branch when
+// this run created it. It is best effort: the setup failure is what gets
+// reported.
+func (m Manager) discard(top, path, spec string, branchMade bool) {
+	_, _, _ = m.Git.Run(top, "worktree", "remove", "--force", path)
+	if branchMade {
+		_, _, _ = m.Git.Run(top, "branch", "-D", Branch(spec))
+	}
+}
+
 // ensureOne makes sure top has a worktree for spec at path, on its branch.
-func (m Manager) ensureOne(top, path, spec string) (bool, error) {
+// made is true when the worktree was created now, and branchMade when its
+// branch was too.
+func (m Manager) ensureOne(top, path, spec string) (made, branchMade bool, err error) {
 	existing, err := m.worktrees(top)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	for _, w := range existing {
 		if w.path == path {
-			return false, nil
+			return false, false, nil
 		}
 	}
 	branch := Branch(spec)
 	_, code, err := m.Git.Run(top, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	args := []string{"worktree", "add", "-b", branch, path, "HEAD"}
 	if code == 0 {
 		args = []string{"worktree", "add", path, branch}
 	}
 	if _, err := m.git(top, args...); err != nil {
-		return false, failed(fmt.Sprintf("could not create the worktree for %s in %s: %v", spec, top, err),
+		return false, false, failed(fmt.Sprintf("could not create the worktree for %s in %s: %v", spec, top, err),
 			"fix the cause git reported, then retry")
 	}
-	return true, nil
+	return true, code != 0, nil
 }
 
 // excludeFromProject lists the worktree folder in the project repository's

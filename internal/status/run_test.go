@@ -437,18 +437,33 @@ func TestRun_DirtyAndReposPassThrough(t *testing.T) {
 	e.epic("E", members("A", "B"))
 	e.spec("A", "E")
 	e.spec("B", "E")
-	touched := map[string][]string{"A": {"api", "web"}}
+	touched := map[string][]string{"A": {"api", "web"}, "B": {"api"}}
 	e.opts.Run.Touched = func(spec string) []string { return touched[spec] }
 
 	r := buildRunReport(t, e, "E")
 	require.False(t, r.Epic.Run.Dirty, "no Dirty func is clean")
+	require.Equal(t, []string{}, r.Epic.Run.DirtyRepos, "no Dirty func still gives an empty list, not nil")
 	require.Equal(t, []string{"api", "web"}, specByName(t, r, "A").Run.Implement.Repos)
-	require.Nil(t, specByName(t, r, "B").Run.Implement.Repos)
+	require.Equal(t, []string{"api"}, specByName(t, r, "B").Run.Implement.Repos)
 	require.Nil(t, specByName(t, r, "A").Run.Plan.Repos, "repos are for implementing only")
 
-	e.opts.Run.Dirty = func() bool { return true }
+	e.opts.Run.Dirty = func(repos []string) []string {
+		require.Equal(t, []string{"api", "web"}, repos, "only the de-duplicated union of touched repos is checked")
+		return []string{"web"}
+	}
 	r = buildRunReport(t, e, "E")
 	require.True(t, r.Epic.Run.Dirty)
+	require.Equal(t, []string{"web"}, r.Epic.Run.DirtyRepos)
+
+	e.opts.Run.Dirty = func(repos []string) []string { return nil }
+	r = buildRunReport(t, e, "E")
+	require.False(t, r.Epic.Run.Dirty)
+	require.Equal(t, []string{}, r.Epic.Run.DirtyRepos)
+
+	raw, err := json.Marshal(r.Epic.Run)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), `"dirty":false`)
+	require.Contains(t, string(raw), `"dirty_repos":[]`, "a clean run serialises an empty list, never null")
 }
 
 // A standalone spec gets a run block; its epic stays null.

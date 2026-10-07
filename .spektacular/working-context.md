@@ -33,3 +33,13 @@ Plan workflow started 2026-10-07 for spec 000065_implement-in-worktrees (worktre
 - With auto_commit off PointFor=PointNone → need forced code-only commits at completion for worktree runs (stepkit LeadsToCommit too).
 - Dependency check today always refuses with override offer (no plain warn).
 - Harbor implement suite needs git fixture or opt-out once default on.
+
+## Implement run (started 2026-10-07)
+- Plan approved & committed (0adbaf0). Implement workflow started, non-orchestrated, auto_commit on.
+- Drift: cmd/workflow_slot_test.go and internal/status/report_test.go don't exist. User chose "proceed and adapt": status unmerged tests go in internal/status/status_test.go; ignore the slot-test note.
+- Spec coverage: complete. Changelog mode: first task.
+- Task 98c6a685 (worktree_setup field): guided add (internal/steps/repo/registration.go) deliberately not extended; only `repo add --data` sets it (plan scope).
+- Task 98c6a685 tests written (config/repo/cmd/templates guided_add_skill_test).
+- Task 98c6a685 verified: build/vet/gofmt/full go test/make lint green.
+- User chose: run all remaining tasks without asking (stop only for failures/real questions).
+- Task acc28f89: setup runs in Manager.setUp after ensureOne made=true, only for touched repos; failure -> discard worktree (+branch if created) and worktree_setup_failed; record not written. cmd var worktreeSetup wired into worktreeManager().
