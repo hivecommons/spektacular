@@ -12,7 +12,6 @@
 package autocommit
 
 import (
-	"os"
 	"strings"
 
 	"github.com/hivecommons/spektacular/internal/gitexec"
@@ -85,26 +84,23 @@ func (execGit) CommitAll(top, message string) error {
 }
 
 func (execGit) CommitPaths(top string, paths []string, message string) error {
-	// A path that is neither on disk nor known to git — a scratch folder the
-	// run never created — would make git refuse the whole pathspec, so only
-	// paths that exist, are in the index, or are in HEAD are kept. HEAD
-	// matters for a retry: a rejected first attempt has already staged a
-	// deletion, so the path is gone from disk and index alike, yet the
-	// deletion still has to be committed.
-	// git add refuses a path in neither the work tree nor the index, so
-	// only those are staged; a path left only in HEAD is a deletion already
-	// staged, and goes straight to the commit.
+	// Only paths holding something git can commit are kept, because a path
+	// with nothing under it makes git refuse the whole pathspec: one that
+	// never existed, a scratch folder left empty once the staged commit
+	// message was removed, or a folder .gitignore covers entirely. ls-files
+	// finds what can be staged — tracked entries, deleted ones included, and
+	// untracked files that are not ignored. HEAD matters for a retry: a
+	// rejected first attempt has already staged a deletion, so the path is
+	// gone from disk and index alike, yet the deletion still has to be
+	// committed. git add refuses a path in neither the work tree nor the
+	// index, so such a path goes straight to the commit.
 	var keep, stage []string
 	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			keep, stage = append(keep, p), append(stage, p)
-			continue
-		}
-		indexed, err := gitexec.Run(top, nil, "ls-files", "--", p)
+		stageable, err := gitexec.Run(top, nil, "ls-files", "--cached", "--others", "--exclude-standard", "--", p)
 		if err != nil {
 			return err
 		}
-		if indexed != "" {
+		if stageable != "" {
 			keep, stage = append(keep, p), append(stage, p)
 			continue
 		}

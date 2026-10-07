@@ -334,3 +334,33 @@ func TestIntegration_CommitPathsCommitsADeletionAlreadyStaged(t *testing.T) {
 		gittest.RunGit(t, dir, "diff-tree", "--no-commit-id", "--name-status", "-r", "HEAD"))
 	require.Empty(t, gittest.RunGit(t, dir, "status", "--porcelain"))
 }
+
+// A path that exists on disk yet holds nothing git can stage — an empty
+// scratch folder whose only file, the staged commit message, was removed
+// before the commit, or a folder wholly covered by .gitignore — is skipped
+// like an absent one, rather than failing git add or git commit's pathspec,
+// while the other paths are still committed.
+func TestIntegration_CommitPathsSkipsEmptyAndIgnoredPaths(t *testing.T) {
+	gittest.RequireGit(t)
+	pinIdentity(t)
+	dir := commitPathsTree(t)
+	writeFile(t, dir, ".gitignore", "ignored/\n")
+	gittest.RunGit(t, dir, "add", ".gitignore")
+	gittest.RunGit(t, dir, "commit", "-m", "ignore")
+
+	writeFile(t, dir, "mine/plan.md", "my plan\n")
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tmp", "mine"), 0o755))
+	writeFile(t, dir, "ignored/mine/scratch.md", "scratch\n")
+
+	paths := []string{
+		filepath.Join(dir, "mine"),
+		filepath.Join(dir, "tmp", "mine"),
+		filepath.Join(dir, "ignored", "mine"),
+	}
+	require.NoError(t, NewGit().CommitPaths(dir, paths, "commit mine"))
+
+	require.Equal(t, "4", gittest.RunGit(t, dir, "rev-list", "--count", "HEAD"))
+	require.Equal(t, "A\tmine/plan.md",
+		gittest.RunGit(t, dir, "diff-tree", "--no-commit-id", "--name-status", "-r", "HEAD"))
+	require.Empty(t, gittest.RunGit(t, dir, "status", "--porcelain"))
+}
