@@ -329,7 +329,7 @@ On its own, this already gives a user a safe way to correct a spec mid-run by ha
 
 **Validation point**: With strict mode on, amend a planned spec's success metric with `spec amend`. The spec shows the new text and an Amendments entry; `status` does not report stale; `implement new` proceeds. A plain `spec file write` edit is still reported stale and refused. The full Go test suite passes.
 
-#### - [ ] Task: Record amendments in spec metadata
+#### - [x] Task: Record amendments in spec metadata
 **Id:** f237fe1d-6081-43f2-afa6-094f0ee9d792
 **Repo:** spektacular
 **Depends on:** none
@@ -340,11 +340,11 @@ Teach the spec frontmatter model a new `amendments` list, so each recorded mid-r
 *Technical detail:* [context.md#task-record-amendments-in-spec-metadata](./context.md#task-record-amendments-in-spec-metadata)
 
 **Acceptance criteria**:
-- [ ] A spec carrying amendments keeps them, unchanged, through any ordinary spec write, including the implement workflow's checkbox reconciliation.
-- [ ] Amendments render in a fixed position in the frontmatter and read back identically.
-- [ ] The body hash is identical for two bodies that differ only in checkbox marks, and different for any other change.
+- [x] A spec carrying amendments keeps them, unchanged, through any ordinary spec write, including the implement workflow's checkbox reconciliation.
+- [x] Amendments render in a fixed position in the frontmatter and read back identically.
+- [x] The body hash is identical for two bodies that differ only in checkbox marks, and different for any other change.
 
-#### - [ ] Task: Honour recorded amendments in plan staleness
+#### - [x] Task: Honour recorded amendments in plan staleness
 **Id:** 7330e44b-3c2c-4965-8918-a519a5e7c3ac
 **Repo:** spektacular
 **Depends on:**
@@ -356,12 +356,12 @@ Extend the single staleness check every command uses, so that a spec whose curre
 *Technical detail:* [context.md#task-honour-recorded-amendments-in-plan-staleness](./context.md#task-honour-recorded-amendments-in-plan-staleness)
 
 **Acceptance criteria**:
-- [ ] A final plan whose spec was changed only by recorded amendments is not reported stale.
-- [ ] A spec edited without recording an amendment, before or after an amendment, still makes its plan stale exactly as today.
-- [ ] Frontmatter-only changes and checkbox ticks after an amendment do not make the plan stale.
-- [ ] A spec with no amendments, or one that cannot be read, behaves exactly as today.
+- [x] A final plan whose spec was changed only by recorded amendments is not reported stale.
+- [x] A spec edited without recording an amendment, before or after an amendment, still makes its plan stale exactly as today.
+- [x] Frontmatter-only changes and checkbox ticks after an amendment do not make the plan stale.
+- [x] A spec with no amendments, or one that cannot be read, behaves exactly as today.
 
-#### - [ ] Task: Add the spec amend command
+#### - [x] Task: Add the spec amend command
 **Id:** 00ffba92-573f-41d0-b9ed-9fab1c86c381
 **Repo:** spektacular
 **Depends on:**
@@ -373,18 +373,18 @@ Add `spektacular spec amend`, the one supported way to change a spec's requireme
 *Technical detail:* [context.md#task-add-the-spec-amend-command](./context.md#task-add-the-spec-amend-command)
 
 **Acceptance criteria**:
-- [ ] Amending a success metric leaves the spec holding the new text, plus an Amendments entry with date, section, reason and run.
-- [ ] Recording a design revision adds an Amendments entry naming the design and leaves the rest of the spec unchanged.
-- [ ] The command refuses, with a corrective next step, when:
+- [x] Amending a success metric leaves the spec holding the new text, plus an Amendments entry with date, section, reason and run.
+- [x] Recording a design revision adds an Amendments entry naming the design and leaves the rest of the spec unchanged.
+- [x] The command refuses, with a corrective next step, when:
   - the reason or run is missing;
   - there is nothing to record;
   - the spec has no plan;
   - nothing changed;
   - a non-amendable section or a past amendment entry was changed;
   - the design is not referenced by the spec or does not resolve.
-- [ ] A dry run reports the result without writing anything, and nothing is ever written outside the project's spec store.
+- [x] A dry run reports the result without writing anything, and nothing is ever written outside the project's spec store.
 
-#### - [ ] Task: Prove a recorded amendment keeps a strict-mode run going
+#### - [x] Task: Prove a recorded amendment keeps a strict-mode run going
 **Id:** 4b92bea1-c4c0-4992-8fd4-f6bf35e8e5ba
 **Repo:** spektacular
 **Depends on:**
@@ -397,9 +397,9 @@ Add end-to-end command tests with `plan.strict_spec_changes` on, showing that an
 *Technical detail:* [context.md#task-prove-a-recorded-amendment-keeps-a-strict-mode-run-going](./context.md#task-prove-a-recorded-amendment-keeps-a-strict-mode-run-going)
 
 **Acceptance criteria**:
-- [ ] In strict mode, after a recorded amendment, status does not report the plan stale, and starting or resuming implement (interactive or orchestrated lane) proceeds.
-- [ ] In strict mode, after an unrecorded spec edit, status reports stale and implement is refused, as today.
-- [ ] A design revised and then recorded keeps its capture date, and every spec that referenced it still does.
+- [x] In strict mode, after a recorded amendment, status does not report the plan stale, and starting or resuming implement (interactive or orchestrated lane) proceeds.
+- [x] In strict mode, after an unrecorded spec edit, status reports stale and implement is refused, as today.
+- [x] A design revised and then recorded keeps its capture date, and every spec that referenced it still does.
 
 ### Milestone 2: Implement runs stop on a wrong spec or design and pick up the amendment
 
@@ -553,3 +553,71 @@ No other implementation-time uncertainties remain. Every other decision is resol
 - **Amending the Overview, Technical Approach or Non-Goals.** Only Requirements, Acceptance Criteria, Constraints and Success Metrics are amendable (accepted spec default).
 - **Rewriting a team-owned design on Spektacular's behalf.** A design stored with `design write` is only replaced with a version the user supplies (spec Constraints).
 - **Regenerating this repository's installed skills or migrating its `.spektacular/`.** The changed skill templates reach this repo only through a later `make install-local` and version check (convention: a plan never changes the active install).
+
+## Changelog
+
+### 2026-10-08 — Task: Record amendments in spec metadata
+
+**What was done**: The spec frontmatter model gained an `amendments` list (`metadata.Amendment`: `at`, `sections`, `design`, `hash`), rendered after `sources`, decoded leniently, and carried forward by every ordinary `Merge` unless `UpdateOptions.Amendments` replaces it. A new `metadata.BodyHash` (with the exported `NormaliseCheckboxes`) hashes a body as `sha256:<hex>` with ticked task-list marks reset and CRLF normalised to LF.
+
+**Deviations**: `sections` and `design` render in YAML flow style so the on-disk shape matches the plan's example. Outside the plan, at the user's request: 13 existing `cmd` tests that ran the CLI from the package directory now start with `t.Chdir(t.TempDir())`, so the suite passes when the checkout sits inside a spec's worktree (the CLI refuses any cwd under `.spektacular/worktrees/`). A suite-wide chdir in `TestMain` was tried and rejected because other tests read the README, CHANGELOG and docs by package-relative paths.
+
+**Files changed**:
+- `spektacular: internal/metadata/metadata.go`
+- `spektacular: internal/metadata/merge.go`
+- `spektacular: internal/metadata/hash.go`
+- `spektacular: internal/metadata/hash_test.go`
+- `spektacular: internal/metadata/metadata_test.go`
+- `spektacular: internal/metadata/merge_test.go`
+- `spektacular: cmd/storefile_metadata_test.go`
+- `spektacular: cmd/epic_complete_test.go`
+- `spektacular: cmd/implement_dependencies_test.go`
+- `spektacular: cmd/implement_test.go`
+- `spektacular: cmd/root_test.go`
+- `spektacular: cmd/spec_test.go`
+- `spektacular: cmd/status_address_test.go`
+- `spektacular: cmd/status_test.go`
+
+**Discoveries**: The spec-worktree guard (`cmd/gate.go` `specWorktreeProject`) is purely path-based, so any `cmd` test that runs the CLI without changing directory depends on where the checkout lives; new tests must `t.Chdir(t.TempDir())`. Existing `twoSourceRefsYAML` uses a 2-space indent, not the renderer's 4-space one, so exact-bytes fixtures need their own rendered constant.
+
+### 2026-10-08 — Task: Honour recorded amendments in plan staleness
+
+**What was done**: `status.PlanIsStale` now reads the plan's spec and returns not-stale when the spec carries amendments and its current body hash (`metadata.BodyHash`) equals the last amendment's hash; otherwise the existing modification-time comparison decides. A read or parse failure falls through to the mtime rule, and every staleness consumer inherits the exemption unchanged.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: internal/status/classify.go`
+- `spektacular: internal/status/status_test.go`
+- `spektacular: cmd/status_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-08 — Task: Add the spec amend command
+
+**What was done**: Added `spektacular spec amend --data '{"name","reason","run","design"?}' [--from <staged spec>] [--dry-run] [--schema]`. With `--from` it diffs the stored and staged bodies by `## ` section (checkbox marks, line endings and surrounding blank lines ignored; headings inside fenced code are not sections) and refuses no-ops and any change outside Requirements, Acceptance Criteria, Constraints and Success Metrics, including the preamble and the append-only `## Amendments` history. With `design` it requires a design the spec references and that resolves to a stored document. It appends a dated `## Amendments` entry naming the sections and/or design, the run and the reason, and records a `metadata.Amendment` with the body hash in one `metadata.Merge` write. Every refusal carries a runnable `next_action`.
+
+**Deviations**: A section that moves relative to the others now counts as changed, so a reorder cannot ride along with a legal amendment unrecorded (found by the test author; not in the plan). `cmd/root_test.go`'s expected `spec` subcommand list gained `amend`.
+
+**Files changed**:
+- `spektacular: cmd/spec_amend.go`
+- `spektacular: cmd/spec_amend_section.go`
+- `spektacular: cmd/spec_amend_test.go`
+- `spektacular: cmd/spec_amend_section_test.go`
+- `spektacular: cmd/root_test.go`
+
+**Discoveries**: An agent must stage the amended spec from `spec file read` output: a staged body that drops the existing `## Amendments` section is refused as rewriting history. `design.Set.Resolve` only builds a path; existence needs `design.Set.Exists`.
+
+### 2026-10-08 — Task: Prove a recorded amendment keeps a strict-mode run going
+
+**What was done**: Added end-to-end CLI tests with `plan.strict_spec_changes: true`. After a real `spec amend`, `implement new` starts and `goto` advances, an orchestrated lane's named `goto` continues, and `status` reports the plan final rather than stale. After a later unrecorded `spec file write` edit, implement is refused with `plan_stale` and status reports stale again. A design revised with `design author` and then recorded with `spec amend` keeps its capture date, its back-links and both specs' references.
+
+**Deviations**: None. Test-only task.
+
+**Files changed**:
+- `spektacular: cmd/implement_test.go`
+- `spektacular: cmd/implement_lane_test.go`
+- `spektacular: cmd/status_test.go`
+- `spektacular: cmd/design_test.go`
+
+**Discoveries**: For a lane already in progress, `implement new` returns the `workflow_in_progress` resume report before any staleness check, so only the named `implement goto` proves an amended lane can continue.
