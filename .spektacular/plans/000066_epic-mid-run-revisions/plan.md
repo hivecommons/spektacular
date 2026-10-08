@@ -411,7 +411,7 @@ Add end-to-end command tests with `plan.strict_spec_changes` on, showing that an
 
 **Validation point**: Rendered implement steps and both skills contain the new stop, apply and re-verify wording, with orchestrator wording only in orchestrated renders. The template and skill contract tests pass. The full Go test suite passes.
 
-#### - [ ] Task: Add the spec-conflict stop to the implement steps
+#### - [x] Task: Add the spec-conflict stop to the implement steps
 **Id:** d1d2f969-a3dc-4c28-bd54-e07aae42c679
 **Repo:** spektacular
 **Depends on:**
@@ -427,12 +427,12 @@ The plan changelog entry for the task also gains a line recording any amendment.
 *Technical detail:* [context.md#task-add-the-spec-conflict-stop-to-the-implement-steps](./context.md#task-add-the-spec-conflict-stop-to-the-implement-steps)
 
 **Acceptance criteria**:
-- [ ] The analyze, implement, test and verify instructions all describe the stop for a wrong spec or design, and what to name when stopping.
-- [ ] Interactive instructions say to ask the user, apply only after approval, then re-read and re-verify, and never mention an orchestrator.
-- [ ] Orchestrated instructions say the child never writes spec or design text, proposes the amendment through its hand-back, and re-reads and re-verifies after the answer.
-- [ ] The plan changelog entry format includes a field naming the amended document, section and reason.
+- [x] The analyze, implement, test and verify instructions all describe the stop for a wrong spec or design, and what to name when stopping.
+- [x] Interactive instructions say to ask the user, apply only after approval, then re-read and re-verify, and never mention an orchestrator.
+- [x] Orchestrated instructions say the child never writes spec or design text, proposes the amendment through its hand-back, and re-reads and re-verifies after the answer.
+- [x] The plan changelog entry format includes a field naming the amended document, section and reason.
 
-#### - [ ] Task: Describe the amendment path in the implement skill
+#### - [x] Task: Describe the amendment path in the implement skill
 **Id:** 3339cefc-a5d4-4cb3-80ad-c7d34fcf89a1
 **Repo:** spektacular
 **Depends on:**
@@ -444,10 +444,10 @@ Add a section to the `spek-implement` skill explaining, for interactive runs, wh
 *Technical detail:* [context.md#task-describe-the-amendment-path-in-the-implement-skill](./context.md#task-describe-the-amendment-path-in-the-implement-skill)
 
 **Acceptance criteria**:
-- [ ] The implement skill describes raising, approving, applying and recording an amendment in an interactive run.
-- [ ] The skill's orchestrated section states a child never writes spec or design text, and that section remains the last one.
+- [x] The implement skill describes raising, approving, applying and recording an amendment in an interactive run.
+- [x] The skill's orchestrated section states a child never writes spec or design text, and that section remains the last one.
 
-#### - [ ] Task: Teach the epic orchestrator to apply approved amendments
+#### - [x] Task: Teach the epic orchestrator to apply approved amendments
 **Id:** 12379e12-728d-43a3-bbbf-b01ccf133a4a
 **Repo:** spektacular
 **Depends on:**
@@ -463,10 +463,10 @@ Extend the `spek-implement-epic` skill in four places:
 *Technical detail:* [context.md#task-teach-the-epic-orchestrator-to-apply-approved-amendments](./context.md#task-teach-the-epic-orchestrator-to-apply-approved-amendments)
 
 **Acceptance criteria**:
-- [ ] The epic skill's definition of a genuine question includes the spec or a referenced design being wrong.
-- [ ] The child prompt states the child never writes spec or design text and proposes amendments through its hand-back.
-- [ ] The skill describes applying an approved amendment from the project root only after the user's explicit approval, then answering the child with what changed.
-- [ ] Every command the skill names is rendered through the installed command name.
+- [x] The epic skill's definition of a genuine question includes the spec or a referenced design being wrong.
+- [x] The child prompt states the child never writes spec or design text and proposes amendments through its hand-back.
+- [x] The skill describes applying an approved amendment from the project root only after the user's explicit approval, then answering the child with what changed.
+- [x] Every command the skill names is rendered through the installed command name.
 
 ### Milestone 3: The docs describe the amendment path
 
@@ -621,3 +621,46 @@ No other implementation-time uncertainties remain. Every other decision is resol
 - `spektacular: cmd/design_test.go`
 
 **Discoveries**: For a lane already in progress, `implement new` returns the `workflow_in_progress` resume report before any staleness check, so only the named `implement goto` proves an amended lane can continue.
+
+### 2026-10-08 — Task: Add the spec-conflict stop to the implement steps
+
+**What was done**: Added the shared partial `templates/partials/implement-spec-conflict.md` ("If the spec or a design is wrong") and included it before `### Advance` in the analyze, implement, test and verify steps. It defines the STOP and what to name: the document, the section, the conflict and the proposed amendment. Standalone runs ask the user and apply only after explicit approval, either through `spec amend --from` or by revising a design with `design author`/`design write` and recording it. Orchestrated runs never write spec or design text and hand the proposal back. Both then re-read and re-run the step's check. The plan changelog entry format gained an optional `**Amendments**` line.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: templates/partials/implement-spec-conflict.md`
+- `spektacular: templates/steps/implement/02-analyze.md`
+- `spektacular: templates/steps/implement/03-implement.md`
+- `spektacular: templates/steps/implement/04-test.md`
+- `spektacular: templates/steps/implement/05-verify.md`
+- `spektacular: templates/steps/implement/07-update_changelog.md`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: internal/steps/implement/orchestrated_test.go`
+
+**Discoveries**: The standalone analyze step already contains "orchestration" (sub-agent guidance), so guards against orchestrator wording in standalone renders must check "orchestrator"/"orchestrated" rather than the bare "orchestrat" prefix.
+
+### 2026-10-08 — Task: Describe the amendment path in the implement skill
+
+**What was done**: The `spek-implement` skill template gained a `# When the spec or a design is wrong` section, before the orchestrated section. It describes four steps for an interactive run: raise the conflict, get the user's explicit approval, apply and record it with `spec amend` (or `design author`/`design write` followed by `spec amend` with a design), and pick it up by re-reading and re-verifying. The orchestrated section, still last, now says "five things change" and that a child never writes spec or design text or runs `spec amend`, proposing amendments only through its `QUESTION:` hand-back.
+
+**Deviations**: None. This repo's installed `.claude/skills` copies were not regenerated.
+
+**Files changed**:
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: templates/orchestrated_skill_section_test.go`
+- `spektacular: internal/agent/instruction_surface_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-08 — Task: Teach the epic orchestrator to apply approved amendments
+
+**What was done**: The `spek-implement-epic` skill template now counts the spec or a referenced design being wrong as a genuine open question, and the child prompt says a child never writes spec or design text and proposes amendments in a `QUESTION:` hand-back. The store-access rule now names `design` and `spec amend`. Step 6 gained "An amendment the user approves": only after explicit approval, from the project root and never in a worktree, apply it with `spec amend --from` (or revise the design with `design author`/`design write` and record it), note it in `.spektacular/working-context.md`, and answer the child naming what changed so it re-reads and re-verifies.
+
+**Deviations**: None. This repo's installed `.claude/skills` copies were not regenerated.
+
+**Files changed**:
+- `spektacular: templates/skills/workflows/spek-implement-epic/SKILL.md`
+- `spektacular: templates/implement_epic_skill_test.go`
+
+**Discoveries**: None.
