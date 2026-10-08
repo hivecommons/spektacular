@@ -342,6 +342,7 @@ func TestImplementDependencies_SpecifyingAndPlanningAreNeverHeldBack(t *testing.
 }
 
 func TestImplementDependencies_SchemaAndHelpNameTheSpec(t *testing.T) {
+	t.Chdir(t.TempDir())
 	require.Contains(t, implementNewCmd.Short, "spec")
 
 	resetRootCmd(t)

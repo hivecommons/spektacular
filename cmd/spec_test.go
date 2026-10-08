@@ -101,6 +101,7 @@ func runSpecNewSchemaForTest(t *testing.T) commandSchema {
 }
 
 func TestSpecNewSchemaDocumentsNameAndOptionalID(t *testing.T) {
+	t.Chdir(t.TempDir())
 	schema := runSpecNewSchemaForTest(t)
 
 	require.Contains(t, schema.Input.Properties, "name")

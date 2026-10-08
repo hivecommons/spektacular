@@ -869,3 +869,53 @@ func TestStoreFileWrite_SpecDesignReferencesSurviveOrdinaryWrite(t *testing.T) {
 		"an ordinary write must preserve the spec's design references")
 	require.Equal(t, "updated body\n", string(body))
 }
+
+// TestStoreFileWrite_SpecAmendmentsSurviveOrdinaryWrite asserts amendments
+// recorded on a spec survive a later ordinary `spec file write` unchanged.
+// The write models the implement workflow's checkbox reconciliation: the body
+// comes back with its task boxes ticked and the command passes no Amendments
+// update, so the merge must carry the stored record forward. The checkbox-only
+// change also leaves BodyHash untouched, so the last amendment still matches.
+func TestStoreFileWrite_SpecAmendmentsSurviveOrdinaryWrite(t *testing.T) {
+	fx := specKindFixture(t)
+	earlier := time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC)
+	original := "# Spec\n\n- [ ] first task\n  - [ ] nested task\n"
+	reconciled := "# Spec\n\n- [x] first task\n  - [X] nested task\n"
+	amendments := []metadata.Amendment{
+		{At: "2026-01-06T10:00:00Z", Sections: []string{"Success Metrics", "Constraints"}, Hash: "sha256:ab"},
+		{
+			At:     "2026-01-07T11:30:00Z",
+			Design: &metadata.DesignRef{Source: "project", Path: "billing/rounding.md"},
+			Hash:   metadata.BodyHash([]byte(original)),
+		},
+	}
+
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, fx.configYAML)
+
+	seedArtifactWithMetadata(t, dir, fx.storeRelPath, metadata.Metadata{
+		CreatedDate:    earlier,
+		DocumentStatus: metadata.StatusDraft,
+		Amendments:     amendments,
+	}, []byte(original))
+
+	srcPath := filepath.Join(t.TempDir(), "source.md")
+	require.NoError(t, os.WriteFile(srcPath, []byte(reconciled), 0o644))
+
+	resetRootCmd(t)
+	stdout, _, code := runRootCmd(t, fx.cmd("write", "--from", srcPath)...)
+	require.Equalf(t, 0, code, "write failed: %s", stdout)
+
+	content, err := os.ReadFile(filepath.Join(dir, fx.storeRelPath))
+	require.NoError(t, err)
+
+	meta, body, err := metadata.Split(content)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Equal(t, amendments, meta.Amendments,
+		"an ordinary write must preserve the spec's amendments unchanged")
+	require.Equal(t, reconciled, string(body))
+	require.Equal(t, meta.Amendments[len(meta.Amendments)-1].Hash, metadata.BodyHash(body),
+		"ticking checkboxes must not change the body hash the last amendment recorded")
+}

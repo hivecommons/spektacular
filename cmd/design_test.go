@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/stretchr/testify/require"
 )
@@ -1277,4 +1279,89 @@ func TestDesignDelete_LeavesEveryOtherFileUntouched(t *testing.T) {
 	require.Len(t, expected, 3)
 	require.Equal(t, expected, snapshotDir(t, apiLoc),
 		"only the addressed document may go, and no other file may change")
+}
+
+// Criterion: a design authored, referenced by two planned specs, revised with
+// `design author` and then recorded on one spec with `spec amend` keeps its
+// original capture date; both specs still reference it and its back-links
+// still name both; and the amended spec carries the entry and a metadata
+// record naming the design.
+func TestDesignAuthorThenSpecAmendKeepsCaptureDateAndRefs(t *testing.T) {
+	root, apiLoc := designRefProject(t)
+	const (
+		billing   = "000070_billing"
+		invoicing = "000071_invoicing"
+	)
+	ref := metadata.DesignRef{Source: "api", Path: "authored/v2.md"}
+	designPath := filepath.Join(apiLoc, "authored", "v2.md")
+
+	author := func(t *testing.T, body string) designAuthorResult {
+		t.Helper()
+		resetRootCmd(t)
+		stdout, stderr, code := runRootCmd(t, "design", "author",
+			"--data", `{"source":"api","path":"authored/v2.md"}`,
+			"--from", stageDesignDoc(t, "v2.md", body))
+		require.Equalf(t, 0, code, "stdout: %s", stdout)
+		require.Empty(t, stderr)
+		var got designAuthorResult
+		require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+		return got
+	}
+	createdDate := func(t *testing.T) string {
+		t.Helper()
+		raw, err := os.ReadFile(designPath)
+		require.NoError(t, err)
+		for _, line := range strings.Split(string(raw), "\n") {
+			if v, ok := strings.CutPrefix(line, "created_date: "); ok {
+				return v
+			}
+		}
+		t.Fatalf("no created_date in %s", designPath)
+		return ""
+	}
+
+	first := author(t, "# Payments v2\n\nThe first shape.\n")
+	captured := createdDate(t)
+	require.Equal(t, `"`+first.CreatedDate+`"`, captured)
+
+	specPaths := map[string]string{}
+	for _, name := range []string{billing, invoicing} {
+		specPaths[name] = writeSpecFixture(t, root, name, strictSpecFrontmatter+specAmendBody)
+		writeFixturePlan(t, filepath.Join(root, ".spektacular"), name)
+		designRefWrite(t, "add", "--data", `{"spec":"`+name+`","source":"api","path":"authored/v2.md"}`)
+	}
+	require.ElementsMatch(t, []string{billing, invoicing}, specsListedBy(t, designPath))
+
+	revised := author(t, "# Payments v2\n\nThe second shape, with a currency.\n")
+	require.Equal(t, first.CreatedDate, revised.CreatedDate, "a revision keeps the capture date")
+
+	got := amendSpecOK(t, "--data", specAmendData(billing, "the v2 request shape gained a currency", "epic run, task 1.2", `{"source":"api","path":"authored/v2.md"}`))
+	require.Equal(t, &ref, got.Design)
+	require.Equal(t, []string{}, got.AmendedSections)
+
+	// The design: same capture date, revised content, both back-links.
+	require.Equal(t, captured, createdDate(t))
+	raw, err := os.ReadFile(designPath)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "The second shape, with a currency.")
+	require.ElementsMatch(t, []string{billing, invoicing}, specsListedBy(t, designPath))
+
+	// Both specs still reference the design.
+	for name, path := range specPaths {
+		require.Containsf(t, designsReferencedBy(t, path), designRefItem{Source: "api", Path: "authored/v2.md"}, "%s must still reference the design", name)
+	}
+
+	// The amended spec carries the entry and a record naming the design.
+	fm, body := splitStoredSpec(t, specPaths[billing])
+	day := recordedDay(t, got.RecordedAt)
+	require.Equal(t, specAmendBody+"\n## Amendments\n\n- **"+day+": design api:authored/v2.md** (epic run, task 1.2)\n  the v2 request shape gained a currency\n", body)
+	require.Len(t, fm.Amendments, 1)
+	require.Equal(t, &ref, fm.Amendments[0].Design)
+	require.Empty(t, fm.Amendments[0].Sections)
+	require.Equal(t, metadata.BodyHash([]byte(body)), fm.Amendments[0].Hash)
+
+	// The other spec gained no amendment.
+	otherFM, otherBody := splitStoredSpec(t, specPaths[invoicing])
+	require.Empty(t, otherFM.Amendments)
+	require.Equal(t, specAmendBody, otherBody)
 }

@@ -485,6 +485,91 @@ func TestBuild_StalePlan(t *testing.T) {
 	require.Equal(t, "stale", s.Plan.CurrentStep)
 }
 
+// amendedSpecBody is the spec body the amendment cases record and edit.
+const amendedSpecBody = "\n# Spec\n\n## Success Metrics\n\n- [ ] metric one\n"
+
+// amendedSpec renders a final spec with extraFM lines in its frontmatter,
+// one amendment per hash, and body.
+func amendedSpec(extraFM string, hashes []string, body string) string {
+	var b strings.Builder
+	b.WriteString("---\ncreated_date: \"2026-09-28\"\ndocument_status: final\n")
+	b.WriteString(extraFM)
+	if len(hashes) > 0 {
+		b.WriteString("amendments:\n")
+		for _, h := range hashes {
+			fmt.Fprintf(&b, "    - at: \"2026-09-30T10:00:00Z\"\n      sections: [Success Metrics]\n      hash: %s\n", h)
+		}
+	}
+	b.WriteString("---\n")
+	b.WriteString(body)
+	return b.String()
+}
+
+// bodyHashOf returns the BodyHash of the body Split finds in doc; it seeds
+// fixtures so a recorded amendment matches exactly what is on disk.
+func bodyHashOf(t *testing.T, doc string) string {
+	t.Helper()
+	_, body, err := metadata.Split([]byte(doc))
+	require.NoError(t, err)
+	return metadata.BodyHash(body)
+}
+
+// TestPlanIsStale_RecordedAmendments checks that a final plan whose spec was
+// changed only through recorded amendments is not stale, while any unrecorded
+// body edit, a spec with no amendments, or an unreadable spec still falls
+// back to the modification-time comparison.
+func TestPlanIsStale_RecordedAmendments(t *testing.T) {
+	match := bodyHashOf(t, amendedSpec("", nil, amendedSpecBody))
+	edited := amendedSpecBody + "- [ ] metric two\n"
+	ticked := strings.Replace(amendedSpecBody, "- [ ] metric one", "- [x] metric one", 1)
+
+	for _, tc := range []struct {
+		name      string
+		spec      string
+		planState string
+		want      bool
+	}{
+		{"no amendments", amendedSpec("", nil, amendedSpecBody), "final", true},
+		{"last amendment matches the body", amendedSpec("", []string{match}, amendedSpecBody), "final", false},
+		{"body edited after the amendment", amendedSpec("", []string{match}, edited), "final", true},
+		{"checkbox ticked after the amendment", amendedSpec("", []string{match}, ticked), "final", false},
+		{"frontmatter changed after the amendment", amendedSpec("epic: E\n", []string{match}, amendedSpecBody), "final", false},
+		{"only an earlier amendment matches", amendedSpec("", []string{match, bodyHashOf(t, amendedSpec("", nil, edited))}, amendedSpecBody), "final", true},
+		{"malformed frontmatter", "---\ndocument_status: [final\namendments:\n    - hash: " + match + "\n---\n" + amendedSpecBody, "final", true},
+		{"non-final plan", amendedSpec("", nil, amendedSpecBody), "draft", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t)
+			e.write("specs/S.md", tc.spec)
+			e.plan("S", tc.planState, true)
+			old := time.Now().Add(-time.Hour)
+			e.touch("plans/S/plan.md", old)
+			e.touch("specs/S.md", old.Add(time.Minute))
+
+			raw, err := os.ReadFile(filepath.Join(e.root, "plans/S/plan.md"))
+			require.NoError(t, err)
+			fm, _, err := metadata.Split(raw)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, PlanIsStale(e.opts.Config, e.opts.Store, "S", fm))
+		})
+	}
+
+	t.Run("build reports a matching amendment as implemented", func(t *testing.T) {
+		e := newEnv(t)
+		e.write("specs/S.md", amendedSpec("", []string{match}, amendedSpecBody))
+		e.plan("S", "final", true)
+		old := time.Now().Add(-time.Hour)
+		e.touch("plans/S/plan.md", old)
+		e.touch("specs/S.md", old.Add(time.Minute))
+		e.opts.Config.Plan.StrictSpecChanges = true
+
+		r, err := Build(e.opts, "S")
+		require.NoError(t, err)
+		require.Equal(t, StateImplemented, r.Specs[0].State)
+		require.Equal(t, "final", r.Specs[0].Plan.DocumentStatus)
+	})
+}
+
 func TestBuild_WorkflowBlock(t *testing.T) {
 	e := newEnv(t)
 	e.standardEpic()
