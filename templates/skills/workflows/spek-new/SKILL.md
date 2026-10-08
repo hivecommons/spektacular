@@ -5,6 +5,8 @@ description: Create a new Specification for a feature, from a conversation or fr
 
 {{> partials/version-check}}
 
+{{> partials/hive-integration}}
+
 > **STOP. Read this before running any command below.**
 > A single successful CLI call — including the very first `spec new` — is **NOT** task completion. It is not a milestone to report back to the user. It is one step out of many in a workflow that you must keep driving, turn after turn, without stopping, until the CLI itself tells you the workflow is *finished*. If you find yourself about to say "successfully completed" or summarize results after calling `spec new` or `spec goto` even once, you are wrong — go back and read the `instruction` field you just received, do what it says, and call `goto` again.
 

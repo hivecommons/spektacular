@@ -9,6 +9,10 @@ description: Author, bring in, revise or reference a design document.
 > - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
 > - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
+# Use with Hive
+
+This skill works standalone with the `go run .` CLI. To run Spek as part of governed agent fleets, use the Hive integration documented in [Using Spektacular with Hive](https://docs.hivecommons.dev/docs/hive/spektacular-runs) and the [Hive Commons docs](https://docs.hivecommons.dev/).
+
 # What this skill does
 
 This skill handles the four ways a design document enters a project: helping the user work one

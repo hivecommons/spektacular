@@ -11,7 +11,7 @@ description: Create a new Plan from an approved Specification.
 
 # Use with Hive
 
-This skill works standalone with the `go run .` CLI. To run Spek as part of governed agent fleets, use the Hive integration documented in [Using Spektacular with Hive](https://docs.hivecommons.dev/docs/hive/spektacular-runs) and the [Hive Commons docs](https://docs.hivecommons.dev/).
+This skill works standalone with the `spektacular` CLI. To run Spek as part of governed agent fleets, use the Hive integration documented in [Using Spektacular with Hive](https://docs.hivecommons.dev/docs/hive/spektacular-runs) and the [Hive Commons docs](https://docs.hivecommons.dev/).
 
 > **STOP. Read this before running any command below.**
 > A single successful CLI call — including the very first `plan new` — is **NOT** task completion. It is not a milestone to report back to the user. It is one step out of many in a workflow that you must keep driving, turn after turn, without stopping, until the CLI itself tells you the workflow is *finished*. If you find yourself about to say "successfully completed" or summarize results after calling `plan new` or `plan goto` even once, you are wrong — go back and read the `instruction` field you just received, do what it says, and call `goto` again.
@@ -62,13 +62,6 @@ referenced design rather than re-deriving it, and the finished plan **names each
 read and the source it came from** in its Dependencies. If any reference does not resolve, the
 discovery step stops and reports rather than planning around the gap — a broken reference is
 meant to surface here, not during implementation.
-
-# Recorded decisions and knowledge
-
-Planning stops to ask the user whenever the plan would contradict a decision the user recorded for
-the spec (in the spec itself, in a design it references, or in its interview notes where those still
-exist) or a knowledge entry. Such a contradiction is never settled silently, and never left as a task
-for a person, an open question or a note for the review.
 
 # Working files vs. the store documents
 
@@ -130,12 +123,3 @@ spektacular plan new --data '{"name": "<spec_name>", "commit_existing": false}'
 - `false` starts the workflow without committing, so the workflow's own automatic commits will include that work alongside the agent's.
 
 Never choose for the user, and never guess from context which they would want — the whole point of the report is that their uncommitted work is about to be swept into a commit they did not make. If the commit fails (`code: auto_commit_failed`), tell them which repository failed and the reason git gave; the workflow has not started.
-
-# When an orchestrator starts this skill
-
-The `spek-plan-epic` skill plans a whole epic by starting one agent per spec, each running this skill. If you were started that way, your prompt says so, and four things change:
-
-- Start with `spektacular plan new --data '{"name":"<spec_name>","orchestrated":true}'`. The run keeps its own progress record and notes in a lane, beside any other workflow, and skips the uncommitted-changes question. Running the same command again resumes the lane.
-- Every `goto` carries `"name":"<spec_name>"`, exactly as the instructions print it.
-- Never ask the user anything yourself. Hand each genuine question back to your orchestrator as a final message whose first line is `QUESTION: <spec_name>`, and wait for its answer. There is no sign-off walkthrough: the walkthrough step has you prepare a summary instead. Besides the approach, tasks, scope and assumptions, that summary lists the project-wide rules the plan relies on or decides, such as how the changelog is kept, so the orchestrator can spot plans that disagree, and the manual checks the test plan will carry.
-- End the run with `DONE: <spec_name>` and that summary, or with `FAILED: <spec_name>` and the reason.

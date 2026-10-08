@@ -6,6 +6,8 @@ Agent-agnostic CLI tool for spec-driven development, providing skills and integr
 
 > **Status:** early development — see the [releases page](https://github.com/hivecommons/spektacular/releases) for the latest version.
 
+[![Install Spek skills](https://skills.sh/b/hivecommons/spektacular?style=for-the-badge)](https://skills.sh/hivecommons/spektacular)
+
 ## What is Spektacular (Spek)?
 
 Spek is a self-contained Go binary that brings spec-driven development to AI coding agents. You write a markdown spek; Spek turns it into a reviewed implementation plan and then drives a coding agent to implement it — keeping your intent reviewable at every stage.
@@ -93,6 +95,24 @@ spektacular implement new --data '{"name":"<spec-name>"}'
 Spek names are normalised and prefixed by the CLI, so use the returned `spec_name` and `spec_path` for follow-up commands rather than the name you passed.
 
 Speks are plain markdown with a small set of structured sections (overview, requirements, constraints, acceptance criteria, and so on), and `spec new` scaffolds the template for you. For the full walkthrough and spek format, see the [getting-started tutorial](https://spektacular.dev/tutorials/getting-started) and the [how-it-works documentation](https://spektacular.dev/how-it-works/).
+
+## Install the Spek skills from a registry
+
+The workflow skills are also published in the repository's top-level `skills/` catalog so the open `skills` CLI and skills.sh can install them without a Hive-managed setup. Install Spektacular first, then install one or all skills into your agent:
+
+```bash
+# Install the spec skill globally for Claude Code, Bob and Codex.
+npx skills add hivecommons/spektacular --skill spek-new -g \
+  -a claude-code -a bob -a codex -y
+
+# Or install the whole Spek skill catalog for those agents.
+npx skills add hivecommons/spektacular --skill '*' -g \
+  -a claude-code -a bob -a codex -y
+```
+
+On a fresh machine, `brew install hivecommons/homebrew-repo/spektacular` followed by the first `npx skills add` command above gives an agent the `spek-new` skill; invoking that skill runs `spektacular spec new`. Release builds also attach a versioned `spektacular_skills_<version>.tar.gz` archive containing the same rendered skill catalog.
+
+Each skill includes a **Use with Hive** section linking standalone Spek users to the Hive integration and Hive Commons docs.
 
 ## Supported agents
 

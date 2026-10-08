@@ -11,7 +11,7 @@ description: Add a repo to the current Spektacular project through a guided conv
 
 # Use with Hive
 
-This skill works standalone with the `go run .` CLI. To run Spek as part of governed agent fleets, use the Hive integration documented in [Using Spektacular with Hive](https://docs.hivecommons.dev/docs/hive/spektacular-runs) and the [Hive Commons docs](https://docs.hivecommons.dev/).
+This skill works standalone with the `spektacular` CLI. To run Spek as part of governed agent fleets, use the Hive integration documented in [Using Spektacular with Hive](https://docs.hivecommons.dev/docs/hive/spektacular-runs) and the [Hive Commons docs](https://docs.hivecommons.dev/).
 
 > **STOP. Read this before running any command below.**
 > A single successful CLI call, including the very first `repo new`, is **NOT** task completion. It is not a milestone to report back to the user. It is one step out of many in a workflow that you must keep driving, turn after turn, without stopping, until the CLI itself tells you the workflow is *finished*. If you find yourself about to say "successfully completed" or summarize results after calling `repo new` or `repo goto` even once, you are wrong. Go back and read the `instruction` field you just received, do what it says, and call `goto` again.
