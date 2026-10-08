@@ -46,6 +46,8 @@ Each sub-agent should return a concise summary (not full file dumps) that the ma
 
 If any sub-agent reports that a file referenced by the task no longer exists, or that a named function/type/package has been renamed or removed, STOP immediately. Report the mismatches to the user and ask whether to (a) fix the plan first, (b) proceed with an agreed-upon substitution, or (c) skip this task.
 
+{{> partials/implement-spec-conflict}}
+
 ### Advance
 
 Once analysis is complete and you have a clear picture of the files, patterns, and integration points for the current task:

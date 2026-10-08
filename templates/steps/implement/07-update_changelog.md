@@ -21,6 +21,8 @@ For the task you just completed, append an entry with this shape (in a plan writ
 
 **Deviations**: <anything that didn't match the plan, or "None" explicitly>
 
+**Amendments**: <the document and section amended, and why; omit this line when no amendment was applied during this task>
+
 **Files changed**:
 - `path/to/file.go`
 - `path/to/another/file.go`

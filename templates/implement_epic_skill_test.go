@@ -78,6 +78,12 @@ func TestImplementEpicSkillRendersLikeAnInstalledSkill(t *testing.T) {
 		"`spekx epic write`",
 		"the project root to run every `spekx` command from",
 		"it never runs `spekx` from inside a worktree",
+		"`spekx design`",
+		"`spekx spec amend`",
+		"`spekx spec file read <spec>`",
+		"`spekx spec amend --data '{\"name\":\"<spec>\",\"reason\":\"<why>\",\"run\":\"epic <epic> implement run, task <task>\"}' --from <staged file>`",
+		"`spekx design author`",
+		"`spekx design write`",
 	)
 }
 
@@ -273,10 +279,9 @@ func TestImplementEpicSkillDefinesHandBackAndStopping(t *testing.T) {
 
 	questions := flat(section(t, skill, "## What counts as a genuine open question"))
 	requirePhrases(t, "What counts as a genuine open question", questions,
-		"Only a stop the implement workflow itself defines earns a question",
-		"the plan no longer matching the code",
-		"a task outgrowing its scope",
-		"a verification failure the child cannot fix within the task",
+		"Only a stop the implement workflow itself defines earns a question: the plan no longer matching the code, "+
+			"the spec or a design it references being wrong, a task outgrowing its scope, "+
+			"or a verification failure the child cannot fix within the task.",
 		"Everything else the child decides itself and records in the plan's changelog.",
 		"A child never asks whether to continue to its next task.",
 	)
@@ -284,6 +289,9 @@ func TestImplementEpicSkillDefinesHandBackAndStopping(t *testing.T) {
 	child := flat(section(t, skill, "# Step 4: The child prompt"))
 	requirePhrases(t, "The child prompt", child,
 		"the hand-back contract and the definition of a genuine open question, below.",
+		"You never write the spec's text or a design document.",
+		"If the spec or a design it references is wrong, propose the amendment in a `QUESTION:` hand-back, "+
+			"naming the document, the section, the conflict and the change you propose.",
 	)
 
 	handling := flat(section(t, skill, "# Step 6: Handling a hand-back"))
@@ -313,6 +321,8 @@ func TestImplementEpicSkillCarriesNotesStoreAccessProgressAndReport(t *testing.T
 		"`"+installedCommand+" spec file`",
 		"`"+installedCommand+" changelog file`",
 		"`"+installedCommand+" epic`",
+		"and designs with `"+installedCommand+" design`.",
+		"A spec is amended during a run only with `"+installedCommand+" spec amend`.",
 		"Every child prompt must restate this rule",
 	)
 
@@ -365,4 +375,31 @@ func TestImplementEpicSkillRunsSpektacularFromTheProjectRoot(t *testing.T) {
 		require.NotContainsf(t, skill, old,
 			"the skill must not tell a child to work from, or resolve repos inside, a worktree (found %q)", old)
 	}
+}
+
+// A child that finds the spec or a referenced design wrong proposes the
+// amendment; the orchestrator applies it from the project root, only once the
+// user explicitly approves, and answers the child with what changed so it
+// re-reads and re-verifies. A rejection is answered too.
+func TestImplementEpicSkillAppliesApprovedAmendmentsFromTheProjectRoot(t *testing.T) {
+	handling := flat(section(t, installedImplementEpicSkill(t), "# Step 6: Handling a hand-back"))
+	requirePhrases(t, "Handling a hand-back", handling,
+		"**An amendment the user approves** — when a `QUESTION:` proposes amending the spec or a design",
+		"apply it yourself only after the user's explicit approval",
+		"from the project root and never in a worktree",
+		"read it with `"+installedCommand+" spec file read <spec>`",
+		"change only the sections the user approved",
+		"stage the full result under `.spektacular/tmp/<spec>/`",
+		"`"+installedCommand+` spec amend --data '{"name":"<spec>","reason":"<why>","run":"epic <epic> implement run, task <task>"}' --from <staged file>`+"`",
+		"revise it with `"+installedCommand+" design author`",
+		"`"+installedCommand+" design write` for a design they wrote",
+		"then record it with `"+installedCommand+" spec amend` and a `\"design\":{\"source\":\"<name>\",\"path\":\"<path>\"}` field",
+		"Note the amendment in `.spektacular/working-context.md`",
+		"then answer the child naming what changed, so it re-reads the amended text and re-verifies its task.",
+		"If the user rejects the amendment, answer the child with their decision.",
+	)
+
+	// The amendment is applied by the orchestrator, never by the child.
+	child := flat(section(t, installedImplementEpicSkill(t), "# Step 4: The child prompt"))
+	require.NotContains(t, child, "spec amend", "a child never runs spec amend itself")
 }

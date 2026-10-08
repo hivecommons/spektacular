@@ -258,6 +258,11 @@ func TestRenderedWorkflowSkillsCarryCrossRepoNotes(t *testing.T) {
 			"spek-implement must name the worktree_setup_failed refusal")
 		require.Contains(t, body, "`worktree_unavailable`",
 			"spek-implement must name the worktree_unavailable refusal")
+
+		// Plan 000066: an approved amendment to the spec or a design is
+		// recorded with spec amend, rendered with the configured command.
+		require.Contains(t, body, "spektacular spec amend",
+			"spek-implement must name the spec amend command")
 	})
 }
 

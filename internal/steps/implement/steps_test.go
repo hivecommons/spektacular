@@ -1097,3 +1097,82 @@ func TestFinishedTaskRunWithOpenTasksDoesNotMerge(t *testing.T) {
 	require.NotContains(t, plain, "implement merge")
 	require.NotContains(t, plain, "kept for the next task run")
 }
+
+// specConflictHeading is the heading of
+// templates/partials/implement-spec-conflict.md, the stop for a wrong spec or
+// design that the analyze, implement, test and verify steps include.
+const specConflictHeading = "### If the spec or a design is wrong"
+
+// specConflictSteps are the implement steps that include the spec-conflict
+// stop, keyed by step name.
+func specConflictSteps() map[string]workflow.StepCallback {
+	return map[string]workflow.StepCallback{
+		"analyze":   analyze(),
+		"implement": implementStep(),
+		"test":      testStep(),
+		"verify":    verify(),
+	}
+}
+
+// TestSpecConflictStopInAnalyzeImplementTestVerify asserts every standalone
+// analyze, implement, test and verify instruction carries the stop for a
+// wrong spec or design: what to name, asking the user, applying only after
+// explicit approval through `spec amend` or a design revision, re-reading and
+// re-verifying, and recording the amendment — with no orchestrator wording.
+// The stop must sit before the step's Advance section.
+func TestSpecConflictStopInAnalyzeImplementTestVerify(t *testing.T) {
+	for name, cb := range specConflictSteps() {
+		t.Run(name, func(t *testing.T) {
+			out := renderStep(t, cb)
+
+			require.Contains(t, out, specConflictHeading)
+			require.Contains(t, out, "STOP. Do not work around it")
+			for _, bullet := range []string{
+				"- the document: the spec, or the design's source and path;",
+				"- the section of the spec, or the rule in the design;",
+				"- the conflict;",
+				"- the amendment you propose.",
+			} {
+				require.Contains(t, out, bullet, "%s must name %q when stopping", name, bullet)
+			}
+
+			require.Contains(t, out, "Ask the user whether to amend the spec or the design.")
+			require.Contains(t, out, "explicit approval")
+			require.Contains(t, out, `spektacular spec amend --data '{"name":"test"`)
+			require.Contains(t, out, "--from .spektacular/tmp/test/spec_amend.md")
+			require.Contains(t, out, "spektacular design author")
+			require.Contains(t, out, "spektacular design write")
+			require.Contains(t, out, `"design":{"source":"<name>","path":"<path>"}`)
+
+			require.Contains(t, out, "re-read the amended spec")
+			require.Contains(t, out, "re-run this step's check")
+			require.Contains(t, out, "**Amendments**")
+
+			// "orchestrator", not "orchestrat": analyze's pre-existing
+			// "orchestration guidance" for sub-agents is unrelated.
+			require.NotContains(t, out, "orchestrator")
+			require.NotContains(t, out, "orchestrated")
+			require.NotContains(t, out, "hand-back")
+			require.NotContains(t, out, "QUESTION:")
+
+			stop := strings.Index(out, specConflictHeading)
+			advance := strings.LastIndex(out, "### Advance")
+			require.NotEqual(t, -1, advance, "%s must have an Advance section", name)
+			require.Less(t, stop, advance, "%s must place the spec-conflict stop before Advance", name)
+		})
+	}
+}
+
+// TestUpdateChangelogEntryHasAmendmentsField asserts the per-task changelog
+// entry format carries an Amendments field, after Deviations, naming the
+// amended document, section and reason.
+func TestUpdateChangelogEntryHasAmendmentsField(t *testing.T) {
+	out := renderStep(t, updateChangelog())
+
+	deviations := strings.Index(out, "**Deviations**:")
+	amendments := strings.Index(out, "**Amendments**:")
+	require.NotEqual(t, -1, deviations)
+	require.NotEqual(t, -1, amendments)
+	require.Less(t, deviations, amendments, "Amendments must follow Deviations in the entry format")
+	require.Contains(t, out, "**Amendments**: <the document and section amended, and why")
+}

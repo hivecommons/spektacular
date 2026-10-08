@@ -38,6 +38,8 @@ The sub-agent should:
 
 If the sub-agent reports that the test conventions it discovered don't match what the plan assumes, or that required test infrastructure (fixtures, helpers) is missing, STOP. Report to the user and ask for guidance before continuing.
 
+{{> partials/implement-spec-conflict}}
+
 ### Advance
 
 Once tests are written and the sub-agent has returned its summary:

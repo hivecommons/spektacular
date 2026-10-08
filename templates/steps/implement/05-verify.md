@@ -38,6 +38,8 @@ If any verification command fails, STOP. Report the failures to the user as the 
 2. **Accept the partial failure and proceed.** Only if the user explicitly chooses this.
 3. **Abandon this task.** {{#task}}End this run without ticking it.{{/task}}{{^task}}Skip to the next unchecked task.{{/task}}
 
+{{> partials/implement-spec-conflict}}
+
 ### Advance
 
 Once verification is green (or the user has explicitly authorized proceeding past a failure):
