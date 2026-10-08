@@ -101,6 +101,16 @@ func TestStatus_EpicDirtyNamesOnlyTouchedRepos(t *testing.T) {
 	require.Equal(t, false, run["dirty"])
 	require.Equal(t, []any{}, run["dirty_repos"])
 
+	// Spektacular's own files never count: the orchestrator's notes, a
+	// tracked spec changing and a new lane file all live in the project, and
+	// none of them is code a worktree would be missing.
+	wtWriteFile(t, f.proj, ".spektacular/working-context.md", "orchestrator notes\n")
+	wtWriteFile(t, f.proj, ".spektacular/specs/alpha.md", specInEpicFixture("E")+"\nedited\n")
+	wtWriteFile(t, f.proj, ".spektacular/workflows/implement-alpha.json", "{}\n")
+	run = epicRun()
+	require.Equal(t, false, run["dirty"])
+	require.Equal(t, []any{}, run["dirty_repos"])
+
 	// The touched project repo gets a tracked change: flagged and named.
 	wtWriteFile(t, f.proj, "main.txt", "user change\n")
 	run = epicRun()

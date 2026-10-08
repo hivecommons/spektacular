@@ -290,8 +290,9 @@ func removeLane(statePath string) {
 }
 
 // commitPlanLane commits a finished plan lane's own files and nothing else:
-// the plan's store directory, its per-section working files, its scratch
-// folder and its lane files. Everything another plan running beside it has
+// the plan's store directory, its per-section working files and its lane
+// files. Its scratch folder is never committed: it held only the staged
+// commit message, already removed, and may be git-ignored. Everything another plan running beside it has
 // changed stays uncommitted for that plan's own commit. The commit is taken
 // under the project commit lock, so lanes finishing together queue rather
 // than contend for git's index.
@@ -312,7 +313,6 @@ func commitPlanLane(cfg config.Config, root, statePath, name, message string) er
 	paths := []string{
 		filepath.Join(root, filepath.Dir(implement.PlanFilePath(cfg.Plan.Config.Directory, name))),
 		filepath.Join(root, ".spektacular", "work", name),
-		filepath.Join(root, ".spektacular", "tmp", name),
 		statePath,
 		laneNotesFor(statePath),
 	}
@@ -325,8 +325,8 @@ func commitPlanLane(cfg config.Config, root, statePath, name, message string) er
 // automatic commits are off, that is all: the main checkouts are left as the
 // off setting means. Otherwise, in the main checkouts only the spec's
 // own files are committed: its plan documents, spec, changelog records
-// (the project's and each registered repo's), its scratch and working
-// folders, and the workflow's state and notes. Everything else changed
+// (the project's and each registered repo's), its working folder, and the
+// workflow's state and notes — never its scratch folder. Everything else changed
 // there, by another spec or by the user, stays uncommitted. The main-checkout
 // commits are taken under the project commit lock, so specs finishing
 // together queue rather than contend for git's index.
@@ -363,7 +363,6 @@ func commitImplementLane(cfg config.Config, root, statePath, name string, rec wo
 		filepath.Join(root, artifact.Address{Kind: artifact.KindSpec, Feature: name}.StorePath(cfg.Spec.Config.Directory)),
 		filepath.Join(root, artifact.Address{Kind: artifact.KindChangelog, Feature: name}.StorePath(cfg.Changelog.Config.Directory)),
 		filepath.Join(root, ".spektacular", "work", name),
-		filepath.Join(root, ".spektacular", "tmp", name),
 		statePath,
 		laneNotesFor(statePath),
 	}

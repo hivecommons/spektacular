@@ -9,6 +9,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/migrate"
 	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/worktree"
 	"github.com/spf13/cobra"
 )
 
@@ -28,12 +29,15 @@ import (
 // A subcommand that defines its own PersistentPreRun(E) would shadow this
 // hook for itself and its children; none does.
 func gate(cmd *cobra.Command, _ []string) error {
-	if gateExempted(cmd) {
-		return nil
-	}
 	root, err := projectRoot()
 	if err != nil {
 		return err
+	}
+	if err := refuseInsideSpecWorktree(cmd, root); err != nil {
+		return err
+	}
+	if gateExempted(cmd) {
+		return nil
 	}
 	cfgPath := filepath.Join(config.ProjectConfigDir(root), config.ProjectConfigFileName)
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
@@ -77,6 +81,44 @@ func gate(cmd *cobra.Command, _ []string) error {
 }
 
 // gateExempted reports whether cmd runs regardless of the project's state.
+// refuseInsideSpecWorktree refuses a command run from inside a spec's
+// worktree. A worktree holds only code: the .spektacular it carries is a
+// stale copy whose stores, workflow state and relative repo locations are all
+// wrong from there, and anything written to it is refused when the branch is
+// merged back. Every command but help, completion and version is refused, so
+// the way to the project root is the only way on.
+func refuseInsideSpecWorktree(cmd *cobra.Command, cwd string) error {
+	project, ok := specWorktreeProject(cwd)
+	if !ok || cmd == rootCmd {
+		return nil
+	}
+	for c := cmd; c != nil; c = c.Parent() {
+		switch c.Name() {
+		case "help", "completion", "version", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:
+			return nil
+		}
+	}
+	return output.NewError("inside_spec_worktree",
+		fmt.Sprintf("%s is inside a spec's worktree, which holds only code; Spektacular is only ever run from the project root, %s", cwd, project)).
+		WithResource(cwd).
+		WithNextAction(fmt.Sprintf("re-run the same command from %s; the implement workflow's instructions name where each repo's code lives in the spec's worktrees", project))
+}
+
+// specWorktreeProject reports the project root holding cwd's spec worktree,
+// when cwd is inside one: spec worktrees all live under the project's
+// .spektacular/worktrees folder.
+func specWorktreeProject(cwd string) (string, bool) {
+	if resolved, err := filepath.EvalSymlinks(cwd); err == nil {
+		cwd = resolved
+	}
+	marker := string(filepath.Separator) + filepath.Join(".spektacular", worktree.Dir) + string(filepath.Separator)
+	i := strings.Index(cwd+string(filepath.Separator), marker)
+	if i <= 0 {
+		return "", false
+	}
+	return cwd[:i], true
+}
+
 func gateExempted(cmd *cobra.Command) bool {
 	if cmd == rootCmd {
 		return true

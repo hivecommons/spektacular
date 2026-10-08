@@ -50,6 +50,10 @@ func (f *fakeGit) Dirty(top string) (bool, error) {
 	return f.dirty[top], nil
 }
 
+func (f *fakeGit) CodeDirty(top string) (bool, error) {
+	return f.Dirty(top)
+}
+
 func (f *fakeGit) CommitAll(top, message string) error {
 	f.commitCalls = append(f.commitCalls, commitCall{Dir: top, Message: message})
 	return f.commitErr[top]

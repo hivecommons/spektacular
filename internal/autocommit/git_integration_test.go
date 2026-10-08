@@ -334,3 +334,31 @@ func TestIntegration_CommitPathsCommitsADeletionAlreadyStaged(t *testing.T) {
 		gittest.RunGit(t, dir, "diff-tree", "--no-commit-id", "--name-status", "-r", "HEAD"))
 	require.Empty(t, gittest.RunGit(t, dir, "status", "--porcelain"))
 }
+
+// A path git has no file for — an empty folder left once its only file was
+// removed, or a folder git ignores — is skipped rather than handed to git,
+// which would refuse the pathspec and fail the whole commit.
+func TestIntegration_CommitPathsSkipsEmptyAndIgnoredFolders(t *testing.T) {
+	gittest.RequireGit(t)
+	pinIdentity(t)
+	dir := commitPathsTree(t)
+	writeFile(t, dir, ".gitignore", "ignored/\n")
+	gittest.RunGit(t, dir, "add", ".gitignore")
+	gittest.RunGit(t, dir, "commit", "-m", "ignore")
+
+	writeFile(t, dir, "mine/plan.md", "my plan\n")
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "empty"), 0o755))
+	writeFile(t, dir, "ignored/scratch.md", "scratch\n")
+
+	paths := []string{
+		filepath.Join(dir, "mine"),
+		filepath.Join(dir, "empty"),
+		filepath.Join(dir, "ignored"),
+	}
+	require.NoError(t, NewGit().CommitPaths(dir, paths, "commit mine"))
+
+	require.Equal(t, "commit mine", gittest.RunGit(t, dir, "log", "-1", "--format=%B"))
+	require.Equal(t, "mine/plan.md",
+		gittest.RunGit(t, dir, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"))
+	require.Empty(t, gittest.RunGit(t, dir, "status", "--porcelain"))
+}

@@ -1,29 +1,29 @@
 {
-  "kind": "implement",
+  "kind": "spec",
   "current_step": "finished",
   "completed_steps": [
     "new",
-    "read_plan",
-    "analyze",
-    "implement",
-    "test",
-    "verify",
-    "update_plan",
-    "update_changelog",
-    "test_plan",
-    "update_feature_changelog",
-    "reconcile_spec",
+    "interview",
+    "overview",
+    "requirements",
+    "acceptance_criteria",
+    "constraints",
+    "technical_approach",
+    "success_metrics",
+    "non_goals",
+    "verification",
+    "split",
     "finished"
   ],
-  "created_at": "2026-10-07T12:08:37.853559849Z",
-  "updated_at": "2026-10-07T12:58:57.268136923Z",
+  "created_at": "2026-10-07T19:46:39.459836552Z",
+  "updated_at": "2026-10-08T06:28:31.736870074Z",
   "data": {
-    "committed_milestones": [
-      1,
-      2,
-      3,
-      4
-    ],
-    "name": "000065_implement-in-worktrees"
+    "name": "000066_epic-mid-run-revisions",
+    "sources": [
+      {
+        "retrieved_date": "2026-10-07",
+        "uri": "https://github.com/hivecommons/spektacular/issues/78"
+      }
+    ]
   }
 }

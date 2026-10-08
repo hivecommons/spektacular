@@ -1,51 +1,26 @@
-# Working context — plan 000065_implement-in-worktrees
+# Working context — spec 000066_epic-mid-run-revisions
 
-Plan workflow started 2026-10-07 for spec 000065_implement-in-worktrees (worktrees for every implement run, merge-back, repo worktree setup command, sub-agent code-location guidance, narrowed epic dirty check).
+## Origin
+- GitHub #78, second comment, item 6: "A design decision made during implement has no clean path." During spec A's verify step the design's rule disagreed with the spec's success metric; the user changed the design mid-run. Revising from the project root didn't reach the child's worktree; writing into the worktree was refused at merge; the spec's success metric couldn't be updated from the implement workflow and is now out of date, with only the plan changelog saying so.
+- Reviewed against shipped 000064/000065: children now run from the project root and read specs/plans/designs from the project store, so a design revised in the project *is* visible to a child. What remains: (a) no defined path for the orchestrator (or an interactive implement run) to revise a design or spec mid-run, (b) the implement workflow cannot amend the spec's success metrics / requirements — reconcile_spec only ticks checkboxes, (c) no record of who changed the spec mid-run and why.
 
-## Spec-time decisions carried forward
-- Worktrees default ON for every implement run; config opt-out; epic runs always use worktrees.
-- Standalone run merges back all-or-nothing at end (reuse epic merge); on conflict refuse naming paths; agent never resolves.
-- Spec branch always gets commits regardless of auto_commit.
-- Unmerged-but-implemented dependency = unmet; warn/refuse per design epics-and-seeded-specs.md (epic.strict_dependencies).
-- Reuse PR #79 dirty_repos approach (RunSource.Dirty(repos) []string; epic.run.dirty_repos alongside dirty bool). Don't reuse its wording.
-- Docs repo in scope.
+## User direction
+- User: "generate the spec and I will review it tomorrow" — no questions asked during drafting; open decisions defaulted and listed as open questions in the spec.
+- Scope: item 6 only. #80 and #78 items 1/4/5 are being fixed separately.
+- Never commit (user rule). auto_commit is full; stop before `finished`.
 
-## Plan-time decisions / answers
-(none yet)
-- (discovery) Non-git / no-commit touched repo on a standalone worktree run → REFUSE with remediation (commit it, or set opt-out). User chose.
-- (discovery) Merge trigger: finished step instructs agent to run new `implement merge` command (shares worktree.Manager.Merge with epic merge). User chose.
-- (discovery) Single-task runs merge only when the plan is complete; partial task runs keep/reuse worktrees. User chose.
+## Code facts found
+- templates/steps/implement/11-reconcile_spec.md: implement only flips spec checkboxes [ ]→[x]; never edits text.
+- Plan staleness (internal/status/classify.go:136) is spec mtime vs plan mtime; under plan.strict_spec_changes `implement new` (incl. resume of an orchestrated lane) refuses with plan_stale (cmd/implement.go refuseStalePlan). A mid-run spec amendment would therefore block resuming the run under strict mode.
+- Orchestrated children never ask the user; they hand back `QUESTION: <spec>` (spek-implement SKILL.md:152); a genuine question includes "the plan no longer matching the code" and verification failures the child cannot fix (spek-implement-epic SKILL.md).
+- `design author` keeps capture date and existing spec references when rewriting.
 
-- (architecture) Direction recorded in assumptions.md; new cmd `implement merge`; config key `implement.worktrees`; repo.yaml `worktree_setup`; partial `implement-code-locations.md` for steps 02-05.
+## Defaults chosen (to flag as open questions)
+- Only the orchestrator (epic) or the user-facing implement agent (interactive) applies an amendment, always after the user's explicit approval; a child never edits spec text itself.
+- An amendment is recorded in a new `## Amendments` section of the spec (date, which section changed, why, which run) plus a plan-changelog entry.
+- An amendment recorded this way does not make the plan stale.
 
-- (milestones) M1 epic fixes (setup, sub-agent partial, dirty_repos); M2 forced commits + implement merge + unmerged deps; M3 standalone worktrees default on + opt-out + finished merge + skill + harbor; M4 docs.
-
-- (tasks) User chose: worktree-on standalone runs use per-spec lanes (data lane:true, separate from orchestrated) so two terminals work. New task e74f4569.
-
-- (write) plan, context, research committed to store; working dir removed.
-- (walkthrough) 2026-10-07: user reviewed approach and milestones/tasks, then signed off ("ok perfect just commit"), skipping the out-of-scope and assumptions beats. No changes requested. Next: implement 000065.
-
-## Learnings
-- Repos: spektacular (root = this dir), docs (root /home/nicj/code/github.com/hivecommons/spektacular-website).
-- Design ref design:epics-and-seeded-specs.md resolved; requires implement check and status to share one dependency classifier → put "unmerged" in status.DependenciesOf (record exists ⇒ unmerged).
-- Config parses over NewDefault(), so default-true bool needs no schema bump. Chose `implement.worktrees`.
-- worktree.Ensure/ensureOne(made) is the hook for repo.yaml `worktree_setup`.
-- With auto_commit off PointFor=PointNone → need forced code-only commits at completion for worktree runs (stepkit LeadsToCommit too).
-- Dependency check today always refuses with override offer (no plain warn).
-- Harbor implement suite needs git fixture or opt-out once default on.
-
-## Implement run (started 2026-10-07)
-- Plan approved & committed (0adbaf0). Implement workflow started, non-orchestrated, auto_commit on.
-- Drift: cmd/workflow_slot_test.go and internal/status/report_test.go don't exist. User chose "proceed and adapt": status unmerged tests go in internal/status/status_test.go; ignore the slot-test note.
-- Spec coverage: complete. Changelog mode: first task.
-- Task 98c6a685 (worktree_setup field): guided add (internal/steps/repo/registration.go) deliberately not extended; only `repo add --data` sets it (plan scope).
-- Task 98c6a685 tests written (config/repo/cmd/templates guided_add_skill_test).
-- Task 98c6a685 verified: build/vet/gofmt/full go test/make lint green.
-- User chose: run all remaining tasks without asking (stop only for failures/real questions).
-- Task acc28f89: setup runs in Manager.setUp after ensureOne made=true, only for touched repos; failure -> discard worktree (+branch if created) and worktree_setup_failed; record not written. cmd var worktreeSetup wired into worktreeManager().
-- Task 182b302a: PointForRun/LeadsToCommitForRun/CodeOnly in autocommit; worktree flag = len(wfCfg.CodeRoots)>0; git-commit partial has commit.code_only wording; commitImplementLane(codeOnly) skips main-checkout artifact commit.
-- Task 7462c057: Options.Unmerged + metBy in buildTarget BlockedBy; DescribeDependency; unmergedFn(root) in cmd/implement.go wired into refuseUnmetDependencies and status. Unmerged dep next_action offers implement merge. Status has no dependency descriptions (only ready/blocked_by) — deviation noted.
-- Task e74f4569: lane data 'lane:true' for user starts with worktrees on (implementLaneStart in workflow_slot.go). Lane start resumes same-spec shared-slot run; refuses over an orchestrated lane of same spec. resumeInstruction(…, lane, orchestrated). isLane in autocommit. snapshotStatePath loads cfg for implement new. Many cmd fixtures assume shared slot → need implement.worktrees:false. Concern: startGate in concurrent terminals may see other lane's uncommitted files (not addressed by plan).
-- Task 36a74c31: ensureImplementWorktrees in cmd/implement.go after startGate/clearState, before codeRootsFor. worktree_unavailable (unavailable()) for non-git project/repo and HEAD-less checkouts (checked before any worktree add).
-- All 14 tasks done; milestones committed (c7efd60, 8280fe0, 48cb1d0, e55214b + docs d803152). Test plan written.
-- Changelog records written (project, spektacular, docs). Spec reconciled: 25/26 ticked; 'Main checkouts unchanged' left open (epic half is manual, test-plan item 2).
+## Status
+- All sections drafted from defaults (no user Q&A), self-reviewed (fork could not spawn a reviewer subagent), and written to the store via `spec file write`. Working dir removed.
+- Split check: one weak signal (9 requirements), counter-signal applies (amendment stop, apply path, record and staleness exemption are tightly coupled) → no split offered.
+- Workflow resumed at `split` (2026-10-08): split check re-confirmed, no offer. User explicitly approved advancing to `finished` with the auto-commit, including unrelated uncommitted changes in the tree. Next: plan this spec via spek-plan.

@@ -246,7 +246,11 @@ func statusRunSource(cfg config.Config, root string, st store.Reader) *status.Ru
 			if err != nil {
 				return nil
 			}
-			dirty, err := autocommit.DirtyTargets(targets, autoCommitGit)
+			// Only code counts: a worktree branches from the last commit, so
+			// uncommitted code would be missing from it, while specs, plans,
+			// progress and the orchestrator's notes are read from the project
+			// and written there throughout the run.
+			dirty, err := autocommit.CodeDirtyTargets(targets, autoCommitGit)
 			if err != nil {
 				return nil
 			}

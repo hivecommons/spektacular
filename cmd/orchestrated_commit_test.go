@@ -108,13 +108,12 @@ const (
 )
 
 // laneCommitFiles is what name's completion commit holds: its plan
-// documents, scratch and working files, and its lane state file's deletion
-// (its notes were never committed).
+// documents and working files, and its lane state file's deletion (its notes
+// were never committed). Its scratch folder is never committed.
 func laneCommitFiles(name string) string {
 	return "A\t.spektacular/plans/" + name + "/context.md\n" +
 		"A\t.spektacular/plans/" + name + "/plan.md\n" +
 		"A\t.spektacular/plans/" + name + "/research.md\n" +
-		"A\t.spektacular/tmp/" + name + "/scratch.md\n" +
 		"A\t.spektacular/work/" + name + "/overview.md\n" +
 		"D\t.spektacular/workflows/plan-" + name + ".json"
 }
@@ -136,12 +135,13 @@ func TestOrchestratedPlanCommit_ContainsOnlyItsOwnFiles(t *testing.T) {
 	require.NoFileExists(t, filepath.Join(dataDir, "workflows", "plan-000001_alpha.json"))
 	require.NoFileExists(t, filepath.Join(dataDir, "workflows", "plan-000001_alpha.md"))
 
-	// Beta's work, its lane and the user's file are untouched and unstaged.
+	// Beta's work, its lane, the user's file and both scratch folders are
+	// untouched and unstaged.
 	require.Empty(t, gittest.RunGit(t, fx.root, "diff", "--cached", "--name-only"))
 	require.Equal(t,
 		"M .spektacular/workflows/plan-000002_beta.json\n"+
 			"?? .spektacular/plans/000002_beta/\n"+
-			"?? .spektacular/tmp/000002_beta/\n"+
+			"?? .spektacular/tmp/\n"+
 			"?? .spektacular/work/000002_beta/\n"+
 			"?? .spektacular/workflows/plan-000002_beta.md\n"+
 			"?? unrelated.txt",
@@ -153,7 +153,7 @@ func TestOrchestratedPlanCommit_ContainsOnlyItsOwnFiles(t *testing.T) {
 
 	require.Equal(t, "3", commitCount(t, fx.root))
 	require.Equal(t, laneCommitFiles(laneBeta), headFiles(t, fx.root))
-	require.Equal(t, "?? unrelated.txt", gittest.RunGit(t, fx.root, "status", "--porcelain"))
+	require.Equal(t, "?? .spektacular/tmp/\n?? unrelated.txt", gittest.RunGit(t, fx.root, "status", "--porcelain"))
 }
 
 // Criterion (c): a commit git refuses puts back only the finishing lane — its
