@@ -33,7 +33,9 @@ Never use your own file tools on a store directory, and never build a store path
 Run `{{command}} status <epic> --format json` and read `epic.run`.
 
 - **Refuse when implementing is blocked.** If `epic.run.problems` holds any problem whose `blocks` includes `implement`, implement nothing. Relay each problem's `message` to the user: `epic_unplanned` names the specs with no plan yet, `epic_dependency_cycle` names the specs whose dependencies form a cycle, and `epic_dependency_outside` names a dependency outside the epic that is not implemented. Suggest "plan this epic" for unplanned specs, or fixing the epic's dependencies with `{{command}} epic write`. Then stop.
-- **Uncommitted work.** If `epic.run.dirty` is true, a registered repo has uncommitted changes. Worktrees branch from each repo's last commit, so that work would not be in them. Ask the user once whether to commit it first; the answer is theirs. If they decline, go ahead, and say that the uncommitted work will not be in any spec's worktree; a spec whose own plan is uncommitted cannot start in its worktree, and its child hands back `FAILED:`. Apart from settling which epic is meant, this is the only start-of-run question.
+- **Uncommitted work.** If `epic.run.dirty` is true, a repo touched by this epic's plans has uncommitted changes. Name the repos in `epic.run.dirty_repos` and match them against each spec's `run.implement.repos` to explain which specs are affected; unrelated registered repos do not trigger this warning. Worktrees branch from each repo's last commit, so that work would not be in them. Ask the user once whether to commit it first; the answer is theirs. If they decline, go ahead, and say that the uncommitted work will not be in any spec's worktree; a spec whose own plan is uncommitted cannot start in its worktree, and its child hands back `FAILED:`. Apart from settling which epic is meant, this is the only start-of-run question.
+
+Before launching children, record `git status --porcelain --untracked-files=all` from every registered repo's main code root (`{{command}} repo list`), including repos no spec touches. This is a read-only isolation baseline: preserve pre-existing user changes, never clean or stash them automatically. Identify the orchestrator's own project notes separately.
 
 # Step 3: The loop
 
@@ -60,10 +62,11 @@ A child that handed back a `QUESTION:` and is waiting for its answer still count
 
 Give each child exactly what it needs, because it inherits nothing from you:
 
-- the spec name, and the root to work in: the spec's project worktree. Every command it runs, and every repo it touches, must be from there; `{{command}} repo list`, run from there, gives it each repo's `root` inside the spec's worktrees;
+- the spec name, and the root to work in: the spec's project worktree. Run workflow and store commands from that project root; `{{command}} repo list`, run from there, gives it each repo's code `root` inside the spec's worktrees. Run code edits, dependency setup and verification from those code roots, which may differ from the workflow project root;
 - to **start** or **resume**: run `{{command}} implement new --data '{"name":"<spec>","orchestrated":true}'`. If it returns a resume report for the spec's lane, read back what the report names (the plan documents and the lane's notes), then run the `goto` it gives, which carries `\"name\":\"<spec>\"`;
 - "Follow the `spek-implement` skill. This run is orchestrated: tasks run one after another without asking between them, every `goto` carries `\"name\":\"<spec>\"`, and you never ask the user anything yourself.";
 - "Never resolve a merge or git conflict yourself, and never merge, rebase or switch branches: your worktree's branch is merged by the orchestrator.";
+- "Pass the workflow project root and the relevant worktree code roots explicitly to every sub-agent you launch, including implementers, test authors and verifiers. Require code edits and checks to run in those worktree roots, never in a main checkout. Worktrees contain tracked files only; install ignored dependencies using each repo's documented setup inside its worktree, not in the main checkout, and do not symlink mutable dependencies from it.";
 - the store-access rule above, word for word;
 - the hand-back contract and the definition of a genuine open question, below.
 
@@ -105,6 +108,8 @@ Any other refusal from `epic worktree` or `epic merge` is handled the same way: 
 After every child you start, every hand-back and every merge, tell the user in one line which specs are being implemented, with their steps from `status`, and how many remain. For example: "Implementing 2 of 4 specs: 000071_a (implement), 000073_c (verify). 000071_a merged. 1 remaining."
 
 # Step 8: The final report
+
+Before reporting, repeat `git status --porcelain --untracked-files=all` in every main code root and compare with the isolation baseline. A run that started clean must leave no modified or untracked code files in any main checkout; merges may change HEAD, not leave uncommitted files. If the user chose to preserve existing dirt, it must remain unchanged. Account separately for your own project notes and any user-approved commits. Report unexpected changes as an isolation failure, naming the repo and paths; never discard them or claim a clean run.
 
 End every run, finished or stopped, with:
 
