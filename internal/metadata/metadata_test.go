@@ -1085,7 +1085,7 @@ func TestRender_OmitsSourcesKeyEntirelyWithNoSources(t *testing.T) {
 }
 
 // TestRender_OmitsAllReferenceKeysWithNoReferences names every optional
-// reference field at once — designs, specs, epic and sources — and pins the
+// reference field at once — designs, specs, epic, sources and amendments — and pins the
 // same hand-written bytes: a spec carrying none of them renders exactly as it
 // did before any of them existed.
 func TestRender_OmitsAllReferenceKeysWithNoReferences(t *testing.T) {
@@ -1096,6 +1096,7 @@ func TestRender_OmitsAllReferenceKeysWithNoReferences(t *testing.T) {
 		Specs:          nil,
 		Epic:           "",
 		Sources:        nil,
+		Amendments:     nil,
 	}, []byte("# body\n"))
 	require.NoError(t, err)
 
@@ -1184,6 +1185,209 @@ func TestSplit_MalformedSourceEntryIsDropped(t *testing.T) {
 			require.Equal(t,
 				[]SourceRef{{URI: "https://example.com/design-notes", RetrievedDate: "2026-07-01"}},
 				meta.Sources)
+		})
+	}
+}
+
+// twoAmendments returns a fresh copy of the amendments the round-trip,
+// exact-bytes and merge cases share: one recording changed sections, one
+// recording a design revision.
+func twoAmendments() []Amendment {
+	return []Amendment{
+		{At: "2026-10-09T14:02:11Z", Sections: []string{"Success Metrics", "Constraints"}, Hash: "sha256:ab"},
+		{At: "2026-10-09T15:40:00Z", Design: &DesignRef{Source: "project", Path: "billing/rounding.md"}, Hash: "sha256:cd"},
+	}
+}
+
+// twoAmendmentsYAML is twoAmendments as it is rendered on disk.
+const twoAmendmentsYAML = "amendments:\n" +
+	"    - at: \"2026-10-09T14:02:11Z\"\n" +
+	"      sections: [Success Metrics, Constraints]\n" +
+	"      hash: sha256:ab\n" +
+	"    - at: \"2026-10-09T15:40:00Z\"\n" +
+	"      design: {source: project, path: billing/rounding.md}\n" +
+	"      hash: sha256:cd\n"
+
+// TestRender_SplitRoundTripAmendments asserts amendments survive Render →
+// Split intact and in order, with each entry's sections, design and hash kept
+// together.
+func TestRender_SplitRoundTripAmendments(t *testing.T) {
+	meta := Metadata{
+		CreatedDate:    time.Date(2026, time.October, 9, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
+		Amendments:     twoAmendments(),
+	}
+	body := []byte("# Spec body\n")
+
+	rendered, err := Render(meta, body)
+	require.NoError(t, err)
+
+	gotMeta, gotBody, err := Split(rendered)
+	require.NoError(t, err)
+	require.NotNil(t, gotMeta)
+	require.Equal(t, twoAmendments(), gotMeta.Amendments)
+	require.Equal(t, string(body), string(gotBody))
+}
+
+// TestRender_AmendmentsExactBytes pins the on-disk shape of a spec carrying
+// amendments, written out by hand — flow-style sections and design, quoted
+// timestamp, four-space sequence indent — so a change to key names, order,
+// style or quoting shows up as a failure rather than a silent drift.
+func TestRender_AmendmentsExactBytes(t *testing.T) {
+	rendered, err := Render(Metadata{
+		CreatedDate:    time.Date(2026, time.October, 9, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
+		Amendments:     twoAmendments(),
+	}, []byte("# b\n"))
+	require.NoError(t, err)
+
+	require.Equal(t,
+		"---\n"+
+			"created_date: \"2026-10-09\"\n"+
+			"document_status: draft\n"+
+			twoAmendmentsYAML+
+			"---\n\n# b\n",
+		string(rendered))
+}
+
+// TestRender_AmendmentsFollowSourcesExactBytes pins amendments' fixed position
+// in the block: after epic and sources, the last key rendered.
+func TestRender_AmendmentsFollowSourcesExactBytes(t *testing.T) {
+	rendered, err := Render(Metadata{
+		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		DocumentStatus: StatusDraft,
+		Epic:           testEpic,
+		Sources:        twoSourceRefs(),
+		Amendments:     twoAmendments(),
+	}, []byte("# body\n"))
+	require.NoError(t, err)
+
+	require.Equal(t,
+		"---\n"+
+			"created_date: \"2026-07-01\"\n"+
+			"document_status: draft\n"+
+			"epic: 000060_epics-and-seeded-specs\n"+
+			twoSourceRefsYAMLRendered+
+			twoAmendmentsYAML+
+			"---\n\n# body\n",
+		string(rendered))
+
+	meta, _, err := Split(rendered)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Equal(t, twoSourceRefs(), meta.Sources)
+	require.Equal(t, twoAmendments(), meta.Amendments)
+}
+
+// twoSourceRefsYAMLRendered is twoSourceRefs exactly as Render writes it, as
+// pinned by TestRender_EpicAndSourcesExactBytes.
+const twoSourceRefsYAMLRendered = "sources:\n" +
+	"    - uri: https://github.com/hivecommons/spektacular/issues/60\n" +
+	"      retrieved_date: \"2026-06-30\"\n" +
+	"    - uri: https://example.com/design-notes\n" +
+	"      retrieved_date: \"2026-07-01\"\n"
+
+// TestRender_OmitsAmendmentsKeyEntirelyWithNoAmendments asserts neither a nil
+// nor an empty amendments list leaves an amendments key behind, or perturbs a
+// single byte of an unamended spec.
+func TestRender_OmitsAmendmentsKeyEntirelyWithNoAmendments(t *testing.T) {
+	tests := []struct {
+		name       string
+		amendments []Amendment
+	}{
+		{name: "nil", amendments: nil},
+		{name: "empty", amendments: []Amendment{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rendered, err := Render(Metadata{
+				CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+				DocumentStatus: StatusDraft,
+				Amendments:     tt.amendments,
+			}, []byte("# body\n"))
+			require.NoError(t, err)
+
+			require.Equal(t,
+				"---\ncreated_date: \"2026-07-01\"\ndocument_status: draft\n---\n\n# body\n",
+				string(rendered))
+		})
+	}
+}
+
+// TestSplit_MalformedAmendmentsReadAsNoAmendments asserts reads across the
+// amendments key are lenient: a missing, empty, scalar, mapping, scalar-entry,
+// hashless or undecodable value reads as no amendments and never fails the
+// parse, so a hand-edited spec stays readable.
+func TestSplit_MalformedAmendmentsReadAsNoAmendments(t *testing.T) {
+	tests := []struct {
+		name       string
+		amendments string
+	}{
+		{name: "absent", amendments: ""},
+		{name: "empty list", amendments: "amendments: []\n"},
+		{name: "scalar", amendments: "amendments: nonsense\n"},
+		{name: "mapping", amendments: "amendments:\n  at: \"2026-10-09T14:02:11Z\"\n  hash: sha256:ab\n"},
+		{name: "list of scalars", amendments: "amendments:\n  - sha256:ab\n  - another\n"},
+		{name: "entry without hash", amendments: "amendments:\n  - at: \"2026-10-09T14:02:11Z\"\n    sections: [Constraints]\n"},
+		{name: "undecodable entry", amendments: "amendments:\n  - at: \"2026-10-09T14:02:11Z\"\n    sections: {not: a list}\n    hash: sha256:ab\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := "---\n" +
+				"created_date: 2026-07-01\n" +
+				"document_status: draft\n" +
+				"epic: " + testEpic + "\n" +
+				tt.amendments +
+				"---\n\n" +
+				"body\n"
+
+			meta, body, err := Split([]byte(raw))
+			require.NoError(t, err, "a malformed amendments value must not fail the parse")
+			require.NotNil(t, meta)
+			require.Empty(t, meta.Amendments)
+			require.Equal(t, StatusDraft, meta.DocumentStatus,
+				"the rest of the block must still parse")
+			require.Equal(t, testEpic, meta.Epic,
+				"the epic must still parse alongside a malformed amendments value")
+			require.Equal(t, "body\n", string(body))
+		})
+	}
+}
+
+// TestSplit_MalformedAmendmentEntryIsDropped asserts a scalar, hashless or
+// undecodable entry is dropped on read while a well-formed sibling in the
+// same list is kept.
+func TestSplit_MalformedAmendmentEntryIsDropped(t *testing.T) {
+	good := "  - at: \"2026-10-09T15:40:00Z\"\n" +
+		"    sections: [Constraints]\n" +
+		"    hash: sha256:cd\n"
+
+	tests := []struct {
+		name string
+		bad  string
+	}{
+		{name: "scalar entry", bad: "  - sha256:ab\n"},
+		{name: "entry without hash", bad: "  - at: \"2026-10-09T14:02:11Z\"\n"},
+		{name: "undecodable entry", bad: "  - at: [not, a, string]\n    hash: sha256:ab\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := "---\n" +
+				"created_date: 2026-07-01\n" +
+				"document_status: draft\n" +
+				"amendments:\n" + tt.bad + good +
+				"---\n\n" +
+				"body\n"
+
+			meta, _, err := Split([]byte(raw))
+			require.NoError(t, err)
+			require.NotNil(t, meta)
+			require.Equal(t,
+				[]Amendment{{At: "2026-10-09T15:40:00Z", Sections: []string{"Constraints"}, Hash: "sha256:cd"}},
+				meta.Amendments)
 		})
 	}
 }

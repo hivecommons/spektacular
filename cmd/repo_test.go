@@ -16,17 +16,18 @@ import (
 
 // repoListEntry mirrors the repoInfo JSON envelope emitted by `repo list`.
 type repoListEntry struct {
-	Name         string   `json:"name"`
-	Location     string   `json:"location"`
-	Root         string   `json:"root"`
-	Provider     string   `json:"provider"`
-	Description  string   `json:"description"`
-	Role         string   `json:"role"`
-	Tags         []string `json:"tags"`
-	Dependencies []string `json:"dependencies"`
-	Materialized bool     `json:"materialized"`
-	StaleNote    string   `json:"stale_note"`
-	MetadataNote string   `json:"metadata_note"`
+	Name          string   `json:"name"`
+	Location      string   `json:"location"`
+	Root          string   `json:"root"`
+	Provider      string   `json:"provider"`
+	Description   string   `json:"description"`
+	Role          string   `json:"role"`
+	Tags          []string `json:"tags"`
+	WorktreeSetup string   `json:"worktree_setup"`
+	Dependencies  []string `json:"dependencies"`
+	Materialized  bool     `json:"materialized"`
+	StaleNote     string   `json:"stale_note"`
+	MetadataNote  string   `json:"metadata_note"`
 }
 
 // repoAddResult mirrors the `repo add` success envelope.
@@ -363,6 +364,51 @@ func TestRepoList_ReportsRegisteredReposWithMetadataAndRoots(t *testing.T) {
 	require.Zero(t, git.calls, "listing must never invoke git")
 }
 
+// `repo list` reports the worktree setup command a repo declares in its own
+// repo.yaml, and leaves it out for a repo that declares none.
+func TestRepoList_ReportsWorktreeSetupWhenDeclared(t *testing.T) {
+	_ = repoProject(t)
+	swapRepoGit(t, &stubGit{})
+
+	withSetup := t.TempDir()
+	_, _, err := runRepo(t, "add", "--data", repoAddJSON(t, map[string]any{
+		"name":           "web",
+		"location":       withSetup,
+		"description":    "the web app",
+		"worktree_setup": "npm ci",
+	}))
+	require.NoError(t, err)
+
+	withoutSetup := t.TempDir()
+	_, _, err = runRepo(t, "add", "--data", repoAddJSON(t, map[string]any{
+		"name":        "docs",
+		"location":    withoutSetup,
+		"description": "the documentation repo",
+	}))
+	require.NoError(t, err)
+
+	stdout, _, err := runRepo(t, "list")
+	require.NoError(t, err)
+
+	var result struct {
+		Repos []repoListEntry `json:"repos"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &result))
+	require.Len(t, result.Repos, 3)
+
+	require.Equal(t, "web", result.Repos[1].Name)
+	require.Equal(t, "npm ci", result.Repos[1].WorktreeSetup)
+
+	require.Equal(t, "docs", result.Repos[2].Name)
+	require.Empty(t, result.Repos[2].WorktreeSetup)
+
+	var raw struct {
+		Repos []map[string]any `json:"repos"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &raw))
+	require.NotContains(t, raw.Repos[2], "worktree_setup", "a repo with no setup command omits the key")
+}
+
 // A registered repo whose location is not on disk is a misregistration, and
 // `repo list` says so instead of listing it with an empty root: the error is
 // coded repo_location_missing, names the registered value and the absolute
@@ -682,7 +728,7 @@ func TestRepoAdd_SchemaDocumentsInputAndOutput(t *testing.T) {
 	var schema commandSchema
 	require.NoError(t, json.Unmarshal([]byte(stdout), &schema))
 	require.NotNil(t, schema.Input)
-	for _, field := range []string{"name", "location", "source", "description", "role", "tags", "dependencies"} {
+	for _, field := range []string{"name", "location", "source", "description", "role", "tags", "worktree_setup", "dependencies"} {
 		require.Contains(t, schema.Input.Properties, field)
 	}
 	for _, field := range []string{"address", "local"} {
@@ -710,7 +756,7 @@ func TestRepoList_SchemaDeclaresReposArray(t *testing.T) {
 	repos := schema.Output.Properties["repos"]
 	require.Equal(t, "array", repos.Type)
 	require.NotNil(t, repos.Items)
-	for _, field := range []string{"name", "location", "root", "materialized", "stale_note"} {
+	for _, field := range []string{"name", "location", "root", "materialized", "stale_note", "worktree_setup"} {
 		require.Contains(t, repos.Items.Properties, field)
 	}
 	for _, field := range []string{"address", "local"} {

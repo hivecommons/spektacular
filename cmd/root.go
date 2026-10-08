@@ -246,12 +246,28 @@ func snapshotStatePath(argv []string) string {
 		if input.Orchestrated {
 			return lane
 		}
+		// An implement run started with worktrees on keeps a lane too.
+		if kind == "implement" && !dryRunArg(argv) {
+			if cfg, err := loadConfig(); err == nil && cfg.Implement.Worktrees {
+				return lane
+			}
+		}
 	case "goto":
 		if _, err := os.Stat(lane); err == nil {
 			return lane
 		}
 	}
 	return shared
+}
+
+// dryRunArg reports whether argv asks for a dry run.
+func dryRunArg(argv []string) bool {
+	for _, a := range argv {
+		if a == "--dry-run" || a == "-n" || a == "--dry-run=true" {
+			return true
+		}
+	}
+	return false
 }
 
 // readStateSnapshot reads the workflow state file at path and returns the

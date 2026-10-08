@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,6 +39,11 @@ fixture
 	require.NoError(t, os.WriteFile(planPath, []byte(body), 0o644))
 	return planPath
 }
+
+// implementSharedSlotConfig turns implement.worktrees off, for a fixture that
+// exercises an implement run in the main checkout and the shared state.json
+// slot rather than a lane of its own.
+const implementSharedSlotConfig = "implement:\n  worktrees: false\n"
 
 // writeInProgressState marshals a workflow.State to .spektacular/state.json so a
 // `new` command's resume prologue (resumeOrClear) sees an in-progress workflow.
@@ -95,7 +101,7 @@ func TestImplementNew_SucceedsWithExistingPlan(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	dataDir := filepath.Join(dir, ".spektacular")
-	writeSpecCommandConfig(t, dir, "")
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 	writeFixturePlan(t, dataDir, "fixture")
 
 	stdout, _ := setupImplementCmd(t)
@@ -129,6 +135,127 @@ func TestImplementNew_StrictModeRejectsStalePlan(t *testing.T) {
 	require.Contains(t, er.NextAction, "re-run the plan workflow")
 }
 
+// strictPlanConfig turns plan.strict_spec_changes on.
+const strictPlanConfig = "plan:\n  strict_spec_changes: true\n"
+
+// The two modification times the strict-mode amendment fixtures pin: the plan
+// was approved on the earlier one and the spec last written on the later, so
+// an mtime comparison alone would always call the plan stale.
+var (
+	strictPlanModTime = time.Date(2026, time.February, 2, 0, 0, 0, 0, time.UTC)
+	strictSpecModTime = time.Date(2026, time.February, 3, 0, 0, 0, 0, time.UTC)
+)
+
+// strictSpecFrontmatter is a stored, approved spec's frontmatter with no
+// design references, for the strict-mode amendment fixtures.
+const strictSpecFrontmatter = "---\ncreated_date: 2026-01-15\ndocument_status: final\n---\n\n"
+
+// strictAmendProject lays out a project in a t.TempDir() and chdirs into it,
+// with plan.strict_spec_changes on plus extraConfig, a stored final spec named
+// name holding specAmendBody, and a final plan for it. The plan's mtime is
+// pinned to strictPlanModTime and the spec's to strictSpecModTime, so the spec
+// is strictly newer than the plan. It returns the .spektacular directory and
+// the spec's path.
+func strictAmendProject(t *testing.T, name, extraConfig string) (dataDir, specPath string) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Chdir(dir)
+	dataDir = filepath.Join(dir, ".spektacular")
+	writeSpecCommandConfig(t, dir, strictPlanConfig+extraConfig)
+	specPath = writeSpecFixture(t, dir, name, strictSpecFrontmatter+specAmendBody)
+	planPath := writeFixturePlan(t, dataDir, name)
+	planBody := readBytes(t, planPath)
+	planFM := "---\ncreated_date: 2026-01-20\ndocument_status: final\nclosed_date: 2026-01-21\nspec: " + name + "\n---\n\n"
+	require.NoError(t, os.WriteFile(planPath, append([]byte(planFM), planBody...), 0o644))
+	require.NoError(t, os.Chtimes(planPath, strictPlanModTime, strictPlanModTime))
+	pinSpecNewer(t, specPath)
+	return dataDir, specPath
+}
+
+// pinSpecNewer sets the spec's mtime to strictSpecModTime, after the plan's,
+// so a staleness check that fell back to mtimes would fire.
+func pinSpecNewer(t *testing.T, specPath string) {
+	t.Helper()
+	require.NoError(t, os.Chtimes(specPath, strictSpecModTime, strictSpecModTime))
+}
+
+// amendSuccessMetricViaCLI records a Success Metrics amendment on name through
+// `spec amend`, staging the stored spec (frontmatter included) with the
+// metric changed, then pins the spec newer than its plan again.
+func amendSuccessMetricViaCLI(t *testing.T, name, specPath string) specAmendResult {
+	t.Helper()
+	stored := string(readBytes(t, specPath))
+	amended := strings.Replace(stored, "99% of charges succeed first time", "97% of charges succeed first time", 1)
+	require.NotEqual(t, stored, amended, "the fixture spec must carry the metric being amended")
+	got := amendSpecOK(t, "--data", specAmendData(name, "99% is unreachable with the current gateway", "implement run, task 1.1", ""), "--from", stageSpecAmend(t, amended))
+	require.Equal(t, []string{"Success Metrics"}, got.AmendedSections)
+	pinSpecNewer(t, specPath)
+	return got
+}
+
+// editSpecUnrecordedViaCLI changes the spec's preamble through
+// `spec file write`, a change no amendment records, then pins the spec newer
+// than its plan again.
+func editSpecUnrecordedViaCLI(t *testing.T, name, specPath string) {
+	t.Helper()
+	stored := string(readBytes(t, specPath))
+	edited := strings.Replace(stored, "Charge customers for their usage.", "Charge customers for their metered usage.", 1)
+	require.NotEqual(t, stored, edited, "the fixture spec must carry the preamble being edited")
+	resetRootCmd(t)
+	runOK(t, "spec", "file", "write", name, "--from", stageSpecAmend(t, edited))
+	pinSpecNewer(t, specPath)
+}
+
+// requirePlanStale runs args, requires the run to be refused, and asserts the
+// refusal is plan_stale.
+func requirePlanStale(t *testing.T, args ...string) {
+	t.Helper()
+	resetRootCmd(t)
+	stdout, stderr, code := runRootCmd(t, args...)
+	require.Equalf(t, 1, code, "%v must be refused: %s", args, stdout)
+	require.Empty(t, stderr)
+	var er output.ErrorResponse
+	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
+	require.Equal(t, "plan_stale", er.Code)
+}
+
+// Criterion: in strict mode, a spec newer than its final plan is refused until
+// the change is recorded with `spec amend`; once it is, an interactive
+// implement run starts and advances, although the spec is still newer than
+// the plan.
+func TestImplementNew_StrictModeAcceptsRecordedAmendment(t *testing.T) {
+	_, specPath := strictAmendProject(t, "fixture", implementSharedSlotConfig)
+
+	// The mtimes alone make the plan stale before anything is recorded.
+	requirePlanStale(t, "implement", "new", "--data", `{"name":"fixture"}`)
+
+	amendSuccessMetricViaCLI(t, "fixture", specPath)
+
+	resetRootCmd(t)
+	stdout := runOK(t, "implement", "new", "--data", `{"name":"fixture"}`)
+	var started map[string]any
+	require.NoError(t, json.Unmarshal([]byte(stdout), &started))
+	require.Equal(t, "read_plan", started["step"])
+	require.Equal(t, "fixture", started["plan_name"])
+
+	resetRootCmd(t)
+	stdout = runOK(t, "implement", "goto", "--data", `{"step":"analyze"}`)
+	var advanced map[string]any
+	require.NoError(t, json.Unmarshal([]byte(stdout), &advanced))
+	require.Equal(t, "analyze", advanced["step"])
+}
+
+// Criterion: in strict mode, a spec edit made with `spec file write` after a
+// recorded amendment is not covered by it, so implement is refused as stale.
+func TestImplementNew_StrictModeStillRejectsUnrecordedEdit(t *testing.T) {
+	dataDir, specPath := strictAmendProject(t, "fixture", implementSharedSlotConfig)
+	amendSuccessMetricViaCLI(t, "fixture", specPath)
+	editSpecUnrecordedViaCLI(t, "fixture", specPath)
+
+	requirePlanStale(t, "implement", "new", "--data", `{"name":"fixture"}`)
+	require.NoFileExists(t, stateFilePath(dataDir), "a refused start writes no workflow state")
+}
+
 func TestImplementGoto_RequiresActiveWorkflow(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -146,7 +273,7 @@ func TestImplementGoto_AdvancesThroughStep(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	dataDir := filepath.Join(dir, ".spektacular")
-	writeSpecCommandConfig(t, dir, "")
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 	writeFixturePlan(t, dataDir, "fixture")
 
 	// Start the workflow — state file is written with name=fixture.
@@ -168,7 +295,7 @@ func TestImplementGoto_UpdateFeatureChangelogInstructsChangelogWrite(t *testing.
 	dir := t.TempDir()
 	t.Chdir(dir)
 	dataDir := filepath.Join(dir, ".spektacular")
-	writeSpecCommandConfig(t, dir, "")
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 	writeFixturePlan(t, dataDir, "fixture")
 
 	setupImplementCmd(t)
@@ -268,6 +395,7 @@ func TestImplementNew_InProgressReturnsWorkflowInProgressError(t *testing.T) {
 }
 
 func TestImplementNew_SchemaOutput(t *testing.T) {
+	t.Chdir(t.TempDir())
 	stdout, _ := setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"implement", "new", "--schema"})
 	require.NoError(t, rootCmd.Execute())
@@ -276,6 +404,7 @@ func TestImplementNew_SchemaOutput(t *testing.T) {
 }
 
 func TestImplementGoto_SchemaOutput(t *testing.T) {
+	t.Chdir(t.TempDir())
 	stdout, _ := setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"implement", "goto", "--schema"})
 	require.NoError(t, rootCmd.Execute())
@@ -287,6 +416,7 @@ func TestImplementGoto_SchemaOutput(t *testing.T) {
 }
 
 func TestImplementSteps_SchemaOutput(t *testing.T) {
+	t.Chdir(t.TempDir())
 	stdout, _ := setupImplementCmd(t)
 	rootCmd.SetArgs([]string{"implement", "steps", "--schema"})
 	require.NoError(t, rootCmd.Execute())
@@ -302,12 +432,12 @@ func TestImplementNewAndGoto_PersistNoRosterAndRunNoGit(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	dataDir := filepath.Join(dir, ".spektacular")
-	writeSpecCommandConfig(t, dir,
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig+
 		"repos:\n"+
-			"  - name: core\n"+
-			"    location: .\n"+
-			"  - name: api\n"+
-			"    location: ../repos/api/.spektacular\n")
+		"  - name: core\n"+
+		"    location: .\n"+
+		"  - name: api\n"+
+		"    location: ../repos/api/.spektacular\n")
 	writeFixturePlan(t, dataDir, "fixture")
 
 	// The colocated repo's footprint sits in .spektacular, so its code is
@@ -353,4 +483,85 @@ func TestImplementNewAndGoto_PersistNoRosterAndRunNoGit(t *testing.T) {
 	rootCmd.SetArgs([]string{"implement", "goto", "--data", `{"step":"read_plan"}`})
 	require.NoError(t, rootCmd.Execute())
 	assertNoRoster("implement goto")
+}
+
+// A spec built in its own worktrees has a worktree record in the project.
+// implement new and implement goto read it as a plain file: they still run no
+// git and persist no repo roster, while the rendered instructions name each
+// recorded repo's worktree code root as where its code lives.
+func TestImplementNewAndGoto_WorktreeRecordNamesCodeRootsWithoutGit(t *testing.T) {
+	resetRootCmd(t)
+	dir := t.TempDir()
+	t.Chdir(dir)
+	dataDir := filepath.Join(dir, ".spektacular")
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig+
+		"repos:\n"+
+		"  - name: core\n"+
+		"    location: .\n"+
+		"  - name: api\n"+
+		"    location: ../repos/api/.spektacular\n")
+	writeFixturePlan(t, dataDir, "fixture")
+
+	coreCfg := config.NewDefaultRepoConfig()
+	coreCfg.Source = config.DefaultRepoSource
+	require.NoError(t, coreCfg.ToYAMLFile(
+		filepath.Join(dataDir, config.RepoConfigFileName)))
+
+	apiLocation := filepath.Join(dir, "repos", "api")
+	require.NoError(t, os.MkdirAll(filepath.Join(apiLocation, ".spektacular"), 0o755))
+	apiCfg := config.NewDefaultRepoConfig()
+	apiCfg.Source = config.GitSource("https://example.com/api.git")
+	require.NoError(t, apiCfg.ToYAMLFile(
+		filepath.Join(apiLocation, ".spektacular", config.RepoConfigFileName)))
+
+	// The spec's worktree record, written by hand as the worktree manager
+	// would leave it: each registered repo mapped to an absolute code root.
+	wtBase := t.TempDir()
+	coreRoot := filepath.Join(wtBase, "core-fixture")
+	apiRoot := filepath.Join(wtBase, "api-fixture")
+	recordDir := filepath.Join(dataDir, "worktrees", "fixture")
+	require.NoError(t, os.MkdirAll(recordDir, 0o755))
+	record := `{"spec":"fixture","repos":{"core":"` + coreRoot + `","api":"` + apiRoot + `"}}`
+	require.NoError(t, os.WriteFile(filepath.Join(recordDir, "record.json"), []byte(record), 0o644))
+
+	git := &stubGit{}
+	swapRepoGit(t, git)
+
+	assertNoGitNoRoster := func(after string) {
+		t.Helper()
+		raw, err := os.ReadFile(filepath.Join(dataDir, "state.json"))
+		require.NoError(t, err, "state.json must exist after %s", after)
+		var st workflow.State
+		require.NoError(t, json.Unmarshal(raw, &st))
+		_, ok := st.Data["repos"]
+		require.False(t, ok, "state.json must carry no repo roster after %s", after)
+		_, ok = st.Data["worktree_roots"]
+		require.False(t, ok, "state.json must not persist the worktree code roots after %s", after)
+		require.Empty(t, git.clones, "%s must not clone", after)
+		require.Zero(t, git.calls, "%s must not run git at all", after)
+	}
+
+	assertNamesRoots := func(out, after string) {
+		t.Helper()
+		require.Contains(t, out, "built in its own worktrees",
+			"%s must say the spec is built in its own worktrees", after)
+		require.Contains(t, out, "- `core`: `"+coreRoot+"`",
+			"%s must name core's worktree code root", after)
+		require.Contains(t, out, "- `api`: `"+apiRoot+"`",
+			"%s must name api's worktree code root", after)
+	}
+
+	stdout, _ := setupImplementCmd(t)
+	rootCmd.SetArgs([]string{"implement", "new", "--data", `{"name":"fixture"}`})
+	require.NoError(t, rootCmd.Execute())
+	assertNoGitNoRoster("implement new")
+	assertNamesRoots(stdout.String(), "implement new")
+	require.NotContains(t, stdout.String(), "Run `spektacular repo list` now if you have not already",
+		"implement new must not send a worktree spec to repo list for its code roots")
+
+	stdout, _ = setupImplementCmd(t)
+	rootCmd.SetArgs([]string{"implement", "goto", "--data", `{"step":"read_plan"}`})
+	require.NoError(t, rootCmd.Execute())
+	assertNoGitNoRoster("implement goto read_plan")
+	assertNamesRoots(stdout.String(), "implement goto read_plan")
 }

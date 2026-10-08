@@ -161,6 +161,61 @@ func TestRegister_PartialFootprintReportsRepaired(t *testing.T) {
 	}
 }
 
+// Registering a repo with a worktree setup command records it in the repo's
+// own repo.yaml, and re-registering without one leaves it in place.
+func TestRegister_WorktreeSetupWrittenAndKeptOnReRegister(t *testing.T) {
+	projectRoot, cfg := newRegisterProject(t)
+	code := t.TempDir()
+	git := newFakeGit(t)
+	repoYAML := filepath.Join(code, ".spektacular", config.RepoConfigFileName)
+
+	_, err := Register(cfg, projectRoot, git, Registration{
+		Name:          "lib",
+		Location:      code,
+		Description:   "the library repo",
+		WorktreeSetup: "npm ci",
+	})
+	require.NoError(t, err)
+
+	repoCfg, err := config.RepoConfigFromYAMLFile(repoYAML)
+	require.NoError(t, err)
+	require.Equal(t, "npm ci", repoCfg.WorktreeSetup)
+
+	_, err = Register(cfg, projectRoot, git, Registration{
+		Name:        "lib",
+		Location:    code,
+		Description: "the library repo",
+	})
+	require.NoError(t, err)
+
+	repoCfg, err = config.RepoConfigFromYAMLFile(repoYAML)
+	require.NoError(t, err)
+	require.Equal(t, "npm ci", repoCfg.WorktreeSetup, "re-registering without a setup command must keep the existing one")
+	require.Equal(t, "the library repo", repoCfg.Description)
+}
+
+// Changing only the setup command on re-registration rewrites repo.yaml with
+// the new command.
+func TestRegister_ChangingOnlyWorktreeSetupRewritesRepoConfig(t *testing.T) {
+	projectRoot, cfg := newRegisterProject(t)
+	code := t.TempDir()
+	git := newFakeGit(t)
+	repoYAML := filepath.Join(code, ".spektacular", config.RepoConfigFileName)
+
+	in := Registration{Name: "lib", Location: code, Role: "library", WorktreeSetup: "npm ci"}
+	_, err := Register(cfg, projectRoot, git, in)
+	require.NoError(t, err)
+
+	in.WorktreeSetup = "pnpm install --frozen-lockfile"
+	_, err = Register(cfg, projectRoot, git, in)
+	require.NoError(t, err)
+
+	repoCfg, err := config.RepoConfigFromYAMLFile(repoYAML)
+	require.NoError(t, err)
+	require.Equal(t, "pnpm install --frozen-lockfile", repoCfg.WorktreeSetup)
+	require.Equal(t, "library", repoCfg.Role)
+}
+
 // The metadata notice fires only when description, role and tags are all
 // empty; supplying any one of the three silences it.
 func TestRegister_MetadataNoteOnlyWhenAllDescriptiveFieldsEmpty(t *testing.T) {

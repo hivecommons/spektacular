@@ -28,7 +28,7 @@ func taskRunProject(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "")
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 	stdout, code := writePlanDoc(t, taskPlanName, "plan", body)
 	require.Equal(t, 0, code, stdout)
 	return filepath.Join(dir, ".spektacular", "state.json")

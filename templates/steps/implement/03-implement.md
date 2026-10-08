@@ -13,6 +13,8 @@ Do not rely on an earlier step's output still being in your context. Read the ta
 
 If the section is missing, unreadable, or empty, STOP and ask the user whether to fix the plan's `context.md` before proceeding. This is a plan/reality mismatch — do not guess.
 
+{{> partials/implement-code-locations}}
+
 ### Step 2: Write the code
 
 Use the task's section and the codebase research from `analyze` as your map, not as a narrative to follow verbatim.
@@ -33,6 +35,8 @@ If the code you need to modify has drifted materially from what the plan describ
 3. **Skip this task.** {{#task}}End this run without implementing it.{{/task}}{{^task}}Return to the task-selection step and pick the next unchecked task.{{/task}}
 
 Do not silently adapt — visible drift must be acknowledged.
+
+{{> partials/implement-spec-conflict}}
 
 ### Advance
 

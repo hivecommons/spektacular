@@ -229,6 +229,40 @@ func TestRenderedWorkflowSkillsCarryCrossRepoNotes(t *testing.T) {
 			"derived entries must be written via `changelog file write ... --repo <name>`")
 		require.NotContains(t, body, "{{command}}",
 			"the rendered skill must not leak the {{command}} placeholder")
+
+		// Plan 000065: with worktrees on, each spec's run keeps a lane of its
+		// own, addressed by the spec's name on new and every goto.
+		require.Contains(t, body, "**Each spec keeps its own run when worktrees are on.**",
+			"spek-implement must say each spec keeps its own run when worktrees are on")
+		require.Contains(t, body, "in a lane of its own under `.spektacular/workflows/`",
+			"spek-implement must say where a lane run keeps its progress and notes")
+		require.Contains(t, body, "every `goto` carries the same `name`",
+			"spek-implement must tell the agent every goto carries the spec's name")
+		require.Contains(t, body, "A run with no name given only finds a run in the shared slot",
+			"spek-implement must say a nameless start only finds the shared slot")
+
+		// Plan 000065: a spec built in worktrees is merged back with
+		// implement merge, and the agent never resolves a conflict or moves
+		// branches itself.
+		require.Contains(t, body, "# Worktrees",
+			"spek-implement must carry a Worktrees section")
+		require.Contains(t, body, `implement merge --data '{"name":"<spec_name>"}'`,
+			"spek-implement must name the implement merge command")
+		require.Contains(t, body, "If the merge is refused, report the repos and conflicting paths to the user and stop.",
+			"spek-implement must say to report and stop on a refused merge")
+		require.Contains(t, body, "Never resolve a conflict yourself",
+			"spek-implement must forbid resolving a conflict")
+		require.Contains(t, body, "never merge, rebase or switch branches on your own initiative",
+			"spek-implement must forbid merging, rebasing or switching branches unprompted")
+		require.Contains(t, body, "`worktree_setup_failed`",
+			"spek-implement must name the worktree_setup_failed refusal")
+		require.Contains(t, body, "`worktree_unavailable`",
+			"spek-implement must name the worktree_unavailable refusal")
+
+		// Plan 000066: an approved amendment to the spec or a design is
+		// recorded with spec amend, rendered with the configured command.
+		require.Contains(t, body, "spektacular spec amend",
+			"spek-implement must name the spec amend command")
 	})
 }
 

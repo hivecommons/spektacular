@@ -392,3 +392,134 @@ func TestMerge_DocumentStatusTransitionCarriesEpicAndSources(t *testing.T) {
 		"closed_date must still be stamped on the transition, got %s", meta.ClosedDate)
 	require.True(t, meta.CreatedDate.Equal(time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)))
 }
+
+// draftWithAmendments is an existing spec that already carries testEpic and
+// the twoAmendments list, for the Merge cases that must preserve, replace or
+// clear them.
+const draftWithAmendments = "---\n" +
+	"created_date: 2026-07-01\n" +
+	"document_status: draft\n" +
+	"epic: " + testEpic + "\n" +
+	twoAmendmentsYAML +
+	"---\n\n" +
+	"- [ ] first task\n"
+
+// amendmentsPtr returns a pointer to list, since UpdateOptions.Amendments is
+// *[]Amendment: nil means "no change", and only a non-nil pointer replaces
+// the stored list.
+func amendmentsPtr(list []Amendment) *[]Amendment { return &list }
+
+// TestMerge_BodyOnlyRewritePreservesAmendments is the durability case the
+// pointer semantics exist for: an ordinary spec write — here the implement
+// workflow ticking a checkbox — passes no Amendments update, and the recorded
+// amendments must survive the body being replaced wholesale.
+func TestMerge_BodyOnlyRewritePreservesAmendments(t *testing.T) {
+	got, err := Merge([]byte(draftWithAmendments), []byte("- [x] first task\n"), UpdateOptions{Today: fixedToday()})
+	require.NoError(t, err)
+
+	meta, body, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Equal(t, twoAmendments(), meta.Amendments, "a nil opts.Amendments must preserve the stored amendments")
+	require.Equal(t, testEpic, meta.Epic)
+	require.Equal(t, "- [x] first task\n", string(body))
+}
+
+// TestMerge_NonNilAmendmentsReplacesList asserts a non-nil opts.Amendments
+// replaces the stored list wholesale rather than merging into it, and leaves
+// the epic untouched.
+func TestMerge_NonNilAmendmentsReplacesList(t *testing.T) {
+	replacement := append(twoAmendments(), Amendment{
+		At:       "2026-10-10T09:00:00Z",
+		Sections: []string{"Requirements"},
+		Hash:     "sha256:ef",
+	})
+
+	got, err := Merge([]byte(draftWithAmendments), []byte("- [ ] first task\n"), UpdateOptions{
+		Today:      fixedToday(),
+		Amendments: amendmentsPtr(replacement),
+	})
+	require.NoError(t, err)
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Equal(t, replacement, meta.Amendments)
+	require.Equal(t, testEpic, meta.Epic)
+}
+
+// TestMerge_EmptyAmendmentsClearsList asserts a non-nil but empty
+// opts.Amendments is the explicit "clear" signal, and that a cleared list
+// leaves no amendments key behind in the rendered block.
+func TestMerge_EmptyAmendmentsClearsList(t *testing.T) {
+	got, err := Merge([]byte(draftWithAmendments), []byte("- [ ] first task\n"), UpdateOptions{
+		Today:      fixedToday(),
+		Amendments: amendmentsPtr([]Amendment{}),
+	})
+	require.NoError(t, err)
+
+	require.NotContains(t, string(got), "amendments",
+		"a cleared list must be physically absent from the block, not an empty key")
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Empty(t, meta.Amendments)
+	require.Equal(t, testEpic, meta.Epic)
+}
+
+// TestMerge_FreshWriteRecordsAmendments asserts the first-write branch
+// records the amendments and still applies the usual first-write stamp.
+func TestMerge_FreshWriteRecordsAmendments(t *testing.T) {
+	got, err := Merge(nil, []byte("# New body\n"), UpdateOptions{
+		Today:      fixedToday(),
+		Amendments: amendmentsPtr(twoAmendments()),
+	})
+	require.NoError(t, err)
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Equal(t, twoAmendments(), meta.Amendments)
+	require.True(t, meta.CreatedDate.Equal(fixedToday()),
+		"created_date must be stamped on a fresh write, got %s", meta.CreatedDate)
+	require.Equal(t, StatusDraft, meta.DocumentStatus)
+}
+
+// TestMerge_FreshWriteWithClearingAmendmentsOmitsKey asserts the clear signal
+// is harmless on a first write: a pointer to an empty list records nothing
+// and no amendments key appears in the block.
+func TestMerge_FreshWriteWithClearingAmendmentsOmitsKey(t *testing.T) {
+	got, err := Merge(nil, []byte("# New body\n"), UpdateOptions{
+		Today:      fixedToday(),
+		Amendments: amendmentsPtr([]Amendment{}),
+	})
+	require.NoError(t, err)
+
+	require.NotContains(t, string(got), "amendments")
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Empty(t, meta.Amendments)
+}
+
+// TestMerge_DocumentStatusTransitionCarriesAmendments asserts a transition to
+// a closed status stamps closed_date as it always did and carries the
+// amendments through unchanged on the same write.
+func TestMerge_DocumentStatusTransitionCarriesAmendments(t *testing.T) {
+	got, err := Merge([]byte(draftWithAmendments), []byte("- [x] first task\n"), UpdateOptions{
+		Today:          fixedToday(),
+		DocumentStatus: documentStatusPtr(StatusFinal),
+	})
+	require.NoError(t, err)
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.Equal(t, twoAmendments(), meta.Amendments)
+	require.Equal(t, StatusFinal, meta.DocumentStatus)
+	require.True(t, meta.ClosedDate.Equal(fixedToday()),
+		"closed_date must still be stamped on the transition, got %s", meta.ClosedDate)
+	require.True(t, meta.CreatedDate.Equal(time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)))
+}

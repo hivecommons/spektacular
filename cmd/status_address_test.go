@@ -17,7 +17,7 @@ const addressPlanBody = "# Plan\n\n## Milestones & Phases\n\n#### - [ ] Phase 1.
 func TestWorkflowStateName_AddressesEveryArtifact(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "")
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 
 	src := func(body string) string {
 		p := filepath.Join(t.TempDir(), "source.md")
@@ -100,7 +100,7 @@ func TestWorkflowResults_ReportConfigRelativeLocation(t *testing.T) {
 		t.Run(tc.kind, func(t *testing.T) {
 			dir := t.TempDir()
 			t.Chdir(dir)
-			writeSpecCommandConfig(t, dir, "")
+			writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 			if tc.kind == "implement" {
 				_, code := writePlanDoc(t, taskPlanName, "plan", addressPlanBody)
 				require.Equal(t, 0, code)
@@ -123,6 +123,7 @@ func TestWorkflowResults_ReportConfigRelativeLocation(t *testing.T) {
 // The new-result schemas describe the reported location as relative, and
 // plan and implement document the plan_document address field.
 func TestWorkflowNew_SchemaDescribesRelativeLocation(t *testing.T) {
+	t.Chdir(t.TempDir())
 	for _, tc := range []struct {
 		kind, pathField string
 		hasDocument     bool

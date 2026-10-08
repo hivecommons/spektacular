@@ -19,6 +19,10 @@ import (
 // tests can swap in a fake, mirroring repoGit.
 var worktreeGit worktree.Runner = worktree.NewRunner()
 
+// worktreeSetup runs repos' worktree setup commands; a variable so tests can
+// swap in a fake, like worktreeGit.
+var worktreeSetup worktree.SetupRunner = worktree.NewSetupRunner()
+
 var epicWorktreeInputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
@@ -32,8 +36,9 @@ var epicWorktreeCmd = &cobra.Command{
 	Short: "Give a spec its own git worktree in every repo its plan touches",
 	Long: `Creates a worktree on branch spek/<spec> under .spektacular/worktrees/<spec>/
 in the project's repo and in every registered repo the spec's plan names, from
-each repo's current HEAD. Inside the project worktree, every touched repo then
-resolves to the spec's worktrees. Existing worktrees are returned as they are.`,
+each repo's current HEAD. The worktrees hold only code: Spektacular itself always
+runs from the project, and the implement workflow names each repo's worktree
+root. Existing worktrees are returned as they are.`,
 	RunE: runEpicWorktree,
 }
 
@@ -42,7 +47,8 @@ var epicMergeCmd = &cobra.Command{
 	Short: "Merge a finished spec's worktrees back into every repo's main line",
 	Long: `Merges branch spek/<spec> into the current branch of every repo the spec
 touched, as one unit: a dry run in every repo first, and nothing merged anywhere
-if any repo would conflict. On success the spec's worktrees and branches are
+if any repo would conflict, or if the branch changes anything under a
+.spektacular directory. On success the spec's worktrees and branches are
 removed.`,
 	RunE: runEpicMerge,
 }
@@ -79,7 +85,7 @@ func worktreeManager() (worktree.Manager, config.Config, store.Store, error) {
 	if err != nil {
 		return worktree.Manager{}, config.Config{}, nil, err
 	}
-	m := worktree.Manager{ProjectRoot: root, Config: cfg, Repos: set, Git: worktreeGit}
+	m := worktree.Manager{ProjectRoot: root, Config: cfg, Repos: set, Git: worktreeGit, Setup: worktreeSetup}
 	return m, cfg, store.NewSourceStore(root, "project"), nil
 }
 
@@ -89,7 +95,7 @@ func runEpicWorktree(cmd *cobra.Command, _ []string) error {
 			Type: "object",
 			Properties: map[string]*schemaProp{
 				"spec":    {Type: "string"},
-				"project": {Type: "string", Description: "the project root inside the spec's project worktree: where its implement run goes"},
+				"project": {Type: "string", Description: "the project root inside the spec's project worktree: where the project's own code for the spec is changed"},
 				"branch":  {Type: "string"},
 				"repos":   {Type: "array", Description: "every touched repo's worktree, the project repo first: {repo, path}"},
 				"created": {Type: "boolean", Description: "false when every worktree already existed"},
@@ -135,14 +141,7 @@ func runEpicWorktree(cmd *cobra.Command, _ []string) error {
 
 func runEpicMerge(cmd *cobra.Command, _ []string) error {
 	if schema, _ := cmd.Flags().GetBool("schema"); schema {
-		return output.Write(cmd.OutOrStdout(), commandSchema{Input: epicWorktreeInputSchema, Output: &schemaObj{
-			Type: "object",
-			Properties: map[string]*schemaProp{
-				"spec":    {Type: "string"},
-				"merged":  {Type: "boolean"},
-				"removed": {Type: "boolean", Description: "every worktree and branch of the spec was removed"},
-			},
-		}}, "")
+		return output.Write(cmd.OutOrStdout(), commandSchema{Input: epicWorktreeInputSchema, Output: worktreeMergeOutputSchema}, "")
 	}
 	m, cfg, _, err := worktreeManager()
 	if err != nil {
@@ -152,6 +151,24 @@ func runEpicMerge(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	return writeMergeResult(cmd, m, spec)
+}
+
+// worktreeMergeOutputSchema is what both merge commands, epic merge and
+// implement merge, return.
+var worktreeMergeOutputSchema = &schemaObj{
+	Type: "object",
+	Properties: map[string]*schemaProp{
+		"spec":    {Type: "string"},
+		"merged":  {Type: "boolean"},
+		"removed": {Type: "boolean", Description: "every worktree and branch of the spec was removed"},
+	},
+}
+
+// writeMergeResult merges spec back through the worktree manager and writes
+// the result, or refuses with the conflicts; shared by epic merge and
+// implement merge so the two can never report a merge differently.
+func writeMergeResult(cmd *cobra.Command, m worktree.Manager, spec string) error {
 	res, err := m.Merge(spec)
 	if err != nil {
 		return err

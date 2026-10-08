@@ -25,15 +25,18 @@ import (
 // the template via {{config.command}} to match the convention used by every
 // other runtime-rendered step template, and as {{command}} for shared partials.
 //
-// orchestrated marks a lane's report: its notes file is the lane's own, and
+// lane marks a lane's report: its notes file is the lane's own, and starting
+// it fresh names the spec so it stays in its lane. orchestrated marks a lane
+// an epic orchestrator started: it is resumed without asking the user, and
 // starting it fresh keeps it orchestrated.
-func resumeInstruction(command, kind, name, currentStep, task string, orchestrated bool) (string, error) {
+func resumeInstruction(command, kind, name, currentStep, task string, lane, orchestrated bool) (string, error) {
 	templatePath := "steps/resume.md"
 	if kind == "implement" {
 		templatePath = "steps/resume_implement.md"
 	}
+	lane = lane || orchestrated
 	notesPath := ".spektacular/working-context.md"
-	if orchestrated {
+	if lane {
 		notesPath = workflow.LaneNotesRel(kind, name)
 	}
 	return stepkit.RenderTemplate(templatePath, map[string]any{
@@ -49,6 +52,7 @@ func resumeInstruction(command, kind, name, currentStep, task string, orchestrat
 		// as step instructions do.
 		"working_context_path": notesPath,
 		"orchestrated":         orchestrated,
+		"lane":                 lane,
 	})
 }
 
@@ -105,7 +109,8 @@ func emitResumeReport(command, expectedKind string, state *workflow.State) error
 
 	task, _ := state.Data["task"].(string)
 	orchestrated, _ := state.Data["orchestrated"].(bool)
-	instruction, err := resumeInstruction(command, state.Kind, name, state.CurrentStep, task, orchestrated)
+	lane, _ := state.Data["lane"].(bool)
+	instruction, err := resumeInstruction(command, state.Kind, name, state.CurrentStep, task, lane, orchestrated)
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,1 @@
+None. Every design question was resolved during planning and recorded in the assumption log. That covers where the record lives, how roots reach the steps, how commits split, the guard's error code, and what status reports as root.

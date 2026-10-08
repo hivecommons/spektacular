@@ -39,6 +39,11 @@ type UpdateOptions struct {
 	// Sources replaces the spec's sources wholesale, with the same three
 	// states as Designs. Only spec new passes it.
 	Sources *[]SourceRef
+	// Amendments replaces the spec's recorded amendments wholesale, with the
+	// same three states as Designs: nil means "no change", which is what every
+	// ordinary spec write passes so the record survives a body rewrite. Only
+	// spec amend passes it.
+	Amendments *[]Amendment
 }
 
 // Merge computes the on-disk bytes for a write by combining an existing store
@@ -58,8 +63,9 @@ type UpdateOptions struct {
 //     only when opts.Designs is non-nil.
 //   - Back-links are preserved across a body-only rewrite, and replaced only
 //     when opts.Specs is non-nil.
-//   - A spec's epic and sources are preserved across a body-only rewrite, and
-//     replaced only when opts.Epic or opts.Sources is non-nil.
+//   - A spec's epic, sources and amendments are preserved across a body-only
+//     rewrite, and replaced only when opts.Epic, opts.Sources or
+//     opts.Amendments is non-nil.
 //   - Malformed existing frontmatter propagates as an error rather than being
 //     silently replaced.
 func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) {
@@ -99,6 +105,9 @@ func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) 
 		}
 		if opts.Sources != nil {
 			result.Sources = *opts.Sources
+		}
+		if opts.Amendments != nil {
+			result.Amendments = *opts.Amendments
 		}
 		result.CreatedDate = today
 		result.DocumentStatus = StatusDraft
@@ -141,6 +150,10 @@ func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) 
 		result.Sources = current.Sources
 		if opts.Sources != nil {
 			result.Sources = *opts.Sources
+		}
+		result.Amendments = current.Amendments
+		if opts.Amendments != nil {
+			result.Amendments = *opts.Amendments
 		}
 		if opts.Project != "" {
 			result.Project = opts.Project

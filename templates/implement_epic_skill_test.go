@@ -76,7 +76,14 @@ func TestImplementEpicSkillRendersLikeAnInstalledSkill(t *testing.T) {
 		"`spekx changelog file`",
 		"`spekx epic list`",
 		"`spekx epic write`",
-		"`spekx repo list`",
+		"the project root to run every `spekx` command from",
+		"it never runs `spekx` from inside a worktree",
+		"`spekx design`",
+		"`spekx spec amend`",
+		"`spekx spec file read <spec>`",
+		"`spekx spec amend --data '{\"name\":\"<spec>\",\"reason\":\"<why>\",\"run\":\"epic <epic> implement run, task <task>\"}' --from <staged file>`",
+		"`spekx design author`",
+		"`spekx design write`",
 	)
 }
 
@@ -106,6 +113,10 @@ func TestImplementEpicSkillRunsSpecsInWorktreesAndMergesBeforeDependents(t *test
 		"on branch `spek/<spec>`, under `.spektacular/worktrees/<spec>/`",
 		"specs that do not depend on each other are implemented side by side without touching each other's files",
 		"you merge it back into every repo's main line before anything that depends on it starts",
+		"The worktrees hold only code: every child runs `"+installedCommand+"` from the project root",
+		"the implement workflow itself tells it where each repo's code lives in its spec's worktrees",
+		"Specs, plans, changelogs and progress stay in the project",
+		"their progress can be followed in the project while they run",
 		"It never implements the epic itself",
 	)
 
@@ -116,7 +127,7 @@ func TestImplementEpicSkillRunsSpecsInWorktreesAndMergesBeforeDependents(t *test
 		"For each spec that is `awaiting_merge`, merge it now (Step 5).",
 		"For each spec that is `ready`, create its worktrees:",
 		installedCommand+" epic worktree --data '{\"spec\":\"<spec>\"}'",
-		"Then start a child to **start** it in the returned `project` path.",
+		"Then start a child to **start** it.",
 		"specs that are `blocked` wait for the specs in their `waiting_on`, which must be implemented **and merged** first.",
 		"independent specs are implemented in overlapping time",
 		"Start every ready spec; there is no limit on how many run at once.",
@@ -176,9 +187,12 @@ func TestImplementEpicSkillAsksNothingBetweenSpecs(t *testing.T) {
 	check := flat(section(t, skill, "# Step 2: Check up front"))
 	requirePhrases(t, "Check up front", check,
 		"If `epic.run.dirty` is true",
-		"Ask the user once whether to commit it first",
+		"`epic.run.dirty_repos` names each one",
+		"A dirty repo the epic does not build is never reported",
+		"Name the repos in `dirty_repos` to the user and ask once whether to commit that work first",
 		"Apart from settling which epic is meant, this is the only start-of-run question.",
-		"If they decline, go ahead, and say that the uncommitted work will not be in any spec's worktree",
+		"If they decline, go ahead, and say that uncommitted code will not be in any spec's worktree.",
+		"Specs, plans and progress are read from the project itself, so they need no commit to be seen.",
 	)
 
 	relay := flat(section(t, skill, "# Step 6: Handling a hand-back"))
@@ -197,7 +211,7 @@ func TestImplementEpicSkillAsksNothingBetweenSpecs(t *testing.T) {
 	allowed := []string{
 		"so a question the user already answered is not asked again",
 		"ask the user which epic they mean, but only when it is still ambiguous",
-		"Ask the user once whether to commit it first; the answer is theirs.",
+		"Name the repos in `dirty_repos` to the user and ask once whether to commit that work first; the answer is theirs.",
 		"tasks run one after another without asking between them",
 		"you never ask the user anything yourself",
 		"A child never asks whether to continue to its next task.",
@@ -231,13 +245,13 @@ func TestImplementEpicSkillResumesOnARepeatedRequest(t *testing.T) {
 	what := flat(section(t, skill, "# What this skill does"))
 	requirePhrases(t, "What this skill does", what,
 		"repeating the request after an interruption picks up exactly where the epic stands",
-		"implemented specs are skipped, an interrupted spec resumes in its worktree, and a finished one is merged",
+		"implemented specs are skipped, an interrupted spec resumes from its record in the project, with its code in the same worktrees, and a finished one is merged",
 		"When the request is repeated, read them back first",
 	)
 
 	loop := flat(section(t, skill, "# Step 3: The loop"))
 	requirePhrases(t, "The loop", loop,
-		"For each spec that is `in_progress` and has no child running, start a child to **resume** it in its `root`, the spec's project worktree.",
+		"For each spec that is `in_progress` and has no child running, start a child to **resume** it (its `root` is the spec's worktree, where its code lives).",
 		"Specs that are `done` are skipped",
 	)
 
@@ -265,10 +279,9 @@ func TestImplementEpicSkillDefinesHandBackAndStopping(t *testing.T) {
 
 	questions := flat(section(t, skill, "## What counts as a genuine open question"))
 	requirePhrases(t, "What counts as a genuine open question", questions,
-		"Only a stop the implement workflow itself defines earns a question",
-		"the plan no longer matching the code",
-		"a task outgrowing its scope",
-		"a verification failure the child cannot fix within the task",
+		"Only a stop the implement workflow itself defines earns a question: the plan no longer matching the code, "+
+			"the spec or a design it references being wrong, a task outgrowing its scope, "+
+			"or a verification failure the child cannot fix within the task.",
 		"Everything else the child decides itself and records in the plan's changelog.",
 		"A child never asks whether to continue to its next task.",
 	)
@@ -276,6 +289,9 @@ func TestImplementEpicSkillDefinesHandBackAndStopping(t *testing.T) {
 	child := flat(section(t, skill, "# Step 4: The child prompt"))
 	requirePhrases(t, "The child prompt", child,
 		"the hand-back contract and the definition of a genuine open question, below.",
+		"You never write the spec's text or a design document.",
+		"If the spec or a design it references is wrong, propose the amendment in a `QUESTION:` hand-back, "+
+			"naming the document, the section, the conflict and the change you propose.",
 	)
 
 	handling := flat(section(t, skill, "# Step 6: Handling a hand-back"))
@@ -305,12 +321,16 @@ func TestImplementEpicSkillCarriesNotesStoreAccessProgressAndReport(t *testing.T
 		"`"+installedCommand+" spec file`",
 		"`"+installedCommand+" changelog file`",
 		"`"+installedCommand+" epic`",
+		"and designs with `"+installedCommand+" design`.",
+		"A spec is amended during a run only with `"+installedCommand+" spec amend`.",
 		"Every child prompt must restate this rule",
 	)
 
 	child := flat(section(t, skill, "# Step 4: The child prompt"))
 	requirePhrases(t, "The child prompt", child,
-		"the spec name, and the root to work in: the spec's project worktree.",
+		"the spec name, and the project root to run every `"+installedCommand+"` command from.",
+		"The implement workflow's own instructions name where each repo's code lives in the spec's worktrees;",
+		"it never runs `"+installedCommand+"` from inside a worktree and never touches a worktree's `.spektacular` directory;",
 		"the store-access rule above, word for word;",
 	)
 
@@ -325,4 +345,61 @@ func TestImplementEpicSkillCarriesNotesStoreAccessProgressAndReport(t *testing.T
 		"End every run, finished or stopped",
 		"**Completed in this run:**", "**Skipped:**", "**Still outstanding:**", "**Worktrees left behind:**",
 	)
+}
+
+// Each child runs Spektacular from the project root; the worktrees hold only
+// code. The old model, where a child worked from its spec's project worktree
+// and resolved every repo inside it, must not come back.
+func TestImplementEpicSkillRunsSpektacularFromTheProjectRoot(t *testing.T) {
+	skill := flat(installedImplementEpicSkill(t))
+
+	child := flat(section(t, installedImplementEpicSkill(t), "# Step 4: The child prompt"))
+	requirePhrases(t, "The child prompt", child,
+		"the project root to run every `"+installedCommand+"` command from",
+	)
+
+	handling := flat(section(t, installedImplementEpicSkill(t), "# Step 6: Handling a hand-back"))
+	requirePhrases(t, "Handling a hand-back", handling,
+		"start a fresh child on the same spec with the answer included in its prompt; it resumes from its lane.",
+	)
+
+	for _, old := range []string{
+		"repo list`, run from there",
+		"the root to work in: the spec's project worktree",
+		"resolves to that spec's worktrees",
+		"in the returned `project` path",
+		"repo list",
+		"resumes in its worktree",
+		"in the same worktree.",
+	} {
+		require.NotContainsf(t, skill, old,
+			"the skill must not tell a child to work from, or resolve repos inside, a worktree (found %q)", old)
+	}
+}
+
+// A child that finds the spec or a referenced design wrong proposes the
+// amendment; the orchestrator applies it from the project root, only once the
+// user explicitly approves, and answers the child with what changed so it
+// re-reads and re-verifies. A rejection is answered too.
+func TestImplementEpicSkillAppliesApprovedAmendmentsFromTheProjectRoot(t *testing.T) {
+	handling := flat(section(t, installedImplementEpicSkill(t), "# Step 6: Handling a hand-back"))
+	requirePhrases(t, "Handling a hand-back", handling,
+		"**An amendment the user approves** — when a `QUESTION:` proposes amending the spec or a design",
+		"apply it yourself only after the user's explicit approval",
+		"from the project root and never in a worktree",
+		"read it with `"+installedCommand+" spec file read <spec>`",
+		"change only the sections the user approved",
+		"stage the full result under `.spektacular/tmp/<spec>/`",
+		"`"+installedCommand+` spec amend --data '{"name":"<spec>","reason":"<why>","run":"epic <epic> implement run, task <task>"}' --from <staged file>`+"`",
+		"revise it with `"+installedCommand+" design author`",
+		"`"+installedCommand+" design write` for a design they wrote",
+		"then record it with `"+installedCommand+" spec amend` and a `\"design\":{\"source\":\"<name>\",\"path\":\"<path>\"}` field",
+		"Note the amendment in `.spektacular/working-context.md`",
+		"then answer the child naming what changed, so it re-reads the amended text and re-verifies its task.",
+		"If the user rejects the amendment, answer the child with their decision.",
+	)
+
+	// The amendment is applied by the orchestrator, never by the child.
+	child := flat(section(t, installedImplementEpicSkill(t), "# Step 4: The child prompt"))
+	require.NotContains(t, child, "spec amend", "a child never runs spec amend itself")
 }

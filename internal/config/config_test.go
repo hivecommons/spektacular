@@ -36,6 +36,7 @@ func TestNewDefault_HasExpectedDefaults(t *testing.T) {
 	require.Equal(t, "file", cfg.Epic.Provider)
 	require.False(t, cfg.Epic.StrictDependencies)
 	require.Equal(t, ".spektacular/epics", cfg.Epic.Config.Directory)
+	require.True(t, cfg.Implement.Worktrees)
 }
 
 func TestFromYAMLFile_LoadsAndExpandsEnvVars(t *testing.T) {
@@ -205,6 +206,52 @@ func TestAutoCommitMode_ResolvesAbsentKeyToOff(t *testing.T) {
 	for _, tc := range cases {
 		require.Equal(t, tc.want, Config{AutoCommit: tc.in}.AutoCommitMode(), "AutoCommitMode() for %q", tc.in)
 	}
+}
+
+// Implement-in-worktrees criterion 1: a current-schema project that never
+// mentions implement.worktrees loads with worktrees on, so an existing
+// project gets worktree runs without editing its settings.
+func TestFromYAMLFile_AbsentImplementWorktreesLoadsAsOn(t *testing.T) {
+	yaml := `name: testproj
+repos:
+  - name: testproj
+    location: ..`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.True(t, cfg.Implement.Worktrees)
+}
+
+// Implement-in-worktrees criteria 2 and 3: turning worktrees off is written
+// to the settings file as the literal `worktrees: false` under `implement:`
+// and read back as false, and doing so leaves the settings format version
+// where it was.
+func TestToYAMLFile_ImplementWorktreesFalseRoundTrips(t *testing.T) {
+	cfg := NewDefault()
+	cfg.Name = "testproj"
+	cfg.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	cfg.Implement.Worktrees = false
+	_, path := projectConfigPath(t)
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "implement:\n    worktrees: false\n")
+	require.Contains(t, string(raw), "schema: 4\n")
+
+	loaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.False(t, loaded.Implement.Worktrees)
+	require.Equal(t, 4, loaded.Schema)
+}
+
+// Implement-in-worktrees criterion 3: adding the implement section did not
+// bump the project settings format version.
+func TestCurrentProjectSchema_UnchangedByImplementSection(t *testing.T) {
+	require.Equal(t, 4, CurrentProjectSchema)
 }
 
 func TestFromYAMLFile_MissingFile_ReturnsError(t *testing.T) {

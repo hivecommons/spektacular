@@ -107,8 +107,12 @@ func WriteStepResult(
 	// its stops go back to the orchestrator that started it.
 	orchestrated, _ := data.Get("orchestrated")
 	isOrchestrated, _ := orchestrated.(bool)
+	// A run the user started with worktrees on is a lane too, with notes of
+	// its own, but it is not orchestrated: it never hands back.
+	lane, _ := data.Get("lane")
+	isLane, _ := lane.(bool)
 	workingContextPath := workingcontext.RelPath
-	if isOrchestrated {
+	if isOrchestrated || isLane {
 		workingContextPath = workflow.LaneNotesRel(cfg.Kind, instanceName)
 	}
 
@@ -139,7 +143,8 @@ func WriteStepResult(
 	}
 	// The git-commit instruction goes before the working-context footer, so
 	// the footer stays last on every continuing step exactly as before.
-	if point := autocommit.LeadsToCommit(cfg.AutoCommit, cfg.Kind, req.StepName, req.NextStep); point != autocommit.PointNone {
+	worktrees := len(cfg.CodeRoots) > 0
+	if point := autocommit.LeadsToCommitForRun(cfg.AutoCommit, cfg.Kind, req.StepName, req.NextStep, worktrees); point != autocommit.PointNone {
 		commitVars := maps.Clone(vars)
 		commitVars["commit"] = map[string]any{
 			"point":     string(point),
@@ -147,9 +152,12 @@ func WriteStepResult(
 			// A completion commit that ends a single-task run early can also
 			// close a milestone in full mode, and must then name it.
 			"may_close_milestone": point == autocommit.PointCompletion && cfg.AutoCommit == config.AutoCommitFull && req.StepName == "update_changelog",
-			"kind":                cfg.Kind,
-			"spec_name":           instanceName,
-			"tmp_path":            autocommit.MessageTmpPath(instanceName),
+			// An implement run in its own worktrees commits its code on the
+			// spec's branch even with automatic commits off, and nothing else.
+			"code_only": autocommit.CodeOnly(cfg.AutoCommit, cfg.Kind, worktrees),
+			"kind":      cfg.Kind,
+			"spec_name": instanceName,
+			"tmp_path":  autocommit.MessageTmpPath(instanceName),
 			// Plan and implement gotos carry the spec name, which routes them
 			// to the right workflow; a spec goto takes none.
 			"goto_name": gotoName(cfg.Kind, instanceName),

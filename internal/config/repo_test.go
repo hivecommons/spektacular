@@ -148,6 +148,51 @@ func TestRepoConfig_ToYAMLFileRoundTripWithDescriptiveFields(t *testing.T) {
 	require.Equal(t, want, loaded)
 }
 
+// A repo.yaml can hold a worktree setup command: it is written to the raw file
+// under the `worktree_setup` key and reads back unchanged.
+func TestRepoConfig_ToYAMLFileRoundTripWithWorktreeSetup(t *testing.T) {
+	pinWriterVersion(t, "test-x")
+	cfg := NewDefaultRepoConfig()
+	cfg.WorktreeSetup = "npm ci && make generate"
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, RepoConfigFileName)
+	require.NoError(t, cfg.ToYAMLFile(path))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "worktree_setup: npm ci && make generate\n")
+
+	loaded, err := RepoConfigFromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "npm ci && make generate", loaded.WorktreeSetup)
+}
+
+// A repo.yaml without a setup command loads exactly as before: the command is
+// empty, the other sections are untouched, and writing it back adds no
+// `worktree_setup` key.
+func TestRepoConfigFromYAMLFile_NoWorktreeSetupLoadsAsBefore(t *testing.T) {
+	pinWriterVersion(t, "test-x")
+	body := "description: the library repo\n" +
+		"changelog:\n  provider: file\n  config:\n    directory: docs/changelog\n"
+	dir := t.TempDir()
+	path := filepath.Join(dir, RepoConfigFileName)
+	require.NoError(t, os.WriteFile(path, []byte(withSchema(body)), 0644))
+
+	cfg, err := RepoConfigFromYAMLFile(path)
+	require.NoError(t, err)
+	require.Empty(t, cfg.WorktreeSetup)
+	require.Equal(t, "the library repo", cfg.Description)
+	require.Equal(t, "docs/changelog", cfg.Changelog.Config.Directory)
+	require.Equal(t, "knowledge", cfg.Knowledge.Config.Location)
+
+	out := filepath.Join(dir, "rewritten.yaml")
+	require.NoError(t, cfg.ToYAMLFile(out))
+	raw, err := os.ReadFile(out)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "worktree_setup")
+}
+
 // Criterion 3: a repo knowledge store missing its required location fails
 // RepoConfig validation with an error naming the config key.
 func TestRepoConfigFromYAMLFile_MissingKnowledgeLocationReturnsError(t *testing.T) {

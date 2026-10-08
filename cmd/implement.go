@@ -14,6 +14,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/steps/implement"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
+	"github.com/hivecommons/spektacular/internal/worktree"
 	"github.com/spf13/cobra"
 )
 
@@ -91,18 +92,41 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	// spec new so the driving agent can offer resume without first
 	// prompting the user for a plan name.
 	statePath := stateFilePath(dataDir)
-	laneName, orchestrated, err := orchestratedStart(dataStr)
+	laneName, lane, orchestrated, err := implementLaneStart(cfg, dataStr, dryRun)
 	if err != nil {
 		return err
 	}
-	if orchestrated {
-		// An orchestrated run keeps its own lane, so it probes only that lane
-		// for a resume: a standalone workflow never blocks it.
+	if lane {
+		// A lane run keeps its own state, so it probes only that lane for a
+		// resume: another spec's workflow never blocks it.
 		statePath = workflow.LaneStatePath(dataDir, "implement", laneName)
 	}
 	if dryRun {
 		statePath += ".dryrun-tmp"
 	} else {
+		if lane && !orchestrated {
+			// An epic orchestrator's run of this spec is its to resume, not
+			// the user's: refuse as the shared slot always has.
+			if existing, err := workflow.ReadLane(dataDir, "implement", laneName); err != nil {
+				return err
+			} else if existing != nil && existing.InProgress() {
+				if o, _ := existing.Data["orchestrated"].(bool); o && !force {
+					return refuseLaneInProgress(dataDir, cfg.Command, "implement", laneName)
+				}
+			}
+			// A run of this same spec still in the shared slot, from before
+			// worktrees were on, is resumed there rather than orphaned.
+			if shared, err := detectInProgress(stateFilePath(dataDir)); err != nil {
+				return err
+			} else if shared != nil && shared.Kind == "implement" {
+				if sharedName, _ := shared.Data["name"].(string); sharedName == laneName {
+					handled, err := probeResume(stateFilePath(dataDir), cfg.Command, "implement", force)
+					if handled || err != nil {
+						return err
+					}
+				}
+			}
+		}
 		handled, err := probeResume(statePath, cfg.Command, "implement", force)
 		if err != nil {
 			return err
@@ -114,8 +138,11 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 
 	// No workflow to resume — starting fresh requires a name.
 	if dataStr == "" {
-		return output.NewError("name_required", "no spec name was provided").
-			WithNextAction(`specify the spec to implement with --data '{"name":"<spec_name>"}'; the spec must have a plan, so if it has none run "plan new" for it first; to see existing specs, run "spec file list"`)
+		next := `specify the spec to implement with --data '{"name":"<spec_name>"}'; the spec must have a plan, so if it has none run "plan new" for it first; to see existing specs, run "spec file list"`
+		if lanes := inProgressLanes(dataDir, cfg.Command, "implement"); len(lanes) > 0 {
+			next += "; implement workflows in progress in their own lanes: " + strings.Join(lanes, ", ")
+		}
+		return output.NewError("name_required", "no spec name was provided").WithNextAction(next)
 	}
 	var input struct {
 		Name                 string `json:"name"`
@@ -128,7 +155,7 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	if input.Name == "" || !nameRegexp.MatchString(input.Name) || len(input.Name) > 64 {
 		return fmt.Errorf("name must match ^[a-z0-9_-]+$ and be at most 64 characters")
 	}
-	if !orchestrated && !dryRun {
+	if !lane && !dryRun {
 		if err := refuseLaneInProgress(dataDir, cfg.Command, "implement", input.Name); err != nil {
 			return err
 		}
@@ -151,7 +178,7 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 	}
-	override, err := refuseUnmetDependencies(cfg, projectStore, input.Name, dataStr, input.OverrideDependencies)
+	override, err := refuseUnmetDependencies(cfg, root, projectStore, input.Name, dataStr, input.OverrideDependencies)
 	if err != nil {
 		return err
 	}
@@ -170,13 +197,24 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 		clearState(statePath)
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
+	if err := ensureImplementWorktrees(root, cfg, projectStore, input.Name, orchestrated, dryRun); err != nil {
+		return err
+	}
+	codeRoots, err := codeRootsFor(root, cfg, input.Name)
+	if err != nil {
+		return err
+	}
+	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode(), CodeRoots: codeRoots}
 	steps := implement.Steps()
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, projectStore, out)
 	wf.SetData("name", input.Name)
 	if orchestrated {
 		wf.SetData("orchestrated", true)
+	} else if lane {
+		// A lane of its own, but an interactive run: it never hands back to
+		// an orchestrator.
+		wf.SetData("lane", true)
 	}
 	if input.Task != "" {
 		wf.SetData("task", input.Task)
@@ -259,16 +297,74 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	wf := workflow.New(implement.Steps(), slot.StatePath, workflow.Config{}, nil, nil)
+	var codeRoots []workflow.CodeRoot
 	if nameVal, ok := wf.GetData("name"); ok {
 		projectStore := store.NewSourceStore(root, "project")
 		if err := refuseStalePlan(cfg, projectStore, fmt.Sprintf("%v", nameVal)); err != nil {
 			return err
 		}
+		if codeRoots, err = codeRootsFor(root, cfg, fmt.Sprintf("%v", nameVal)); err != nil {
+			return err
+		}
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
+	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode(), CodeRoots: codeRoots}
 	return gotoWithAutoCommit(cmd, cfg, root, slot.StatePath, "implement",
 		implement.Steps(), wfCfg, input, stepVal, "no active implement workflow found — run 'implement new' first")
+}
+
+// ensureImplementWorktrees gives a run the user starts its spec's worktrees,
+// one in every repo its plan touches, before the workflow starts, so every
+// step builds there. It does nothing for an orchestrated child, whose
+// orchestrator made them; for a dry run; with implement.worktrees off; or
+// when the spec already has a worktree record, from an earlier task run, a
+// resume or `epic worktree`. Those checks read files only, so no git runs
+// unless worktrees are actually made.
+func ensureImplementWorktrees(root string, cfg config.Config, st store.Store, spec string, orchestrated, dryRun bool) error {
+	if orchestrated || dryRun || !cfg.Implement.Worktrees {
+		return nil
+	}
+	if _, ok, err := worktree.ReadRecord(root, spec); err != nil || ok {
+		return err
+	}
+	touched, err := worktree.TouchedRepos(cfg, st, spec)
+	if err != nil {
+		return err
+	}
+	m, _, _, err := worktreeManager()
+	if err != nil {
+		return err
+	}
+	_, _, err = m.Ensure(spec, touched)
+	return err
+}
+
+// unmergedFn reports whether a spec's worktrees are still unmerged: its
+// worktree record exists, and only a successful merge removes it. It reads a
+// file and never runs git. Every status view and the implement dependency
+// check use it, so they always agree on whether a dependency is met.
+func unmergedFn(root string) func(string) bool {
+	return func(spec string) bool {
+		_, ok, err := worktree.ReadRecord(root, spec)
+		return ok && err == nil
+	}
+}
+
+// codeRootsFor reads the spec's worktree record from the project and lists
+// each recorded repo's code root, in registry order. A spec built without
+// worktrees has no record, and so no code roots. It never runs git.
+func codeRootsFor(root string, cfg config.Config, spec string) ([]workflow.CodeRoot, error) {
+	rec, ok, err := worktree.ReadRecord(root, spec)
+	if err != nil || !ok {
+		return nil, err
+	}
+	var roots []workflow.CodeRoot
+	for _, e := range cfg.Repos {
+		if dir, ok := rec.Repos[e.Name]; ok {
+			roots = append(roots, workflow.CodeRoot{Repo: e.Name, Root: dir})
+		}
+	}
+	return roots, nil
 }
 
 func refuseStalePlan(cfg config.Config, st store.Store, planName string) error {
@@ -299,8 +395,8 @@ func refuseStalePlan(cfg config.Config, st store.Store, planName string) error {
 // even then. It runs before any workflow state is written, so a refusal
 // starts nothing. On an accepted override it returns the unmet dependencies
 // and their states, for the workflow to record in the changelog.
-func refuseUnmetDependencies(cfg config.Config, st store.Store, specName, dataStr string, override bool) ([]map[string]any, error) {
-	deps, err := status.DependenciesOf(status.Options{Config: cfg, Store: st}, specName)
+func refuseUnmetDependencies(cfg config.Config, root string, st store.Store, specName, dataStr string, override bool) ([]map[string]any, error) {
+	deps, err := status.DependenciesOf(status.Options{Config: cfg, Store: st, Unmerged: unmergedFn(root)}, specName)
 	if err != nil {
 		return nil, err
 	}
@@ -317,6 +413,12 @@ func refuseUnmetDependencies(cfg config.Config, st store.Store, specName, dataSt
 
 	implementReady := "no unmet dependency is ready to implement yet, because each still waits on its own dependencies; run `" + cfg.Command + " status " + specName + "` to see the epic's order"
 	for _, dep := range unmet {
+		if dep.Unmerged {
+			// Its work is done: what it needs is merging back, which is the
+			// user's call to make, not another implement run.
+			implementReady = fmt.Sprintf(`offer to merge the implemented dependency back first: %s implement merge --data '{"name":"%s"}'`, cfg.Command, dep.Name)
+			break
+		}
 		if dep.Ready {
 			implementReady = fmt.Sprintf(`implement the first ready dependency instead: %s implement new --data '{"name":"%s"}'`, cfg.Command, dep.Name)
 			break

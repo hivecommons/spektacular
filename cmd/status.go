@@ -64,7 +64,7 @@ var statusRunPartSchema = &schemaProp{Type: "object", Properties: map[string]*sc
 	"state":        {Type: "string", Enum: []string{"done", "in_progress", "awaiting_merge", "ready", "blocked"}, Description: "awaiting_merge is for implementing only"},
 	"waiting_on":   {Type: "array", Items: &schemaProp{Type: "string"}, Description: "blocked only: the specs it waits on"},
 	"current_step": {Type: "string", Description: "in_progress only: the live workflow's step"},
-	"root":         {Type: "string", Description: "where the work runs: the project, or the spec's project worktree"},
+	"root":         {Type: "string", Description: "where the work runs: the project, or the spec's worktree for its code"},
 	"repos":        {Type: "array", Items: &schemaProp{Type: "string"}, Description: "implementing only: the registered repos the plan touches"},
 }}
 
@@ -80,10 +80,11 @@ var statusRunCountsSchema = &schemaProp{Type: "object", Properties: map[string]*
 
 // statusEpicRunSchema is where an epic stands for planning and implementing.
 var statusEpicRunSchema = &schemaProp{Type: "object", Description: "present when an epic is named", Properties: map[string]*schemaProp{
-	"order":     {Type: "array", Items: &schemaProp{Type: "string"}, Description: "dependency order; ties follow the epic's list order"},
-	"plan":      statusRunCountsSchema,
-	"implement": statusRunCountsSchema,
-	"dirty":     {Type: "boolean", Description: "a registered repo has uncommitted changes"},
+	"order":       {Type: "array", Items: &schemaProp{Type: "string"}, Description: "dependency order; ties follow the epic's list order"},
+	"plan":        statusRunCountsSchema,
+	"implement":   statusRunCountsSchema,
+	"dirty":       {Type: "boolean", Description: "a repo touched by this epic's plans has uncommitted changes"},
+	"dirty_repos": {Type: "array", Items: &schemaProp{Type: "string"}, Description: "the repos touched by this epic's plans that have uncommitted changes; empty when none"},
 	"problems": {Type: "array", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
 		"code":    {Type: "string", Enum: []string{"epic_unplanned", "epic_dependency_cycle", "epic_dependency_outside"}},
 		"specs":   {Type: "array", Items: &schemaProp{Type: "string"}},
@@ -181,6 +182,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			s, _ := workflow.ReadLane(dir, kind, name)
 			return s
 		},
+		Unmerged: unmergedFn(root),
 	}
 	if len(args) == 1 {
 		opts.Run = statusRunSource(cfg, root, opts.Store)
@@ -208,16 +210,13 @@ func init() {
 }
 
 // statusRunSource is what the run view reads beyond the project store: the
-// spec worktrees, each worktree's own store, the repos each plan touches,
-// and whether any registered repo has uncommitted changes. status reports
+// spec worktrees, the repos each plan touches,
+// and which of the touched repos have uncommitted changes. status reports
 // and never refuses, so anything it cannot read — no git, an unregistered
 // repo — is simply absent from the view.
 func statusRunSource(cfg config.Config, root string, st store.Reader) *status.RunSource {
 	src := &status.RunSource{
 		ProjectRoot: root,
-		StoreAt: func(r string) store.Reader {
-			return store.NewSourceStore(r, "project")
-		},
 		Touched: func(spec string) []string {
 			names, err := worktree.TouchedRepos(cfg, st, spec)
 			if err != nil {
@@ -225,13 +224,41 @@ func statusRunSource(cfg config.Config, root string, st store.Reader) *status.Ru
 			}
 			return names
 		},
-		Dirty: func() bool {
-			targets, err := autocommit.Targets(cfg, root, autoCommitGit)
-			if err != nil {
-				return false
+		Dirty: func(names []string) []string {
+			if len(names) == 0 {
+				return nil
 			}
-			dirty, err := autocommit.DirtyTargets(targets, autoCommitGit)
-			return err == nil && len(dirty) > 0
+			touched := map[string]bool{}
+			for _, name := range names {
+				touched[name] = true
+			}
+			// Only the touched repos are resolved, so a dirty checkout that
+			// holds none of them is never looked at, and repos sharing a
+			// checkout with a touched one are not reported.
+			filtered := cfg
+			filtered.Repos = nil
+			for _, entry := range cfg.Repos {
+				if touched[entry.Name] {
+					filtered.Repos = append(filtered.Repos, entry)
+				}
+			}
+			targets, err := autocommit.Targets(filtered, root, autoCommitGit)
+			if err != nil {
+				return nil
+			}
+			// Only code counts: a worktree branches from the last commit, so
+			// uncommitted code would be missing from it, while specs, plans,
+			// progress and the orchestrator's notes are read from the project
+			// and written there throughout the run.
+			dirty, err := autocommit.CodeDirtyTargets(targets, autoCommitGit)
+			if err != nil {
+				return nil
+			}
+			var result []string
+			for _, target := range dirty {
+				result = append(result, target.Repos...)
+			}
+			return result
 		},
 	}
 	if set, err := repo.New(cfg, root, repoGit); err == nil {

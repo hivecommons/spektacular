@@ -40,13 +40,16 @@ var orchestratedSkillCases = []orchestratedSkillCase{
 	{
 		path: "skills/workflows/spek-implement/SKILL.md",
 		phrases: []string{
-			"The `spek-implement-epic` skill implements a whole epic by starting one agent per spec, each running this skill in the spec's own worktree.",
-			"`{{command}} implement new --data '{\"name\":\"<spec_name>\",\"orchestrated\":true}'`, from the worktree you were given.",
+			"The `spek-implement-epic` skill implements a whole epic by starting one agent per spec, each running this skill for one spec.",
+			"`{{command}} implement new --data '{\"name\":\"<spec_name>\",\"orchestrated\":true}'`, from the project root you were given.",
 			"skips the uncommitted-changes question",
 			"Running the same command again resumes the lane.",
 			"Every `goto` carries `\"name\":\"<spec_name>\"`",
 			"never ask whether to continue between tasks: tasks run one after another.",
 			"a final message whose first line is `QUESTION: <spec_name>`",
+			"five things change",
+			"You never write the spec's text or a design document, and never run `{{command}} spec amend`.",
+			"Propose any amendment in your `QUESTION:` hand-back, naming the document, section, conflict and proposed change, and continue once your orchestrator says it is applied.",
 			"End the run with `DONE: <spec_name>` and the completion summary, or with `FAILED: <spec_name>` and the reason.",
 		},
 	},
@@ -74,6 +77,18 @@ func TestPerSpecSkillsExplainOrchestratedStart(t *testing.T) {
 				"%s's orchestrated section lost a load-bearing phrase", c.path)
 		}
 	}
+}
+
+// An orchestrated implement run starts from the project root it was given, not
+// from a worktree: the implement workflow itself names where each repo's code
+// lives, so the skill's orchestrated section must not mention worktrees at all.
+func TestImplementOrchestratedSectionDoesNotMentionWorktrees(t *testing.T) {
+	const path = "skills/workflows/spek-implement/SKILL.md"
+	_, section := splitOrchestratedSection(t, path)
+	require.Containsf(t, section, "from the project root you were given",
+		"%s's orchestrated section must start the run from the project root", path)
+	require.NotContainsf(t, strings.ToLower(section), "worktree",
+		"%s's orchestrated section must not tell the child to work in a worktree", path)
 }
 
 // The orchestrated section is the skill's final section and the only place the
@@ -128,6 +143,52 @@ func TestSpekPlanStopsOnContradictingRecordedDecisions(t *testing.T) {
 		require.Containsf(t, body, phrase, "%s's %q section lost a load-bearing phrase", path, recordedDecisionsHeading)
 	}
 	for _, needle := range []string{"QUESTION:", "DONE:", "FAILED:"} {
+		require.NotContainsf(t, body, needle,
+			"%s: %q belongs only in the orchestrated section", path, needle)
+	}
+}
+
+// specAmendmentHeading opens spek-implement's section on what to do when the
+// spec, or a design it references, turns out to be wrong mid-run.
+const specAmendmentHeading = "# When the spec or a design is wrong"
+
+// spek-implement describes, in the user-driven flow, how an amendment to the
+// spec or a referenced design is raised, approved by the user, applied and
+// recorded with spec amend, and picked up by the run. The section sits before
+// the orchestrated section so it binds an interactive run, and carries none of
+// the orchestrated-only markers.
+func TestSpekImplementDescribesSpecAmendment(t *testing.T) {
+	const path = "skills/workflows/spek-implement/SKILL.md"
+	before, _ := splitOrchestratedSection(t, path)
+
+	require.Equalf(t, 1, strings.Count(before, specAmendmentHeading+"\n"),
+		"%s must carry %q exactly once, before %q", path, specAmendmentHeading, orchestratedSectionHeading)
+	start := strings.Index(before, specAmendmentHeading+"\n")
+	rest := before[start+len(specAmendmentHeading)+1:]
+	if end := strings.Index(rest, "\n# "); end >= 0 {
+		rest = rest[:end]
+	}
+	body := strings.Join(strings.Fields(rest), " ")
+
+	for _, phrase := range []string{
+		"1. **Raise it.**",
+		"tell the user the document, the section, the conflict and the amendment you propose.",
+		"2. **The user approves.**",
+		"Apply nothing until the user explicitly approves the amendment.",
+		"3. **Apply and record it, in the project.**",
+		"`{{command}} spec amend --data '{\"name\":\"<spec_name>\",\"reason\":\"<why>\",\"run\":\"interactive implement run, task <task>\"}' --from <staged file>`",
+		"`{{command}} design author`",
+		"`{{command}} design write`",
+		"`\"design\":{\"source\":\"<name>\",\"path\":\"<path>\"}`",
+		"`## Amendments`",
+		"a recorded amendment does not make the plan stale",
+		"4. **Pick it up.**",
+		"Re-read the amended spec or design, re-run the current step's check of the task against it",
+		"name the amendment under **Amendments** in the task's plan changelog entry.",
+	} {
+		require.Containsf(t, body, phrase, "%s's %q section lost a load-bearing phrase", path, specAmendmentHeading)
+	}
+	for _, needle := range []string{"QUESTION:", "DONE:", "FAILED:", `"orchestrated":true`} {
 		require.NotContainsf(t, body, needle,
 			"%s: %q belongs only in the orchestrated section", path, needle)
 	}

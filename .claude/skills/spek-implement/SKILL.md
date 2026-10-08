@@ -98,6 +98,8 @@ The tasks are under `specs[].plan.tasks`, in the entry whose `name` is the spec;
 
 The CLI refuses a task that cannot start, and starts nothing: `task_not_found`, `task_completed`, `task_dependencies_incomplete` (it lists the tasks to implement first) and `task_requires_human` (it gives the reason a person must do it). Relay the refusal and its `next_action` to the user rather than working around it.
 
+**Each spec keeps its own run when worktrees are on.** With `implement.worktrees` on (the default), a run you start keeps its progress and notes in a lane of its own under `.spektacular/workflows/`, keyed by the spec, so runs for different specs can be in progress at once from different terminals. Always pass the spec's name: `implement new --data '{"name":"<spec_name>"}'` resumes that spec's own run when one is in progress, and every `goto` carries the same `name`. A run with no name given only finds a run in the shared slot, and its refusal lists the runs in progress in their own lanes.
+
 **If a workflow was interrupted and is still in progress**, this command does not start a fresh one. Instead it returns a *resume report* — a JSON object with `"resumable": true` plus the in-progress workflow's `kind`, `name`, and `current_step`, and an `instruction` field — and changes nothing on disk. When you get a resume report:
 
 **First check the report's `kind`.** If it is **not** `implement`, a *different* workflow (a spec or plan run) is in progress — you cannot resume it from the implement skill, and the CLI will refuse to. Do **not** run an `implement goto`. Instead follow the report's `instruction`: tell the user a `<kind>` workflow is in progress and let them choose — continue it with that workflow's skill (`spektacular <kind> goto`), or discard it and start the implement run with `spektacular implement new --force`. Only proceed with the steps below when the report's `kind` is `implement`.
@@ -143,11 +145,19 @@ spektacular implement new --data '{"name": "<spec_name>", "commit_existing": fal
 
 Never choose for the user, and never guess from context which they would want — the whole point of the report is that their uncommitted work is about to be swept into a commit they did not make. If the commit fails (`code: auto_commit_failed`), tell them which repository failed and the reason git gave; the workflow has not started.
 
+# Worktrees
+
+Unless the project sets `implement.worktrees: false`, a run you start builds the spec in its own git worktrees, one per repo its plan touches, on branch `spek/<spec_name>`. Each step says where each repo's code lives: work only there, give every sub-agent those exact locations, and run `spektacular` itself from the project root. Your changes stay out of the main checkouts until the spec is merged back.
+
+- When the plan is complete, the finished step tells you to run `spektacular implement merge --data '{"name":"<spec_name>"}'`. It merges every touched repo or none.
+- If the merge is refused, report the repos and conflicting paths to the user and stop. Never resolve a conflict yourself, and never merge, rebase or switch branches on your own initiative: conflicts are the user's to resolve, and the worktrees are kept for them.
+- A `worktree_unavailable` or `worktree_setup_failed` refusal from `implement new` means the worktrees could not be made. Report it to the user with its `next_action`.
+
 # When an orchestrator starts this skill
 
-The `spek-implement-epic` skill implements a whole epic by starting one agent per spec, each running this skill in the spec's own worktree. If you were started that way, your prompt says so, and four things change:
+The `spek-implement-epic` skill implements a whole epic by starting one agent per spec, each running this skill for one spec. If you were started that way, your prompt says so, and four things change:
 
-- Start with `spektacular implement new --data '{"name":"<spec_name>","orchestrated":true}'`, from the worktree you were given. The run keeps its own progress record and notes in a lane and skips the uncommitted-changes question. Running the same command again resumes the lane.
+- Start with `spektacular implement new --data '{"name":"<spec_name>","orchestrated":true}'`, from the project root you were given. The run keeps its own progress record and notes in a lane and skips the uncommitted-changes question. Running the same command again resumes the lane.
 - Every `goto` carries `"name":"<spec_name>"`, exactly as the instructions print it.
 - Never ask the user anything yourself, and never ask whether to continue between tasks: tasks run one after another. Hand each genuine question back to your orchestrator as a final message whose first line is `QUESTION: <spec_name>`, and wait for its answer.
 - End the run with `DONE: <spec_name>` and the completion summary, or with `FAILED: <spec_name>` and the reason.

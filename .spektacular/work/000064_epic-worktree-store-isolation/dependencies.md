@@ -1,0 +1,10 @@
+- **Worktree package**: creates, lists and merges spec worktrees. Changed: it gains the worktree record and the `.spektacular/` merge guard, and loses the overlay write.
+- **Repo package**: the registry view. Changed: no implicit overlay, plus a spec-scoped constructor.
+- **Workflow package**: lanes and runtime config. Changed: a runtime-only code-roots field. Lanes are reused unchanged.
+- **Implement step package and step kit**: render step instructions. Changed: the read-plan and feature-changelog templates and their data.
+- **Autocommit package**: commit targets, the lock, and path-scoped commits. Changed: spec-scoped targets for implement. The lock and path-scoped helper are reused.
+- **Status package**: epic run state. Changed: lane and finished evidence come from the main project.
+- **git (system binary)**: `merge-tree`, three-dot `diff`, `worktree`. No new git features beyond those already used.
+- **Docs repo (`docs`)**: the epics page is updated in the same change. No build dependency.
+- **Prior work that must already be in place**: the epics and seeded specs work and the epic plan/implement orchestration work, both already merged on `main`. Nothing else must land first.
+- **Design documents this plan was built on**: none. The spec carries no design references.

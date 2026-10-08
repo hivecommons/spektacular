@@ -30,6 +30,8 @@ epic:
     strict_dependencies: false
     config:
         directory: epics
+implement:
+    worktrees: true
 design:
     sources:
         - name: design

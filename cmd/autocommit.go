@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hivecommons/spektacular/internal/artifact"
+	"github.com/hivecommons/spektacular/internal/repo"
+	"github.com/hivecommons/spektacular/internal/worktree"
 	"os"
 	"path/filepath"
 	"sort"
@@ -71,7 +74,11 @@ func gotoWithAutoCommit(
 	out := output.New(&buf, globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, store.NewSourceStore(root, "project"), out)
 
-	point := autocommit.PointFor(wfCfg.AutoCommit, kind, wf.Current(), stepVal)
+	// A run built in its own worktrees always commits its code at
+	// completion, so its branch holds the work to merge back.
+	worktrees := len(wfCfg.CodeRoots) > 0
+	codeOnly := autocommit.CodeOnly(wfCfg.AutoCommit, kind, worktrees)
+	point := autocommit.PointForRun(wfCfg.AutoCommit, kind, wf.Current(), stepVal, worktrees)
 	if wfCfg.DryRun {
 		point = autocommit.PointNone
 	}
@@ -93,12 +100,13 @@ func gotoWithAutoCommit(
 		return err
 	}
 
-	// An orchestrated workflow is a lane, whose files are removed once it
-	// finishes: without them, status falls back to the documents, which say
-	// the same thing, and finished lanes never pile up in the tree.
+	// A lane's files are removed once it finishes: without them, status
+	// falls back to the documents, which say the same thing, and finished
+	// lanes never pile up in the tree.
 	orchestrated := isOrchestrated(wf) && !wfCfg.DryRun
+	inLane := isLane(wf) && !wfCfg.DryRun
 	finishLane := func() {
-		if orchestrated && wf.Current() == "finished" {
+		if inLane && wf.Current() == "finished" {
 			removeLane(statePath)
 		}
 	}
@@ -179,7 +187,7 @@ func gotoWithAutoCommit(
 		if snapshotErr == nil {
 			_ = os.WriteFile(statePath, snapshot, 0o644)
 		}
-		if orchestrated && notesErr == nil {
+		if inLane && notesErr == nil {
 			_ = os.WriteFile(notesPath, notesSnapshot, 0o644)
 		}
 	}
@@ -196,6 +204,38 @@ func gotoWithAutoCommit(
 		}
 		flushBuffer(cmd, &buf)
 		return nil
+	}
+
+	// An implement run on a spec built in its own worktrees commits the
+	// code there, on the spec's branch, and only the spec's own files in the
+	// project, beside whatever other specs and the user have in progress.
+	if kind == "implement" {
+		rec, ok, err := worktree.ReadRecord(root, specName)
+		if err != nil {
+			restore()
+			return output.NewError("auto_commit_failed", err.Error()).
+				WithNextAction(commitRetryAction(cfg.Command, kind, stepVal, specName))
+		}
+		if !ok && codeOnly {
+			// No worktrees after all, and automatic commits are off: there is
+			// nothing this run may commit.
+			flushBuffer(cmd, &buf)
+			return nil
+		}
+		if ok {
+			if err := commitImplementLane(cfg, root, statePath, specName, rec, message, codeOnly); err != nil {
+				restore()
+				er := output.NewError("auto_commit_failed", err.Error()).
+					WithNextAction(commitRetryAction(cfg.Command, kind, stepVal, specName))
+				var commitErr *autocommit.CommitError
+				if errors.As(err, &commitErr) {
+					er = er.WithResource(strings.Join(commitErr.Target.Repos, ", "))
+				}
+				return er
+			}
+			flushBuffer(cmd, &buf)
+			return nil
+		}
 	}
 
 	targets, err := autocommit.Targets(cfg, root, autoCommitGit)
@@ -227,6 +267,17 @@ func isOrchestrated(wf *workflow.Workflow) bool {
 	return b
 }
 
+// isLane reports whether the workflow keeps its state in a lane of its own:
+// an orchestrated run, or an implement run the user started with worktrees on.
+func isLane(wf *workflow.Workflow) bool {
+	if isOrchestrated(wf) {
+		return true
+	}
+	v, _ := wf.GetData("lane")
+	b, _ := v.(bool)
+	return b
+}
+
 // laneNotesFor is the notes file beside a lane's state file.
 func laneNotesFor(statePath string) string {
 	return strings.TrimSuffix(statePath, ".json") + ".md"
@@ -239,8 +290,9 @@ func removeLane(statePath string) {
 }
 
 // commitPlanLane commits a finished plan lane's own files and nothing else:
-// the plan's store directory, its per-section working files, its scratch
-// folder and its lane files. Everything another plan running beside it has
+// the plan's store directory, its per-section working files and its lane
+// files. Its scratch folder is never committed: it held only the staged
+// commit message, already removed, and may be git-ignored. Everything another plan running beside it has
 // changed stays uncommitted for that plan's own commit. The commit is taken
 // under the project commit lock, so lanes finishing together queue rather
 // than contend for git's index.
@@ -261,11 +313,126 @@ func commitPlanLane(cfg config.Config, root, statePath, name, message string) er
 	paths := []string{
 		filepath.Join(root, filepath.Dir(implement.PlanFilePath(cfg.Plan.Config.Directory, name))),
 		filepath.Join(root, ".spektacular", "work", name),
-		filepath.Join(root, ".spektacular", "tmp", name),
 		statePath,
 		laneNotesFor(statePath),
 	}
 	return autoCommitGit.CommitPaths(top, paths, message)
+}
+
+// commitImplementLane commits an implement run on a spec built in its own
+// worktrees, split by where each change belongs. The code is committed in
+// the spec's worktrees, on its branch. When codeOnly is set, because
+// automatic commits are off, that is all: the main checkouts are left as the
+// off setting means. Otherwise, in the main checkouts only the spec's
+// own files are committed: its plan documents, spec, changelog records
+// (the project's and each registered repo's), its working folder, and the
+// workflow's state and notes — never its scratch folder. Everything else changed
+// there, by another spec or by the user, stays uncommitted. The main-checkout
+// commits are taken under the project commit lock, so specs finishing
+// together queue rather than contend for git's index.
+func commitImplementLane(cfg config.Config, root, statePath, name string, rec worktree.Record, message string, codeOnly bool) error {
+	base, err := filepath.EvalSymlinks(filepath.Join(root, ".spektacular", worktree.Dir, name))
+	if err != nil {
+		return err
+	}
+	targets, err := autocommit.TargetsWithCodeRoots(cfg, root, autoCommitGit, rec.Repos)
+	if err != nil {
+		return err
+	}
+	var code []autocommit.Target
+	for _, t := range targets {
+		if strings.HasPrefix(t.Dir, base+string(filepath.Separator)) {
+			code = append(code, t)
+		}
+	}
+	if _, err := autocommit.CommitDirty(code, message, autoCommitGit); err != nil {
+		return err
+	}
+	if codeOnly {
+		return nil
+	}
+
+	release, err := autocommit.AcquireLock(filepath.Join(root, ".spektacular"))
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	paths := []string{
+		filepath.Join(root, filepath.Dir(implement.PlanFilePath(cfg.Plan.Config.Directory, name))),
+		filepath.Join(root, artifact.Address{Kind: artifact.KindSpec, Feature: name}.StorePath(cfg.Spec.Config.Directory)),
+		filepath.Join(root, artifact.Address{Kind: artifact.KindChangelog, Feature: name}.StorePath(cfg.Changelog.Config.Directory)),
+		filepath.Join(root, ".spektacular", "work", name),
+		statePath,
+		laneNotesFor(statePath),
+	}
+	byTop := map[string][]string{}
+	var tops []string
+	add := func(top string, p ...string) {
+		if _, seen := byTop[top]; !seen {
+			tops = append(tops, top)
+		}
+		byTop[top] = append(byTop[top], p...)
+	}
+	projTop, ok, err := autoCommitGit.TopLevel(root)
+	if err != nil {
+		return err
+	}
+	if ok {
+		add(projTop, paths...)
+	}
+	for _, rc := range repoChangelogPaths(cfg, root, name) {
+		top, ok, err := autoCommitGit.TopLevel(rc.repoRoot)
+		if err != nil {
+			return err
+		}
+		if ok {
+			add(top, rc.path)
+		}
+	}
+	for _, top := range tops {
+		if err := autoCommitGit.CommitPaths(top, byTop[top], message); err != nil {
+			return &autocommit.CommitError{Target: autocommit.Target{Dir: top}, Cause: err}
+		}
+	}
+	return nil
+}
+
+// repoChangelog is where one registered repo keeps a spec's repo-routed
+// changelog record: the repo's root, which is on disk, and the record's
+// path under it, which need not be yet.
+type repoChangelog struct {
+	repoRoot string
+	path     string
+}
+
+// repoChangelogPaths lists where each registered repo keeps the spec's
+// repo-routed changelog record, at the repo's registered location — never
+// inside a worktree. A repo that is not on disk, or whose footprint cannot be
+// read, has nothing to commit and is skipped; a repo the spec did not change
+// has no record, which CommitPaths skips.
+func repoChangelogPaths(cfg config.Config, root, name string) []repoChangelog {
+	set, err := repo.New(cfg, root, nil)
+	if err != nil {
+		return nil
+	}
+	var out []repoChangelog
+	for _, e := range set.Entries() {
+		repoRoot, ok := set.LocalRoot(e.Name)
+		if !ok {
+			continue
+		}
+		rc, err := config.RepoConfigFromYAMLFile(filepath.Join(repoRoot, config.RepoConfigFileName))
+		if err != nil {
+			continue
+		}
+		dir := filepath.Join(rc.Changelog.Config.Directory, cfg.Name)
+		out = append(out, repoChangelog{
+			repoRoot: repoRoot,
+			path:     filepath.Join(repoRoot, artifact.Address{Kind: artifact.KindChangelog, Feature: name}.StorePath(dir)),
+		})
+	}
+	return out
 }
 
 // startGate is the shared uncommitted-changes check the three `new` commands

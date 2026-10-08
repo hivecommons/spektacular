@@ -78,10 +78,35 @@ func ReferencedSteps() map[string][]string {
 // workflow kind under the given auto_commit mode. Mode off never produces a
 // point, and mode workflow never produces a milestone point.
 func PointFor(mode, kind, fromStep, toStep string) Point {
+	return PointForRun(mode, kind, fromStep, toStep, false)
+}
+
+// codeOnly reports whether an implement run with worktrees commits at a
+// completion point although automatic commits are off: the spec's branch
+// must always record its work, so there is something to merge back. Only its
+// code is committed then, in the worktrees; milestones stay mode-gated.
+func codeOnly(mode, kind string, worktrees bool) bool {
+	return worktrees && kind == "implement" && (mode == "" || mode == config.AutoCommitOff)
+}
+
+// CodeOnly reports whether a commit point of this run commits only the
+// code in its worktrees: an implement run with worktrees under auto_commit
+// off.
+func CodeOnly(mode, kind string, worktrees bool) bool {
+	return codeOnly(mode, kind, worktrees)
+}
+
+// PointForRun is PointFor for a run that may be built in its own worktrees.
+// With worktrees, an implement completion is a commit point even when
+// automatic commits are off.
+func PointForRun(mode, kind, fromStep, toStep string, worktrees bool) Point {
+	t := transition{kind: kind, from: fromStep, to: toStep}
+	if codeOnly(mode, kind, worktrees) && completionPoints[t] {
+		return PointCompletion
+	}
 	if mode == "" || mode == config.AutoCommitOff {
 		return PointNone
 	}
-	t := transition{kind: kind, from: fromStep, to: toStep}
 	if completionPoints[t] {
 		return PointCompletion
 	}
@@ -100,6 +125,19 @@ func PointFor(mode, kind, fromStep, toStep string) Point {
 // exit, since the agent picks between them. Where a step leads to both kinds
 // of point, completion wins, since that is the stronger requirement.
 func LeadsToCommit(mode, kind, fromStep, nextStep string) Point {
+	return LeadsToCommitForRun(mode, kind, fromStep, nextStep, false)
+}
+
+// LeadsToCommitForRun is LeadsToCommit for a run that may be built in its own
+// worktrees, matching PointForRun: with worktrees, an implement completion
+// exit leads to a commit even when automatic commits are off.
+func LeadsToCommitForRun(mode, kind, fromStep, nextStep string, worktrees bool) Point {
+	if codeOnly(mode, kind, worktrees) {
+		if completionPoints[transition{kind: kind, from: fromStep, to: nextStep}] {
+			return PointCompletion
+		}
+		return PointNone
+	}
 	if mode == "" || mode == config.AutoCommitOff {
 		return PointNone
 	}

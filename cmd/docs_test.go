@@ -343,3 +343,17 @@ func TestREADMEDocumentsAutoCommitSetting(t *testing.T) {
 	require.Contains(t, readme, "off | workflow | full",
 		"the README must list the three accepted auto_commit values together")
 }
+
+// TestREADMEDocumentsRecordedAmendmentExemption pins the README's description
+// of plan.strict_spec_changes: a change recorded with spec amend leaves the
+// plan current, and any other edit to the spek's body still makes it stale.
+func TestREADMEDocumentsRecordedAmendmentExemption(t *testing.T) {
+	readme := readRepoRootFile(t, "README.md")
+
+	require.Contains(t, readme,
+		"A spek change recorded with `spektacular spec amend` during an implement run does not make the plan stale in either mode; any other edit to the spek's body still does under the strict setting.",
+		"the README must name spec amend as the strict-mode exemption")
+	require.Contains(t, readme,
+		"strict_spec_changes: false        # true marks final plans stale after later spec edits (recorded amendments excepted)",
+		"the README config example must note the recorded-amendment exemption")
+}

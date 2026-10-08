@@ -152,6 +152,16 @@ type EpicConfig struct {
 	Config             FileEpicConfig `yaml:"config"`
 }
 
+// ImplementConfig holds configuration for implement runs. Worktrees decides
+// whether a run started on its own builds its spec in the spec's own git
+// worktrees and merges them back when the plan is complete; it is on unless
+// the project turns it off, including in a config written before the key
+// existed, since configs are parsed over NewDefault. Epic runs always use
+// worktrees, whatever it says.
+type ImplementConfig struct {
+	Worktrees bool `yaml:"worktrees"`
+}
+
 // FileEpicConfig is the file-provider configuration for the epic section.
 type FileEpicConfig struct {
 	// Directory is the store directory, in the same two forms as
@@ -337,6 +347,7 @@ type Config struct {
 	Plan                 PlanConfig      `yaml:"plan"`
 	Changelog            ChangelogConfig `yaml:"changelog"`
 	Epic                 EpicConfig      `yaml:"epic"`
+	Implement            ImplementConfig `yaml:"implement"`
 	Knowledge            KnowledgeConfig `yaml:"knowledge,omitempty"`
 	Design               DesignConfig    `yaml:"design,omitempty"`
 	Repos                []RepoEntry     `yaml:"repos,omitempty"`
@@ -382,6 +393,7 @@ func NewDefault() Config {
 				Directory: filepath.Join(ProjectConfigDirName, DefaultChangelogDir),
 			},
 		},
+		Implement: ImplementConfig{Worktrees: true},
 		Epic: EpicConfig{
 			Provider: ProviderFile,
 			Config: FileEpicConfig{

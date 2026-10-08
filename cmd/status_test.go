@@ -145,6 +145,32 @@ func TestStatus_SpecInAnEpicReportsTheWholeEpic(t *testing.T) {
 	require.Equal(t, "finished", specs["B"]["current_step"])
 }
 
+// A's worktree record is still there, so its work is not merged yet: B is
+// not ready and blocked by A, while A itself is still reported implemented.
+// Once the record is gone, B is ready again.
+func TestStatus_UnmergedDependencyBlocksItsDependent(t *testing.T) {
+	dir := stProject(t)
+	recordDir := filepath.Join(dir, ".spektacular", "worktrees", "A")
+	require.NoError(t, os.MkdirAll(recordDir, 0o755))
+	record := `{"spec":"A","repos":{"testproj":"` + filepath.Join(t.TempDir(), "testproj-A") + `"}}`
+	require.NoError(t, os.WriteFile(filepath.Join(recordDir, "record.json"), []byte(record), 0o644))
+
+	resetRootCmd(t)
+	got := statusOf(t, "E", "--format", "json")
+	specs := statusSpecs(t, got)
+	require.Equal(t, "implemented", specs["A"]["state"])
+	require.Equal(t, false, specs["B"]["ready"])
+	require.Equal(t, []any{"A"}, specs["B"]["blocked_by"])
+	require.Equal(t, float64(1), got["epic"].(map[string]any)["progress"].(map[string]any)["specs_implemented"])
+
+	require.NoError(t, os.RemoveAll(recordDir))
+	resetRootCmd(t)
+	specs = statusSpecs(t, statusOf(t, "E", "--format", "json"))
+	require.Equal(t, "implemented", specs["A"]["state"])
+	require.Equal(t, true, specs["B"]["ready"])
+	require.Equal(t, []any{}, specs["B"]["blocked_by"])
+}
+
 func TestStatus_StandaloneSpecHasANullEpicAndOneSpec(t *testing.T) {
 	stProject(t)
 
@@ -427,6 +453,67 @@ func TestStatus_StrictSpecChangesReportsAStalePlan(t *testing.T) {
 	}
 }
 
+// Under plan.strict_spec_changes, a spec newer than its plan whose body still
+// matches its last recorded amendment does not make the plan stale.
+func TestStatus_StrictSpecChangesIgnoresRecordedAmendment(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	dataDir := filepath.Join(dir, ".spektacular")
+	writeSpecCommandConfig(t, dir, "plan:\n  strict_spec_changes: true\n")
+
+	base := "---\ncreated_date: 2026-02-01\ndocument_status: final\n---\n"
+	_, body, err := metadata.Split([]byte(base + "\n# Artifact\n"))
+	require.NoError(t, err)
+	amended := "---\ncreated_date: 2026-02-01\ndocument_status: final\namendments:\n    - at: \"2026-02-03T00:00:00Z\"\n      sections: [Success Metrics]\n      hash: " + metadata.BodyHash(body) + "\n---\n"
+	writeArtifactStatusFile(t, filepath.Join(dataDir, "specs", "000004_feature.md"), amended, time.Date(2026, time.February, 3, 0, 0, 0, 0, time.UTC))
+
+	planPath := filepath.Join(dataDir, "plans", "000004_feature", "plan.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(planPath), 0o755))
+	require.NoError(t, os.WriteFile(planPath, []byte("---\ncreated_date: 2026-02-01\ndocument_status: final\nclosed_date: 2026-02-02\nspec: 000004_feature\n---\n\n"+
+		taskPlanDoc(taskBlock("Work", false, agentFields(idA)))), 0o644))
+	mod := time.Date(2026, time.February, 2, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, os.Chtimes(planPath, mod, mod))
+
+	spec := statusSpecs(t, statusOf(t, "000004_feature", "--format", "json"))["000004_feature"]
+	plan := spec["plan"].(map[string]any)
+	require.Equal(t, "final", plan["document_status"])
+	require.Equal(t, "finished", plan["current_step"])
+	require.Equal(t, "planned", spec["state"])
+}
+
+// Under plan.strict_spec_changes, an amendment recorded through the real
+// `spec amend` command keeps the plan final although the spec is newer than
+// it, and a further body edit through `spec file write` makes it stale.
+func TestStatus_StrictSpecChangesAmendThroughCLI(t *testing.T) {
+	const name = "000004_feature"
+	_, specPath := strictAmendProject(t, name, "")
+	planState := func(t *testing.T) (docStatus, step, state any) {
+		t.Helper()
+		resetRootCmd(t)
+		spec := statusSpecs(t, statusOf(t, name, "--format", "json"))[name]
+		plan := spec["plan"].(map[string]any)
+		return plan["document_status"], plan["current_step"], spec["state"]
+	}
+	requireState := func(t *testing.T, wantDoc, wantStep, wantState string) {
+		t.Helper()
+		docStatus, step, state := planState(t)
+		require.Equal(t, wantDoc, docStatus)
+		require.Equal(t, wantStep, step)
+		require.Equal(t, wantState, state)
+	}
+
+	// The mtimes alone make the plan stale before anything is recorded.
+	requireState(t, "stale", "stale", "stale")
+
+	// The fixture plan already has one phase ticked, so a plan that is not
+	// stale reports its spec in progress.
+	amendSuccessMetricViaCLI(t, name, specPath)
+	requireState(t, "final", "finished", "in_progress")
+
+	editSpecUnrecordedViaCLI(t, name, specPath)
+	requireState(t, "stale", "stale", "stale")
+}
+
 // A task's location comes only from a declared git source, never from a
 // checkout's remotes.
 func TestStatus_TaskLocationComesOnlyFromADeclaredGitSource(t *testing.T) {
@@ -509,6 +596,7 @@ func TestStatus_EverySavedPlanReports(t *testing.T) {
 }
 
 func TestStatus_SchemaDescribesTheReport(t *testing.T) {
+	t.Chdir(t.TempDir())
 	stdout, _, code := runRootCmd(t, "status", "--schema")
 	require.Equal(t, 0, code, stdout)
 	var schema commandSchema
@@ -634,6 +722,7 @@ func TestStatus_EpicReportCarriesTheRunView(t *testing.T) {
 	require.Equal(t, map[string]any{"done": float64(2), "in_progress": float64(0), "ready": float64(1), "blocked": float64(0), "awaiting_merge": float64(0), "remaining": float64(1)}, run["plan"])
 	require.Equal(t, map[string]any{"done": float64(1), "in_progress": float64(0), "ready": float64(1), "blocked": float64(1), "awaiting_merge": float64(0), "remaining": float64(2)}, run["implement"])
 	require.Equal(t, false, run["dirty"])
+	require.Equal(t, []any{}, run["dirty_repos"], "clean runs expose an empty repo list, not null")
 	problems := run["problems"].([]any)
 	require.Len(t, problems, 1)
 	require.Equal(t, "epic_unplanned", problems[0].(map[string]any)["code"])
@@ -662,13 +751,14 @@ func TestStatus_EpicReportCarriesTheRunView(t *testing.T) {
 }
 
 func TestStatus_SchemaDescribesTheRunView(t *testing.T) {
+	t.Chdir(t.TempDir())
 	stdout, _, code := runRootCmd(t, "status", "--schema")
 	require.Equal(t, 0, code, stdout)
 	var schema commandSchema
 	require.NoError(t, json.Unmarshal([]byte(stdout), &schema))
 	epicRun := schema.Output.Properties["epic"].Properties["run"]
 	require.NotNil(t, epicRun)
-	for _, k := range []string{"order", "plan", "implement", "dirty", "problems"} {
+	for _, k := range []string{"order", "plan", "implement", "dirty", "dirty_repos", "problems"} {
 		require.Contains(t, epicRun.Properties, k)
 	}
 	specRun := schema.Output.Properties["specs"].Items.Properties["run"]

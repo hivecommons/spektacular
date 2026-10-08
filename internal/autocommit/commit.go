@@ -36,6 +36,22 @@ func DirtyTargets(targets []Target, git Git) ([]Target, error) {
 	return dirty, nil
 }
 
+// CodeDirtyTargets returns the subset of targets with uncommitted changes
+// outside Spektacular's own files, in the order given.
+func CodeDirtyTargets(targets []Target, git Git) ([]Target, error) {
+	var dirty []Target
+	for _, t := range targets {
+		d, err := git.CodeDirty(t.Dir)
+		if err != nil {
+			return nil, err
+		}
+		if d {
+			dirty = append(dirty, t)
+		}
+	}
+	return dirty, nil
+}
+
 // CommitDirty commits every target that has uncommitted changes, in order,
 // with the same message. A clean target is skipped without error, since
 // having nothing to commit is an ordinary outcome at a commit point.

@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/hivecommons/spektacular/internal/autocommit"
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/testutil/gittest"
@@ -97,6 +100,8 @@ func gitProject(t *testing.T, autoCommit string) gitFixture {
 	// counter ids make the resolved spec name deterministic, so the commit
 	// message's oracle below can be written by hand.
 	body += "spec:\n  id_method: counter\n"
+	// Implement runs here use the main checkout and the shared state slot.
+	body += implementSharedSlotConfig
 	body += "repos:\n" +
 		"  - name: " + gitFixtureProjectRepo + "\n    location: \".\"\n" +
 		"  - name: " + gitFixtureOtherRepo + "\n    location: \"" + footprint + "\"\n"
@@ -445,5 +450,367 @@ func TestAutoCommit_OffCompletesWorkflowWithoutCommitting(t *testing.T) {
 					"the agent's work must be left uncommitted in the working tree")
 			}
 		})
+	}
+}
+
+// An implement run on a spec built in its own worktrees (see
+// epic_worktree_test.go for the fixture: the project at f.proj registered as
+// "testproj", a sibling at f.site registered as "docs") commits the code in
+// the spec's worktrees on spek/alpha, and only the spec's own files in the
+// main checkouts.
+
+// implementLaneFixture is the scenario's starting point: the spec has its
+// worktrees and an implement run in workflow mode has been walked to the
+// step before completion. heads holds each checkout's HEAD at that moment.
+type implementLaneFixture struct {
+	worktreeFixture
+	heads map[string]string // checkout dir -> HEAD before the commit point
+	// reconcileOut is the step result that entered reconcile_spec, the step
+	// whose exit is the completion commit.
+	reconcileOut string
+}
+
+// implementLaneSiteChangelog is where the docs repo keeps the spec's
+// repo-routed changelog record, at its registered location: the docs
+// footprint is f.site/.spektacular, its changelog directory is the default
+// "changelog", and records are filed under the project's name, "testproj".
+func implementLaneSiteChangelog(f worktreeFixture) string {
+	return filepath.Join(f.site, ".spektacular", "changelog", "testproj", "alpha.md")
+}
+
+func startImplementLane(t *testing.T) implementLaneFixture {
+	t.Helper()
+	return startImplementLaneWith(t, true)
+}
+
+// startImplementLaneWith is startImplementLane; docsChanged false leaves the
+// docs repo out of the agent's work entirely: no code in its worktree and no
+// repo-level record, so not even a record folder, in its main checkout.
+func startImplementLaneWith(t *testing.T, docsChanged bool) implementLaneFixture {
+	t.Helper()
+	return startImplementLaneConfigured(t, docsChanged, "auto_commit: workflow\n")
+}
+
+// startImplementLaneConfigured is startImplementLaneWith under the given
+// config.yaml lines (the auto_commit mode, or none at all).
+func startImplementLaneConfigured(t *testing.T, docsChanged bool, extraConfig string) implementLaneFixture {
+	t.Helper()
+	f := worktreeProjectWith(t, true, implementSharedSlotConfig+extraConfig)
+	// The terminal step refuses to finish without a project changelog
+	// record; seed it in the baseline as the earlier steps would have.
+	wtWriteFile(t, f.proj, ".spektacular/changelog/alpha.md", "# alpha\n\nstarted\n")
+	wtCommitAll(t, f.proj, "seed changelog")
+
+	runEpicWorktreeCmd(t)
+
+	_, _, code := runRootCmd(t, "implement", "new", "--data", `{"name":"alpha"}`)
+	require.Equal(t, 0, code)
+	walkSteps(t, "implement",
+		"analyze", "implement", "test", "verify", "update_plan", "update_changelog",
+		"test_plan", "update_feature_changelog")
+	reconcileOut, _, code := runRootCmd(t, "implement", "goto", "--data", `{"step":"reconcile_spec"}`)
+	require.Equalf(t, 0, code, "implement goto reconcile_spec failed: %s", reconcileOut)
+
+	fx := implementLaneFixture{worktreeFixture: f, heads: map[string]string{}, reconcileOut: reconcileOut}
+	for _, dir := range []string{f.proj, f.site, f.wt("testproj"), f.wt("docs")} {
+		fx.heads[dir] = gittest.RunGit(t, dir, "rev-parse", "HEAD")
+	}
+
+	// The agent's work: code in both worktrees, the spec's plan tick and
+	// changelog records in the main checkouts.
+	wtWriteFile(t, f.wt("testproj"), "main.txt", "main v2\n")
+	if docsChanged {
+		wtWriteFile(t, f.wt("docs"), "lib.txt", "lib v2\n")
+	}
+	plan := filepath.Join(f.proj, ".spektacular", "plans", "alpha", "plan.md")
+	body, err := os.ReadFile(plan)
+	require.NoError(t, err)
+	wtWriteFile(t, f.proj, ".spektacular/plans/alpha/plan.md",
+		strings.Replace(string(body), "#### - [ ] Task: Change the project", "#### - [x] Task: Change the project", 1))
+	wtWriteFile(t, f.proj, ".spektacular/changelog/alpha.md", "# alpha\n\nwhat was built\n")
+	if docsChanged {
+		wtWriteFile(t, filepath.Dir(implementLaneSiteChangelog(f)), "alpha.md", "# alpha\n\nthe docs side\n")
+	}
+	// Every affected repo gets a repo-level record, the project's own repo
+	// included; its footprint is the project's .spektacular folder.
+	wtWriteFile(t, f.proj, ".spektacular/changelog/testproj/alpha.md", "# alpha\n\nthe project side\n")
+
+	// Work that is not the spec's: another spec's plan, and the user's own
+	// edits in both main checkouts.
+	wtWriteFile(t, f.proj, ".spektacular/plans/beta/plan.md", "# Plan: beta\n")
+	wtWriteFile(t, f.proj, "notes.txt", "the user's own notes\n")
+	wtWriteFile(t, f.site, "draft.txt", "the user's own draft\n")
+	return fx
+}
+
+// finishImplementLane stages the message and runs the completion commit.
+func finishImplementLane(t *testing.T, f worktreeFixture) (string, int) {
+	t.Helper()
+	path := filepath.Join(f.proj, filepath.FromSlash(stagedCommitMessagePath))
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, []byte("Implement alpha\n\nBoth repos changed.\n"), 0o644))
+	stdout, _, code := runRootCmd(t, "implement", "goto", "--data", finishWithMessage)
+	return stdout, code
+}
+
+// changedIn lists the paths HEAD changed relative to base, one per line.
+func changedIn(t *testing.T, dir, base string) string {
+	t.Helper()
+	return gittest.RunGit(t, dir, "diff", "--name-only", base, "HEAD")
+}
+
+func requireImplementLaneCommitted(t *testing.T, fx implementLaneFixture) {
+	t.Helper()
+	f := fx.worktreeFixture
+
+	// The code: one commit on spek/alpha in each worktree, holding only the
+	// code, and nothing left behind there.
+	for wt, want := range map[string]string{f.wt("testproj"): "main.txt", f.wt("docs"): "lib.txt"} {
+		require.Equal(t, "spek/alpha", gittest.RunGit(t, wt, "rev-parse", "--abbrev-ref", "HEAD"), wt)
+		require.Equal(t, fx.heads[wt], gittest.RunGit(t, wt, "rev-parse", "HEAD~1"), "exactly one commit in %s", wt)
+		require.Equal(t, want, changedIn(t, wt, fx.heads[wt]), wt)
+		require.Empty(t, gittest.RunGit(t, wt, "status", "--porcelain", "--untracked-files=all"), wt)
+		require.Contains(t, gittest.RunGit(t, wt, "log", "-1", "--format=%B"), "Implement alpha", wt)
+		// Each worktree's .spektacular is exactly its base commit's.
+		require.Empty(t, gittest.RunGit(t, wt, "diff", fx.heads[wt], "--", ".spektacular"), wt)
+		require.Empty(t, gittest.RunGit(t, wt, "status", "--porcelain", "--ignored", "--", ".spektacular"), wt)
+	}
+
+	// The project's main checkout: one commit on main with the spec's own
+	// files and none of its code. state.json is the workflow's own state.
+	require.Equal(t, "main", gittest.RunGit(t, f.proj, "rev-parse", "--abbrev-ref", "HEAD"))
+	require.Equal(t, fx.heads[f.proj], gittest.RunGit(t, f.proj, "rev-parse", "HEAD~1"))
+	require.Equal(t,
+		".spektacular/changelog/alpha.md\n"+
+			".spektacular/changelog/testproj/alpha.md\n"+
+			".spektacular/plans/alpha/plan.md\n"+
+			".spektacular/state.json",
+		changedIn(t, f.proj, fx.heads[f.proj]))
+	main, err := os.ReadFile(filepath.Join(f.proj, "main.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "main v1\n", string(main), "the spec's code must not reach the main checkout")
+	// Another spec's plan and the user's file are left exactly as they were:
+	// uncommitted.
+	require.Equal(t,
+		"?? .spektacular/plans/beta/plan.md\n"+
+			"?? notes.txt",
+		gittest.RunGit(t, f.proj, "status", "--porcelain", "--untracked-files=all"))
+
+	// The sibling's main checkout: one commit holding only its repo-routed
+	// changelog record for the spec; the user's draft stays uncommitted.
+	require.Equal(t, "main", gittest.RunGit(t, f.site, "rev-parse", "--abbrev-ref", "HEAD"))
+	require.Equal(t, fx.heads[f.site], gittest.RunGit(t, f.site, "rev-parse", "HEAD~1"))
+	require.Equal(t, ".spektacular/changelog/testproj/alpha.md", changedIn(t, f.site, fx.heads[f.site]))
+	require.Equal(t, "?? draft.txt", gittest.RunGit(t, f.site, "status", "--porcelain", "--untracked-files=all"))
+	lib, err := os.ReadFile(filepath.Join(f.site, "lib.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "lib v1\n", string(lib))
+}
+
+// Code changed during an epic implement run is committed on the spec's branch
+// in its worktrees; the spec's plan tick and changelog records are committed
+// in the main checkouts; nothing of another spec's or the user's is swept in.
+func TestAutoCommit_ImplementInWorktreesCommitsCodeOnSpecBranchAndArtifactsInMain(t *testing.T) {
+	fx := startImplementLane(t)
+
+	stdout, code := finishImplementLane(t, fx.worktreeFixture)
+	require.Equalf(t, 0, code, "implement goto finished failed: %s", stdout)
+	require.Equal(t, "finished", currentImplementStep(t, fx.proj))
+
+	requireImplementLaneCommitted(t, fx)
+}
+
+// Two specs committing at the same time queue on the project commit lock
+// rather than fail: with the lock held by someone else, the commit waits,
+// commits nothing in the main checkout while it waits, and succeeds once the
+// lock is released.
+func TestAutoCommit_ImplementInWorktreesWaitsForTheCommitLock(t *testing.T) {
+	fx := startImplementLane(t)
+
+	release, err := autocommit.AcquireLock(filepath.Join(fx.proj, ".spektacular"))
+	require.NoError(t, err)
+	const hold = 500 * time.Millisecond
+	headWhileHeld := make(chan string, 1)
+	timer := time.AfterFunc(hold, func() {
+		out, _ := exec.Command("git", "-C", fx.proj, "rev-parse", "HEAD").Output()
+		headWhileHeld <- strings.TrimSpace(string(out))
+		release()
+	})
+	t.Cleanup(func() {
+		if timer.Stop() {
+			release()
+		}
+	})
+
+	start := time.Now()
+	stdout, code := finishImplementLane(t, fx.worktreeFixture)
+	require.Equalf(t, 0, code, "implement goto finished failed: %s", stdout)
+	require.GreaterOrEqual(t, time.Since(start), hold, "the commit must wait for the lock")
+	require.Equal(t, fx.heads[fx.proj], <-headWhileHeld, "nothing may be committed in the main checkout while another holds the lock")
+
+	requireImplementLaneCommitted(t, fx)
+}
+
+// A lock that is never released within LockTimeout is reported as a failed
+// commit naming the lock, and the workflow stays on the step it was on.
+func TestAutoCommit_ImplementInWorktreesReportsALockTimeout(t *testing.T) {
+	fx := startImplementLane(t)
+
+	prev := autocommit.LockTimeout
+	autocommit.LockTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { autocommit.LockTimeout = prev })
+	release, err := autocommit.AcquireLock(filepath.Join(fx.proj, ".spektacular"))
+	require.NoError(t, err)
+	t.Cleanup(release)
+
+	stdout, code := finishImplementLane(t, fx.worktreeFixture)
+	require.Equal(t, 1, code)
+	er := errorEnvelope(t, stdout)
+	require.Equal(t, "auto_commit_failed", er.Code)
+	require.Contains(t, er.Message, "timed out waiting for the commit lock")
+	require.Equal(t, "reconcile_spec", currentImplementStep(t, fx.proj))
+	require.Equal(t, fx.heads[fx.proj], gittest.RunGit(t, fx.proj, "rev-parse", "HEAD"))
+	require.Equal(t, fx.heads[fx.site], gittest.RunGit(t, fx.site, "rev-parse", "HEAD"))
+}
+
+// currentImplementStep reads the step the project's workflow state file
+// says the workflow is on.
+func currentImplementStep(t *testing.T, root string) string {
+	t.Helper()
+	return currentStep(t, gitFixture{root: root})
+}
+
+// A registered repo the spec did not change gets no repo-level record, and so
+// has no record folder at all; the commit still succeeds, committing the
+// project's code on spek/alpha and the spec's own files in the project's main
+// checkout, and leaving the untouched repo's checkouts exactly as they were.
+func TestAutoCommit_ImplementInWorktreesSkipsARepoWithNoRecord(t *testing.T) {
+	fx := startImplementLaneWith(t, false)
+	f := fx.worktreeFixture
+	require.NoDirExists(t, filepath.Dir(implementLaneSiteChangelog(f)))
+
+	stdout, code := finishImplementLane(t, f)
+	require.Equalf(t, 0, code, "implement goto finished failed: %s", stdout)
+	require.Equal(t, "finished", currentImplementStep(t, f.proj))
+
+	wt := f.wt("testproj")
+	require.Equal(t, "spek/alpha", gittest.RunGit(t, wt, "rev-parse", "--abbrev-ref", "HEAD"))
+	require.Equal(t, fx.heads[wt], gittest.RunGit(t, wt, "rev-parse", "HEAD~1"))
+	require.Equal(t, "main.txt", changedIn(t, wt, fx.heads[wt]))
+	require.Empty(t, gittest.RunGit(t, wt, "status", "--porcelain", "--untracked-files=all"))
+
+	require.Equal(t, fx.heads[f.wt("docs")], gittest.RunGit(t, f.wt("docs"), "rev-parse", "HEAD"))
+	require.Empty(t, gittest.RunGit(t, f.wt("docs"), "status", "--porcelain", "--untracked-files=all"))
+
+	require.Equal(t, fx.heads[f.proj], gittest.RunGit(t, f.proj, "rev-parse", "HEAD~1"))
+	require.Equal(t,
+		".spektacular/changelog/alpha.md\n"+
+			".spektacular/changelog/testproj/alpha.md\n"+
+			".spektacular/plans/alpha/plan.md\n"+
+			".spektacular/state.json",
+		changedIn(t, f.proj, fx.heads[f.proj]))
+	require.Equal(t,
+		"?? .spektacular/plans/beta/plan.md\n"+
+			"?? notes.txt",
+		gittest.RunGit(t, f.proj, "status", "--porcelain", "--untracked-files=all"))
+
+	require.Equal(t, fx.heads[f.site], gittest.RunGit(t, f.site, "rev-parse", "HEAD"))
+	require.Equal(t, "?? draft.txt", gittest.RunGit(t, f.site, "status", "--porcelain", "--untracked-files=all"))
+	require.NoDirExists(t, filepath.Dir(implementLaneSiteChangelog(f)))
+}
+
+// With auto_commit off (set, or left out of config.yaml), an implement run
+// built in its own worktrees still commits its code on the spec's branch at
+// completion, leaving the worktrees clean, and the agent is asked for the
+// message on the step before. Nothing is committed in either main checkout:
+// the spec's own files and the user's stay exactly as they were, uncommitted.
+func TestAutoCommit_OffModeWorktreeRunCommitsCodeOnSpecBranchOnly(t *testing.T) {
+	for name, extra := range map[string]string{"off": "auto_commit: off\n", "key absent": ""} {
+		t.Run(name, func(t *testing.T) {
+			fx := startImplementLaneConfigured(t, true, extra)
+			f := fx.worktreeFixture
+
+			// The step before completion asks for the message, in the
+			// code-only wording.
+			require.Contains(t, fx.reconcileOut, "## Automatic git commit")
+			require.Contains(t, fx.reconcileOut, "even though `auto_commit` is off")
+			require.Contains(t, fx.reconcileOut, "Nothing is committed in the main checkouts.")
+
+			// Finishing without a message is refused, and nothing moves.
+			stdout, _, code := runRootCmd(t, "implement", "goto", "--data", `{"step":"finished"}`)
+			require.Equal(t, 1, code)
+			require.Equal(t, "commit_message_required", errorEnvelope(t, stdout).Code)
+			require.Equal(t, "reconcile_spec", currentImplementStep(t, f.proj))
+
+			stdout, code = finishImplementLane(t, f)
+			require.Equalf(t, 0, code, "implement goto finished failed: %s", stdout)
+			require.Equal(t, "finished", currentImplementStep(t, f.proj))
+
+			// The code: one commit on spek/alpha in each worktree, holding
+			// only the code, and nothing left uncommitted there.
+			for wt, want := range map[string]string{f.wt("testproj"): "main.txt", f.wt("docs"): "lib.txt"} {
+				require.Equal(t, "spek/alpha", gittest.RunGit(t, wt, "rev-parse", "--abbrev-ref", "HEAD"), wt)
+				require.Equal(t, fx.heads[wt], gittest.RunGit(t, wt, "rev-parse", "HEAD~1"), "exactly one commit in %s", wt)
+				require.Equal(t, want, changedIn(t, wt, fx.heads[wt]), wt)
+				require.Empty(t, gittest.RunGit(t, wt, "status", "--porcelain", "--untracked-files=all"), wt)
+				require.Contains(t, gittest.RunGit(t, wt, "log", "-1", "--format=%B"), "Implement alpha", wt)
+			}
+			require.Contains(t, gittest.RunGit(t, f.proj, "log", "-1", "--format=%B", "spek/alpha"), "Implement alpha")
+
+			// The main checkouts: no commit at all, and the spec's own files
+			// are left uncommitted alongside the user's.
+			require.Equal(t, fx.heads[f.proj], gittest.RunGit(t, f.proj, "rev-parse", "HEAD"))
+			require.Equal(t, fx.heads[f.site], gittest.RunGit(t, f.site, "rev-parse", "HEAD"))
+			projStatus := gittest.RunGit(t, f.proj, "status", "--porcelain", "--untracked-files=all")
+			for _, path := range []string{
+				".spektacular/changelog/alpha.md",
+				".spektacular/changelog/testproj/alpha.md",
+				".spektacular/plans/alpha/plan.md",
+				".spektacular/plans/beta/plan.md",
+				"notes.txt",
+			} {
+				require.Contains(t, projStatus, path, "%s must stay uncommitted in the main checkout", path)
+			}
+			siteStatus := gittest.RunGit(t, f.site, "status", "--porcelain", "--untracked-files=all")
+			require.Contains(t, siteStatus, ".spektacular/changelog/testproj/alpha.md")
+			require.Contains(t, siteStatus, "draft.txt")
+
+			main, err := os.ReadFile(filepath.Join(f.proj, "main.txt"))
+			require.NoError(t, err)
+			require.Equal(t, "main v1\n", string(main), "the spec's code must not reach the main checkout")
+		})
+	}
+}
+
+// With auto_commit off and no worktrees, an implement run finishes without
+// being asked for a message and commits nothing anywhere.
+func TestAutoCommit_OffModeImplementWithoutWorktreesCommitsNothing(t *testing.T) {
+	fx := gitProject(t, config.AutoCommitOff)
+	dataDir := filepath.Join(fx.root, config.ProjectConfigDirName)
+	writeFixturePlan(t, dataDir, "billing")
+
+	changelog := filepath.Join(dataDir, config.DefaultChangelogDir, "billing.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(changelog), 0o755))
+	require.NoError(t, os.WriteFile(changelog, []byte("# billing\n\nwhat was built\n"), 0o644))
+	commitFixtures(t, fx)
+
+	_, _, code := runRootCmd(t, "implement", "new", "--data", `{"name":"billing"}`)
+	require.Equal(t, 0, code)
+	walkSteps(t, "implement",
+		"analyze", "implement", "test", "verify", "update_plan", "update_changelog",
+		"test_plan", "update_feature_changelog")
+	stdout, _, code := runRootCmd(t, "implement", "goto", "--data", `{"step":"reconcile_spec"}`)
+	require.Equal(t, 0, code)
+	require.NotContains(t, stdout, "Automatic git commit", "no commit message may be asked for")
+
+	dirtyOtherRepo(t, fx)
+
+	stdout, _, code = runRootCmd(t, "implement", "goto", "--data", `{"step":"finished"}`)
+	require.Equalf(t, 0, code, "finishing must not ask for a commit message: %s", stdout)
+	require.Equal(t, "finished", currentStep(t, fx))
+	for _, dir := range []string{fx.root, fx.other} {
+		require.Equal(t, "1", commitCount(t, dir), "no commit may be made with auto_commit off")
+		require.NotEmpty(t, gittest.RunGit(t, dir, "status", "--porcelain"),
+			"the agent's work must be left uncommitted in the working tree")
 	}
 }

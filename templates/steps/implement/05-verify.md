@@ -13,6 +13,8 @@ Do not rely on an earlier step's output still being in your context. Read the ta
 
 If the section is missing, unreadable, or empty, STOP and ask the user whether to fix the plan's `context.md` before proceeding. This is a plan/reality mismatch — do not guess.
 
+{{> partials/implement-code-locations}}
+
 ### Step 2: Delegate to the verify-implementation skill
 
 Launch a sub-agent with the instructions from:
@@ -35,6 +37,8 @@ If any verification command fails, STOP. Report the failures to the user as the 
 1. **Fix the code and re-run verification.** Return to the `implement` step with the fixes in mind.
 2. **Accept the partial failure and proceed.** Only if the user explicitly chooses this.
 3. **Abandon this task.** {{#task}}End this run without ticking it.{{/task}}{{^task}}Skip to the next unchecked task.{{/task}}
+
+{{> partials/implement-spec-conflict}}
 
 ### Advance
 

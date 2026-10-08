@@ -205,6 +205,7 @@ func TestEpicComplete_IncompleteEpicNeedsNoConfirmation(t *testing.T) {
 
 // `spec new --schema` publishes the confirmation key as a boolean.
 func TestEpicComplete_SpecNewSchemaPublishesConfirmation(t *testing.T) {
+	t.Chdir(t.TempDir())
 	schema := runSpecNewSchemaForTest(t)
 	require.Contains(t, schema.Input.Properties, "confirm_completed_epic")
 	require.Equal(t, "boolean", schema.Input.Properties["confirm_completed_epic"].Type)

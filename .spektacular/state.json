@@ -1,29 +1,31 @@
 {
-  "kind": "implement",
+  "kind": "plan",
   "current_step": "finished",
   "completed_steps": [
     "new",
-    "read_plan",
-    "analyze",
-    "implement",
-    "test",
-    "verify",
-    "update_plan",
-    "update_changelog",
-    "test_plan",
-    "update_feature_changelog",
-    "reconcile_spec",
+    "overview",
+    "discovery",
+    "architecture",
+    "components",
+    "data_structures",
+    "implementation_detail",
+    "dependencies",
+    "testing_approach",
+    "milestones",
+    "tasks",
+    "open_questions",
+    "out_of_scope",
+    "assemble",
+    "verification",
+    "write_plan",
+    "write_context",
+    "write_research",
+    "walkthrough",
     "finished"
   ],
-  "created_at": "2026-10-04T14:07:47.171696106Z",
-  "updated_at": "2026-10-04T14:40:46.482260937Z",
+  "created_at": "2026-10-08T06:28:34.060744274Z",
+  "updated_at": "2026-10-08T07:17:18.613720507Z",
   "data": {
-    "committed_milestones": [
-      1,
-      2,
-      3,
-      4
-    ],
-    "name": "000063_epic-planning-summary-and-reordering"
+    "name": "000066_epic-mid-run-revisions"
   }
 }

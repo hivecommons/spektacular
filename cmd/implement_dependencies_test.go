@@ -42,7 +42,7 @@ func depProject(t *testing.T, extraConfig string) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, extraConfig)
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig+extraConfig)
 	data := filepath.Join(dir, ".spektacular")
 
 	write := func(rel, content string) {
@@ -232,6 +232,95 @@ func TestImplementDependencies_StrictRefusesWithoutOfferingAnOverride(t *testing
 	require.NoFileExists(t, filepath.Join(dir, ".spektacular", "state.json"))
 }
 
+// writeWorktreeRecord writes spec's worktree record by hand, as the worktree
+// manager leaves it until the spec is merged back.
+func writeWorktreeRecord(t *testing.T, dir, spec string) string {
+	t.Helper()
+	recordDir := filepath.Join(dir, ".spektacular", "worktrees", spec)
+	require.NoError(t, os.MkdirAll(recordDir, 0o755))
+	record := `{"spec":"` + spec + `","repos":{"testproj":"` + filepath.Join(t.TempDir(), "testproj-"+spec) + `"}}`
+	path := filepath.Join(recordDir, "record.json")
+	require.NoError(t, os.WriteFile(path, []byte(record), 0o644))
+	return path
+}
+
+// dep-i has every task complete, but its worktree record is still there, so
+// its work is not merged yet: spec-z's run is refused naming it, offering the
+// override and the merge rather than implementing it again.
+func TestImplementDependencies_UnmergedDependencyIsUnmet(t *testing.T) {
+	dir := depProject(t, "")
+	writeWorktreeRecord(t, dir, "dep-i")
+
+	stdout, code := implementNewData(t, `{"name":"spec-z"}`)
+	require.Equal(t, 1, code, stdout)
+	er := decodeError(t, stdout)
+	require.Equal(t, "dependencies_unmet", er.Code)
+	require.Equal(t, "spec-z", er.Resource)
+	require.Equal(t, "spec-z depends on dep-i, which is implemented but not yet merged", er.Message)
+	require.Contains(t, er.NextAction, "ask whether to continue")
+	require.Contains(t, er.NextAction, `implement new --data '{"name":"spec-z","override_dependencies":true}'`)
+	require.Contains(t, er.NextAction, `implement merge --data '{"name":"dep-i"}'`)
+	require.NotContains(t, er.NextAction, `implement new --data '{"name":"dep-i"}'`)
+	require.NoFileExists(t, filepath.Join(dir, ".spektacular", "state.json"), "a refusal starts nothing")
+}
+
+func TestImplementDependencies_UnmergedDependencyOverrideIsRecorded(t *testing.T) {
+	dir := depProject(t, "")
+	writeWorktreeRecord(t, dir, "dep-i")
+
+	requireStarted(t, `{"name":"spec-z","override_dependencies":true}`)
+	require.Equal(t, []any{
+		map[string]any{"name": "dep-i", "state": "implemented but not yet merged"},
+	}, workflowData(t, dir)["dependency_override"])
+}
+
+func TestImplementDependencies_StrictRefusesAnUnmergedDependency(t *testing.T) {
+	t.Run("without override", func(t *testing.T) {
+		dir := depProject(t, strictDependenciesConfig)
+		writeWorktreeRecord(t, dir, "dep-i")
+
+		stdout, code := implementNewData(t, `{"name":"spec-z"}`)
+		require.Equal(t, 1, code, stdout)
+		er := decodeError(t, stdout)
+		require.Equal(t, "dependencies_unmet", er.Code)
+		require.Equal(t, "spec-z depends on dep-i, which is implemented but not yet merged", er.Message)
+		require.Contains(t, er.NextAction, "strict_dependencies")
+		require.Contains(t, er.NextAction, `implement merge --data '{"name":"dep-i"}'`)
+		require.NotContains(t, er.NextAction, "override_dependencies")
+		require.NoFileExists(t, filepath.Join(dir, ".spektacular", "state.json"))
+	})
+
+	t.Run("with override", func(t *testing.T) {
+		dir := depProject(t, strictDependenciesConfig)
+		writeWorktreeRecord(t, dir, "dep-i")
+
+		stdout, code := implementNewData(t, `{"name":"spec-z","override_dependencies":true}`)
+		require.Equal(t, 1, code, stdout)
+		er := decodeError(t, stdout)
+		require.Equal(t, "dependency_override_refused", er.Code)
+		require.Contains(t, er.Message, "spec-z depends on dep-i, which is implemented but not yet merged")
+		require.Contains(t, er.Message, "strict_dependencies")
+		require.Contains(t, er.NextAction, `implement merge --data '{"name":"dep-i"}'`)
+		require.NotContains(t, er.NextAction, "override_dependencies")
+		require.NoFileExists(t, filepath.Join(dir, ".spektacular", "state.json"))
+	})
+}
+
+// Once the dependency is merged back its record is gone, and the dependent
+// starts without a warning, even under strict dependencies.
+func TestImplementDependencies_MergedDependencyStartsSilently(t *testing.T) {
+	dir := depProject(t, strictDependenciesConfig)
+	record := writeWorktreeRecord(t, dir, "dep-i")
+
+	_, code := implementNewData(t, `{"name":"spec-z"}`)
+	require.Equal(t, 1, code, "refused while dep-i is unmerged")
+
+	require.NoError(t, os.RemoveAll(filepath.Dir(record)))
+	requireStarted(t, `{"name":"spec-z"}`)
+	_, recorded := workflowData(t, dir)["dependency_override"]
+	require.False(t, recorded)
+}
+
 func TestImplementDependencies_SpecifyingAndPlanningAreNeverHeldBack(t *testing.T) {
 	t.Run("spec new joining an epic with unimplemented specs", func(t *testing.T) {
 		depProject(t, strictDependenciesConfig)
@@ -253,6 +342,7 @@ func TestImplementDependencies_SpecifyingAndPlanningAreNeverHeldBack(t *testing.
 }
 
 func TestImplementDependencies_SchemaAndHelpNameTheSpec(t *testing.T) {
+	t.Chdir(t.TempDir())
 	require.Contains(t, implementNewCmd.Short, "spec")
 
 	resetRootCmd(t)

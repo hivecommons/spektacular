@@ -485,6 +485,91 @@ func TestBuild_StalePlan(t *testing.T) {
 	require.Equal(t, "stale", s.Plan.CurrentStep)
 }
 
+// amendedSpecBody is the spec body the amendment cases record and edit.
+const amendedSpecBody = "\n# Spec\n\n## Success Metrics\n\n- [ ] metric one\n"
+
+// amendedSpec renders a final spec with extraFM lines in its frontmatter,
+// one amendment per hash, and body.
+func amendedSpec(extraFM string, hashes []string, body string) string {
+	var b strings.Builder
+	b.WriteString("---\ncreated_date: \"2026-09-28\"\ndocument_status: final\n")
+	b.WriteString(extraFM)
+	if len(hashes) > 0 {
+		b.WriteString("amendments:\n")
+		for _, h := range hashes {
+			fmt.Fprintf(&b, "    - at: \"2026-09-30T10:00:00Z\"\n      sections: [Success Metrics]\n      hash: %s\n", h)
+		}
+	}
+	b.WriteString("---\n")
+	b.WriteString(body)
+	return b.String()
+}
+
+// bodyHashOf returns the BodyHash of the body Split finds in doc; it seeds
+// fixtures so a recorded amendment matches exactly what is on disk.
+func bodyHashOf(t *testing.T, doc string) string {
+	t.Helper()
+	_, body, err := metadata.Split([]byte(doc))
+	require.NoError(t, err)
+	return metadata.BodyHash(body)
+}
+
+// TestPlanIsStale_RecordedAmendments checks that a final plan whose spec was
+// changed only through recorded amendments is not stale, while any unrecorded
+// body edit, a spec with no amendments, or an unreadable spec still falls
+// back to the modification-time comparison.
+func TestPlanIsStale_RecordedAmendments(t *testing.T) {
+	match := bodyHashOf(t, amendedSpec("", nil, amendedSpecBody))
+	edited := amendedSpecBody + "- [ ] metric two\n"
+	ticked := strings.Replace(amendedSpecBody, "- [ ] metric one", "- [x] metric one", 1)
+
+	for _, tc := range []struct {
+		name      string
+		spec      string
+		planState string
+		want      bool
+	}{
+		{"no amendments", amendedSpec("", nil, amendedSpecBody), "final", true},
+		{"last amendment matches the body", amendedSpec("", []string{match}, amendedSpecBody), "final", false},
+		{"body edited after the amendment", amendedSpec("", []string{match}, edited), "final", true},
+		{"checkbox ticked after the amendment", amendedSpec("", []string{match}, ticked), "final", false},
+		{"frontmatter changed after the amendment", amendedSpec("epic: E\n", []string{match}, amendedSpecBody), "final", false},
+		{"only an earlier amendment matches", amendedSpec("", []string{match, bodyHashOf(t, amendedSpec("", nil, edited))}, amendedSpecBody), "final", true},
+		{"malformed frontmatter", "---\ndocument_status: [final\namendments:\n    - hash: " + match + "\n---\n" + amendedSpecBody, "final", true},
+		{"non-final plan", amendedSpec("", nil, amendedSpecBody), "draft", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t)
+			e.write("specs/S.md", tc.spec)
+			e.plan("S", tc.planState, true)
+			old := time.Now().Add(-time.Hour)
+			e.touch("plans/S/plan.md", old)
+			e.touch("specs/S.md", old.Add(time.Minute))
+
+			raw, err := os.ReadFile(filepath.Join(e.root, "plans/S/plan.md"))
+			require.NoError(t, err)
+			fm, _, err := metadata.Split(raw)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, PlanIsStale(e.opts.Config, e.opts.Store, "S", fm))
+		})
+	}
+
+	t.Run("build reports a matching amendment as implemented", func(t *testing.T) {
+		e := newEnv(t)
+		e.write("specs/S.md", amendedSpec("", []string{match}, amendedSpecBody))
+		e.plan("S", "final", true)
+		old := time.Now().Add(-time.Hour)
+		e.touch("plans/S/plan.md", old)
+		e.touch("specs/S.md", old.Add(time.Minute))
+		e.opts.Config.Plan.StrictSpecChanges = true
+
+		r, err := Build(e.opts, "S")
+		require.NoError(t, err)
+		require.Equal(t, StateImplemented, r.Specs[0].State)
+		require.Equal(t, "final", r.Specs[0].Plan.DocumentStatus)
+	})
+}
+
 func TestBuild_WorkflowBlock(t *testing.T) {
 	e := newEnv(t)
 	e.standardEpic()
@@ -586,6 +671,78 @@ func TestDependenciesOf(t *testing.T) {
 	deps, err = DependenciesOf(e.opts, "S")
 	require.NoError(t, err)
 	require.Equal(t, SpecDependencies{}, deps, "a standalone spec has no dependencies")
+}
+
+// An implemented dependency whose worktrees are not merged yet is unmet: it
+// is worded "implemented but not yet merged", and its dependent is not ready.
+// Its own state stays implemented, and the epic counts it as implemented.
+func TestDependenciesOf_UnmergedDependencyIsUnmet(t *testing.T) {
+	e := newEnv(t)
+	e.standardEpic()
+	e.opts.Unmerged = func(spec string) bool { return spec == "A" }
+
+	deps, err := DependenciesOf(e.opts, "B")
+	require.NoError(t, err)
+	require.Equal(t, []Dependency{{Name: "A", State: StateImplemented, Progress: TaskCounts{2, 2}, Description: "implemented but not yet merged", Ready: true, Unmerged: true}}, deps.Dependencies)
+	require.Equal(t, deps.Dependencies, deps.Unmet())
+
+	r, err := Build(e.opts, "E")
+	require.NoError(t, err)
+	a := specByName(t, r, "A")
+	require.Equal(t, StateImplemented, a.State)
+	b := specByName(t, r, "B")
+	require.False(t, b.Ready)
+	require.Equal(t, []string{"A"}, b.BlockedBy)
+	require.Equal(t, EpicProgress{SpecsImplemented: 1, SpecsTotal: 4, TasksCompleted: 3, TasksTotal: 5}, r.Epic.Progress)
+}
+
+// The hook only matters for an implemented dependency, and a hook reporting
+// nothing unmerged leaves every implemented dependency met.
+func TestDependenciesOf_UnmergedHook(t *testing.T) {
+	t.Run("hook reports nothing unmerged", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		e.opts.Unmerged = func(string) bool { return false }
+
+		deps, err := DependenciesOf(e.opts, "B")
+		require.NoError(t, err)
+		require.Equal(t, []Dependency{{Name: "A", State: StateImplemented, Progress: TaskCounts{2, 2}, Description: "implemented", Ready: true}}, deps.Dependencies)
+		require.Empty(t, deps.Unmet())
+
+		r, err := Build(e.opts, "E")
+		require.NoError(t, err)
+		b := specByName(t, r, "B")
+		require.True(t, b.Ready)
+		require.Equal(t, []string{}, b.BlockedBy)
+	})
+
+	t.Run("nil hook", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+
+		deps, err := DependenciesOf(e.opts, "B")
+		require.NoError(t, err)
+		require.Equal(t, []Dependency{{Name: "A", State: StateImplemented, Progress: TaskCounts{2, 2}, Description: "implemented", Ready: true}}, deps.Dependencies)
+		require.Empty(t, deps.Unmet())
+	})
+
+	t.Run("a dependency that is not implemented is never unmerged", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		e.opts.Unmerged = func(string) bool { return true }
+
+		deps, err := DependenciesOf(e.opts, "C")
+		require.NoError(t, err)
+		// B itself is not ready, because the hook reports its dependency A unmerged.
+		require.Equal(t, []Dependency{{Name: "B", State: StateInProgress, Progress: TaskCounts{1, 3}, Description: "in progress (1/3 tasks complete)", Ready: false}}, deps.Dependencies)
+	})
+}
+
+func TestDescribeDependency(t *testing.T) {
+	require.Equal(t, "implemented but not yet merged", DescribeDependency(StateImplemented, TaskCounts{5, 5}, true))
+	require.Equal(t, "implemented", DescribeDependency(StateImplemented, TaskCounts{5, 5}, false))
+	require.Equal(t, "in progress (2/5 tasks complete)", DescribeDependency(StateInProgress, TaskCounts{2, 5}, true))
+	require.Equal(t, "unplanned", DescribeDependency(StateSpecified, TaskCounts{}, true))
 }
 
 func TestRenderPretty_Epic(t *testing.T) {

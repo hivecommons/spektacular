@@ -259,3 +259,46 @@ func TestGate_UnparseableMemberRepoIsLeftToTheCommand(t *testing.T) {
 	require.Equal(t, filepath.Join(member, ".spektacular"), er.Resource)
 	require.Contains(t, er.Message, "parsing repo config file "+filepath.Join(member, ".spektacular", "repo.yaml")+": ")
 }
+
+// A command run from inside a spec's worktree is refused, naming the project
+// root to run it from instead, and nothing is written; help still answers.
+func TestGate_RefusesInsideSpecWorktree(t *testing.T) {
+	proj, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	wt := filepath.Join(proj, ".spektacular", "worktrees", "alpha", "site")
+	require.NoError(t, os.MkdirAll(wt, 0o755))
+	t.Chdir(wt)
+	before := snapshotDir(t, proj)
+
+	er := runRootError(t, "repo", "list")
+
+	require.Equal(t, "inside_spec_worktree", er.Code)
+	require.Equal(t, wt, er.Resource)
+	require.Contains(t, er.Message, "Spektacular is only ever run from the project root, "+proj)
+	require.Contains(t, er.NextAction, "re-run the same command from "+proj)
+	require.Equal(t, before, snapshotDir(t, proj), "a refused command must change nothing")
+
+	resetRootCmd(t)
+	_, _, code := runRootCmd(t, "help")
+	require.Equal(t, 0, code)
+}
+
+// Only a folder under a project's .spektacular/worktrees is a spec worktree.
+func TestSpecWorktreeProject(t *testing.T) {
+	sep := string(filepath.Separator)
+	for _, tc := range []struct {
+		cwd, project string
+		ok           bool
+	}{
+		{sep + filepath.Join("p", ".spektacular", "worktrees", "alpha"), sep + "p", true},
+		{sep + filepath.Join("p", ".spektacular", "worktrees", "alpha", "repo", "src"), sep + "p", true},
+		{sep + filepath.Join("p", ".spektacular", "worktrees"), sep + "p", true},
+		{sep + filepath.Join("p", ".spektacular"), "", false},
+		{sep + filepath.Join("p", "worktrees", "alpha"), "", false},
+		{sep + filepath.Join("p", ".spektacular", "worktreesx"), "", false},
+	} {
+		project, ok := specWorktreeProject(tc.cwd)
+		require.Equal(t, tc.ok, ok, tc.cwd)
+		require.Equal(t, tc.project, project, tc.cwd)
+	}
+}

@@ -65,11 +65,18 @@ func renderStepWithData(t *testing.T, cb workflow.StepCallback, values map[strin
 // changelog guard added to finished().
 func renderFinishedStep(t *testing.T) string {
 	t.Helper()
-	data := &testData{values: map[string]any{"name": "test"}}
+	return renderFinishedStepWith(t, map[string]any{"name": "test"}, workflow.Config{Command: "spektacular"})
+}
+
+// renderFinishedStepWith is renderFinishedStep with caller-supplied workflow
+// data and config, for finishes whose rendering depends on whether the run is
+// orchestrated or built in worktrees.
+func renderFinishedStepWith(t *testing.T, values map[string]any, cfg workflow.Config) string {
+	t.Helper()
+	data := &testData{values: values}
 	writer := &captureWriter{}
 	st := store.NewFileStore(t.TempDir(), "project")
 
-	cfg := workflow.Config{Command: "spektacular"}
 	seed, err := metadata.Render(metadata.Metadata{
 		CreatedDate:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
 		DocumentStatus: metadata.StatusDraft,
@@ -723,27 +730,27 @@ func TestImplementFinished_TolerantOfMissingTestPlan(t *testing.T) {
 
 // --- where each repo's code lives, in the code-touching steps ---
 
-// repoListSteps are the two implement callbacks whose templates must send the
-// agent to `repo list`: read_plan, which opens the workflow with the "Where
-// the code lives" preamble, and update_feature_changelog, which attributes
-// changes to repos. The other code-touching steps (analyze, implement, test,
-// verify) rely on the agent carrying that forward from read_plan.
+// repoListSteps are the implement callbacks whose templates must send the
+// agent to `repo list` when the spec has no worktrees: read_plan, which opens
+// the workflow with the "Where the code lives" preamble,
+// update_feature_changelog, which attributes changes to repos, and the four
+// steps that launch sub-agents onto the code (analyze, implement, test,
+// verify), which must hand those sub-agents each repo's location.
 func repoListSteps() map[string]workflow.StepCallback {
-	return map[string]workflow.StepCallback{
-		"read_plan":                readPlan(),
-		"update_feature_changelog": updateFeatureChangelog(),
-	}
+	steps := subAgentCodeSteps()
+	steps["read_plan"] = readPlan()
+	steps["update_feature_changelog"] = updateFeatureChangelog()
+	return steps
 }
 
-// laterCodeTouchingSteps are the code-touching steps after read_plan that
-// must not repeat the preamble.
-func laterCodeTouchingSteps() map[string]workflow.StepCallback {
+// subAgentCodeSteps are the steps that launch sub-agents onto the code and so
+// each carry their own "Where the code lives" section.
+func subAgentCodeSteps() map[string]workflow.StepCallback {
 	return map[string]workflow.StepCallback{
-		"analyze":     analyze(),
-		"implement":   implementStep(),
-		"test":        testStep(),
-		"verify":      verify(),
-		"update_plan": updatePlan(),
+		"analyze":   analyze(),
+		"implement": implementStep(),
+		"test":      testStep(),
+		"verify":    verify(),
 	}
 }
 
@@ -762,24 +769,30 @@ func TestRepoListStepsSendTheAgentToRepoList(t *testing.T) {
 	}
 }
 
-func TestWhereTheCodeLivesPreambleRenderedOnceByReadPlan(t *testing.T) {
+// read_plan opens the workflow with the code-location preamble; update_plan,
+// which only ticks the plan, does not repeat it.
+func TestWhereTheCodeLivesPreambleRenderedByReadPlan(t *testing.T) {
 	out := renderStepWithData(t, readPlan(), map[string]any{"name": "test"})
 	require.Contains(t, out, "Where the code lives", "read_plan must open with the code-location preamble")
 	require.Contains(t, out, "the rest of this workflow", "read_plan must scope the preamble to the whole workflow")
 
-	for name, cb := range laterCodeTouchingSteps() {
-		t.Run(name, func(t *testing.T) {
-			out := renderStepWithData(t, cb, map[string]any{"name": "test"})
-			require.NotContains(t, out, "Where the code lives", "%s must not repeat the code-location preamble", name)
-			require.NotContains(t, out, "repo list", "%s must not repeat the repo list direction", name)
-		})
-	}
+	updatePlanOut := renderStepWithData(t, updatePlan(), map[string]any{"name": "test"})
+	require.NotContains(t, updatePlanOut, "Where the code lives", "update_plan must not repeat the code-location preamble")
+	require.NotContains(t, updatePlanOut, "repo list", "update_plan must not repeat the repo list direction")
 }
 
 // renderTaskStep renders a step for a single-task run over a plan holding
 // two tasks, the selected one and another.
 func renderTaskStep(t *testing.T, cb workflow.StepCallback) string {
 	t.Helper()
+	return renderTaskStepWithConfig(t, cb, workflow.Config{Command: "spektacular"})
+}
+
+// renderTaskStepWithConfig is renderTaskStep with a caller-supplied workflow
+// config; its PlanDir is always the one the seeded plan lives under.
+func renderTaskStepWithConfig(t *testing.T, cb workflow.StepCallback, cfg workflow.Config) string {
+	t.Helper()
+	cfg.PlanDir = "plans"
 	root := t.TempDir()
 	st := store.NewFileStore(root, "project")
 	plan := "# Plan: test\n\n## Milestones & Tasks\n\n### Milestone 1: M\n\n" +
@@ -789,7 +802,7 @@ func renderTaskStep(t *testing.T, cb workflow.StepCallback) string {
 
 	data := &testData{values: map[string]any{"name": "test", "task": "sel-1"}}
 	writer := &captureWriter{}
-	_, err := cb(data, writer, st, workflow.Config{Command: "spektacular", PlanDir: "plans"})
+	_, err := cb(data, writer, st, cfg)
 	require.NoError(t, err)
 	return writer.result.Instruction
 }
@@ -837,4 +850,329 @@ func TestTestPlanStepCollectsManualReviews(t *testing.T) {
 	require.Contains(t, out, "A plan never makes these tasks, so the test plan is where they are recorded and done.")
 	require.Contains(t, out, "For every manual review, write what the reviewer looks at")
 	require.Contains(t, out, "list one procedure per metric and one per review")
+}
+
+// renderStepWithConfig drives a step callback the way renderStep does but
+// with a caller-supplied workflow config, for steps whose rendering depends
+// on runtime-only config such as a spec's worktree code roots.
+func renderStepWithConfig(t *testing.T, cb workflow.StepCallback, cfg workflow.Config) string {
+	t.Helper()
+	data := &testData{values: map[string]any{"name": "test"}}
+	writer := &captureWriter{}
+	st := store.NewFileStore(t.TempDir(), "project")
+	_, err := cb(data, writer, st, cfg)
+	require.NoError(t, err)
+	return writer.result.Instruction
+}
+
+func worktreeCodeRoots() []workflow.CodeRoot {
+	return []workflow.CodeRoot{
+		{Repo: "core", Root: "/work/trees/core-test"},
+		{Repo: "api", Root: "/work/trees/api&co-test"},
+	}
+}
+
+// A spec built in its own worktrees: read_plan names each repo's worktree
+// code root as where its code lives, instead of sending the agent to repo
+// list for it.
+func TestReadPlanNamesWorktreeCodeRoots(t *testing.T) {
+	out := renderStepWithConfig(t, readPlan(), workflow.Config{Command: "spektacular", CodeRoots: worktreeCodeRoots()})
+
+	require.Contains(t, out, "**Where the code lives.** This spec is built in its own worktrees, and each repo's code lives at the `root` listed below.",
+		"read_plan must say the spec's code lives in its worktrees")
+	require.Contains(t, out, "- `core`: `/work/trees/core-test`", "read_plan must list core's worktree root")
+	require.Contains(t, out, "- `api`: `/work/trees/api&co-test`", "read_plan must list api's worktree root unescaped")
+	require.NotContains(t, out, "&amp;", "a worktree root must render unescaped")
+	require.Contains(t, out, "Run every `spektacular` command from the directory you started in, never from inside a worktree",
+		"read_plan must keep spektacular commands out of the worktrees")
+	require.Contains(t, out, "never read or change anything under a worktree's `.spektacular` directory",
+		"read_plan must keep the agent out of a worktree's .spektacular")
+	require.Contains(t, out, "the roots listed above say where", "the drift check must point at the listed roots")
+	require.NotContains(t, out, "Run `spektacular repo list` now if you have not already",
+		"read_plan must not send a worktree spec to repo list for its code roots")
+	require.NotContains(t, out, "{{", "read_plan must leave no unrendered mustache")
+}
+
+// A spec built in its own worktrees: update_feature_changelog lists each
+// repo's worktree code root.
+func TestUpdateFeatureChangelogNamesWorktreeCodeRoots(t *testing.T) {
+	out := renderStepWithConfig(t, updateFeatureChangelog(), workflow.Config{Command: "spektacular", CodeRoots: worktreeCodeRoots()})
+
+	require.Contains(t, out, "This spec was built in its own worktrees, where each repo's code lives at the `root` listed below.",
+		"update_feature_changelog must say the spec's code lives in its worktrees")
+	require.Contains(t, out, "- `core`: `/work/trees/core-test`", "update_feature_changelog must list core's worktree root")
+	require.Contains(t, out, "- `api`: `/work/trees/api&co-test`", "update_feature_changelog must list api's worktree root unescaped")
+	require.NotContains(t, out, "&amp;", "a worktree root must render unescaped")
+	require.NotContains(t, out, "`spektacular repo list` reports the registered repos, with the `root` each one's code lives at.",
+		"update_feature_changelog must not point a worktree spec at repo list for code roots")
+	require.NotContains(t, out, "{{", "update_feature_changelog must leave no unrendered mustache")
+}
+
+// A spec without worktrees renders exactly as before: an empty CodeRoots
+// slice renders identically to none at all, and the original repo list
+// direction is intact with no trace of the worktree variant.
+func TestStepsWithoutWorktreeRootsRenderUnchanged(t *testing.T) {
+	for name, cb := range map[string]workflow.StepCallback{
+		"read_plan":                readPlan(),
+		"update_feature_changelog": updateFeatureChangelog(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			plain := renderStepWithConfig(t, cb, workflow.Config{Command: "spektacular"})
+			empty := renderStepWithConfig(t, cb, workflow.Config{Command: "spektacular", CodeRoots: []workflow.CodeRoot{}})
+			require.Equal(t, plain, empty, "%s must render the same with no code roots as with an empty list", name)
+			require.Equal(t, renderStep(t, cb), plain, "%s must render as the standard helper does", name)
+
+			require.NotContains(t, plain, "built in its own worktrees", "%s must not mention worktrees without code roots", name)
+			require.NotContains(t, plain, "has_worktree_roots", "%s must not leak the section variable", name)
+			require.NotContains(t, plain, "worktree_roots", "%s must not leak the roots variable", name)
+			require.NotContains(t, plain, "{{", "%s must leave no unrendered mustache", name)
+		})
+	}
+
+	readPlanOut := renderStepWithConfig(t, readPlan(), workflow.Config{Command: "spektacular"})
+	require.Contains(t, readPlanOut, "**Where the code lives.** Run `spektacular repo list` now if you have not already: it reports each registered repo and the `root` its code lives at.",
+		"read_plan must keep its original code-location paragraph")
+	require.Contains(t, readPlanOut, "a `<repo-name>: ` prefix says which; `spektacular repo list` says where)",
+		"read_plan's drift check must keep pointing at repo list")
+
+	changelogOut := renderStepWithConfig(t, updateFeatureChangelog(), workflow.Config{Command: "spektacular"})
+	require.Contains(t, changelogOut, "### Step 2: Identify affected repos\n\n`spektacular repo list` reports the registered repos, with the `root` each one's code lives at.",
+		"update_feature_changelog must keep its original repo list sentence directly under its heading")
+}
+
+// A spec built in its own worktrees: every step that launches sub-agents onto
+// the code names each repo's worktree root, tells the agent to hand those
+// locations to every sub-agent and keep it inside them, and says a new
+// worktree holds only tracked files so dependencies are prepared there.
+func TestSubAgentCodeStepsNameWorktreeCodeRoots(t *testing.T) {
+	for name, cb := range subAgentCodeSteps() {
+		t.Run(name, func(t *testing.T) {
+			out := renderStepWithConfig(t, cb, workflow.Config{Command: "spektacular", CodeRoots: worktreeCodeRoots()})
+
+			require.Contains(t, out, "### Where the code lives\n\nThis spec is built in its own worktrees. Each repo's code lives here:",
+				"%s must say the spec's code lives in its worktrees", name)
+			require.Contains(t, out, "- **core**: `/work/trees/core-test`", "%s must list core's worktree root", name)
+			require.Contains(t, out, "- **api**: `/work/trees/api&co-test`", "%s must list api's worktree root unescaped", name)
+			require.NotContains(t, out, "&amp;", "%s must render a worktree root unescaped", name)
+			require.Contains(t, out, "Every code edit, build and check happens in these locations, never in a main checkout.",
+				"%s must keep the work in the worktrees", name)
+			require.Contains(t, out, "Give every sub-agent you launch (task implementers, test authors, verifiers) these exact locations, and tell it to work only in them.",
+				"%s must hand every sub-agent the worktree locations", name)
+			require.Contains(t, out, "A new worktree holds only tracked files: ignored dependency folders such as `node_modules` are not there.",
+				"%s must say a new worktree holds only tracked files", name)
+			require.Contains(t, out, "Prepare dependencies inside the worktree",
+				"%s must say dependencies are prepared inside the worktree", name)
+			require.Contains(t, out, "Never install into, symlink from or share dependencies with a main checkout.",
+				"%s must forbid taking dependencies from a main checkout", name)
+			require.Contains(t, out, "Run `spektacular` itself from the project root, not from a worktree.",
+				"%s must keep spektacular commands out of the worktrees", name)
+			require.NotContains(t, out, "Run `spektacular repo list`. Each repo's code lives at its `root`.",
+				"%s must not send a worktree spec to repo list for its code roots", name)
+			require.NotContains(t, out, "{{", "%s must leave no unrendered mustache", name)
+		})
+	}
+}
+
+// A spec without worktrees: every step that launches sub-agents onto the code
+// sends the agent to repo list and tells it to hand each repo's registered
+// root to every sub-agent, with no trace of the worktree variant.
+func TestSubAgentCodeStepsWithoutWorktreeRootsPointAtRepoList(t *testing.T) {
+	for name, cb := range subAgentCodeSteps() {
+		t.Run(name, func(t *testing.T) {
+			plain := renderStepWithConfig(t, cb, workflow.Config{Command: "spektacular"})
+			empty := renderStepWithConfig(t, cb, workflow.Config{Command: "spektacular", CodeRoots: []workflow.CodeRoot{}})
+			require.Equal(t, plain, empty, "%s must render the same with no code roots as with an empty list", name)
+
+			require.Contains(t, plain, "### Where the code lives\n\nRun `spektacular repo list`. Each repo's code lives at its `root`.",
+				"%s must send the agent to repo list for each repo's root", name)
+			require.Contains(t, plain, "Give every sub-agent you launch those exact locations for the repos its work touches, and tell it to work only there.",
+				"%s must hand every sub-agent the registered locations", name)
+			require.NotContains(t, plain, "built in its own worktrees", "%s must not mention worktrees without code roots", name)
+			require.NotContains(t, plain, "only tracked files", "%s must not carry the worktree dependency guidance", name)
+			require.NotContains(t, plain, "main checkout", "%s must not mention a main checkout without worktrees", name)
+			require.NotContains(t, plain, "worktree_roots", "%s must not leak the roots variable", name)
+			require.NotContains(t, plain, "{{", "%s must leave no unrendered mustache", name)
+		})
+	}
+}
+
+// The code-only wording of the git-commit instruction, and the ordinary
+// auto_commit-on wording, hand-copied from the partial.
+const (
+	codeOnlyCommitIntro   = "even though `auto_commit` is off"
+	codeOnlyMainCheckouts = "Nothing is committed in the main checkouts."
+	autoCommitOnIntro     = "This project has `auto_commit` on"
+)
+
+// With automatic commits off, an implement run built in its own worktrees is
+// still asked for a commit message at each step whose exit is a completion:
+// reconcile_spec, and update_changelog when it ends a single-task run early.
+// The instruction says only the code is committed, on the spec's branch.
+func TestCompletionStepsAskForACodeOnlyCommitInOffModeWithWorktrees(t *testing.T) {
+	cfg := workflow.Config{Command: "spektacular", Kind: "implement", AutoCommit: "off", CodeRoots: worktreeCodeRoots()}
+	for name, out := range map[string]string{
+		"reconcile_spec":               renderStepWithConfig(t, reconcileSpec(), cfg),
+		"single-task update_changelog": renderTaskStepWithConfig(t, updateChangelog(), cfg),
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.Contains(t, out, "## Automatic git commit", "%s must carry the git-commit instruction", name)
+			require.Contains(t, out, "advancing to `finished` makes a\n**git commit** of its code on the spec's branch", name)
+			require.Contains(t, out, codeOnlyCommitIntro, name)
+			require.Contains(t, out, codeOnlyMainCheckouts, name)
+			require.NotContains(t, out, autoCommitOnIntro, "%s must not claim auto_commit is on", name)
+			require.Contains(t, out, `spektacular implement goto --data '{"step":"finished","name":"test","commit_message_from":".spektacular/tmp/test/git-commit-message.md"}'`, name)
+			require.NotContains(t, out, "{{", "%s must leave no unrendered mustache", name)
+		})
+	}
+}
+
+// With automatic commits off and no worktrees, nothing is committed, so no
+// step asks for a commit message.
+func TestCompletionStepsAskForNoCommitInOffModeWithoutWorktrees(t *testing.T) {
+	cfg := workflow.Config{Command: "spektacular", Kind: "implement", AutoCommit: "off"}
+	for name, out := range map[string]string{
+		"reconcile_spec":               renderStepWithConfig(t, reconcileSpec(), cfg),
+		"single-task update_changelog": renderTaskStepWithConfig(t, updateChangelog(), cfg),
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.NotContains(t, out, "Automatic git commit", name)
+			require.NotContains(t, out, "commit_message_from", name)
+		})
+	}
+}
+
+// With automatic commits on, a run in its own worktrees keeps the ordinary
+// wording.
+func TestCompletionStepsKeepAutoCommitOnWordingInWorkflowModeWithWorktrees(t *testing.T) {
+	cfg := workflow.Config{Command: "spektacular", Kind: "implement", AutoCommit: "workflow", CodeRoots: worktreeCodeRoots()}
+	out := renderStepWithConfig(t, reconcileSpec(), cfg)
+	require.Contains(t, out, "## Automatic git commit")
+	require.Contains(t, out, autoCommitOnIntro)
+	require.NotContains(t, out, codeOnlyCommitIntro)
+	require.NotContains(t, out, codeOnlyMainCheckouts)
+}
+
+// A complete run the user started, built in worktrees, is told to merge the
+// spec back with implement merge, and to report and stop on a refusal.
+func TestFinishedInWorktreesTellsTheRunToMerge(t *testing.T) {
+	out := renderFinishedStepWith(t, map[string]any{"name": "test"}, workflow.Config{Command: "spektacular", CodeRoots: worktreeCodeRoots()})
+
+	require.Contains(t, out, "### Merge the spec back")
+	require.Contains(t, out, "spektacular implement merge --data '{\"name\":\"test\"}'")
+	require.Contains(t, out, "on branch `spek/test`")
+	require.Contains(t, out, "The merge is all or nothing")
+	require.Contains(t, out, "If it is refused, report the repos and conflicting paths it names to the user and stop.")
+	require.Contains(t, out, "Never resolve a conflict yourself, and never merge, rebase or switch branches on your own initiative.")
+	require.NotContains(t, out, "kept for the next task run")
+}
+
+// An orchestrated run leaves the merge to its orchestrator and still hands
+// back DONE.
+func TestFinishedOrchestratedInWorktreesDoesNotMerge(t *testing.T) {
+	out := renderFinishedStepWith(t, map[string]any{"name": "test", "orchestrated": true}, workflow.Config{Command: "spektacular", CodeRoots: worktreeCodeRoots()})
+
+	require.NotContains(t, out, "implement merge")
+	require.NotContains(t, out, "Merge the spec back")
+	require.Contains(t, out, "first line is exactly `DONE: test`")
+}
+
+// A run without worktrees has nothing to merge.
+func TestFinishedWithoutWorktreesDoesNotMerge(t *testing.T) {
+	out := renderFinishedStepWith(t, map[string]any{"name": "test"}, workflow.Config{Command: "spektacular"})
+
+	require.NotContains(t, out, "implement merge")
+	require.NotContains(t, out, "Merge the spec back")
+}
+
+// A task run that leaves tasks open is not told to merge; in worktrees it
+// reports that they are kept for the next task run.
+func TestFinishedTaskRunWithOpenTasksDoesNotMerge(t *testing.T) {
+	out := renderTaskStepWithConfig(t, finished(), workflow.Config{Command: "spektacular", CodeRoots: worktreeCodeRoots()})
+	require.Contains(t, out, "2 task(s) in the plan remain open")
+	require.NotContains(t, out, "implement merge")
+	require.Contains(t, out, "- That the spec's worktrees are kept for the next task run, and are merged back once the plan is complete.")
+
+	plain := renderTaskStep(t, finished())
+	require.Contains(t, plain, "2 task(s) in the plan remain open")
+	require.NotContains(t, plain, "implement merge")
+	require.NotContains(t, plain, "kept for the next task run")
+}
+
+// specConflictHeading is the heading of
+// templates/partials/implement-spec-conflict.md, the stop for a wrong spec or
+// design that the analyze, implement, test and verify steps include.
+const specConflictHeading = "### If the spec or a design is wrong"
+
+// specConflictSteps are the implement steps that include the spec-conflict
+// stop, keyed by step name.
+func specConflictSteps() map[string]workflow.StepCallback {
+	return map[string]workflow.StepCallback{
+		"analyze":   analyze(),
+		"implement": implementStep(),
+		"test":      testStep(),
+		"verify":    verify(),
+	}
+}
+
+// TestSpecConflictStopInAnalyzeImplementTestVerify asserts every standalone
+// analyze, implement, test and verify instruction carries the stop for a
+// wrong spec or design: what to name, asking the user, applying only after
+// explicit approval through `spec amend` or a design revision, re-reading and
+// re-verifying, and recording the amendment — with no orchestrator wording.
+// The stop must sit before the step's Advance section.
+func TestSpecConflictStopInAnalyzeImplementTestVerify(t *testing.T) {
+	for name, cb := range specConflictSteps() {
+		t.Run(name, func(t *testing.T) {
+			out := renderStep(t, cb)
+
+			require.Contains(t, out, specConflictHeading)
+			require.Contains(t, out, "STOP. Do not work around it")
+			for _, bullet := range []string{
+				"- the document: the spec, or the design's source and path;",
+				"- the section of the spec, or the rule in the design;",
+				"- the conflict;",
+				"- the amendment you propose.",
+			} {
+				require.Contains(t, out, bullet, "%s must name %q when stopping", name, bullet)
+			}
+
+			require.Contains(t, out, "Ask the user whether to amend the spec or the design.")
+			require.Contains(t, out, "explicit approval")
+			require.Contains(t, out, `spektacular spec amend --data '{"name":"test"`)
+			require.Contains(t, out, "--from .spektacular/tmp/test/spec_amend.md")
+			require.Contains(t, out, "spektacular design author")
+			require.Contains(t, out, "spektacular design write")
+			require.Contains(t, out, `"design":{"source":"<name>","path":"<path>"}`)
+
+			require.Contains(t, out, "re-read the amended spec")
+			require.Contains(t, out, "re-run this step's check")
+			require.Contains(t, out, "**Amendments**")
+
+			// "orchestrator", not "orchestrat": analyze's pre-existing
+			// "orchestration guidance" for sub-agents is unrelated.
+			require.NotContains(t, out, "orchestrator")
+			require.NotContains(t, out, "orchestrated")
+			require.NotContains(t, out, "hand-back")
+			require.NotContains(t, out, "QUESTION:")
+
+			stop := strings.Index(out, specConflictHeading)
+			advance := strings.LastIndex(out, "### Advance")
+			require.NotEqual(t, -1, advance, "%s must have an Advance section", name)
+			require.Less(t, stop, advance, "%s must place the spec-conflict stop before Advance", name)
+		})
+	}
+}
+
+// TestUpdateChangelogEntryHasAmendmentsField asserts the per-task changelog
+// entry format carries an Amendments field, after Deviations, naming the
+// amended document, section and reason.
+func TestUpdateChangelogEntryHasAmendmentsField(t *testing.T) {
+	out := renderStep(t, updateChangelog())
+
+	deviations := strings.Index(out, "**Deviations**:")
+	amendments := strings.Index(out, "**Amendments**:")
+	require.NotEqual(t, -1, deviations)
+	require.NotEqual(t, -1, amendments)
+	require.Less(t, deviations, amendments, "Amendments must follow Deviations in the entry format")
+	require.Contains(t, out, "**Amendments**: <the document and section amended, and why")
 }

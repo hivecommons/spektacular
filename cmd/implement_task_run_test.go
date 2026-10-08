@@ -52,7 +52,7 @@ func gotoJSON(step string) string {
 func TestTaskRun_WrapUpHappensOnlyOnTheLastTask(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "")
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 	_, code := writePlanDoc(t, taskPlanName, "plan", twoTaskPlan(false, false))
 	require.Equal(t, 0, code)
 	dataDir := filepath.Join(dir, ".spektacular")
@@ -104,7 +104,7 @@ func TestTaskRun_WrapUpHappensOnlyOnTheLastTask(t *testing.T) {
 func TestWholePlanRun_UpdateChangelogExitsAreUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "")
+	writeSpecCommandConfig(t, dir, implementSharedSlotConfig)
 	_, code := writePlanDoc(t, taskPlanName, "plan", twoTaskPlan(false, false))
 	require.Equal(t, 0, code)
 

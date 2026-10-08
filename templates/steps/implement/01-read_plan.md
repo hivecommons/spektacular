@@ -2,7 +2,16 @@
 
 This step is the **validation and drift gate** for the implement workflow. Nothing else runs until it passes. If any check below fails, STOP and report to the user with a three-option prompt — do not silently continue past a failed check.
 
+{{^has_worktree_roots}}
 **Where the code lives.** Run `{{config.command}} repo list` now if you have not already: it reports each registered repo and the `root` its code lives at. For the rest of this workflow, carry out every code-touching step — analysis, implementation, tests, verification — in the `root` reported for the repo the work belongs to, never in whatever directory you started in, and pass that `root` to any sub-agent you launch.
+{{/has_worktree_roots}}
+{{#has_worktree_roots}}
+**Where the code lives.** This spec is built in its own worktrees, and each repo's code lives at the `root` listed below. For the rest of this workflow, carry out every code-touching step — analysis, implementation, tests, verification — in the `root` listed for the repo the work belongs to, never in whatever directory you started in, and pass that `root` to any sub-agent you launch. Run every `{{config.command}}` command from the directory you started in, never from inside a worktree, and never read or change anything under a worktree's `.spektacular` directory.
+
+{{#worktree_roots}}
+- `{{repo}}`: `{{{root}}}`
+{{/worktree_roots}}
+{{/has_worktree_roots}}
 
 
 ### Step 1: Full plan read
@@ -44,7 +53,7 @@ If any structural check fails, STOP and report the failures to the user.
 
 ### Step 3: Drift check against each repo's source
 
-For every **file path**, **package path**, **function name**, **type name**, **command path**, and **template path** named in the plan or the plan's `context` document (including inside code blocks and in `file:line` references), verify the target still exists in the codebase — checked in the `root` of the repo the reference belongs to (a `**Repo:**` line or a `<repo-name>: ` prefix says which; `{{config.command}} repo list` says where).
+For every **file path**, **package path**, **function name**, **type name**, **command path**, and **template path** named in the plan or the plan's `context` document (including inside code blocks and in `file:line` references), verify the target still exists in the codebase — checked in the `root` of the repo the reference belongs to (a `**Repo:**` line or a `<repo-name>: ` prefix says which; {{^has_worktree_roots}}`{{config.command}} repo list` says where{{/has_worktree_roots}}{{#has_worktree_roots}}the roots listed above say where{{/has_worktree_roots}}).
 
 **Method**:
 

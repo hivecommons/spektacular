@@ -2,9 +2,18 @@
     into an automatic git commit. Never include it from a step template. }}
 ## Automatic git commit
 
+{{#commit.code_only}}
+This spec is built in its own worktrees, so advancing to `{{next_step}}` makes a
+**git commit** of its code on the spec's branch, in every worktree that has
+changes, even though `auto_commit` is off: the branch must hold the work for it
+to be merged back. Nothing is committed in the main checkouts. This is a commit
+to git, not a document written to Spektacular — the two are different things.
+{{/commit.code_only}}
+{{^commit.code_only}}
 This project has `auto_commit` on, so advancing to `{{next_step}}` makes a **git
 commit** in every registered repository that has changes. This is a commit to
 git, not a document written to Spektacular — the two are different things.
+{{/commit.code_only}}
 
 Write the message yourself, from the work you just finished:
 

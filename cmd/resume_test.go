@@ -19,7 +19,7 @@ import (
 // NextAction) and that this shape round-trips through JSON, since it flows
 // all the way to stdout via that encoding in production.
 func TestEmitResumeReport_JSONCarriesWorkflowIdentityAndInstruction(t *testing.T) {
-	instruction, err := resumeInstruction("spektacular", "spec", "000024_resume", "overview", "", false)
+	instruction, err := resumeInstruction("spektacular", "spec", "000024_resume", "overview", "", false, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, instruction)
 
@@ -57,7 +57,7 @@ func TestEmitResumeReport_JSONCarriesWorkflowIdentityAndInstruction(t *testing.T
 }
 
 func TestResumeInstruction_AsksResumeVsNewWithBothCommands(t *testing.T) {
-	out, err := resumeInstruction("spektacular", "spec", "000024_resume", "overview", "", false)
+	out, err := resumeInstruction("spektacular", "spec", "000024_resume", "overview", "", false, false)
 	require.NoError(t, err)
 
 	require.NotContains(t, out, "{{")
@@ -115,7 +115,7 @@ func TestResumeInstruction_InterpolatesAcrossKinds(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			out, err := resumeInstruction(tt.command, tt.kind, tt.instance, tt.currentStep, "", false)
+			out, err := resumeInstruction(tt.command, tt.kind, tt.instance, tt.currentStep, "", false, false)
 			require.NoError(t, err)
 
 			require.NotContains(t, out, "{{")
@@ -139,7 +139,7 @@ func TestResumeInstruction_InterpolatesAcrossKinds(t *testing.T) {
 // the spec named, and offers a --force that re-founds the same orchestrated
 // lane rather than a bare `new --force`.
 func TestResumeInstruction_OrchestratedNamesLaneNotesAndForceData(t *testing.T) {
-	out, err := resumeInstruction("spektacular", "plan", "000024_resume", "tasks", "", true)
+	out, err := resumeInstruction("spektacular", "plan", "000024_resume", "tasks", "", false, true)
 	require.NoError(t, err)
 
 	require.NotContains(t, out, "{{")
@@ -155,7 +155,7 @@ func TestResumeInstruction_OrchestratedNamesLaneNotesAndForceData(t *testing.T) 
 // counterpart: its own resume template names the implement lane's notes file
 // and the orchestrated --force data.
 func TestResumeInstruction_OrchestratedImplementNamesLaneNotes(t *testing.T) {
-	out, err := resumeInstruction("spektacular", "implement", "000024_resume", "analyze", "", true)
+	out, err := resumeInstruction("spektacular", "implement", "000024_resume", "analyze", "", false, true)
 	require.NoError(t, err)
 
 	require.NotContains(t, out, "{{")
@@ -163,6 +163,26 @@ func TestResumeInstruction_OrchestratedImplementNamesLaneNotes(t *testing.T) {
 	require.Contains(t, out, `spektacular implement goto --data '{"step":"analyze","name":"000024_resume"}'`)
 	require.Contains(t, out,
 		`spektacular implement new --force --data '{"name":"000024_resume","orchestrated":true}'`)
+}
+
+// TestResumeInstruction_LaneImplementNamesLaneNotesWithoutOrchestrated asserts
+// a resume of an implement run the user started in its own lane (worktrees
+// on) points at the lane's notes, asks the user rather than resuming
+// unattended, and offers a --force that names the spec but is not
+// orchestrated.
+func TestResumeInstruction_LaneImplementNamesLaneNotesWithoutOrchestrated(t *testing.T) {
+	out, err := resumeInstruction("spektacular", "implement", "000024_resume", "analyze", "", true, false)
+	require.NoError(t, err)
+
+	require.NotContains(t, out, "{{")
+	require.Contains(t, out, "Read `.spektacular/workflows/implement-000024_resume.md`")
+	require.NotContains(t, out, ".spektacular/working-context.md",
+		"a lane resume must not send the agent to the shared working context")
+	require.Contains(t, out, "Ask the user whether to **resume** the existing workflow or **start a new one**")
+	require.NotContains(t, out, "This is an orchestrated run")
+	require.Contains(t, out, `spektacular implement goto --data '{"step":"analyze","name":"000024_resume"}'`)
+	require.Contains(t, out, `spektacular implement new --force --data '{"name":"000024_resume"}'`)
+	require.NotContains(t, out, `"orchestrated":true`)
 }
 
 // TestEmitResumeReport_OrchestratedStateRendersLaneResume asserts the report
@@ -213,7 +233,7 @@ func TestResumeImplement_ReadsPlanFirstAtEveryStep(t *testing.T) {
 
 	for _, step := range implementResumeSteps {
 		t.Run(step, func(t *testing.T) {
-			out, err := resumeInstruction(command, "implement", "demo-feature", step, "", false)
+			out, err := resumeInstruction(command, "implement", "demo-feature", step, "", false, false)
 			require.NoError(t, err)
 
 			require.Contains(t, normalizeIndent(out), block,
@@ -256,7 +276,7 @@ func TestResumeImplement_ReadsPlanFirstAtEveryStep(t *testing.T) {
 func TestResumeNonImplementUsesSharedTemplate(t *testing.T) {
 	for _, kind := range []string{"spec", "plan", "repo"} {
 		t.Run(kind, func(t *testing.T) {
-			out, err := resumeInstruction("spekx", kind, "demo-feature", "overview", "", false)
+			out, err := resumeInstruction("spekx", kind, "demo-feature", "overview", "", false, false)
 			require.NoError(t, err)
 
 			require.Contains(t, out, "spekx repo list")

@@ -15,6 +15,8 @@ If the section is missing, unreadable, or empty, STOP and ask the user whether t
 
 Pass the current task's acceptance criteria and its section of the plan's `context.md` to the sub-agent.
 
+{{> partials/implement-code-locations}}
+
 ### Step 2: Delegate to the follow-test-patterns skill
 
 Launch a sub-agent with the instructions from:
@@ -35,6 +37,8 @@ The sub-agent should:
 ### STOP-on-mismatch
 
 If the sub-agent reports that the test conventions it discovered don't match what the plan assumes, or that required test infrastructure (fixtures, helpers) is missing, STOP. Report to the user and ask for guidance before continuing.
+
+{{> partials/implement-spec-conflict}}
 
 ### Advance
 

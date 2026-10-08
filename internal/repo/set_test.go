@@ -692,67 +692,133 @@ func TestResolveAll_ReturnsRegistryOrder(t *testing.T) {
 	require.Equal(t, []string{"bravo", "alpha"}, names)
 }
 
-// writeOverlay writes the repo overlay into projectRoot/.spektacular.
-func writeOverlay(t *testing.T, projectRoot string, o Overlay) {
+// newSetWithCodeRoots builds a Set over the given entries whose code is
+// relocated as codeRoots maps it.
+func newSetWithCodeRoots(t *testing.T, projectRoot string, codeRoots map[string]string, entries ...config.RepoEntry) *Set {
 	t.Helper()
-	raw, err := json.Marshal(o)
+	cfg := config.NewDefault()
+	cfg.Repos = entries
+	s, err := NewWithCodeRoots(cfg, projectRoot, newFakeGit(t), codeRoots)
 	require.NoError(t, err)
-	dir := filepath.Join(projectRoot, ".spektacular")
-	require.NoError(t, os.MkdirAll(dir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, OverlayFile), raw, 0o644))
+	return s
 }
 
-// A repo the overlay maps resolves to the overlay's location — its root, its
-// code, and its resolution — while an unmapped repo resolves as registered.
-func TestNew_OverlayRelocatesMappedReposOnly(t *testing.T) {
+// A repo the code roots map has its code — LocalSource and Resolve's Source
+// — at the mapped directory, while its root (repo.yaml, knowledge,
+// changelog) stays at the registered location. An unmapped repo resolves
+// exactly as registered.
+func TestNewWithCodeRoots_RelocatesOnlyMappedReposCode(t *testing.T) {
 	project := t.TempDir()
 	registered := t.TempDir()
 	writeFootprint(t, registered)
 	inWorktree := t.TempDir()
-	writeFootprint(t, inWorktree)
 	other := t.TempDir()
 	writeFootprint(t, other)
-	writeOverlay(t, project, Overlay{Spec: "alpha", Repos: map[string]string{"lib": inWorktree}})
 
-	set := newSet(t, project, newFakeGit(t),
+	set := newSetWithCodeRoots(t, project, map[string]string{"lib": inWorktree},
 		config.RepoEntry{Name: "lib", Location: registered},
 		config.RepoEntry{Name: "other", Location: other},
 	)
 
-	root, ok := set.LocalRoot("lib")
-	require.True(t, ok)
-	require.Equal(t, inWorktree, root)
 	src, ok := set.LocalSource("lib")
 	require.True(t, ok)
 	require.Equal(t, inWorktree, src)
-	r, err := set.Resolve("lib")
-	require.NoError(t, err)
-	require.Equal(t, inWorktree, r.Root)
-
-	root, ok = set.LocalRoot("other")
-	require.True(t, ok)
-	require.Equal(t, other, root)
-	require.Equal(t, other, set.Entries()[1].Location)
-}
-
-// A relative location in the overlay is ignored: the overlay only ever names
-// absolute worktree paths, so a relative value is not trusted.
-func TestNew_OverlayRelativeLocationIsIgnored(t *testing.T) {
-	project := t.TempDir()
-	registered := t.TempDir()
-	writeFootprint(t, registered)
-	writeOverlay(t, project, Overlay{Spec: "alpha", Repos: map[string]string{"lib": "../elsewhere"}})
-
-	set := newSet(t, project, newFakeGit(t), config.RepoEntry{Name: "lib", Location: registered})
-
 	root, ok := set.LocalRoot("lib")
 	require.True(t, ok)
 	require.Equal(t, registered, root)
+	r, err := set.Resolve("lib")
+	require.NoError(t, err)
+	require.Equal(t, registered, r.Root)
+	require.Equal(t, inWorktree, r.Source)
+
+	src, ok = set.LocalSource("other")
+	require.True(t, ok)
+	require.Equal(t, other, src)
+	root, ok = set.LocalRoot("other")
+	require.True(t, ok)
+	require.Equal(t, other, root)
+	r, err = set.Resolve("other")
+	require.NoError(t, err)
+	require.Equal(t, other, r.Root)
+	require.Equal(t, other, r.Source)
+	require.Equal(t, other, set.Entries()[1].Location)
 }
 
-// With no overlay file, every repo resolves exactly as configured, relative
+// A relative code root is not trusted and is ignored, so the repo's code
+// stays at its registered location; a mapped directory that does not exist
+// on disk is reported absent rather than falling back.
+func TestNewWithCodeRoots_RelativeIgnoredAndMissingReportedAbsent(t *testing.T) {
+	project := t.TempDir()
+	relLib := t.TempDir()
+	writeFootprint(t, relLib)
+	goneLib := t.TempDir()
+	writeFootprint(t, goneLib)
+	missing := filepath.Join(t.TempDir(), "gone")
+
+	set := newSetWithCodeRoots(t, project,
+		map[string]string{"rel": "../elsewhere", "gone": missing},
+		config.RepoEntry{Name: "rel", Location: relLib},
+		config.RepoEntry{Name: "gone", Location: goneLib},
+	)
+
+	src, ok := set.LocalSource("rel")
+	require.True(t, ok)
+	require.Equal(t, relLib, src)
+	r, err := set.Resolve("rel")
+	require.NoError(t, err)
+	require.Equal(t, relLib, r.Source)
+
+	src, ok = set.LocalSource("gone")
+	require.False(t, ok)
+	require.Equal(t, "", src)
+	root, ok := set.LocalRoot("gone")
+	require.True(t, ok)
+	require.Equal(t, goneLib, root)
+}
+
+// New never reads a stray .spektacular/worktree-repos.json left in the
+// project — not even a malformed one: every repo resolves as registered.
+func TestNew_IgnoresStrayWorktreeReposFile(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  func(elsewhere string) []byte
+	}{
+		{name: "well-formed", raw: func(elsewhere string) []byte {
+			raw, err := json.Marshal(map[string]any{"spec": "alpha", "repos": map[string]string{"lib": elsewhere}})
+			require.NoError(t, err)
+			return raw
+		}},
+		{name: "malformed", raw: func(string) []byte { return []byte("{not json") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			project := t.TempDir()
+			registered := t.TempDir()
+			writeFootprint(t, registered)
+			elsewhere := t.TempDir()
+			writeFootprint(t, elsewhere)
+			dir := filepath.Join(project, ".spektacular")
+			require.NoError(t, os.MkdirAll(dir, 0o755))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "worktree-repos.json"), tc.raw(elsewhere), 0o644))
+
+			set := newSet(t, project, newFakeGit(t), config.RepoEntry{Name: "lib", Location: registered})
+
+			root, ok := set.LocalRoot("lib")
+			require.True(t, ok)
+			require.Equal(t, registered, root)
+			src, ok := set.LocalSource("lib")
+			require.True(t, ok)
+			require.Equal(t, registered, src)
+			r, err := set.Resolve("lib")
+			require.NoError(t, err)
+			require.Equal(t, registered, r.Root)
+			require.Equal(t, registered, r.Source)
+		})
+	}
+}
+
+// With no code roots, every repo resolves exactly as configured, relative
 // locations included.
-func TestNew_NoOverlayLeavesLocationsUnchanged(t *testing.T) {
+func TestNew_LeavesLocationsUnchanged(t *testing.T) {
 	project := t.TempDir()
 	writeFootprint(t, filepath.Join(project, "repos", "lib"))
 
@@ -762,19 +828,4 @@ func TestNew_NoOverlayLeavesLocationsUnchanged(t *testing.T) {
 	root, ok := set.LocalRoot("lib")
 	require.True(t, ok)
 	require.Equal(t, filepath.Join(project, "repos", "lib"), root)
-}
-
-// An overlay that is not JSON fails construction rather than silently
-// resolving into the shared checkouts.
-func TestNew_MalformedOverlayIsAnError(t *testing.T) {
-	project := t.TempDir()
-	dir := filepath.Join(project, ".spektacular")
-	require.NoError(t, os.MkdirAll(dir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, OverlayFile), []byte("{not json"), 0o644))
-
-	cfg := config.NewDefault()
-	cfg.Repos = []config.RepoEntry{{Name: "lib", Location: t.TempDir()}}
-	_, err := New(cfg, project, newFakeGit(t))
-	require.Error(t, err)
-	require.Contains(t, err.Error(), OverlayFile)
 }

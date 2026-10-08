@@ -140,6 +140,21 @@ type Options struct {
 	// Run, when set, adds the run view: what each spec, and the epic, still
 	// needs for planning and implementing.
 	Run *RunSource
+	// Unmerged reports whether a spec's worktrees are still unmerged: its
+	// work is done but not yet in the main line. nil reports nothing
+	// unmerged.
+	Unmerged func(spec string) bool
+}
+
+// unmerged reports whether name's worktrees are still unmerged.
+func (o Options) unmerged(name string) bool {
+	return o.Unmerged != nil && o.Unmerged(name)
+}
+
+// metBy reports whether a dependency in state on spec name is met: it is
+// implemented and its work has been merged back.
+func (o Options) metBy(name string, state SpecState) bool {
+	return state == StateImplemented && !o.unmerged(name)
 }
 
 // lane is the in-progress orchestrated workflow of kind for name, or nil.
@@ -214,6 +229,9 @@ type Dependency struct {
 	// Ready is true when every one of the dependency's own dependencies is
 	// implemented, so it could itself be implemented now.
 	Ready bool
+	// Unmerged is true when the dependency is implemented but its worktrees
+	// are not merged yet, so its code is not in the main line.
+	Unmerged bool
 }
 
 // SpecDependencies is what the implement check needs about a spec.
@@ -225,11 +243,12 @@ type SpecDependencies struct {
 	Dependencies []Dependency
 }
 
-// Unmet returns the dependencies that are not implemented, in order.
+// Unmet returns the dependencies that are not implemented, or implemented
+// but not yet merged, in order.
 func (d SpecDependencies) Unmet() []Dependency {
 	var unmet []Dependency
 	for _, dep := range d.Dependencies {
-		if dep.State != StateImplemented {
+		if dep.State != StateImplemented || dep.Unmerged {
 			unmet = append(unmet, dep)
 		}
 	}
@@ -266,7 +285,8 @@ func DependenciesOf(opts Options, specName string) (SpecDependencies, error) {
 		if ok {
 			dep.State, dep.Progress, dep.Ready = s.State, s.counts, s.Ready
 		}
-		dep.Description = Describe(dep.State, dep.Progress)
+		dep.Unmerged = dep.State == StateImplemented && opts.unmerged(d)
+		dep.Description = DescribeDependency(dep.State, dep.Progress, dep.Unmerged)
 		out.Dependencies = append(out.Dependencies, dep)
 	}
 	return out, nil
@@ -335,7 +355,7 @@ func buildTarget(opts Options, target Target) (Report, error) {
 		s := &r.Specs[i]
 		s.BlockedBy = []string{}
 		for _, d := range s.DependsOn {
-			if states[d] != StateImplemented {
+			if !opts.metBy(d, states[d]) {
 				s.BlockedBy = append(s.BlockedBy, d)
 			}
 		}
