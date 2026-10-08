@@ -203,6 +203,46 @@ func TestOrchestratedPlanCommit_FailureRestoresOnlyItsOwnLane(t *testing.T) {
 	require.Equal(t, betaStateBefore, readBytes(t, betaState))
 }
 
+// Issue #80: a plan lane's completion commit still succeeds when its scratch
+// folder holds nothing but the staged commit message — so it is empty once
+// the message is removed — and when the scratch folder is git-ignored. The
+// lane's own plan, work and lane files are committed either way.
+func TestOrchestratedPlanCommit_ScratchFolderEmptyOrIgnored(t *testing.T) {
+	for name, setup := range map[string]func(t *testing.T, root string){
+		"holds only the message": func(t *testing.T, root string) {
+			require.NoError(t, os.RemoveAll(filepath.Join(root, ".spektacular", "tmp", laneAlpha)))
+		},
+		"is git-ignored": func(t *testing.T, root string) {
+			require.NoError(t, os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".spektacular/tmp/\n"), 0o644))
+			gittest.RunGit(t, root, "add", ".gitignore")
+			gittest.RunGit(t, root, "commit", "-q", "-m", "ignore scratch")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fx := gitProject(t, config.AutoCommitWorkflow)
+			startPlanLane(t, laneAlpha)
+			commitFixtures(t, fx)
+			walkPlanLane(t, laneAlpha, planStepsToWalkthrough...)
+			writeLaneWork(t, fx.root, laneAlpha)
+			setup(t, fx.root)
+			before := gittest.RunGit(t, fx.root, "rev-parse", "HEAD")
+
+			stageLaneMessage(t, fx.root, laneAlpha, "Plan "+laneAlpha+"\n\nThe alpha plan is complete.\n")
+			runOK(t, "plan", "goto", "--data", finishLaneData(laneAlpha))
+
+			require.Equal(t, before, gittest.RunGit(t, fx.root, "rev-parse", "HEAD~1"))
+			require.Equal(t,
+				"A\t.spektacular/plans/"+laneAlpha+"/context.md\n"+
+					"A\t.spektacular/plans/"+laneAlpha+"/plan.md\n"+
+					"A\t.spektacular/plans/"+laneAlpha+"/research.md\n"+
+					"A\t.spektacular/work/"+laneAlpha+"/overview.md\n"+
+					"D\t.spektacular/workflows/plan-"+laneAlpha+".json",
+				headFiles(t, fx.root))
+			require.Empty(t, gittest.RunGit(t, fx.root, "status", "--porcelain"))
+		})
+	}
+}
+
 // Criterion (d): a standalone plan's completion commit still takes the whole
 // tree, a file unrelated to the plan included.
 func TestStandalonePlanCommit_StillCommitsTheWholeTree(t *testing.T) {
