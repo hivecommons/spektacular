@@ -133,6 +133,11 @@ func DocumentStatus(cfg config.Config, st store.Reader, planName string, fm *met
 // PlanIsStale reports whether a final plan's spec was modified after the
 // plan. The spec is the plan's `spec` frontmatter, or the plan's own name. It
 // is the bare comparison: callers apply plan.strict_spec_changes themselves.
+//
+// A spec whose body still matches its last recorded amendment is not a later
+// modification: spec amend changed it during the run on purpose, so the plan
+// stays current. Any other body edit, before or after an amendment, falls
+// back to comparing modification times, as does a spec that cannot be read.
 func PlanIsStale(cfg config.Config, st store.Reader, planName string, fm *metadata.Metadata) bool {
 	if fm == nil || fm.DocumentStatus != metadata.StatusFinal {
 		return false
@@ -140,6 +145,9 @@ func PlanIsStale(cfg config.Config, st store.Reader, planName string, fm *metada
 	specName := fm.Spec
 	if specName == "" {
 		specName = planName
+	}
+	if specMatchesLastAmendment(st, specPath(cfg, specName)) {
+		return false
 	}
 	planInfo, err := st.Stat(planPath(cfg, planName))
 	if err != nil {
@@ -150,4 +158,20 @@ func PlanIsStale(cfg config.Config, st store.Reader, planName string, fm *metada
 		return false
 	}
 	return specInfo.ModTime.After(planInfo.ModTime)
+}
+
+// specMatchesLastAmendment reports whether the spec at path carries recorded
+// amendments and its body, checkbox marks aside, is exactly the body the last
+// one left behind. A read or parse failure reports false, so a malformed spec
+// never hides staleness.
+func specMatchesLastAmendment(st store.Reader, path string) bool {
+	raw, err := st.Read(path)
+	if err != nil {
+		return false
+	}
+	fm, body, err := metadata.Split(raw)
+	if err != nil || fm == nil || len(fm.Amendments) == 0 {
+		return false
+	}
+	return fm.Amendments[len(fm.Amendments)-1].Hash == metadata.BodyHash(body)
 }

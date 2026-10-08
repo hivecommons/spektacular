@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/workflow"
@@ -303,4 +304,46 @@ func TestImplementLane_SnapshotStatePathFollowsTheLane(t *testing.T) {
 		dataDir := filepath.Join(dir, config.ProjectConfigDirName)
 		require.Equal(t, stateFilePath(dataDir), snapshotStatePath([]string{"implement", "new", "--data", `{"name":"alpha"}`}))
 	})
+}
+
+// Criterion: in strict mode, an orchestrated run interrupted by a recorded
+// spec amendment carries on: repeating its start reports the lane for resume
+// rather than plan_stale, and a goto naming the spec advances it, although
+// the spec is now newer than the plan. A later unrecorded edit stops it.
+func TestImplementLane_OrchestratedResumeAfterRecordedAmendment(t *testing.T) {
+	dataDir, specPath := strictAmendProject(t, "alpha", "")
+	writeEmptyWorktreeRecord(t, dataDir, "alpha")
+
+	// Start before the spec is touched again: the plan is newer than the
+	// spec for this start only.
+	planPath := filepath.Join(dataDir, "plans", "alpha", "plan.md")
+	require.NoError(t, os.Chtimes(specPath, strictPlanModTime.Add(-time.Hour), strictPlanModTime.Add(-time.Hour)))
+	resetRootCmd(t)
+	runOK(t, "implement", "new", "--data", `{"name":"alpha","orchestrated":true}`)
+	resetRootCmd(t)
+	runOK(t, "implement", "goto", "--data", `{"step":"analyze","name":"alpha"}`)
+
+	amendSuccessMetricViaCLI(t, "alpha", specPath)
+	planInfo, err := os.Stat(planPath)
+	require.NoError(t, err)
+	specInfo, err := os.Stat(specPath)
+	require.NoError(t, err)
+	require.True(t, specInfo.ModTime().After(planInfo.ModTime()), "the amended spec must be newer than its plan")
+
+	resetRootCmd(t)
+	er := runRefused(t, "implement", "new", "--data", `{"name":"alpha","orchestrated":true}`)
+	require.Equal(t, "workflow_in_progress", er.Code)
+	require.Equal(t, "alpha", er.Resource)
+	require.Equal(t, "analyze", er.Current)
+
+	resetRootCmd(t)
+	runOK(t, "implement", "goto", "--data", `{"step":"implement","name":"alpha"}`)
+	lane := laneState(t, dataDir, "implement", "alpha")
+	require.Equal(t, "implement", lane.CurrentStep)
+	require.Equal(t, true, lane.Data["orchestrated"])
+	require.NoFileExists(t, stateFilePath(dataDir))
+
+	editSpecUnrecordedViaCLI(t, "alpha", specPath)
+	requirePlanStale(t, "implement", "goto", "--data", `{"step":"test","name":"alpha"}`)
+	require.Equal(t, "implement", laneState(t, dataDir, "implement", "alpha").CurrentStep, "a refused goto leaves the lane where it was")
 }

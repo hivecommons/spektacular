@@ -20,7 +20,7 @@ Your own notes for this run go in `.spektacular/working-context.md`: which epic,
 
 # Spektacular's files are reached through Spektacular
 
-Never use your own file tools on a store directory, and never build a store path by hand. Read and write plans only with `{{command}} plan file read` and `{{command}} plan file write --from <path>`, specs with `{{command}} spec file`, changelogs with `{{command}} changelog file`, and epics with `{{command}} epic`. Every child prompt must restate this rule, because a child inherits neither this skill nor your context.
+Never use your own file tools on a store directory, and never build a store path by hand. Read and write plans only with `{{command}} plan file read` and `{{command}} plan file write --from <path>`, specs with `{{command}} spec file`, changelogs with `{{command}} changelog file`, epics with `{{command}} epic`, and designs with `{{command}} design`. A spec is amended during a run only with `{{command}} spec amend`. Every child prompt must restate this rule, because a child inherits neither this skill nor your context.
 
 # Step 1: Find the epic
 
@@ -65,6 +65,7 @@ Give each child exactly what it needs, because it inherits nothing from you:
 - to **start** or **resume**: run `{{command}} implement new --data '{"name":"<spec>","orchestrated":true}'`. If it returns a resume report for the spec's lane, read back what the report names (the plan documents and the lane's notes), then run the `goto` it gives, which carries `\"name\":\"<spec>\"`;
 - "Follow the `spek-implement` skill. This run is orchestrated: tasks run one after another without asking between them, every `goto` carries `\"name\":\"<spec>\"`, and you never ask the user anything yourself.";
 - "Never resolve a merge or git conflict yourself, and never merge, rebase or switch branches: your worktree's branch is merged by the orchestrator.";
+- "You never write the spec's text or a design document. If the spec or a design it references is wrong, propose the amendment in a `QUESTION:` hand-back, naming the document, the section, the conflict and the change you propose.";
 - the store-access rule above, word for word;
 - the hand-back contract and the definition of a genuine open question, below.
 
@@ -78,7 +79,7 @@ A child ends every turn that stops its work with a final message whose **first l
 
 ## What counts as a genuine open question
 
-Only a stop the implement workflow itself defines earns a question: the plan no longer matching the code, a task outgrowing its scope, or a verification failure the child cannot fix within the task. Everything else the child decides itself and records in the plan's changelog. A child never asks whether to continue to its next task.
+Only a stop the implement workflow itself defines earns a question: the plan no longer matching the code, the spec or a design it references being wrong, a task outgrowing its scope, or a verification failure the child cannot fix within the task. Everything else the child decides itself and records in the plan's changelog. A child never asks whether to continue to its next task.
 
 # Step 5: Merging a finished spec
 
@@ -96,6 +97,7 @@ Any other refusal from `epic worktree` or `epic merge` is handled the same way: 
 
 - **`DONE:`** — merge the spec (Step 5), keep its summary for the final report, then re-read `status` and start the specs that have just become ready.
 - **`QUESTION:`** — put the question to the user. Present it as ordinary text first, naming the spec, the options and the recommended default, then ask. While the user considers it, the other children keep going. Send the user's answer back to the same child, so it continues where it stopped. If your agent cannot continue a stopped child, start a fresh child on the same spec with the answer included in its prompt; it resumes from its lane.
+- **An amendment the user approves** — when a `QUESTION:` proposes amending the spec or a design, apply it yourself only after the user's explicit approval, from the project root and never in a worktree. For the spec, read it with `{{command}} spec file read <spec>`, change only the sections the user approved, stage the full result under `.spektacular/tmp/<spec>/`, and run `{{command}} spec amend --data '{"name":"<spec>","reason":"<why>","run":"epic <epic> implement run, task <task>"}' --from <staged file>`. For a design, revise it with `{{command}} design author`, or store the new version the user supplies with `{{command}} design write` for a design they wrote, then record it with `{{command}} spec amend` and a `"design":{"source":"<name>","path":"<path>"}` field. Note the amendment in `.spektacular/working-context.md`, then answer the child naming what changed, so it re-reads the amended text and re-verifies its task. If the user rejects the amendment, answer the child with their decision.
 - **The user declines to answer now** — enter stopping mode.
 - **`FAILED:`** — enter stopping mode.
 

@@ -38,7 +38,7 @@ spektacular status                        # the workflow in progress, if any
 
 `current_step` is the live workflow step when that artifact's workflow is in progress, `finished` for a closed document, `stale` for a stale plan, and empty otherwise. The report carries a `workflow` block (`kind`, `name`, `current_step`, `completed_steps`, `updated_at`) when the workflow in progress belongs to one of the reported specs or plans, and `null` otherwise. With no name, `status` reports the workflow in progress the same way, or `{"workflow": null}` when nothing is in progress. An unknown name is refused with `artifact_not_found`, and an unsupported `--format` with `status_format_unsupported`; failures are always JSON, whatever format was asked for. Frontmatter dates are emitted as RFC3339 midnight UTC timestamps. `spec file list` and `plan file list` carry `modified_at` per entry, so polling many artifacts is one list call.
 
-When `plan.strict_spec_changes` is true, `status` reports a plan's `document_status: "stale"` and `current_step: "stale"`, and its spec's state as `stale`, once the linked spek is modified after a final plan; `implement new` and subsequent implement steps refuse that plan until it is replanned and re-approved. With the default non-strict setting, a later spek edit does not invalidate an existing plan.
+When `plan.strict_spec_changes` is true, `status` reports a plan's `document_status: "stale"` and `current_step: "stale"`, and its spec's state as `stale`, once the linked spek is modified after a final plan; `implement new` and subsequent implement steps refuse that plan until it is replanned and re-approved. With the default non-strict setting, a later spek edit does not invalidate an existing plan. A spek change recorded with `spektacular spec amend` during an implement run does not make the plan stale in either mode; any other edit to the spek's body still does under the strict setting.
 
 **Epics.** When a piece of work is split into an epic, ask your agent to *plan this epic*, review the plans, then *implement this epic*. Independent specs are worked on in parallel, each spec is built in its own worktree and merged before the specs that depend on it, and repeating either request picks up where it stopped. Naming an epic in `status` adds a `run` view that says, for planning and for implementing, what each spec still needs and what blocks the epic. See [Epics](https://spektacular.dev/epics/).
 
@@ -231,7 +231,7 @@ spec:
     directory: specs                # relative to the folder holding config.yaml
 plan:
   provider: file
-  strict_spec_changes: false        # true marks final plans stale after later spec edits
+  strict_spec_changes: false        # true marks final plans stale after later spec edits (recorded amendments excepted)
   config:
     directory: plans                # relative to the folder holding config.yaml
 changelog:

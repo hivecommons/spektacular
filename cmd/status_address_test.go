@@ -123,6 +123,7 @@ func TestWorkflowResults_ReportConfigRelativeLocation(t *testing.T) {
 // The new-result schemas describe the reported location as relative, and
 // plan and implement document the plan_document address field.
 func TestWorkflowNew_SchemaDescribesRelativeLocation(t *testing.T) {
+	t.Chdir(t.TempDir())
 	for _, tc := range []struct {
 		kind, pathField string
 		hasDocument     bool

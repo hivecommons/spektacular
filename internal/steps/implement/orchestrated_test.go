@@ -71,3 +71,26 @@ func TestOrchestratedFinishedHandsBackDone(t *testing.T) {
 	require.NotContains(t, standalone, "DONE:")
 	require.NotContains(t, standalone, "orchestrat")
 }
+
+// TestOrchestratedSpecConflictNeverWritesSpec asserts an orchestrated
+// analyze, implement, test or verify lane stops on a wrong spec or design
+// without writing spec or design text itself: it proposes the amendment
+// through its hand-back, then re-reads and re-verifies once answered, and
+// carries none of the interactive amend commands.
+func TestOrchestratedSpecConflictNeverWritesSpec(t *testing.T) {
+	for name, cb := range specConflictSteps() {
+		t.Run(name, func(t *testing.T) {
+			out := renderOrchestratedImplement(t, cb, store.NewFileStore(t.TempDir(), "project"))
+
+			require.Contains(t, out, specConflictHeading)
+			require.Contains(t, out, "Never write the spec's text or a design document yourself, and never record an amendment")
+			require.Contains(t, out, "Put the document, section, conflict and proposed amendment in your hand-back.")
+			require.Contains(t, out, "QUESTION: 000007_billing")
+			require.Contains(t, out, "re-run this step's check")
+
+			require.NotContains(t, out, "spec amend --data")
+			require.NotContains(t, out, "--from .spektacular/tmp/000007_billing/spec_amend.md")
+			require.NotContains(t, out, "Ask the user whether to amend")
+		})
+	}
+}

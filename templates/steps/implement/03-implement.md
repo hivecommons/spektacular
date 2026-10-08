@@ -36,6 +36,8 @@ If the code you need to modify has drifted materially from what the plan describ
 
 Do not silently adapt — visible drift must be acknowledged.
 
+{{> partials/implement-spec-conflict}}
+
 ### Advance
 
 Once the code for the current task compiles:

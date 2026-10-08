@@ -93,6 +93,23 @@ type Metadata struct {
 	// with the date it was retrieved. Only spec new sets them; like Designs,
 	// they are modelled here so the closed schema carries them forward.
 	Sources []SourceRef
+	// Amendments are the changes recorded on a spec during an implement run,
+	// oldest first. Only a spec carries them, and only spec amend appends to
+	// them. Like Designs, they are modelled here so the closed schema carries
+	// them forward through every ordinary write, including reconcile_spec.
+	Amendments []Amendment
+}
+
+// Amendment is one change recorded on a spec during an implement run: the
+// moment it was recorded (RFC3339, UTC), the spec sections it changed or the
+// design whose revision it records, and BodyHash of the spec body it left
+// behind. Plan staleness compares that hash with the spec's current body, so
+// a spec changed only by recorded amendments does not make its plan stale.
+type Amendment struct {
+	At       string     `yaml:"at" json:"at"`
+	Sections []string   `yaml:"sections,omitempty,flow" json:"sections,omitempty"`
+	Design   *DesignRef `yaml:"design,omitempty,flow" json:"design,omitempty"`
+	Hash     string     `yaml:"hash" json:"hash"`
 }
 
 // SourceRef is one piece of existing material a document was seeded from: a
@@ -127,6 +144,7 @@ type yamlShape struct {
 	Specs          []string       `yaml:"specs,omitempty"`
 	Epic           string         `yaml:"epic,omitempty"`
 	Sources        []SourceRef    `yaml:"sources,omitempty"`
+	Amendments     []Amendment    `yaml:"amendments,omitempty"`
 }
 
 // yamlInShape is the decode-side twin of yamlShape. It holds document_status
@@ -149,6 +167,8 @@ type yamlInShape struct {
 	Epic  string    `yaml:"epic"`
 	// Sources is a raw node for the same reason Designs is.
 	Sources yaml.Node `yaml:"sources"`
+	// Amendments is a raw node for the same reason Designs is.
+	Amendments yaml.Node `yaml:"amendments"`
 }
 
 // MarshalYAML implements yaml.Marshaler.
@@ -164,6 +184,7 @@ func (m Metadata) MarshalYAML() (interface{}, error) {
 		Specs:          m.Specs,
 		Epic:           m.Epic,
 		Sources:        m.Sources,
+		Amendments:     m.Amendments,
 	}
 	if !m.ClosedDate.IsZero() {
 		out.ClosedDate = m.ClosedDate.Format(dateFormat)
@@ -207,6 +228,7 @@ func (m *Metadata) UnmarshalYAML(node *yaml.Node) error {
 	m.Specs = decodeSpecNames(in.Specs)
 	m.Epic = in.Epic
 	m.Sources = decodeSourceRefs(in.Sources)
+	m.Amendments = decodeAmendments(in.Amendments)
 	return nil
 }
 
@@ -257,6 +279,32 @@ func decodeSourceRefs(node yaml.Node) []SourceRef {
 		refs = append(refs, ref)
 	}
 	return refs
+}
+
+// decodeAmendments reads the amendments list leniently, on the same bargain
+// decodeDesignRefs strikes: an absent, empty, malformed or non-list value
+// yields no amendments instead of an error. Non-mapping entries and entries
+// with no hash are dropped, since an amendment that cannot be matched against
+// the spec body exempts nothing.
+func decodeAmendments(node yaml.Node) []Amendment {
+	if node.Kind != yaml.SequenceNode {
+		return nil
+	}
+	var out []Amendment
+	for _, item := range node.Content {
+		if item.Kind != yaml.MappingNode {
+			continue
+		}
+		var a Amendment
+		if err := item.Decode(&a); err != nil {
+			continue
+		}
+		if a.Hash == "" {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
 }
 
 // decodeSpecNames reads the specs list leniently, on the same bargain
