@@ -206,10 +206,11 @@ func TestUncommittedChangesTextIsIdenticalAcrossAgents(t *testing.T) {
 	cfg := config.Config{Command: uncommittedChangesCommand}
 
 	skillsDirs := map[string]string{
-		"claude": ".claude/skills",
-		"bob":    ".bob/skills",
-		"codex":  ".agents/skills",
-		"omp":    ".omp/skills",
+		"claude":  ".claude/skills",
+		"bob":     ".bob/skills",
+		"codex":   ".agents/skills",
+		"copilot": ".github/skills",
+		"omp":     ".omp/skills",
 	}
 	for name, dir := range skillsDirs {
 		a, err := Lookup(name)

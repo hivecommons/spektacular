@@ -336,6 +336,7 @@ func TestInit_InvalidAgent(t *testing.T) {
 	require.Contains(t, err.Error(), "claude")
 	require.Contains(t, err.Error(), "bob")
 	require.Contains(t, err.Error(), "codex")
+	require.Contains(t, err.Error(), "copilot")
 	require.Contains(t, err.Error(), "omp")
 }
 
