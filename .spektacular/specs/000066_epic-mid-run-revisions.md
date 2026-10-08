@@ -38,23 +38,23 @@ When implementing a spec shows that the spec itself, or a design it references, 
 -->
 ## Requirements
 
-- [ ] **The implement workflow stops when the spec or a design is wrong**
+- [x] **The implement workflow stops when the spec or a design is wrong**
   When implementing or verifying shows that a requirement, acceptance criterion, constraint or success metric of the spec, or a rule in a design the plan references, is wrong or contradicts another, the implement workflow treats it as a stop rather than working around it. An interactive run asks the user; an orchestrated run hands the question back to its orchestrator, naming the document, the section, the conflict, and a proposed amendment.
-- [ ] **Users can approve an amendment to the spec during an implement run**
+- [x] **Users can approve an amendment to the spec during an implement run**
   The agent that talks to the user (the orchestrator in an epic run, the implement agent in an interactive run) can, with the user's explicit approval, amend the spec's requirements, acceptance criteria, constraints or success metrics in the project while the spec's implement run is in progress.
-- [ ] **Users can approve a revision to a referenced design during an implement run**
+- [x] **Users can approve a revision to a referenced design during an implement run**
   The same agent can, with the user's explicit approval, revise a design document the spec references, in the project, while the run is in progress, keeping the design's existing references and capture date.
-- [ ] **A child never amends a spec or design itself**
+- [x] **A child never amends a spec or design itself**
   An orchestrated child proposes amendments only through its hand-back; it never writes the spec's text or a design document.
-- [ ] **Every mid-run amendment is recorded on the spec**
+- [x] **Every mid-run amendment is recorded on the spec**
   Each approved amendment is recorded in the spec with its date, the sections or design it changed, the reason, and the run it came from, so the spec explains its own history without reading the plan.
-- [ ] **Every mid-run amendment is recorded in the plan's changelog**
+- [x] **Every mid-run amendment is recorded in the plan's changelog**
   The running implement workflow records the amendment as a plan changelog entry alongside the task in which the conflict was found.
-- [ ] **A recorded amendment does not block the run**
+- [x] **A recorded amendment does not block the run**
   An amendment recorded this way does not make the spec's plan stale, so the run continues, and can be resumed, even when the project treats spec changes after planning as making a plan stale. A spec edit made any other way keeps today's staleness behaviour.
-- [ ] **The running child picks up the amended document**
+- [x] **The running child picks up the amended document**
   After an amendment is applied, the child (or interactive run) re-reads the amended spec or design before it continues, and verifies the current task against the amended text.
-- [ ] **The skills and docs describe the amendment path**
+- [x] **The skills and docs describe the amendment path**
   The guidance agents follow for implementing a spec and an epic, and the documentation site's implement and epics pages, describe when to raise an amendment, who approves it, and how it is applied and recorded.
 
 <!--
@@ -89,21 +89,21 @@ When implementing a spec shows that the spec itself, or a design it references, 
   In an orchestrated run whose verify step finds a spec success metric contradicting a referenced design, the child stops and hands back a question to the orchestrator that names the document, the section, the conflict and a proposed amendment; the spec and design files in the project are unchanged at that point.
 - [ ] **An interactive run asks the user about a spec conflict**
   In an interactive implement run with the same conflict, the workflow stops and asks the user whether to amend the spec or design, rather than continuing to the next step.
-- [ ] **An approved spec amendment lands in the project and is recorded**
+- [x] **An approved spec amendment lands in the project and is recorded**
   After the user approves an amendment to a success metric, the spec in the project store holds the new metric text and an amendments record with date, section, reason and run; nothing under any worktree's `.spektacular` has changed.
-- [ ] **An approved design revision keeps its references**
+- [x] **An approved design revision keeps its references**
   After the user approves a design revision mid-run, the design in the project holds the new text, its capture date is unchanged, and every spec that referenced it still does.
 - [ ] **The plan changelog records the amendment**
   The plan's changelog has an entry for the task in which the conflict was found that names the amended document and the reason.
-- [ ] **A recorded amendment does not make the plan stale**
+- [x] **A recorded amendment does not make the plan stale**
   With `plan.strict_spec_changes: true`, after a recorded mid-run amendment, `spektacular status <spec>` does not report the plan as stale, and re-running `implement new` for the orchestrated lane resumes it instead of refusing with `plan_stale`.
-- [ ] **An unrecorded spec edit is still stale**
+- [x] **An unrecorded spec edit is still stale**
   With `plan.strict_spec_changes: true`, editing the spec through `spec file write` without recording an amendment still makes the plan stale, as today.
 - [ ] **The child continues against the amended text**
   After the orchestrator answers the question with the applied amendment, the child re-reads the spec or design and re-runs verification of the current task against it before advancing.
-- [ ] **A child cannot amend the spec**
+- [x] **A child cannot amend the spec**
   The child prompt the epic orchestrator gives, and the instructions the implement workflow returns, both state that a child never writes spec or design text and proposes amendments only through its hand-back.
-- [ ] **The docs describe the path**
+- [x] **The docs describe the path**
   The documentation site's implement and epics pages describe raising, approving, applying and recording a mid-run amendment.
 
 <!--
