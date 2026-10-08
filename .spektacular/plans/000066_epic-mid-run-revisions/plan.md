@@ -478,7 +478,7 @@ Extend the `spek-implement-epic` skill in four places:
 
 **Validation point**: The site builds and type-checks cleanly. The MDX layout-HTML guard returns no matches. Each page names the stop, the approval, `spec amend` and the `## Amendments` record.
 
-#### - [ ] Task: Document the amendment exemption in the README
+#### - [x] Task: Document the amendment exemption in the README
 **Id:** 0081434f-3ca0-4c23-b12c-b2fdf2a196b4
 **Repo:** spektacular
 **Depends on:**
@@ -490,9 +490,9 @@ Update the CLI README's description of `plan.strict_spec_changes` to say that a 
 *Technical detail:* [context.md#task-document-the-amendment-exemption-in-the-readme](./context.md#task-document-the-amendment-exemption-in-the-readme)
 
 **Acceptance criteria**:
-- [ ] The README's strict-mode description names `spec amend` as the exemption, and says other edits still make the plan stale.
+- [x] The README's strict-mode description names `spec amend` as the exemption, and says other edits still make the plan stale.
 
-#### - [ ] Task: Document the amendment path on the implement and epics pages
+#### - [x] Task: Document the amendment path on the implement and epics pages
 **Id:** 1925e88d-1418-4a15-b9c6-1384e1432160
 **Repo:** docs
 **Depends on:**
@@ -510,11 +510,11 @@ Add to the how-it-works page's implement stage and to the epics page an explanat
 *Technical detail:* [context.md#task-document-the-amendment-path-on-the-implement-and-epics-pages](./context.md#task-document-the-amendment-path-on-the-implement-and-epics-pages)
 
 **Acceptance criteria**:
-- [ ] The how-it-works implement stage mentions the stop and the approved amendment, and links to the fuller epics explanation.
-- [ ] The epics page has a subsection describing raising, approving, applying and recording a mid-run amendment.
-- [ ] The site builds and type-checks cleanly, with no layout markup in page bodies and no em dashes.
+- [x] The how-it-works implement stage mentions the stop and the approved amendment, and links to the fuller epics explanation.
+- [x] The epics page has a subsection describing raising, approving, applying and recording a mid-run amendment.
+- [x] The site builds and type-checks cleanly, with no layout markup in page bodies and no em dashes.
 
-#### - [ ] Task: Document spec amend and strict spec changes in the reference pages
+#### - [x] Task: Document spec amend and strict spec changes in the reference pages
 **Id:** 4f958095-4040-4607-9305-59774ecccd7a
 **Repo:** docs
 **Depends on:**
@@ -532,11 +532,11 @@ Update the reference pages:
 *Technical detail:* [context.md#task-document-spec-amend-and-strict-spec-changes-in-the-reference-pages](./context.md#task-document-spec-amend-and-strict-spec-changes-in-the-reference-pages)
 
 **Acceptance criteria**:
-- [ ] The documents page lists `spec amend` with an example and states which sections can be amended.
-- [ ] The design-documents page explains that a design can be revised during a run after approval, keeping its capture date and references.
-- [ ] The configuration page documents `plan.strict_spec_changes`, its default, and that recorded amendments do not make a plan stale.
-- [ ] The plan-tasks stale state mentions the exemption, and the docs changelog has an entry for this spec.
-- [ ] The site builds and type-checks cleanly, with no layout markup in page bodies and no em dashes.
+- [x] The documents page lists `spec amend` with an example and states which sections can be amended.
+- [x] The design-documents page explains that a design can be revised during a run after approval, keeping its capture date and references.
+- [x] The configuration page documents `plan.strict_spec_changes`, its default, and that recorded amendments do not make a plan stale.
+- [x] The plan-tasks stale state mentions the exemption, and the docs changelog has an entry for this spec.
+- [x] The site builds and type-checks cleanly, with no layout markup in page bodies and no em dashes.
 
 ## Open Questions
 
@@ -662,5 +662,44 @@ No other implementation-time uncertainties remain. Every other decision is resol
 **Files changed**:
 - `spektacular: templates/skills/workflows/spek-implement-epic/SKILL.md`
 - `spektacular: templates/implement_epic_skill_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-08 — Task: Document the amendment exemption in the README
+
+**What was done**: The README's `plan.strict_spec_changes` paragraph now says that a spek change recorded with `spektacular spec amend` during an implement run does not make the plan stale, while any other body edit still does under the strict setting. The config example's comment notes the exemption.
+
+**Deviations**: Added `TestREADMEDocumentsRecordedAmendmentExemption` in `cmd/docs_test.go`, following the existing README pin tests. The test was written in the main context rather than by a sub-agent because it is a few lines.
+
+**Files changed**:
+- `spektacular: README.md`
+- `spektacular: cmd/docs_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-08 — Task: Document the amendment path on the implement and epics pages
+
+**What was done**: The how-it-works "Implement the Spek" stage gained a paragraph: a run that finds the spek or a design wrong stops, you approve an amendment, it is applied in the project with `spektacular spec amend` and recorded on the spek and in the plan's changelog, and the run carries on. The epics page's "What still stops for you" points on to a new "When the spek or a design is wrong" subsection. It covers the child's hand-back, the orchestrator applying an approved amendment in the project, the amendable sections, design revision, a sample `## Amendments` entry, the plan changelog record, the strict-mode exemption, and the same path in a single `/spek-implement` run.
+
+**Deviations**: The how-it-works paragraph links to the Epics page and names the subsection, rather than linking to a `#` fragment, because the site uses no anchored links anywhere.
+
+**Files changed**:
+- `docs: src/pages/how-it-works.mdx`
+- `docs: src/pages/epics.mdx`
+
+**Discoveries**: The docs worktree needs `npm ci` inside it before `npm run build`/`npx astro check`; `dist/` is ignored.
+
+### 2026-10-08 — Task: Document spec amend and strict spec changes in the reference pages
+
+**What was done**: The Documents page's "Specs: spec file" section gained an "Amending a spek during implementation" subsection with a `spec amend` example, the amendable sections, the append-only history, the `design` field and the no-plan refusal. The Design documents page notes that a design can be corrected during a run after approval, keeping its capture date and references. The Configuration page shows `strict_spec_changes: false` in the `plan` example and documents the key, its default and the recorded-amendment exemption. The Plan tasks `stale` state notes the exemption, and the docs `CHANGELOG.md` has a `000066_epic-mid-run-revisions` entry.
+
+**Deviations**: None.
+
+**Files changed**:
+- `docs: src/pages/documents.mdx`
+- `docs: src/pages/design-documents.mdx`
+- `docs: src/pages/configuration.mdx`
+- `docs: src/pages/plan-tasks.mdx`
+- `docs: CHANGELOG.md`
 
 **Discoveries**: None.
