@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/hivecommons/spektacular/internal/config"
@@ -23,10 +24,14 @@ import (
 type Report struct {
 	// Workflow is the workflow in progress when it belongs to one of the
 	// reported specs or plans; null otherwise.
-	Workflow  *WorkflowInfo `json:"workflow"`
-	Requested string        `json:"requested,omitempty"`
-	Epic      *EpicStatus   `json:"epic"`
-	Specs     []SpecStatus  `json:"specs"`
+	Workflow *WorkflowInfo `json:"workflow"`
+	// Workflows is every workflow in progress, the shared one first and then
+	// each lane, most recently updated first. Only the no-name report sets
+	// it; Workflow is its first entry.
+	Workflows []WorkflowInfo `json:"workflows,omitempty"`
+	Requested string         `json:"requested,omitempty"`
+	Epic      *EpicStatus    `json:"epic"`
+	Specs     []SpecStatus   `json:"specs"`
 }
 
 // MarshalJSON writes a report with no specs, which is the no-name report
@@ -34,8 +39,9 @@ type Report struct {
 func (r Report) MarshalJSON() ([]byte, error) {
 	if r.Specs == nil {
 		return json.Marshal(struct {
-			Workflow *WorkflowInfo `json:"workflow"`
-		}{r.Workflow})
+			Workflow  *WorkflowInfo  `json:"workflow"`
+			Workflows []WorkflowInfo `json:"workflows,omitempty"`
+		}{r.Workflow, r.Workflows})
 	}
 	type plain Report
 	return json.Marshal(plain(r))
@@ -137,6 +143,9 @@ type Options struct {
 	// Lane reads the orchestrated workflow of kind for a spec — its lane —
 	// or returns nil when it has none. nil reports no lanes.
 	Lane func(kind, name string) *workflow.State
+	// LaneNames lists the spec names with a lane of kind, so the no-name
+	// report can find every lane in progress. nil lists none.
+	LaneNames func(kind string) []string
 	// Run, when set, adds the run view: what each spec, and the epic, still
 	// needs for planning and implementing.
 	Run *RunSource
@@ -183,30 +192,63 @@ func Build(opts Options, name string) (Report, error) {
 	return r, nil
 }
 
-// BuildCurrent reports on the workflow in progress: the same report as Build
-// for its artifact, with the workflow block set. With nothing in progress it
+// BuildCurrent reports on the workflows in progress: the same report as Build
+// for the first one's artifact, with the workflow block set to it and every
+// workflow in progress listed in Workflows. With nothing in progress it
 // is a report holding only a null workflow. A workflow whose artifact has not
 // been written yet, such as a spec workflow before its spec is saved, is a
 // report holding only the workflow block.
 func BuildCurrent(opts Options) (Report, error) {
-	s := opts.State
-	if s == nil || !s.InProgress() {
+	active := activeWorkflows(opts)
+	if len(active) == 0 {
 		return Report{}, nil
 	}
-	name := stateName(s)
-	if name == "" {
-		return Report{}, nil
-	}
-	r, err := Build(opts, name)
+	primary := active[0]
+	r, err := Build(opts, primary.Name)
 	var notFound *output.ErrorResponse
 	if errors.As(err, &notFound) && notFound.Code == "artifact_not_found" {
-		return Report{Workflow: workflowInfo(s)}, nil
+		return Report{Workflow: &primary, Workflows: active}, nil
 	}
 	if err != nil {
 		return Report{}, err
 	}
-	r.Workflow = workflowInfo(s)
+	r.Workflow = &primary
+	r.Workflows = active
 	return r, nil
+}
+
+// activeWorkflows is every workflow in progress: the shared workflow first,
+// then each plan and implement lane, most recently updated first. A lane is
+// where a run keeps its state when it is orchestrated or builds in its own
+// worktrees, so the shared state alone misses most implement runs.
+func activeWorkflows(opts Options) []WorkflowInfo {
+	var active []WorkflowInfo
+	seen := map[string]bool{}
+	if s := opts.State; s != nil && s.InProgress() && stateName(s) != "" {
+		info := workflowInfo(s)
+		active = append(active, *info)
+		seen[info.Kind+"-"+info.Name] = true
+	}
+	if opts.LaneNames == nil {
+		return active
+	}
+	var lanes []WorkflowInfo
+	updated := map[string]time.Time{}
+	for _, kind := range []string{"plan", "implement"} {
+		for _, name := range opts.LaneNames(kind) {
+			lane := opts.lane(kind, name)
+			if lane == nil || seen[kind+"-"+name] {
+				continue
+			}
+			seen[kind+"-"+name] = true
+			lanes = append(lanes, *laneInfo(kind, name, lane))
+			updated[kind+"-"+name] = lane.UpdatedAt
+		}
+	}
+	sort.SliceStable(lanes, func(i, j int) bool {
+		return updated[lanes[i].Kind+"-"+lanes[i].Name].After(updated[lanes[j].Kind+"-"+lanes[j].Name])
+	})
+	return append(active, lanes...)
 }
 
 // EpicComplete reports whether the named epic is done: it has specs, and
@@ -480,7 +522,7 @@ func currentStep(opts Options, kind, name string, docStatus metadata.DocumentSta
 
 // matchingWorkflow is the workflow block when the shared workflow in
 // progress works on one of the reported specs or plans, or else when one of
-// them has an orchestrated plan or implement lane in progress (the first, in
+// them has a plan or implement lane in progress (the first, in
 // report order).
 func matchingWorkflow(opts Options, specs []SpecStatus) *WorkflowInfo {
 	if s := opts.State; s != nil && s.InProgress() {
@@ -494,15 +536,22 @@ func matchingWorkflow(opts Options, specs []SpecStatus) *WorkflowInfo {
 	for _, spec := range specs {
 		for _, kind := range []string{"plan", "implement"} {
 			if lane := opts.lane(kind, spec.Name); lane != nil {
-				info := workflowInfo(lane)
-				info.Kind = kind
-				info.Name = spec.Name
-				info.Orchestrated = true
-				return info
+				return laneInfo(kind, spec.Name, lane)
 			}
 		}
 	}
 	return nil
+}
+
+// laneInfo is the workflow block for the kind lane of name. It is marked
+// orchestrated only when an epic orchestrator started it; an interactive run
+// that builds in its own worktrees keeps a lane too.
+func laneInfo(kind, name string, lane *workflow.State) *WorkflowInfo {
+	info := workflowInfo(lane)
+	info.Kind = kind
+	info.Name = name
+	info.Orchestrated, _ = lane.Data["orchestrated"].(bool)
+	return info
 }
 
 func workflowInfo(s *workflow.State) *WorkflowInfo {

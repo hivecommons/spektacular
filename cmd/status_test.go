@@ -246,14 +246,15 @@ func TestStatus_PrettyAndJSONCarryTheSameInformation(t *testing.T) {
 	got := statusOf(t, "B", "--format", "json")
 	e := got["epic"].(map[string]any)
 	p := e["progress"].(map[string]any)
-	require.Contains(t, pretty, "epic E  (draft)  1/3 specs implemented, 2/4 tasks")
+	require.Contains(t, pretty, "epic E  (draft)\n")
+	require.Contains(t, pretty, "  1/3 specs implemented, 2/4 tasks\n")
 	require.Equal(t, float64(1), p["specs_implemented"])
 	require.Equal(t, float64(4), p["tasks_total"])
 
 	lines := strings.Split(pretty, "\n")
 	lineFor := func(name string) string {
 		for _, l := range lines {
-			if strings.HasPrefix(strings.TrimSpace(l), name+" ") {
+			if fields := strings.Fields(l); len(fields) > 1 && fields[1] == name {
 				return l
 			}
 		}
@@ -369,7 +370,40 @@ func TestStatus_NoNameReportsTheWorkflowInProgress(t *testing.T) {
 
 	pretty, _, code := runRootCmd(t, "status")
 	require.Equal(t, 0, code, pretty)
-	require.Contains(t, pretty, "workflow in progress: implement B, at step analyze")
+	require.Contains(t, pretty, "workflow in progress\n  ● implement  B  at step analyze\n")
+	require.Contains(t, pretty, "epic E")
+}
+
+// With no name, a run kept in its own lane is reported even when the shared
+// state holds nothing in progress, as an implement run with worktrees or an
+// epic's orchestrated runs do.
+func TestStatus_NoNameReportsARunInItsOwnLane(t *testing.T) {
+	dir := stProject(t)
+	lane := workflow.State{
+		Kind:        "implement",
+		CurrentStep: "verify",
+		CreatedAt:   fixedResumeTime,
+		UpdatedAt:   fixedResumeTime,
+		Data:        map[string]any{"name": "B", "orchestrated": true},
+	}
+	raw, err := json.Marshal(lane)
+	require.NoError(t, err)
+	path := workflow.LaneStatePath(filepath.Join(dir, ".spektacular"), "implement", "B")
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, raw, 0o644))
+
+	got := statusOf(t, "--format", "json")
+	w := got["workflow"].(map[string]any)
+	require.Equal(t, "implement", w["kind"])
+	require.Equal(t, "B", w["name"])
+	require.Equal(t, "verify", w["current_step"])
+	require.Equal(t, true, w["orchestrated"])
+	require.Len(t, got["workflows"], 1)
+	require.Equal(t, "E", got["epic"].(map[string]any)["name"])
+
+	pretty, _, code := runRootCmd(t, "status")
+	require.Equal(t, 0, code, pretty)
+	require.Contains(t, pretty, "● implement  B  at step verify  (orchestrated)")
 	require.Contains(t, pretty, "epic E")
 }
 

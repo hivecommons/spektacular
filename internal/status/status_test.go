@@ -633,7 +633,62 @@ func TestBuildCurrent(t *testing.T) {
 		require.NoError(t, err)
 		raw, err := json.Marshal(r)
 		require.NoError(t, err)
-		require.JSONEq(t, `{"workflow": {"kind": "spec", "name": "unwritten", "current_step": "overview", "completed_steps": [], "updated_at": ""}}`, string(raw))
+		require.JSONEq(t, `{"workflow": {"kind": "spec", "name": "unwritten", "current_step": "overview", "completed_steps": [], "updated_at": ""}, "workflows": [{"kind": "spec", "name": "unwritten", "current_step": "overview", "completed_steps": [], "updated_at": ""}]}`, string(raw))
+	})
+}
+
+// With no name, a workflow kept in its own lane is reported even though the
+// shared state holds nothing in progress: an implement run with worktrees,
+// or an epic's orchestrated runs, never touch the shared state.
+func TestBuildCurrent_Lanes(t *testing.T) {
+	older := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	newer := older.Add(time.Hour)
+	laneSet := map[string]*workflow.State{
+		"plan-C":      {Kind: "plan", CurrentStep: "overview", UpdatedAt: older, Data: map[string]any{"name": "C", "orchestrated": true}},
+		"implement-B": {Kind: "implement", CurrentStep: "analyze", UpdatedAt: newer, Data: map[string]any{"name": "B"}},
+		"implement-A": {Kind: "implement", CurrentStep: "finished", UpdatedAt: newer, Data: map[string]any{"name": "A"}},
+	}
+	laneNames := func(kind string) []string {
+		var names []string
+		for _, n := range []string{"A", "B", "C"} {
+			if laneSet[kind+"-"+n] != nil {
+				names = append(names, n)
+			}
+		}
+		return names
+	}
+
+	t.Run("a lane alone is the workflow in progress", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		e.opts.State = &workflow.State{Kind: "plan", CurrentStep: "finished", Data: map[string]any{"name": "A"}}
+		e.opts.Lane = lanes(laneSet)
+		e.opts.LaneNames = laneNames
+
+		r, err := BuildCurrent(e.opts)
+		require.NoError(t, err)
+		require.Len(t, r.Workflows, 2, "a finished lane is not in progress")
+		require.Equal(t, "B", r.Workflows[0].Name, "the most recently updated lane comes first")
+		require.False(t, r.Workflows[0].Orchestrated, "an interactive run in its own lane is not orchestrated")
+		require.Equal(t, "C", r.Workflows[1].Name)
+		require.True(t, r.Workflows[1].Orchestrated)
+		require.Equal(t, &r.Workflows[0], r.Workflow)
+		require.Equal(t, "E", r.Epic.Name, "the running spec's epic is reported")
+		require.Equal(t, "B", r.Requested)
+	})
+
+	t.Run("the shared workflow comes before every lane", func(t *testing.T) {
+		e := newEnv(t)
+		e.standardEpic()
+		e.opts.State = &workflow.State{Kind: "spec", CurrentStep: "requirements", Data: map[string]any{"name": "D"}}
+		e.opts.Lane = lanes(laneSet)
+		e.opts.LaneNames = laneNames
+
+		r, err := BuildCurrent(e.opts)
+		require.NoError(t, err)
+		require.Len(t, r.Workflows, 3)
+		require.Equal(t, "spec", r.Workflow.Kind)
+		require.Equal(t, "D", r.Workflow.Name)
 	})
 }
 
@@ -754,10 +809,11 @@ func TestRenderPretty_Epic(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, RenderPretty(&buf, r))
 	want := strings.Join([]string{
-		"epic E  (draft)  1/4 specs implemented, 3/5 tasks",
+		"epic E  (draft)",
+		"  ━━━━━━━━━━━━────────  1/4 specs implemented, 3/5 tasks",
 		"",
-		"  A   implemented   2/2 tasks",
-		"  B   in progress   1/3 tasks   ← requested",
+		"  ✓ A   implemented   2/2 tasks",
+		"  ◐ B   in progress   1/3 tasks   ← requested",
 		"      depends on: A",
 		"      Milestone 1",
 		"        [x] Task 1   spektacular   agent",
@@ -765,9 +821,9 @@ func TestRenderPretty_Epic(t *testing.T) {
 		"            depends on: Task 1",
 		"        [ ] Task 3   spektacular   agent",
 		"            depends on: Task 2",
-		"  C   specified     no plan",
+		"  · C   specified     no plan",
 		"      depends on: B",
-		"  D   missing       no plan",
+		"  ✗ D   missing       no plan",
 		"",
 	}, "\n")
 	require.Equal(t, want, buf.String())
@@ -784,9 +840,10 @@ func TestRenderPretty_StandaloneAndWorkflow(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, RenderPretty(&buf, r))
 	require.Equal(t, strings.Join([]string{
-		"workflow in progress: implement S, at step verify",
+		"workflow in progress",
+		"  ● implement  S  at step verify",
 		"",
-		"S   implemented   1/1 tasks   ← requested",
+		"✓ S   implemented   1/1 tasks   ← requested",
 		"    Milestone 1",
 		"      [x] Task 1   spektacular   agent",
 		"",
@@ -795,6 +852,29 @@ func TestRenderPretty_StandaloneAndWorkflow(t *testing.T) {
 	buf.Reset()
 	require.NoError(t, RenderPretty(&buf, Report{}))
 	require.Equal(t, "no workflow in progress\n", buf.String())
+
+	buf.Reset()
+	require.NoError(t, RenderPretty(&buf, Report{Workflows: []WorkflowInfo{
+		{Kind: "implement", Name: "S", CurrentStep: "verify"},
+		{Kind: "plan", Name: "other", CurrentStep: "overview", Orchestrated: true},
+	}}))
+	require.Equal(t, strings.Join([]string{
+		"2 workflows in progress",
+		"  ● implement  S      at step verify",
+		"  ● plan       other  at step overview  (orchestrated)",
+		"",
+	}, "\n"), buf.String())
+}
+
+// A writer that is not a terminal gets plain text: no escape codes.
+func TestRenderPretty_PlainWhenNotATerminal(t *testing.T) {
+	e := newEnv(t)
+	e.standardEpic()
+	r, err := Build(e.opts, "B")
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	require.NoError(t, RenderPretty(&buf, r))
+	require.NotContains(t, buf.String(), "\x1b[")
 }
 
 // lanes is a fake Options.Lane: the lane for kind+name, or nil.

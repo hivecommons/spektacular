@@ -1,7 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/hivecommons/spektacular/internal/autocommit"
 	"github.com/hivecommons/spektacular/internal/config"
@@ -26,8 +32,12 @@ var statusCmd = &cobra.Command{
 	Short: "Report where a piece of work stands, from the epic down to each task",
 	Long: `Report where a piece of work stands. <name> may be an epic, a spec or a plan:
 a spec in an epic, or its plan, reports the whole epic, with the spec asked for
-named in "requested". With no name, reports the workflow in progress, or that
-nothing is in progress.`,
+named in "requested". With no name, reports every workflow in progress, the
+shared one and each spec's own run, with the first one's epic or spec in full,
+or that nothing is in progress.
+
+--watch keeps the readable tree on screen and refreshes it every --interval
+(2s by default) until interrupted with Ctrl+C.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runStatus,
 }
@@ -38,6 +48,7 @@ var statusWorkflowSchema = &schemaProp{Type: "object", Properties: map[string]*s
 	"current_step":    {Type: "string"},
 	"completed_steps": {Type: "array", Items: &schemaProp{Type: "string"}},
 	"updated_at":      {Type: "string"},
+	"orchestrated":    {Type: "boolean", Description: "an epic orchestrator started it"},
 }}
 
 var statusSourcesSchema = &schemaProp{Type: "array", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
@@ -97,6 +108,7 @@ var statusOutputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
 		"workflow":  statusWorkflowSchema,
+		"workflows": {Type: "array", Items: statusWorkflowSchema, Description: "no name only: every workflow in progress, the shared one first, then each spec's lane, most recently updated first; workflow is its first entry"},
 		"requested": {Type: "string"},
 		"epic": {Type: "object", Properties: map[string]*schemaProp{
 			"name":            {Type: "string"},
@@ -147,7 +159,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return output.Write(cmd.OutOrStdout(), commandSchema{
 			Output: statusOutputSchema,
 			Flags: map[string]*schemaProp{
-				"format": {Type: "string", Enum: []string{statusFormatPretty, statusFormatJSON}},
+				"format":   {Type: "string", Enum: []string{statusFormatPretty, statusFormatJSON}},
+				"watch":    {Type: "boolean", Description: "redraw the readable tree every interval until interrupted; pretty only"},
+				"interval": {Type: "string", Description: "how often --watch refreshes, as a Go duration such as 2s; at least 200ms"},
 			},
 		}, "")
 	}
@@ -158,6 +172,21 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			fmt.Sprintf("status format %q is not supported; supported formats: %s, %s", format, statusFormatPretty, statusFormatJSON)).
 			WithResource(format).
 			WithNextAction(fmt.Sprintf("re-run with --format %s or --format %s", statusFormatPretty, statusFormatJSON))
+	}
+
+	watch, _ := cmd.Flags().GetBool("watch")
+	interval, _ := cmd.Flags().GetDuration("interval")
+	if watch && format != statusFormatPretty {
+		return output.NewError("status_watch_format_unsupported",
+			fmt.Sprintf("--watch redraws the readable tree and cannot be used with --format %s", format)).
+			WithResource(format).
+			WithNextAction("re-run with --watch alone, or poll status --format json yourself")
+	}
+	if watch && interval < minWatchInterval {
+		return output.NewError("status_interval_invalid",
+			fmt.Sprintf("--interval %s is too short; the shortest is %s", interval, minWatchInterval)).
+			WithResource(interval.String()).
+			WithNextAction(fmt.Sprintf("re-run with --interval %s or longer", minWatchInterval))
 	}
 
 	cfg, err := loadConfig()
@@ -173,6 +202,45 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if watch {
+		// The frames go straight to the terminal: the debug session log
+		// would otherwise keep every frame of a watch that runs for hours.
+		term := outputTerminal(cmd)
+		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		title := "spektacular status"
+		if len(args) == 1 {
+			title += " " + args[0]
+		}
+		return watchStatus(ctx, term, interval, func() string {
+			var b bytes.Buffer
+			b.WriteString(status.WatchHeader(term, title, interval, time.Now()) + "\n\n")
+			r, err := buildStatusReport(cfg, root, dir, args)
+			if err != nil {
+				b.WriteString(status.WatchError(term, toErrorResponse(err).Message) + "\n")
+				return b.String()
+			}
+			if err := status.RenderPrettyStyled(&b, r, term); err != nil {
+				b.WriteString(status.WatchError(term, err.Error()) + "\n")
+			}
+			return b.String()
+		})
+	}
+
+	r, err := buildStatusReport(cfg, root, dir, args)
+	if err != nil {
+		return err
+	}
+
+	if format == statusFormatJSON {
+		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(r)
+	}
+	return status.RenderPrettyStyled(cmd.OutOrStdout(), r, outputTerminal(cmd))
+}
+
+// buildStatusReport reads the project afresh and reports on the named epic,
+// spec or plan, or on the workflows in progress when no name is given.
+func buildStatusReport(cfg config.Config, root, dir string, args []string) (status.Report, error) {
 	opts := status.Options{
 		Config: cfg,
 		Store:  store.NewSourceStore(root, "project"),
@@ -182,31 +250,37 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			s, _ := workflow.ReadLane(dir, kind, name)
 			return s
 		},
+		LaneNames: func(kind string) []string {
+			return workflow.LaneNames(dir, kind)
+		},
 		Unmerged: unmergedFn(root),
 	}
 	if len(args) == 1 {
 		opts.Run = statusRunSource(cfg, root, opts.Store)
+		return status.Build(opts, args[0])
 	}
+	return status.BuildCurrent(opts)
+}
 
-	var r status.Report
-	if len(args) == 1 {
-		r, err = status.Build(opts, args[0])
-	} else {
-		r, err = status.BuildCurrent(opts)
-	}
-	if err != nil {
-		return err
-	}
+// terminalOut is the command's own output writer while the debug session log
+// tees it into a buffer. The tee hides whether output goes to a terminal, so
+// colour is decided from this writer instead.
+var terminalOut io.Writer
 
-	if format == statusFormatJSON {
-		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(r)
+// outputTerminal is the writer whose terminal decides whether readable
+// output is coloured.
+func outputTerminal(cmd *cobra.Command) io.Writer {
+	if terminalOut != nil {
+		return terminalOut
 	}
-	return status.RenderPretty(cmd.OutOrStdout(), r)
+	return cmd.OutOrStdout()
 }
 
 func init() {
 	statusCmd.Flags().Bool("schema", false, "Print the input/output schema and exit")
 	statusCmd.Flags().String("format", statusFormatPretty, "Output format: pretty or json")
+	statusCmd.Flags().Bool("watch", false, "Keep the readable tree on screen, refreshed every --interval, until interrupted")
+	statusCmd.Flags().Duration("interval", defaultWatchInterval, "How often --watch refreshes")
 }
 
 // statusRunSource is what the run view reads beyond the project store: the

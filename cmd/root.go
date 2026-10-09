@@ -114,6 +114,7 @@ func runRoot() int {
 		orig = rootCmd.OutOrStdout()
 		buf = &bytes.Buffer{}
 		rootCmd.SetOut(io.MultiWriter(orig, buf))
+		terminalOut = orig
 	}
 
 	executedCmd, err := rootCmd.ExecuteC()
@@ -150,6 +151,7 @@ func runRoot() int {
 			})
 		}
 		rootCmd.SetOut(orig)
+		terminalOut = nil
 	}
 
 	return exitCode
