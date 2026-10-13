@@ -90,8 +90,9 @@ func (d *Spektacular) All(
 	// build the applications
 	output, _ = d.Build(ctx, src, version, sha)
 
-	// package the build outputs
+	// package the build outputs and include the rendered skills catalog for release packaging
 	output, _ = d.Package(ctx, output, version)
+	output = output.WithDirectory("/skills", src.Directory("skills"))
 
 	// create the archives
 	output, _ = d.Archive(ctx, output, version)
@@ -256,9 +257,12 @@ var archives = []Archive{
 	{Path: "/build/linux/arm64/spektacular", Type: "targz", Output: "spektacular_%%VERSION%%_linux_arm64.tar.gz"},
 	{Path: "/pkg/linux/amd64/spektacular.deb", Type: "copy", Output: "spektacular_%%VERSION%%_linux_x86_64.deb"},
 	{Path: "/pkg/linux/arm64/spektacular.deb", Type: "copy", Output: "spektacular_%%VERSION%%_linux_arm64.deb"},
+	{Path: "/skills", Type: "targzdir", Output: skillArchiveOutput},
 }
 
-// Archive creates zipped and tar archives of the binaries
+const skillArchiveOutput = "spektacular_skills_%%VERSION%%.tar.gz"
+
+// Archive creates zipped and tar archives of the binaries.
 func (d *Spektacular) Archive(
 	ctx context.Context,
 	binaries *dagger.Directory,
@@ -297,6 +301,13 @@ func (d *Spektacular) Archive(
 			zip := zipContainer.
 				WithMountedFile("/spektacular", binaries.File(a.Path)).
 				WithExec([]string{"tar", "-czf", outPath, "/spektacular"})
+
+			out = out.WithFile(outPath, zip.File(outPath))
+		case "targzdir":
+			archiveDir := strings.TrimPrefix(a.Path, "/")
+			zip := zipContainer.
+				WithDirectory(a.Path, binaries.Directory(archiveDir)).
+				WithExec([]string{"tar", "-czf", outPath, "-C", "/", archiveDir})
 
 			out = out.WithFile(outPath, zip.File(outPath))
 		case "copy":

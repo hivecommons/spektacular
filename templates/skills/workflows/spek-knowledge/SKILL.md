@@ -5,6 +5,8 @@ description: Search, contribute to, or update the project's knowledge base.
 
 {{> partials/version-check}}
 
+{{> partials/hive-integration}}
+
 # What this skill does
 
 This skill orchestrates the existing `{{command}} knowledge` CRUD surface for ad-hoc read, contribute, update, audit, and maintenance operations on the project's knowledge store, without starting a spec/plan/implement flow. Unlike `spek-new`, `spek-plan`, and `spek-implement`, it does not drive an interactive CLI state machine — it is a static playbook. The agent recognises the user's natural-language intent, picks one of five branches (lookup / contribute / update / audit / maintenance), and calls the matching `{{command}} knowledge` command directly.

@@ -5,6 +5,8 @@ description: Author, bring in, revise or reference a design document.
 
 {{> partials/version-check}}
 
+{{> partials/hive-integration}}
+
 # What this skill does
 
 This skill handles the four ways a design document enters a project: helping the user work one

@@ -9,6 +9,10 @@ description: Implement an approved Spec by executing its Plan.
 > - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
 > - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
+# Use with Hive
+
+This skill works standalone with the `go run .` CLI. To run Spek as part of governed agent fleets, use the Hive integration documented in [Using Spektacular with Hive](https://docs.hivecommons.dev/docs/hive/spektacular-runs) and the [Hive Commons docs](https://docs.hivecommons.dev/).
+
 > **STOP. Read this before running any command below.**
 > A single successful CLI call — including the very first `implement new` — is **NOT** task completion. It is not a milestone to report back to the user. It is one step out of many in a workflow that you must keep driving, turn after turn, without stopping, until the CLI itself tells you the workflow is *finished*. If you find yourself about to say "successfully completed" or summarize results after calling `implement new` or `implement goto` even once, you are wrong — go back and read the `instruction` field you just received, do what it says, and call `goto` again.
 
