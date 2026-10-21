@@ -4,6 +4,7 @@ document_status: draft
 spec: 000058_plan-task-graph
 specs:
     - 000058_plan-task-graph
+    - 000068_task-goal-validation
 ---
 
 # Plan task graph
