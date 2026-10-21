@@ -61,6 +61,7 @@ EXPECTED_STEP_ORDER = (
     "implement",
     "test",
     "verify",
+    "check_goal",
     "update_plan",
     "update_changelog",
     "test_plan",

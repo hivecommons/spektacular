@@ -11,9 +11,10 @@ tags = ["spektacular", "epic-workflow", "implement-workflow", "sub-agents", "wor
 # Three rounds of implement workflows: storage and format side by side, then
 # commands, then export. One implement run has a 1200s budget in
 # implement-workflow, so three rounds plus the merges is 3600s and change;
-# 5400s leaves room for a resumed child without hiding a stalled run. Read
-# the timeline in the verifier output before raising it.
-timeout_sec = 5400.0
+# 7000s is the earlier 5400s plus about two minutes per seeded task for the
+# goal check's reviewer; it leaves room for a resumed child without hiding a
+# stalled run. Read the timeline in the verifier output before raising it.
+timeout_sec = 7000.0
 
 [verifier]
 timeout_sec = 300.0
