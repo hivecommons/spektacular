@@ -129,7 +129,7 @@ func milestoneProjectWith(t *testing.T, mode string, writePlan func(*testing.T, 
 // the step a milestone commit is made on the way out of.
 func walkPhase(t *testing.T, from string) {
 	t.Helper()
-	steps := []string{"analyze", "implement", "test", "verify", "update_plan", "update_changelog"}
+	steps := []string{"analyze", "implement", "test", "verify", "check_goal", "update_plan", "update_changelog"}
 	if from == "analyze" {
 		steps = steps[1:]
 	}

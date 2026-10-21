@@ -43,7 +43,7 @@ func TestCopilotInstall(t *testing.T) {
 	require.Equal(t, "copilot", a.Name())
 	require.NoError(t, a.Install(root, cfg, io.Discard))
 	first := copilotSnapshot(t, root)
-	require.Len(t, first, 17, "only eight skills, AGENTS.md and the eight standing-rule guidance files")
+	require.Len(t, first, 18, "only eight skills, the goal reviewer helper, AGENTS.md and the eight standing-rule guidance files")
 	for _, rel := range standingRuleGuidancePaths {
 		require.Contains(t, first, filepath.FromSlash(rel), "copilot must install guidance file %s", rel)
 	}

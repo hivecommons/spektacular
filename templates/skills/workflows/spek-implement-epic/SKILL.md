@@ -66,6 +66,7 @@ Give each child exactly what it needs, because it inherits nothing from you:
 - "Follow the `spek-implement` skill. This run is orchestrated: tasks run one after another without asking between them, every `goto` carries `\"name\":\"<spec>\"`, and you never ask the user anything yourself.";
 - "Never resolve a merge or git conflict yourself, and never merge, rebase or switch branches: your worktree's branch is merged by the orchestrator.";
 - "You never write the spec's text or a design document. If the spec or a design it references is wrong, propose the amendment in a `QUESTION:` hand-back, naming the document, the section, the conflict and the change you propose.";
+- "If the goal check stops your task, because its attempts ran out or it judged a criterion impossible, hand it back as a `QUESTION:` with the criteria not met or impossible and the reviewer's evidence, and the options the step offers.";
 - the store-access rule above, word for word;
 - the hand-back contract and the definition of a genuine open question, below.
 
@@ -79,11 +80,11 @@ A child ends every turn that stops its work with a final message whose **first l
 
 ## What counts as a genuine open question
 
-Only a stop the implement workflow itself defines earns a question: the plan no longer matching the code, the spec or a design it references being wrong, a task outgrowing its scope, or a verification failure the child cannot fix within the task. Everything else the child decides itself and records in the plan's changelog. A child never asks whether to continue to its next task.
+Only a stop the implement workflow itself defines earns a question: the plan no longer matching the code, the spec or a design it references being wrong, a task outgrowing its scope, a verification failure the child cannot fix within the task, or the goal check running out of attempts or judging a criterion impossible. Everything else the child decides itself and records in the plan's changelog. A child never asks whether to continue to its next task.
 
 # Step 5: Merging a finished spec
 
-Merge a spec as soon as its child hands back `DONE:`, and whenever `status` reports it `awaiting_merge`:
+Merge a spec as soon as its child hands back `DONE:`, and whenever `status` reports it `awaiting_merge`. Never merge a spec while its goal-check question is open: `epic merge` refuses it (`goal_check_open`) until the question is answered and its run goes on.
 
 ```
 {{command}} epic merge --data '{"spec":"<spec>"}'

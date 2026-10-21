@@ -20,6 +20,15 @@ import (
 // unchecked phases in the plan, it advances back to `analyze`; otherwise it
 // advances to `test_plan`.
 //
+// With the goal check switched on (workflow.Config.GoalCheck), verify leads to
+// check_goal, where a separate read-only reviewer judges the current item's
+// criteria. The decision of what follows is taken by `implement goal record`
+// (and `decide` after a stop), not by the template: check_goal goes on to
+// update_plan when the goal is accepted, loops back to implement for a retry,
+// and otherwise stays put to ask the user. update_plan keeps verify as a
+// source so a run with the check switched off goes straight there, and its
+// callback refuses until the item's goal check is settled when it is on.
+//
 // A single-task run (workflow data "task") never loops. `update_changelog`
 // either continues into the feature wrap-up, when the run completed the
 // plan's last open task, or goes straight to `finished`, leaving the wrap-up
@@ -29,10 +38,11 @@ func Steps() []workflow.StepConfig {
 		{Name: "new", Src: []string{"start"}, Dst: "new", Callback: newStep()},
 		{Name: "read_plan", Src: []string{"new"}, Dst: "read_plan", Callback: readPlan()},
 		{Name: "analyze", Src: []string{"read_plan", "update_changelog"}, Dst: "analyze", Callback: analyze()},
-		{Name: "implement", Src: []string{"analyze"}, Dst: "implement", Callback: implementStep()},
+		{Name: "implement", Src: []string{"analyze", "check_goal"}, Dst: "implement", Callback: implementStep()},
 		{Name: "test", Src: []string{"implement"}, Dst: "test", Callback: testStep()},
 		{Name: "verify", Src: []string{"test"}, Dst: "verify", Callback: verify()},
-		{Name: "update_plan", Src: []string{"verify"}, Dst: "update_plan", Callback: updatePlan()},
+		{Name: "check_goal", Src: []string{"verify"}, Dst: "check_goal", Callback: checkGoal()},
+		{Name: "update_plan", Src: []string{"verify", "check_goal"}, Dst: "update_plan", Callback: updatePlan()},
 		{Name: "update_changelog", Src: []string{"update_plan"}, Dst: "update_changelog", Callback: updateChangelog()},
 		{Name: "test_plan", Src: []string{"update_changelog"}, Dst: "test_plan", Callback: testPlan()},
 		{Name: "update_feature_changelog", Src: []string{"test_plan"}, Dst: "update_feature_changelog", Callback: updateFeatureChangelog()},
@@ -61,7 +71,7 @@ func writeStep(stepName, nextStep, templatePath string, data workflow.Data, out 
 			NextStep:     nextStep,
 			TemplatePath: templatePath,
 			Strategy:     strategy{planDir: cfg.PlanDir},
-			Extra:        withCodeRoots(cfg, extra),
+			Extra:        withCodeRoots(cfg, withGoalCheck(cfg, extra)),
 		},
 		data, out, st, cfg,
 		buildResult,
@@ -92,6 +102,7 @@ func analyze() workflow.StepCallback {
 		if err != nil {
 			return "", err
 		}
+		clearGoalItem(data, cfg)
 		return "", writeStep("analyze", "implement", "steps/implement/02-analyze.md", data, out, st, cfg, extra)
 	}
 }
@@ -100,6 +111,9 @@ func implementStep() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
 		extra, err := taskExtra(data, st, cfg)
 		if err != nil {
+			return "", err
+		}
+		if extra, err = goalRetryExtra(data, st, cfg, extra); err != nil {
 			return "", err
 		}
 		return "", writeStep("implement", "test", "steps/implement/03-implement.md", data, out, st, cfg, extra)
@@ -122,7 +136,11 @@ func verify() workflow.StepCallback {
 		if err != nil {
 			return "", err
 		}
-		return "", writeStep("verify", "update_plan", "steps/implement/05-verify.md", data, out, st, cfg, extra)
+		next := "update_plan"
+		if cfg.GoalCheck {
+			next = "check_goal"
+		}
+		return "", writeStep("verify", next, "steps/implement/05-verify.md", data, out, st, cfg, extra)
 	}
 }
 
@@ -130,6 +148,9 @@ func updatePlan() workflow.StepCallback {
 	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
 		extra, err := taskExtra(data, st, cfg)
 		if err != nil {
+			return "", err
+		}
+		if extra, err = goalUpdateExtra(data, st, cfg, extra); err != nil {
 			return "", err
 		}
 		return "", writeStep("update_plan", "update_changelog", "steps/implement/06-update_plan.md", data, out, st, cfg, extra)
@@ -156,7 +177,11 @@ func updateChangelog() workflow.StepCallback {
 		if !ok {
 			return "", writeStep("update_changelog", "test_plan", "steps/implement/07-update_changelog.md", data, out, st, cfg, withDependencyOverride(data, nil))
 		}
-		last := len(p.OpenTasks()) == 0
+		open, err := openTasksLeft(p, st, cfg, stepkit.GetString(data, "name"))
+		if err != nil {
+			return "", err
+		}
+		last := open == 0
 		next := "finished"
 		if last {
 			next = "test_plan"
@@ -217,7 +242,11 @@ func finished() workflow.StepCallback {
 		isOrchestrated, _ := orchestrated.(bool)
 		inWorktrees := !isOrchestrated && len(cfg.CodeRoots) > 0
 		if ok {
-			if open := len(p.OpenTasks()); open > 0 {
+			open, err := openTasksLeft(p, st, cfg, stepkit.GetString(data, "name"))
+			if err != nil {
+				return "", err
+			}
+			if open > 0 {
 				return "", writeStep("finished", "", "steps/implement/12-finished.md", data, out, st, cfg, map[string]any{
 					"task":           taskVars(task),
 					"task_run":       true,

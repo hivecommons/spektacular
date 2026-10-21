@@ -70,6 +70,8 @@ func TestSnapshotStatePath(t *testing.T) {
 		{"argument that is not a spec name", []string{"plan", "file", "write", "alpha", "plan", "--from", ".spektacular/tmp/x.md"}, alphaPlan},
 		{"plan command prefers the plan lane", []string{"plan", "file", "read", "gamma", "plan"}, workflow.LaneStatePath(dataDir, "plan", "gamma")},
 		{"implement command prefers the implement lane", []string{"implement", "status", "gamma"}, workflow.LaneStatePath(dataDir, "implement", "gamma")},
+		{"implement goal record naming a spec with a lane", []string{"implement", "goal", "record", "--data", `{"name":"gamma","item":"t-1"}`, "--from", "r.json"}, workflow.LaneStatePath(dataDir, "implement", "gamma")},
+		{"implement goal decide naming a spec with no implement lane", []string{"implement", "goal", "decide", "--data", `{"name":"alpha","item":"t-1","decision":"skip"}`}, shared},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, snapshotStatePath(tc.argv))

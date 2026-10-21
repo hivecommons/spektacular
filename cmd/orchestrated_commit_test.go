@@ -233,10 +233,13 @@ func TestOrchestratedImplementCommit_StillCommitsTheWholeTree(t *testing.T) {
 
 	runOK(t, "implement", "new", "--data", `{"name":"billing","orchestrated":true}`)
 	for _, s := range []string{
-		"analyze", "implement", "test", "verify", "update_plan", "update_changelog",
+		"analyze", "implement", "test", "verify", "check_goal", "update_plan", "update_changelog",
 		"test_plan", "update_feature_changelog", "reconcile_spec",
 	} {
 		runOK(t, "implement", "goto", "--data", `{"step":"`+s+`","name":"billing"}`)
+		if s == "check_goal" {
+			passGoalCheck(t, "billing")
+		}
 	}
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "workflows", "implement-billing.md"), []byte("notes\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(fx.root, "unrelated.txt"), []byte("user work\n"), 0o644))

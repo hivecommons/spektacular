@@ -23,7 +23,7 @@ HARBOR_AUTH_bob = PYTHONPATH=$(CURDIR)/tests/harbor/agents
 # artifact failed to collect. Agents with no file of their own add nothing.
 AGENT_ARTIFACTS = tests/harbor/agents/$(AGENT)-artifacts.toml
 
-.PHONY: build test lint clean install install-local cross harbor-install harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-test-epic harbor-test-epic-claude harbor-test-epic-codex harbor-test-epic-bob _harbor-test-epic harbor-test-plan-claude harbor-test-plan-codex harbor-test-plan-bob _harbor-test-plan harbor-test-implement-epic harbor-test-implement-epic-claude harbor-test-implement-epic-codex harbor-test-implement-epic-bob harbor-test-implement-epic-bob-unlimited _harbor-test-implement-epic harbor-test-standing-rules harbor-test-standing-rules-claude harbor-test-standing-rules-codex harbor-test-standing-rules-bob _harbor-test-standing-rules
+.PHONY: build test lint clean install install-local cross harbor-install harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-test-epic harbor-test-epic-claude harbor-test-epic-codex harbor-test-epic-bob _harbor-test-epic harbor-test-plan-claude harbor-test-plan-codex harbor-test-plan-bob _harbor-test-plan harbor-test-implement-epic harbor-test-implement-epic-claude harbor-test-implement-epic-codex harbor-test-implement-epic-bob harbor-test-implement-epic-bob-unlimited _harbor-test-implement-epic harbor-test-standing-rules harbor-test-standing-rules-claude harbor-test-standing-rules-codex harbor-test-standing-rules-bob _harbor-test-standing-rules harbor-test-goal-check harbor-test-goal-check-claude harbor-test-goal-check-codex harbor-test-goal-check-bob _harbor-test-goal-check
 
 build:
 	go build -ldflags "-X github.com/hivecommons/spektacular/cmd.version=$(VERSION)" -o ./bin/$(BINARY) .
@@ -290,3 +290,50 @@ _harbor-test-implement-epic:
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/$$(echo implement-epic-workflow-$(AGENT)$(VARIANT) | cut -c1-32)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
+
+# The goal-check suite: an implement run resumed at verify for one task whose
+# README criterion is missing while its tests pass (SCENARIO=unmet, the
+# default for the per-agent targets) or whose criteria all hold (SCENARIO=met). Renders
+# tests/harbor/goal-check-workflow into
+# tests/harbor/.build/goal-check-workflow-$(AGENT)-$(SCENARIO), with the
+# scenario baked into the seed and the verifier, the shared session-log and
+# transcript helpers copied into its tests, and the agent, its skill
+# invocation and the scenario's text substituted into instruction.md. The
+# verifier's self-check (tests/test_verifier_selfcheck.py) stays out of the
+# image; run it locally with uvx --with pytest pytest.
+harbor-test-goal-check: harbor-test-goal-check-claude
+
+harbor-test-goal-check-claude:
+	$(MAKE) _harbor-test-goal-check AGENT=claude SCENARIO=$(or $(SCENARIO),unmet) SPEK_IMPLEMENT='/spek-implement 20260301000000-todo-count'
+
+harbor-test-goal-check-codex:
+	$(MAKE) _harbor-test-goal-check AGENT=codex SCENARIO=$(or $(SCENARIO),unmet) SPEK_IMPLEMENT='$$$$spek-implement 20260301000000-todo-count'
+
+harbor-test-goal-check-bob:
+	$(MAKE) _harbor-test-goal-check AGENT=bob SCENARIO=$(or $(SCENARIO),unmet) SPEK_IMPLEMENT='/spek-implement 20260301000000-todo-count'
+
+GOAL_CHECK_BUILD = tests/harbor/.build/goal-check-workflow-$(AGENT)-$(SCENARIO)
+_harbor-test-goal-check:
+	@test -n "$(AGENT)" || (echo "AGENT is required" && exit 1)
+	@test -n "$(HARBOR_ARGS_$(AGENT))" || (echo "no harbor arguments for AGENT=$(AGENT)" && exit 1)
+	@test -f tests/harbor/goal-check-workflow/scenario-$(SCENARIO).md || (echo "SCENARIO must be unmet or met" && exit 1)
+	@rm -rf $(GOAL_CHECK_BUILD)
+	@mkdir -p $(GOAL_CHECK_BUILD)/tests
+	cp -r tests/harbor/goal-check-workflow/environment tests/harbor/goal-check-workflow/solution \
+		tests/harbor/goal-check-workflow/task.toml $(GOAL_CHECK_BUILD)/
+	cp tests/harbor/goal-check-workflow/tests/test.sh tests/harbor/goal-check-workflow/tests/test_goal_check.py $(GOAL_CHECK_BUILD)/tests/
+	cp tests/harbor/shared/*.py $(GOAL_CHECK_BUILD)/tests/
+	echo $(SCENARIO) > $(GOAL_CHECK_BUILD)/environment/seed/scenario
+	echo $(SCENARIO) > $(GOAL_CHECK_BUILD)/tests/scenario
+	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> $(GOAL_CHECK_BUILD)/task.toml; fi
+	GOOS=linux GOARCH=amd64 go build -o $(GOAL_CHECK_BUILD)/environment/spektacular .
+	SCENARIO_BODY=$$(cat tests/harbor/goal-check-workflow/scenario-$(SCENARIO).md); \
+	awk -v scenario="$$SCENARIO_BODY" -v agent="$(AGENT)" -v skill="$(SPEK_IMPLEMENT)" \
+		'{ gsub(/\{\{agent\}\}/, agent); gsub(/\{\{spek_implement\}\}/, skill); \
+		   if ($$0 == "{{scenario}}") print scenario; else print }' \
+		tests/harbor/goal-check-workflow/instruction.md \
+		> $(GOAL_CHECK_BUILD)/instruction.md
+	SPEK_SCENARIO=$(SCENARIO) $(HARBOR_AUTH_$(AGENT)) harbor run -p $(GOAL_CHECK_BUILD) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
+	@echo ""
+	@echo "=== Test Results ==="
+	@cat $$(ls -td tests/harbor/jobs/*/$$(echo goal-check-workflow-$(AGENT)-$(SCENARIO) | cut -c1-32)__*/verifier/test-stdout.txt 2>/dev/null | head -1)

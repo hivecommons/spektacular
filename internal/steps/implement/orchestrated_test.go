@@ -94,3 +94,22 @@ func TestOrchestratedSpecConflictNeverWritesSpec(t *testing.T) {
 		})
 	}
 }
+
+// An orchestrated run's goal-check stops reach the orchestrator as a
+// question from that spec's run; a standalone render carries no hand-back.
+func TestOrchestratedCheckGoalHandsStopsBack(t *testing.T) {
+	cfg := orchestratedImplementConfig
+	cfg.GoalCheck = true
+	data := &testData{values: map[string]any{"name": "000007_billing", "orchestrated": true}}
+	writer := &captureWriter{}
+	_, err := checkGoal()(data, writer, store.NewFileStore(t.TempDir(), "project"), cfg)
+	require.NoError(t, err)
+	out := writer.result.Instruction
+	require.Contains(t, out, "## Running under an orchestrator")
+	require.Contains(t, out, "`QUESTION: 000007_billing`")
+	require.Contains(t, out, "STOP at once, without retrying")
+
+	standalone := renderStep(t, checkGoalOn())
+	require.NotContains(t, standalone, "## Running under an orchestrator")
+	require.NotContains(t, standalone, "QUESTION:")
+}

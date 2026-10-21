@@ -1,6 +1,7 @@
 package plantask
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -89,7 +90,11 @@ func TestParse_ReadsEveryTaskField(t *testing.T) {
 	require.Empty(t, reader.DependsOn, "none yields no dependencies")
 	require.Equal(t, Execution{Type: "agent"}, reader.Execution)
 	require.True(t, reader.Completed)
-	require.Equal(t, Criteria{Met: 2, Total: 3}, reader.Criteria,
+	require.Equal(t, Criteria{Met: 2, Total: 3, Items: []Criterion{
+		{Text: "reads ids", Met: true},
+		{Text: "reads repos", Met: true},
+		{Text: "reads everything else", Met: false},
+	}}, reader.Criteria,
 		"a checkbox before the criteria marker is not a criterion")
 
 	export := p.Tasks[1]
@@ -98,7 +103,7 @@ func TestParse_ReadsEveryTaskField(t *testing.T) {
 	require.Equal(t, []string{"0b9f6d2e-5a41-4c7b-9e08-3d1f7a6c2b95"}, export.DependsOn,
 		"a drifted dependency title never affects resolution")
 	require.False(t, export.Completed)
-	require.Equal(t, Criteria{Met: 0, Total: 1}, export.Criteria)
+	require.Equal(t, Criteria{Met: 0, Total: 1, Items: []Criterion{{Text: "exports"}}}, export.Criteria)
 
 	key := p.Tasks[2]
 	require.Equal(t, 2, key.Milestone)
@@ -108,7 +113,10 @@ func TestParse_ReadsEveryTaskField(t *testing.T) {
 		"0b9f6d2e-5a41-4c7b-9e08-3d1f7a6c2b95",
 	}, key.DependsOn)
 	require.Equal(t, Execution{Type: "human", Reason: "needs access to the production key vault"}, key.Execution)
-	require.Equal(t, Criteria{Met: 1, Total: 2}, key.Criteria, "an uppercase X counts as met")
+	require.Equal(t, Criteria{Met: 1, Total: 2, Items: []Criterion{
+		{Text: "key published", Met: true},
+		{Text: "key rotated", Met: false},
+	}}, key.Criteria, "an uppercase X counts as met")
 }
 
 func TestParse_OnlyReadsTheMilestonesSection(t *testing.T) {
@@ -180,6 +188,62 @@ func TestParse_LegacyPlan(t *testing.T) {
 	for _, word := range []string{"legacy", "old", "version", "age"} {
 		require.NotContains(t, err.Error(), word)
 	}
+}
+
+func TestParse_LegacyPlanReadsEachPhase(t *testing.T) {
+	p := Parse([]byte(legacyPlan))
+
+	require.Equal(t, []Phase{
+		{Label: "Phase 1.1", Title: "Do a thing", Milestone: 1, Repo: "spektacular", Completed: true,
+			Criteria: Criteria{Met: 1, Total: 1, Items: []Criterion{{Text: "done", Met: true}}}},
+		{Label: "Phase 1.2", Title: "Do another", Milestone: 1, Completed: true},
+		{Label: "Phase 2.1", Title: "Done", Milestone: 2, Completed: true},
+		{Label: "Phase 2.2", Title: "Not done", Milestone: 2},
+	}, p.Phases, "a heading outside the section is not a phase")
+
+	ph, ok := p.Phase("Phase 1.1")
+	require.True(t, ok)
+	require.Equal(t, "Do a thing", ph.Title)
+	_, ok = p.Phase("Phase 9.9")
+	require.False(t, ok)
+
+	open := p.OpenPhases()
+	require.Len(t, open, 1)
+	require.Equal(t, "Phase 2.2", open[0].Label)
+}
+
+func TestParse_CriterionTextKeepsFormattingAndJoinsDetailLines(t *testing.T) {
+	p := Parse([]byte(`## Milestones & Tasks
+
+### Milestone 1: One
+
+#### - [ ] Task: Spec-style criteria
+**Id:** a
+
+**Acceptance criteria**:
+- [ ] **The goal includes the task's criteria**
+  When a task is checked, the goal lists every criterion.
+
+- [x]   ` + "`plan status`" + ` output is unchanged
+  - a nested list item is not detail
+  not detail either, after a list item
+- [ ] last
+
+Trailing paragraph that is not indented.
+`))
+	require.Equal(t, []Criterion{
+		{Text: "**The goal includes the task's criteria** When a task is checked, the goal lists every criterion."},
+		{Text: "`plan status` output is unchanged", Met: true},
+		{Text: "last"},
+	}, p.Tasks[0].Criteria.Items, "a nested list item, and the lines after it, are not detail")
+	require.Equal(t, 3, p.Tasks[0].Criteria.Total)
+}
+
+func TestCriteria_JSONShapeIsUnchanged(t *testing.T) {
+	p := Parse([]byte(taskPlan))
+	raw, err := json.Marshal(p.Tasks[0].Criteria)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"met":2,"total":3}`, string(raw), "criterion text is never serialised")
 }
 
 func TestParse_NoWorkAtAll(t *testing.T) {

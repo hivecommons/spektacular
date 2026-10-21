@@ -279,3 +279,56 @@ class TestOrchestration:
     def test_no_merge_refused(self, log):
         refused = [" ".join(e.command) for e in log.shared if e.is_verb("epic", "merge") and not e.ok]
         assert not refused, f"`epic merge` was refused: {refused}"
+
+
+# ---------------------------------------------------------------------------
+# Every task's goal was checked before it was ticked.
+# ---------------------------------------------------------------------------
+
+
+def plan_tasks(spec: str) -> list[dict]:
+    out = cli("status", spec, "--format", "json")
+    for s in out.get("specs") or []:
+        if s.get("name") == spec:
+            return (s.get("plan") or {}).get("tasks") or []
+    return []
+
+
+class TestGoalCheck:
+    @pytest.mark.parametrize("spec", SPECS)
+    def test_every_task_has_recorded_verdicts(self, spec):
+        outcome = cli("implement", "goal", "show", spec, "--format", "json")
+        assert not outcome.get("error"), outcome
+        recorded = {item["item"]: item for item in outcome.get("items") or []}
+        tasks = plan_tasks(spec)
+        assert tasks, f"{spec}'s plan lists no tasks"
+        for task in tasks:
+            item = recorded.get(task["id"])
+            assert item and item.get("checks"), (
+                f"{spec} task {task['id']} ({task['title']}) has no recorded goal check: "
+                "every task's criteria must be judged by the reviewer before it is ticked"
+            )
+            want = task["acceptance_criteria"]["total"]
+            for check in item["checks"]:
+                verdicts = check.get("verdicts") or []
+                assert len(verdicts) == want, (
+                    f"{spec} task {task['id']}: a check holds {len(verdicts)} verdicts for {want} criteria"
+                )
+                assert all(v.get("evidence", "").strip() for v in verdicts), (
+                    f"{spec} task {task['id']}: a verdict has no evidence"
+                )
+
+    @pytest.mark.parametrize("spec", SPECS)
+    def test_goal_record_precedes_update_plan(self, log, spec):
+        lane = log.lane("implement", spec)
+        assert lane is not None, f"{spec} has no implement lane in the session log"
+        recorded = 0
+        for e in lane.events:
+            if e.ok and (e.is_verb("implement", "goal", "record") or e.is_verb("implement", "goal", "decide")):
+                recorded += 1
+            elif e.ok and e.goto_step == "update_plan" and (e.state_before or {}).get("current_step") != "update_plan":
+                assert recorded > 0, (
+                    f"{spec}'s lane reached update_plan at {e.at:%H:%M:%S} with no goal check "
+                    "recorded since the previous plan update"
+                )
+                recorded = 0

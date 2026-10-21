@@ -34,7 +34,7 @@ func runTaskTo(t *testing.T, task string) {
 	t.Helper()
 	stdout, code := implementNewTask(t, task)
 	require.Equal(t, 0, code, stdout)
-	walkSteps(t, "implement", "analyze", "implement", "test", "verify", "update_plan")
+	walkSteps(t, "implement", "analyze", "implement", "test", "verify", "check_goal", "update_plan")
 }
 
 func gotoStep(t *testing.T, step string) (string, int) {
@@ -110,7 +110,7 @@ func TestWholePlanRun_UpdateChangelogExitsAreUnchanged(t *testing.T) {
 
 	_, _, code = runRootCmd(t, "implement", "new", "--data", `{"name":"`+taskPlanName+`"}`)
 	require.Equal(t, 0, code)
-	walkSteps(t, "implement", "analyze", "implement", "test", "verify", "update_plan")
+	walkSteps(t, "implement", "analyze", "implement", "test", "verify", "check_goal", "update_plan")
 	stdout, code := gotoStep(t, "update_changelog")
 	require.Equal(t, 0, code)
 	instr := instructionOf(t, stdout)
@@ -151,7 +151,7 @@ func TestTaskRun_EarlyFinishIsCommitted(t *testing.T) {
 
 			_, _, code := runRootCmd(t, "implement", "new", "--data", `{"name":"`+milestoneSpecName+`","task":"`+idA+`"}`)
 			require.Equal(t, 0, code)
-			walkSteps(t, "implement", "analyze", "implement", "test", "verify", "update_plan")
+			walkSteps(t, "implement", "analyze", "implement", "test", "verify", "check_goal", "update_plan")
 			writeTaskMilestonePlan(t, fx.root, milestoneSpecName, true)
 
 			stdout, code := gotoStep(t, "update_changelog")

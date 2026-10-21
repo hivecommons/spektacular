@@ -108,6 +108,30 @@ Spek ships with five coding-agent integrations. `spektacular init <agent>` runs 
 - **copilot** — GitHub Copilot CLI; installs the eight workflow skills under `.github/skills/` and the same standing rules in root `AGENTS.md`, with no command wrappers or extra instruction files.
 - **omp** — installs the same six skills under `.omp/skills/`, Markdown wrappers and native input-preserving handlers under `.omp/commands/`, and eight always-applied `spek-*.md` rules under `.omp/rules/`. The rules mirror only Spektacular's sections of root `AGENTS.md`, keeping them visible even when omp selects another instruction file. Other project instructions, rules, skills and settings are left alone.
 
+### Goal reviewer
+
+The implement workflow's `check_goal` step has a separate, read-only reviewer judge each task's
+acceptance criteria before any is ticked. `spektacular init <agent>` installs that reviewer as a
+helper named `spek-goal-reviewer`, in the agent's own sub-agent format, on a cheaper model than the
+agent's default:
+
+| Agent | Helper | Default model | Read-only |
+|---|---|---|---|
+| claude | `.claude/agents/spek-goal-reviewer.md` | `haiku` | `Read`, `Grep`, `Glob` tools only |
+| codex | `.codex/agents/spek-goal-reviewer.toml` | `gpt-6-luna` | by instruction only: Codex has no read-only mode for a helper |
+| copilot | `.github/agents/spek-goal-reviewer.agent.md` | `Claude Haiku 4.5` | `read` and `search` tools only |
+| omp | `.omp/agents/spek-goal-reviewer.md` | `@smol` (your own cheap model role) | `read`, `grep`, `glob` tools only |
+| bob | none | Bob's lighter model | Bob's built-in read-only `explore` helper is the reviewer |
+
+Set `implement.goal_check.models.<agent>` in `.spektacular/config.yaml` to use another model for
+one agent; the others keep their defaults. The model is written into the helper when it is
+installed, so re-run `spektacular init <agent>` after changing it (`migrate` refreshes it on an
+upgrade). Your own agent settings that pin a helper's model still win. Copilot ignores a helper's
+model when the session model is `Auto`, and Copilot in VS Code also loads `.claude/agents/`, so a
+project set up for both may list two copies of the same reviewer; both carry the same brief. An
+agent without the helper falls back to any fresh-context sub-agent given
+`spektacular skill review-task-goal`. Switch the check off with `implement.goal_check.enabled: false`.
+
 ### GitHub Copilot CLI
 
 Install [Copilot CLI](https://docs.github.com/copilot/how-tos/copilot-cli), then run:

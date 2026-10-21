@@ -297,6 +297,13 @@ func snapshotStatePath(argv []string) string {
 		if _, err := os.Stat(lane); err == nil {
 			return lane
 		}
+	case "goal":
+		// `implement goal record|decide|show` name their spec in --data like
+		// a goto, and belong to the same lane, so a verifier finds each
+		// recorded goal check in the lane it gates.
+		if _, err := os.Stat(lane); err == nil && kind == "implement" {
+			return lane
+		}
 	}
 	return laneNamedByArgs(dir, kind, args, shared)
 }

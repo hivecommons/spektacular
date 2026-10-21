@@ -195,8 +195,11 @@ func TestImplementLane_InstructionsStayInteractiveWithLaneNotes(t *testing.T) {
 	implementLaneProject(t)
 
 	outputs := []string{runOK(t, "implement", "new", "--data", `{"name":"alpha"}`)}
-	for _, s := range []string{"analyze", "implement", "test", "verify", "update_plan", "update_changelog"} {
+	for _, s := range []string{"analyze", "implement", "test", "verify", "check_goal", "update_plan", "update_changelog"} {
 		outputs = append(outputs, runOK(t, "implement", "goto", "--data", `{"step":"`+s+`","name":"alpha"}`))
+		if s == "check_goal" {
+			passGoalCheck(t, "alpha")
+		}
 	}
 	for i, out := range outputs {
 		instruction := instructionField(t, out)
@@ -219,10 +222,13 @@ func TestImplementLane_FinishRemovesTheLane(t *testing.T) {
 	runOK(t, "implement", "new", "--data", `{"name":"alpha"}`)
 	runOK(t, "implement", "new", "--data", `{"name":"beta"}`)
 	for _, s := range []string{
-		"analyze", "implement", "test", "verify", "update_plan", "update_changelog",
+		"analyze", "implement", "test", "verify", "check_goal", "update_plan", "update_changelog",
 		"test_plan", "update_feature_changelog", "reconcile_spec",
 	} {
 		runOK(t, "implement", "goto", "--data", `{"step":"`+s+`","name":"alpha"}`)
+		if s == "check_goal" {
+			passGoalCheck(t, "alpha")
+		}
 	}
 	notes := filepath.Join(dataDir, "workflows", "implement-alpha.md")
 	require.NoError(t, os.WriteFile(notes, []byte("notes\n"), 0o644))

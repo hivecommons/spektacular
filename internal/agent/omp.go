@@ -21,6 +21,9 @@ func (ompAgent) Install(projectPath string, cfg config.Config, out io.Writer) er
 	if err := installWorkflowSkills(projectPath, ".omp/skills", cfg, out); err != nil {
 		return err
 	}
+	if err := installGoalReviewer(projectPath, "omp", cfg, out); err != nil {
+		return err
+	}
 	if err := installCommandWrappers(projectPath, ".omp/commands", bobCommandFilename, cfg, out); err != nil {
 		return err
 	}

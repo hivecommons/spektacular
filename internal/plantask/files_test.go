@@ -179,3 +179,44 @@ func TestTaskFiles_SingleRepoFallback(t *testing.T) {
 	}, TaskFiles([]byte(plan), []byte(context), []string{"one", "two"}),
 		"with several repos and no task repo the file has no repo")
 }
+
+func TestPhaseFiles_ReadsEachLegacyPhasesFiles(t *testing.T) {
+	plan := `# Plan: old
+
+## Milestones & Phases
+
+### Milestone 1: First
+
+#### - [ ] Phase 1.1: Do a thing
+**Repo:** docs
+
+**Acceptance criteria**:
+- [ ] done
+
+#### - [ ] Phase 1.2: Do another
+
+#### - [ ] Phase 1.3: No notes
+`
+	context := "# Context\n\n" +
+		"### Phase 1.1: Do a thing\n\n" +
+		"- `site/page.md:3` — the page\n" +
+		"- `spektacular:cmd/root.go` — a link\n\n" +
+		"### Phase 1.2: Do another\n\n" +
+		"- `internal/x.go` — a file\n" +
+		"```\n`internal/fenced.go`\n```\n" +
+		"## Testing\n\n- `internal/outside.go`\n"
+
+	files := PhaseFiles([]byte(plan), []byte(context), []string{"spektacular", "docs"})
+	require.Equal(t, map[string][]FileRef{
+		"Phase 1.1": {{Repo: "docs", Path: "site/page.md"}, {Repo: "spektacular", Path: "cmd/root.go"}},
+		"Phase 1.2": {{Repo: "", Path: "internal/x.go"}},
+	}, files, "a phase without a section is absent; fenced code and later sections are ignored")
+
+	single := PhaseFiles([]byte(plan), []byte(context), []string{"spektacular"})
+	require.Equal(t, []FileRef{{Repo: "spektacular", Path: "internal/x.go"}}, single["Phase 1.2"],
+		"a phase naming no repo falls back to the only registered repo")
+}
+
+func TestPhaseFiles_TaskPlanHasNone(t *testing.T) {
+	require.Empty(t, PhaseFiles([]byte(filesPlan), []byte(filesContext), []string{"spektacular", "docs"}))
+}

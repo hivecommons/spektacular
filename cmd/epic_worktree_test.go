@@ -13,6 +13,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/testutil/gittest"
+	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/hivecommons/spektacular/internal/worktree"
 	"github.com/stretchr/testify/require"
 )
@@ -499,4 +500,54 @@ func TestEpicWorktreeHelp_SaysWorktreesHoldOnlyCode(t *testing.T) {
 	merge := strings.Join(strings.Fields(epicMergeCmd.Long), " ")
 	require.Contains(t, merge, "or if the branch changes anything under a .spektacular directory",
 		"epic merge help must say a branch changing .spektacular is refused")
+}
+
+// writeImplementLane leaves spec's implement lane standing at step, as an
+// orchestrated child's run does while it works or waits for an answer.
+func writeImplementLane(t *testing.T, proj, spec, step string) {
+	t.Helper()
+	path := workflow.LaneStatePath(filepath.Join(proj, ".spektacular"), "implement", spec)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	body, err := json.Marshal(map[string]any{
+		"kind": "implement", "current_step": step, "completed_steps": []string{},
+		"data": map[string]any{"name": spec, "orchestrated": true},
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, body, 0o644))
+}
+
+// A spec whose implement run is stopped at the goal check has an open
+// question, so epic merge refuses it, naming the question and how to resume,
+// and merges nothing.
+func TestEpicMerge_RefusedWhileTheGoalCheckQuestionIsOpen(t *testing.T) {
+	f := mergeReadyProject(t)
+	writeImplementLane(t, f.proj, "alpha", "check_goal")
+
+	stdout, code := runEpic(t, "merge", "--data", `{"spec":"alpha"}`)
+	require.Equal(t, 1, code)
+	er := decodeError(t, stdout)
+	require.Equal(t, "goal_check_open", er.Code)
+	require.Equal(t, "alpha", er.Resource)
+	require.Contains(t, er.Message, "stopped at the goal check")
+	require.Contains(t, er.Message, "open question")
+	require.Contains(t, er.NextAction, `implement new --data '{"name":"alpha","orchestrated":true}'`)
+	require.DirExists(t, f.wt("testproj"), "nothing is merged or removed")
+	main, err := os.ReadFile(filepath.Join(f.proj, "main.txt"))
+	require.NoError(t, err)
+	require.NotEqual(t, "main v2\n", string(main))
+}
+
+// At any other step, or with no lane at all, epic merge behaves as before.
+func TestEpicMerge_OtherStepsMergeAsBefore(t *testing.T) {
+	for _, step := range []string{"verify", "finished", ""} {
+		t.Run("lane at "+step, func(t *testing.T) {
+			f := mergeReadyProject(t)
+			if step != "" {
+				writeImplementLane(t, f.proj, "alpha", step)
+			}
+			stdout, code := runEpic(t, "merge", "--data", `{"spec":"alpha"}`)
+			require.Equalf(t, 0, code, "epic merge failed: %s", stdout)
+			require.Contains(t, stdout, `"merged": true`)
+		})
+	}
 }

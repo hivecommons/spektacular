@@ -1307,3 +1307,107 @@ func TestPeekSchema(t *testing.T) {
 	_, err = PeekSchema(filepath.Join(dir, "missing.yaml"))
 	require.Error(t, err)
 }
+
+// Goal-check criterion 1: a new project's configuration has the goal check
+// switched on, and so does one written before implement.goal_check existed.
+func TestNewDefault_GoalCheckIsOn(t *testing.T) {
+	cfg := NewDefault()
+	require.True(t, cfg.Implement.GoalCheck.Enabled)
+	require.Empty(t, cfg.Implement.GoalCheck.Models)
+}
+
+func TestFromYAMLFile_AbsentGoalCheckLoadsAsOn(t *testing.T) {
+	for name, yaml := range map[string]string{
+		"no implement section":         "name: testproj\nrepos:\n  - name: testproj\n    location: ..",
+		"implement without goal_check": "name: testproj\nimplement:\n    worktrees: false\nrepos:\n  - name: testproj\n    location: ..",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, path := projectConfigPath(t)
+			require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+			cfg, err := FromYAMLFile(path)
+			require.NoError(t, err)
+			require.True(t, cfg.Implement.GoalCheck.Enabled)
+		})
+	}
+}
+
+// Goal-check criterion 2: switching the check off is written as the literal
+// `enabled: false` under `goal_check:` and read back as off, with no
+// settings-format bump.
+func TestToYAMLFile_GoalCheckDisabledRoundTrips(t *testing.T) {
+	cfg := NewDefault()
+	cfg.Name = "testproj"
+	cfg.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	cfg.Implement.GoalCheck.Enabled = false
+	_, path := projectConfigPath(t)
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "implement:\n    worktrees: true\n    goal_check:\n        enabled: false\n")
+	require.NotContains(t, string(raw), "models:", "an empty models map is not written")
+	require.Contains(t, string(raw), "schema: 4\n")
+
+	loaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.False(t, loaded.Implement.GoalCheck.Enabled)
+}
+
+// Goal-check criterion 3: a reviewer model set for one agent round-trips and
+// leaves every other agent without an override.
+func TestToYAMLFile_GoalCheckModelsRoundTrip(t *testing.T) {
+	cfg := NewDefault()
+	cfg.Name = "testproj"
+	cfg.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	cfg.Implement.GoalCheck.Models = map[string]string{"claude": "sonnet"}
+	_, path := projectConfigPath(t)
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "goal_check:\n        enabled: true\n        models:\n            claude: sonnet\n")
+
+	loaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{"claude": "sonnet"}, loaded.Implement.GoalCheck.Models)
+	_, ok := loaded.Implement.GoalCheck.Models["codex"]
+	require.False(t, ok, "other agents keep their defaults")
+}
+
+// Goal-check criterion 3: naming an unknown agent, or giving an agent no
+// model, is refused with a message naming the valid agents and a fix.
+func TestFromYAMLFile_GoalCheckModelsRefusesUnknownAgentOrEmptyModel(t *testing.T) {
+	cases := map[string]struct {
+		models  string
+		message string
+		fix     string
+	}{
+		"unknown agent": {
+			models:  "            cursor: fast",
+			message: `implement.goal_check.models names "cursor", which is not a supported agent; valid agents are bob, claude, codex, copilot, omp`,
+			fix:     "rename implement.goal_check.models.cursor in .spektacular/config.yaml to one of bob, claude, codex, copilot, omp, or remove it",
+		},
+		"empty model": {
+			models:  `            codex: ""`,
+			message: "implement.goal_check.models.codex has no model",
+			fix:     "remove it to use codex's default reviewer model",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			yaml := "name: testproj\nimplement:\n    goal_check:\n        models:\n" + tc.models + "\nrepos:\n  - name: testproj\n    location: .."
+			_, path := projectConfigPath(t)
+			require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+			_, err := FromYAMLFile(path)
+			require.Error(t, err)
+			var oe *output.ErrorResponse
+			require.ErrorAs(t, err, &oe)
+			require.Equal(t, "config_invalid", oe.Code)
+			require.Contains(t, oe.Message, tc.message)
+			require.Contains(t, oe.NextAction, tc.fix)
+		})
+	}
+}

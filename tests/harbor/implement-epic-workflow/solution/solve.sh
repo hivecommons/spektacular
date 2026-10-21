@@ -13,30 +13,79 @@ set -euo pipefail
 cd /app
 spektacular init claude >/dev/null
 EPIC=$(spektacular epic list | jq -r '.files[0].name')
-STEPS="analyze implement test verify update_plan update_changelog test_plan update_feature_changelog reconcile_spec"
+# Each task is walked through the implement steps in turn. At check_goal the
+# reviewer's reply is recorded: every criterion judged met, with evidence.
+TASK_STEPS="implement test verify check_goal"
+WRAP_UP="test_plan update_feature_changelog reconcile_spec"
 
 poll() { spektacular status "$EPIC" --format json >/dev/null; }
 root() { spektacular status "$EPIC" --format json | jq -r --arg s "$1" '.specs[] | select(.name == $s) | .run.implement.root'; }
 goto() { spektacular implement goto --data "{\"step\":\"$2\",\"name\":\"$1\"}" >/dev/null; }
+tasks() { spektacular status "$1" --format json | jq -c --arg s "$1" '.specs[] | select(.name == $s) | .plan.tasks[]'; }
 
 start() {
   spektacular epic worktree --data "{\"spec\":\"$1\"}" >/dev/null
   spektacular implement new --data "{\"name\":\"$1\",\"orchestrated\":true}" >/dev/null
 }
 
-# Tick the plan, write the changelog, walk the remaining steps and finish
-# with a commit message, all from the project root.
-finish() {
-  local spec=$1 tmp=.spektacular/tmp
+# Record the goal check of one task: one met verdict per criterion.
+record_goal() {
+  local spec=$1 id=$2 total=$3 tmp=.spektacular/tmp/$1/goal-check
   mkdir -p "$tmp"
-  spektacular plan file read "$spec" plan | sed 's/#### - \[ \] Task:/#### - [x] Task:/' > "$tmp/plan.md"
+  jq -n --argjson n "$total" '{verdicts: [range(1; $n + 1) | {criterion: ., verdict: "met", evidence: "solution walk: the reference implementation meets it"}]}' > "$tmp/reply.json"
+  spektacular implement goal record --data "{\"name\":\"$spec\",\"item\":\"$id\"}" --from "$tmp/reply.json" >/dev/null
+  rm -rf "$tmp"
+}
+
+# Tick one task's heading and every criterion of it, as update_plan says to
+# once all of them are judged met.
+tick_task() {
+  local spec=$1 id=$2 tmp=.spektacular/tmp
+  spektacular plan file read "$spec" plan | python3 -c '
+import sys
+task_id = sys.argv[1]
+lines = sys.stdin.read().split("\n")
+heading = None
+for i, line in enumerate(lines):
+    if line.startswith("#### - [ ] Task:"):
+        heading = i
+    elif line.strip() == "**Id:** " + task_id and heading is not None:
+        lines[heading] = lines[heading].replace("#### - [ ] Task:", "#### - [x] Task:", 1)
+        j = i + 1
+        while j < len(lines) and not lines[j].startswith("#"):
+            if lines[j].startswith("- [ ] "):
+                lines[j] = "- [x] " + lines[j][6:]
+            j += 1
+        break
+sys.stdout.write("\n".join(lines))
+' "$id" > "$tmp/plan.md"
   spektacular plan file write "$spec" plan --from "$tmp/plan.md" >/dev/null
+  rm -f "$tmp/plan.md"
+}
+
+# Walk every task through the goal check, write the changelog, walk the
+# wrap-up and finish with a commit message, all from the project root.
+finish() {
+  local spec=$1 tmp=.spektacular/tmp task id total
+  local -a all
+  mkdir -p "$tmp"
+  mapfile -t all < <(tasks "$spec")
+  for task in "${all[@]}"; do
+    id=$(jq -r .id <<<"$task")
+    total=$(jq -r .acceptance_criteria.total <<<"$task")
+    goto "$spec" analyze
+    for step in $TASK_STEPS; do goto "$spec" "$step"; done
+    record_goal "$spec" "$id" "$total"
+    goto "$spec" update_plan
+    tick_task "$spec" "$id"
+    goto "$spec" update_changelog
+  done
   printf '# %s\n\nImplemented as planned.\n' "$spec" > "$tmp/changelog.md"
   spektacular changelog file write "$spec" --from "$tmp/changelog.md" >/dev/null
-  for step in $STEPS; do goto "$spec" "$step"; done
+  for step in $WRAP_UP; do goto "$spec" "$step"; done
   printf 'Implement %s\n' "$spec" > "$tmp/git-commit-message.md"
   spektacular implement goto --data "{\"step\":\"finished\",\"name\":\"$spec\",\"commit_message_from\":\"$tmp/git-commit-message.md\"}" >/dev/null
-  rm -f "$tmp/plan.md" "$tmp/changelog.md"
+  rm -f "$tmp/changelog.md"
 }
 
 merge() { spektacular epic merge --data "{\"spec\":\"$1\"}" >/dev/null; }

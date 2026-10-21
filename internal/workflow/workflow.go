@@ -38,6 +38,13 @@ type Config struct {
 	// on every invocation. Empty otherwise. Like the rest of this config it
 	// is never persisted.
 	CodeRoots []CodeRoot
+	// GoalCheck says whether the implement workflow's goal check runs, read
+	// from implement.goal_check.enabled on every invocation. Like the rest of
+	// this config it is never persisted.
+	GoalCheck bool
+	// Repos are the registered repo names, in registry order, which the goal
+	// check attributes a task's files to. Never persisted.
+	Repos []string
 }
 
 // CodeRoot is one repo's code root inside a spec's worktrees.

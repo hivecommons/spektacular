@@ -31,6 +31,10 @@ For the task you just completed, append an entry with this shape (in a plan writ
 **Discoveries**: <anything the next task or a future maintainer should know — a tricky API, a hidden constraint, a renamed symbol, a missed edge case>
 ```
 
+{{#goal_check}}
+If the goal check stopped this task and the user accepted the shortfall or skipped the task (`{{config.command}} implement goal show {{plan_name}}` shows its state as `accepted shortfall` or `skipped`), name that under **Deviations**, with the criteria left unticked.
+
+{{/goal_check}}
 In the **Files changed** list, prefix every path with its repo's name (`<repo-name>: path`) whenever more than one repo is registered; an unprefixed path belongs to the only registered repo. The final feature-changelog step derives one entry per affected repo mechanically from these prefixes, so keep them accurate.
 
 {{#has_dependency_override}}
@@ -94,7 +98,7 @@ Other tasks in the plan are still open, so the feature-level wrap-up (test plan,
 {{^task}}
 ### Step 3: Check for remaining unchecked tasks
 
-Re-read plan.md with `{{config.command}} plan file read {{plan_name}} plan` and count the unchecked `#### - [ ] Task:` headings under `## Milestones & Tasks` (`#### - [ ] Phase` headings under `## Milestones & Phases` in a plan written before tasks).
+Re-read plan.md with `{{config.command}} plan file read {{plan_name}} plan` and count the unchecked `#### - [ ] Task:` headings under `## Milestones & Tasks` (`#### - [ ] Phase` headings under `## Milestones & Phases` in a plan written before tasks).{{#goal_check}} Do not count any task or phase that `{{config.command}} implement goal show {{plan_name}}` reports as skipped.{{/goal_check}}
 
 **If unchecked tasks remain**:
 

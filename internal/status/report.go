@@ -506,7 +506,10 @@ func buildPlan(opts Options, name string) (*PlanStatus, PlanFacts) {
 			if t.Completed {
 				p.Progress.TasksCompleted++
 			}
-			p.Tasks[i] = TaskStatus{ExportTask: t, AcceptanceCriteria: parsed.Tasks[i].Criteria}
+			// Status reports the criteria counts only; the criterion text the
+			// reader also keeps is for the goal check, never for status.
+			c := parsed.Tasks[i].Criteria
+			p.Tasks[i] = TaskStatus{ExportTask: t, AcceptanceCriteria: plantask.Criteria{Met: c.Met, Total: c.Total}}
 		}
 	}
 	return p, PlanFacts{Exists: true, Stale: docStatus == metadata.StatusStale, Parsed: parsed}
