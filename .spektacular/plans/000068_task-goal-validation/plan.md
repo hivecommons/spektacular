@@ -580,7 +580,7 @@ The implement workflow gains a `check_goal` step between verification and the pl
 
 **Validation point**: The full Go test suite passes, covering every agent's install with default and overridden models, the epic merge refusal and the epic skill wording. Initialising throwaway projects shows the reviewer definition for each agent.
 
-#### - [ ] Task: Install a reviewer helper for every agent
+#### - [x] Task: Install a reviewer helper for every agent
 **Id:** 1383ae8c-d97a-44f0-bcda-af2bdb6a697d
 **Repo:** spektacular
 **Depends on:**
@@ -593,14 +593,14 @@ Installing Spektacular for Claude, Codex, Copilot or omp now writes a `spek-goal
 *Technical detail:* [context.md#task-install-a-reviewer-helper-for-every-agent](./context.md#task-install-a-reviewer-helper-for-every-agent)
 
 **Acceptance criteria**:
-- [ ] Initialising a project for Claude, Codex, Copilot or omp installs a reviewer helper that embeds the shared brief.
-- [ ] Each installed helper names a cheaper model than that agent's default working model, with no project configuration needed.
-- [ ] The Claude and Copilot helpers can only read and search, and the Codex helper is told never to change files.
-- [ ] Setting a reviewer model for one agent changes that agent's helper only. Other agents keep their defaults.
-- [ ] Re-running init, or upgrading with migrate, refreshes the helper and leaves a second run byte-identical.
-- [ ] Initialising for Bob installs no helper, and the README explains that Bob's reviewer is its built-in explore helper.
+- [x] Initialising a project for Claude, Codex, Copilot or omp installs a reviewer helper that embeds the shared brief.
+- [x] Each installed helper names a cheaper model than that agent's default working model, with no project configuration needed.
+- [x] The Claude and Copilot helpers can only read and search, and the Codex helper is told never to change files.
+- [x] Setting a reviewer model for one agent changes that agent's helper only. Other agents keep their defaults.
+- [x] Re-running init, or upgrading with migrate, refreshes the helper and leaves a second run byte-identical.
+- [x] Initialising for Bob installs no helper, and the README explains that Bob's reviewer is its built-in explore helper.
 
-#### - [ ] Task: Keep epic merges off an open goal-check question
+#### - [x] Task: Keep epic merges off an open goal-check question
 **Id:** 06981fa2-6f64-4817-9517-f2be6022faad
 **Repo:** spektacular
 **Depends on:**
@@ -612,10 +612,10 @@ In an epic, a spec whose run stops at the goal check hands a question back to th
 *Technical detail:* [context.md#task-keep-epic-merges-off-an-open-goal-check-question](./context.md#task-keep-epic-merges-off-an-open-goal-check-question)
 
 **Acceptance criteria**:
-- [ ] Merging a spec whose implement run is stopped at the goal check is refused, with a message naming the open question and how to resume the run.
-- [ ] Merging a spec at any other point behaves as before.
-- [ ] The epic implement skill tells the orchestrator that attempts running out and an impossible criterion are genuine questions to put to the user.
-- [ ] An orchestrated run's goal-check stop is handed back as a question from that spec's run.
+- [x] Merging a spec whose implement run is stopped at the goal check is refused, with a message naming the open question and how to resume the run.
+- [x] Merging a spec at any other point behaves as before.
+- [x] The epic implement skill tells the orchestrator that attempts running out and an impossible criterion are genuine questions to put to the user.
+- [x] An orchestrated run's goal-check stop is handed back as a question from that spec's run.
 
 ### Milestone 3: The check is proved end to end with real agents
 
@@ -855,3 +855,42 @@ These items can only be settled by exercising the agents themselves at implement
 - `spektacular: cmd/orchestrated_commit_test.go`
 
 **Discoveries**: looplab/fsm's `AvailableTransitions` iterates a map, so `Workflow.Next()` is nondeterministic from any step with two successors; walks must use `Goto`. Mustache `{{x}}` HTML-escapes apostrophes and quotes, so criterion text and evidence are rendered with `{{{x}}}`. `goals.json` sits in the plan's folder, so auto-commit sweeps it into the artifacts commit with the plan.
+
+### 2026-10-21 — Task: Install a reviewer helper for every agent
+
+**What was done**: `init`/`migrate` now install a `spek-goal-reviewer` helper for Claude (`.claude/agents/`, `haiku`, `Read, Grep, Glob`), Codex (`.codex/agents/*.toml`, `gpt-6-luna`, told never to change files), Copilot (`.github/agents/*.agent.md`, `Claude Haiku 4.5`, `read` and `search`) and omp (`.omp/agents/`, `@smol`, `read, grep, glob`), rendered from `templates/subagents/` with the shared reviewer brief embedded unchanged and the project's `implement.goal_check.models` override for that agent only. Bob installs none. The README gains a "Goal reviewer" section with the paths, default models, the override and each agent's limits.
+
+**Deviations**: Model names and formats were confirmed against the agents' docs on 2026-10-21 (sources in `internal/agent/subagents.go`). Codex's docs say `sandbox_mode` in an agent file does not override the parent session, so the plan's optional `sandbox_mode = "read-only"` was left out and the Codex reviewer is read-only by instruction only. The Codex default is `gpt-6-luna`, which its docs name the faster, lower-cost model for lighter subagent work, beside the default `gpt-6.1-sol`. omp's read-only tools follow its plan-mode list (`read`, `grep`, `glob`); the `@smol` alias in an agent's `model` field is documented only as a role and should be confirmed in the manual omp run. `cmd/migrate_test.go` checks that migrate's reinstall writes the helper, and `cmd/init_test.go`'s existing whole-tree second-run check covers byte identity.
+
+**Files changed**:
+- `spektacular: internal/agent/subagents.go`
+- `spektacular: internal/agent/subagents_test.go`
+- `spektacular: internal/agent/claude.go`
+- `spektacular: internal/agent/codex.go`
+- `spektacular: internal/agent/copilot.go`
+- `spektacular: internal/agent/omp.go`
+- `spektacular: internal/agent/copilot_test.go`
+- `spektacular: internal/agent/instruction_surface_test.go`
+- `spektacular: templates/subagents/claude.md`
+- `spektacular: templates/subagents/codex.toml`
+- `spektacular: templates/subagents/copilot.agent.md`
+- `spektacular: templates/subagents/omp.md`
+- `spektacular: cmd/migrate_test.go`
+- `spektacular: README.md`
+
+**Discoveries**: Copilot in VS Code also loads `.claude/agents/`, so a project initialised for both Claude and Copilot may show two `spek-goal-reviewer` definitions; both carry the same brief, and the README says so. Copilot honours a custom agent's `model` only in the IDEs, not in the cloud agent, and its docs do not say what happens under `Auto`.
+
+### 2026-10-21 — Task: Keep epic merges off an open goal-check question
+
+**What was done**: `epic merge` refuses with `goal_check_open` (resource: the spec) while the spec's implement lane is in progress at `check_goal`, naming the open question and the command that resumes the run; any other step, or no lane, merges as before, and `implement merge` is unchanged. The `spek-implement-epic` skill's genuine-question list and child prompt now name the goal check running out of attempts or judging a criterion impossible, and its merge step says a spec with an open goal-check question is never merged. The orchestrated `check_goal` render carries the `QUESTION:` hand-back through the shared orchestrated partial; the standalone render carries none.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: cmd/epic_worktree.go`
+- `spektacular: cmd/epic_worktree_test.go`
+- `spektacular: templates/skills/workflows/spek-implement-epic/SKILL.md`
+- `spektacular: templates/implement_epic_skill_test.go`
+- `spektacular: internal/steps/implement/orchestrated_test.go`
+
+**Discoveries**: None.
