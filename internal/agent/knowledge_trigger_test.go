@@ -20,12 +20,23 @@ import (
 func fixtureKnowledgeTriggerFS() fs.FS {
 	return fstest.MapFS{
 		knowledgeTriggerTemplatePath: &fstest.MapFile{
+			Data: []byte("# Knowledge-Worthy Discovery Recognition\n\nFull guidance: route through {{command}} knowledge write.\n"),
+		},
+		knowledgeTriggerShortTemplatePath: &fstest.MapFile{
 			Data: []byte("## Knowledge-Worthy Discovery Recognition\n\nRoute writes through {{command}} knowledge write.\n"),
 		},
 	}
 }
 
 const fixtureKnowledgeTriggerRenderedDefault = "## Knowledge-Worthy Discovery Recognition\n\nRoute writes through go run . knowledge write.\n"
+
+// knowledgeTriggerShortTemplatePath is the embedded path of the rule's short
+// AGENTS.md section, hand-written here rather than taken from the standing-rule table.
+const knowledgeTriggerShortTemplatePath = "agents/short/knowledge-trigger.md"
+
+// fixtureKnowledgeTriggerGuidanceDefault is the fixture's full guidance rendered
+// for cfg.Command = "go run .": it lands in .spektacular/guidance/knowledge-trigger.md, not in AGENTS.md.
+const fixtureKnowledgeTriggerGuidanceDefault = "# Knowledge-Worthy Discovery Recognition\n\nFull guidance: route through go run . knowledge write.\n"
 
 func TestInstallKnowledgeTriggerSection_CreatesFromMissing(t *testing.T) {
 	withSourceFS(t, fixtureKnowledgeTriggerFS())
@@ -37,6 +48,8 @@ func TestInstallKnowledgeTriggerSection_CreatesFromMissing(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
 	require.Equal(t, fixtureKnowledgeTriggerRenderedDefault, string(got))
+	require.Equal(t, fixtureKnowledgeTriggerGuidanceDefault, readGuidanceFile(t, tmp, "knowledge-trigger"),
+		"the full guidance lands in its own guidance file, not in AGENTS.md")
 }
 
 func TestInstallKnowledgeTriggerSection_AppendsAfterTesslBlock(t *testing.T) {
@@ -125,6 +138,8 @@ func TestInstallKnowledgeTriggerSection_PicksUpTemplateChange(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
 	require.Equal(t, want, string(got))
+	require.Equal(t, "# Knowledge-Worthy Discovery Recognition\n\nFull guidance: route through spektacular knowledge write.\n", readGuidanceFile(t, tmp, "knowledge-trigger"),
+		"the guidance file is re-rendered with the new command")
 }
 
 func TestInstallKnowledgeTriggerSection_CrossAgentIdempotency(t *testing.T) {

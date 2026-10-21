@@ -20,5 +20,5 @@ const (
 // same projectPath leaves a single section, and hoists one an older init left
 // further down the file.
 func installRepoSourcesSection(projectPath string, cfg config.Config, out io.Writer) error {
-	return installManagedSectionAt(projectPath, cfg, out, repoSourcesTemplatePath, repoSourcesHeading, "Where the Code Lives section", placeAtTop)
+	return installStandingRule(projectPath, cfg, out, "repo-sources")
 }

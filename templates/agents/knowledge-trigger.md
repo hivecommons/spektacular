@@ -1,8 +1,9 @@
-## Knowledge-Worthy Discovery Recognition
+# Knowledge-Worthy Discovery Recognition
 
-> Managed by `{{command}} init` — edit `templates/agents/knowledge-trigger.md`
-> in the Spektacular source, not this section in place. Hand edits will not
-> survive the next init.
+> Managed by `{{command}} init` and refreshed by `{{command}} migrate` — edit
+> `templates/agents/knowledge-trigger.md` in the Spektacular source, not this file in
+> place. Hand edits will not survive the next init. Agents read this file
+> when its rule's short section in `AGENTS.md` sends them here, and never edit it.
 
 While working — debugging, reading code to understand how something works,
 making a non-obvious choice — watch for the moment you surface something

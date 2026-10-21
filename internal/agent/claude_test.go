@@ -54,10 +54,16 @@ func TestClaudeAgent_Install(t *testing.T) {
 		validateSkillFrontmatter(t, filepath.Join(tmp, ".claude", "skills", skill, "SKILL.md"))
 	}
 
+	// Every standing rule's full guidance lands in its own file under
+	// .spektacular/guidance/, which the short AGENTS.md sections link to.
+	requireGuidanceFilesInstalled(t, tmp)
+
 	// CLAUDE.md must exist and import AGENTS.md so the installed rules take effect.
 	claudeData, err := os.ReadFile(filepath.Join(tmp, "CLAUDE.md"))
 	require.NoError(t, err, "CLAUDE.md should be created")
 	require.Contains(t, string(claudeData), "@AGENTS.md")
+	require.Equal(t, 1, strings.Count(string(claudeData), "@AGENTS.md"),
+		"CLAUDE.md imports AGENTS.md exactly once")
 }
 
 func TestClaudeAgent_Install_CreatesClaudeMdWhenAbsent(t *testing.T) {

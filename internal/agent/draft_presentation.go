@@ -17,5 +17,5 @@ const (
 // re-running for the same projectPath leaves a single section and does not
 // duplicate.
 func installDraftPresentationSection(projectPath string, cfg config.Config, out io.Writer) error {
-	return installManagedSection(projectPath, cfg, out, draftPresentationTemplatePath, draftPresentationHeading, "Presenting Drafts and Confirmations section")
+	return installStandingRule(projectPath, cfg, out, "draft-presentation")
 }
