@@ -445,7 +445,7 @@ On Claude the verifier also asserts, from the transcript, that a `spek-goal-revi
 
 **Validation point**: The full Go test suite passes, covering the goal rules, the new commands, the step flow with the check on and off, and legacy plans. A throwaway project's implement run records a verdict for every criterion of every task and ticks only the met ones.
 
-#### - [ ] Task: Teach the plan reader criterion text and legacy phases
+#### - [x] Task: Teach the plan reader criterion text and legacy phases
 **Id:** 1e1a7dab-7778-471a-b361-0ee7e83d2dc2
 **Repo:** spektacular
 **Depends on:** none
@@ -456,12 +456,12 @@ The plan reader only counts acceptance criteria today, and it does not read the 
 *Technical detail:* [context.md#task-teach-the-plan-reader-criterion-text-and-legacy-phases](./context.md#task-teach-the-plan-reader-criterion-text-and-legacy-phases)
 
 **Acceptance criteria**:
-- [ ] Reading a task-format plan gives every task's acceptance criteria as text, in plan order, with each one's ticked state.
-- [ ] Reading a plan written before tasks gives each phase's label, title, completion and acceptance criteria.
-- [ ] The files a legacy phase's context section names are reported for that phase, as they already are for a task.
-- [ ] `plan status` and `plan export` produce exactly the same output as before for existing plans.
+- [x] Reading a task-format plan gives every task's acceptance criteria as text, in plan order, with each one's ticked state.
+- [x] Reading a plan written before tasks gives each phase's label, title, completion and acceptance criteria.
+- [x] The files a legacy phase's context section names are reported for that phase, as they already are for a task.
+- [x] `plan status` and `plan export` produce exactly the same output as before for existing plans.
 
-#### - [ ] Task: Add the goal-check configuration
+#### - [x] Task: Add the goal-check configuration
 **Id:** 7f68231b-d84a-4042-bea0-c2754a2e69e8
 **Repo:** spektacular
 **Depends on:** none
@@ -472,12 +472,12 @@ Projects get an `implement.goal_check` setting with an on/off switch, on by defa
 *Technical detail:* [context.md#task-add-the-goal-check-configuration](./context.md#task-add-the-goal-check-configuration)
 
 **Acceptance criteria**:
-- [ ] A new project's configuration has the goal check switched on, and a configuration written before the setting existed also loads with it on.
-- [ ] A project can switch the check off, and the setting survives being saved and loaded again.
-- [ ] A project can set a reviewer model for one agent without affecting the others, and naming an unknown agent is refused with a message saying which agents are valid.
-- [ ] Implement runs started and resumed through the CLI see whether the check is switched on.
+- [x] A new project's configuration has the goal check switched on, and a configuration written before the setting existed also loads with it on.
+- [x] A project can switch the check off, and the setting survives being saved and loaded again.
+- [x] A project can set a reviewer model for one agent without affecting the others, and naming an unknown agent is refused with a message saying which agents are valid.
+- [x] Implement runs started and resumed through the CLI see whether the check is switched on.
 
-#### - [ ] Task: Add the goal package
+#### - [x] Task: Add the goal package
 **Id:** 3a9d0384-743f-4fd4-b1c8-14622f54f571
 **Repo:** spektacular
 **Depends on:**
@@ -489,14 +489,14 @@ A new package owns the goal concept. It builds an item's goal from the plan: the
 *Technical detail:* [context.md#task-add-the-goal-package](./context.md#task-add-the-goal-package)
 
 **Acceptance criteria**:
-- [ ] A task's goal lists every acceptance criterion of that task, in order, with its repo and files, and nothing from any other task. A legacy phase's goal is built the same way.
-- [ ] A reply is accepted only when it holds exactly one verdict (met, not yet met or impossible) with non-empty evidence for every criterion.
-- [ ] All criteria met is accepted. Any impossible criterion stops at once with no retry. Not yet met is retried at most twice, then stops to ask.
-- [ ] After a stop, keep fixing allows two more retries, while accept and skip settle the task, and a recheck runs the check again.
-- [ ] Every check and decision is kept with its goal, verdicts, evidence and attempt number, and can be read back after the run.
-- [ ] The current item is the run's selected task, or else the first open task or phase that has not been skipped.
+- [x] A task's goal lists every acceptance criterion of that task, in order, with its repo and files, and nothing from any other task. A legacy phase's goal is built the same way.
+- [x] A reply is accepted only when it holds exactly one verdict (met, not yet met or impossible) with non-empty evidence for every criterion.
+- [x] All criteria met is accepted. Any impossible criterion stops at once with no retry. Not yet met is retried at most twice, then stops to ask.
+- [x] After a stop, keep fixing allows two more retries, while accept and skip settle the task, and a recheck runs the check again.
+- [x] Every check and decision is kept with its goal, verdicts, evidence and attempt number, and can be read back after the run.
+- [x] The current item is the run's selected task, or else the first open task or phase that has not been skipped.
 
-#### - [ ] Task: Add the implement goal commands
+#### - [x] Task: Add the implement goal commands
 **Id:** 923b7ace-176f-4b8f-b518-60b2c28887d2
 **Repo:** spektacular
 **Depends on:**
@@ -515,14 +515,14 @@ Every refusal says what was wrong and the exact command to fix it.
 *Technical detail:* [context.md#task-add-the-implement-goal-commands](./context.md#task-add-the-implement-goal-commands)
 
 **Acceptance criteria**:
-- [ ] Recording a valid reply stores one verdict per criterion and answers with the decision and the exact next command.
-- [ ] A reply with a missing or extra criterion, an unknown verdict or empty evidence is refused, naming the problem and how to fix it.
-- [ ] Recording a decision when none is due, or naming an unknown decision, is refused with a runnable fix.
-- [ ] After a run, `show` lists each task's goal, every criterion's verdict and evidence, and the attempt count, in both readable and JSON form.
-- [ ] With the check switched off, the commands refuse and say how to switch it on.
-- [ ] Each recorded check notes whether the work was the same when the verdicts were recorded as when it was staged for the reviewer.
+- [x] Recording a valid reply stores one verdict per criterion and answers with the decision and the exact next command.
+- [x] A reply with a missing or extra criterion, an unknown verdict or empty evidence is refused, naming the problem and how to fix it.
+- [x] Recording a decision when none is due, or naming an unknown decision, is refused with a runnable fix.
+- [x] After a run, `show` lists each task's goal, every criterion's verdict and evidence, and the attempt count, in both readable and JSON form.
+- [x] With the check switched off, the commands refuse and say how to switch it on.
+- [x] Each recorded check notes whether the work was the same when the verdicts were recorded as when it was staged for the reviewer.
 
-#### - [ ] Task: Write the reviewer brief and skill
+#### - [x] Task: Write the reviewer brief and skill
 **Id:** 89519cf7-7f43-43aa-b374-ee88bae92d5f
 **Repo:** spektacular
 **Depends on:** none
@@ -540,12 +540,12 @@ The brief is served as `spektacular skill review-task-goal` for agents with no n
 *Technical detail:* [context.md#task-write-the-reviewer-brief-and-skill](./context.md#task-write-the-reviewer-brief-and-skill)
 
 **Acceptance criteria**:
-- [ ] `spektacular skill review-task-goal` prints the reviewer brief.
-- [ ] The brief forbids changing any file and says to judge each criterion from the files and the diff, never from the implementer's description.
-- [ ] The brief defines the three verdicts, requires evidence for every one, and fixes the JSON reply shape.
-- [ ] The brief is a single shared text that the installed reviewers can include unchanged.
+- [x] `spektacular skill review-task-goal` prints the reviewer brief.
+- [x] The brief forbids changing any file and says to judge each criterion from the files and the diff, never from the implementer's description.
+- [x] The brief defines the three verdicts, requires evidence for every one, and fixes the JSON reply shape.
+- [x] The brief is a single shared text that the installed reviewers can include unchanged.
 
-#### - [ ] Task: Add the check_goal step to the implement workflow
+#### - [x] Task: Add the check_goal step to the implement workflow
 **Id:** 2804db4c-2664-4c84-a0ac-a0821b77ed21
 **Repo:** spektacular
 **Depends on:**
@@ -566,13 +566,13 @@ The implement workflow gains a `check_goal` step between verification and the pl
 *Technical detail:* [context.md#task-add-the-check_goal-step-to-the-implement-workflow](./context.md#task-add-the-check_goal-step-to-the-implement-workflow)
 
 **Acceptance criteria**:
-- [ ] With the check on, every task goes from verification to the goal check, and no criterion is ticked until a verdict is recorded for every one of its criteria.
-- [ ] The reviewer is told to start fresh and is handed only the goal, the verification results and pointers to the work, never the implementing agent's conversation.
-- [ ] A not-yet-met verdict sends the run back to implementing with the reviewer's reasons, and the next check follows.
-- [ ] When attempts run out, the run stops and asks to keep fixing, accept or skip. When a criterion is impossible, it stops right after that check and asks how to proceed.
-- [ ] After the user accepts a mix of verdicts, exactly the criteria judged met are ticked. A skipped task ticks nothing and is passed over in a whole-plan run.
-- [ ] With the check switched off, no verdicts are recorded and criteria are ticked from verification as before.
-- [ ] A plan written before tasks runs to completion with each phase judged the same way.
+- [x] With the check on, every task goes from verification to the goal check, and no criterion is ticked until a verdict is recorded for every one of its criteria.
+- [x] The reviewer is told to start fresh and is handed only the goal, the verification results and pointers to the work, never the implementing agent's conversation.
+- [x] A not-yet-met verdict sends the run back to implementing with the reviewer's reasons, and the next check follows.
+- [x] When attempts run out, the run stops and asks to keep fixing, accept or skip. When a criterion is impossible, it stops right after that check and asks how to proceed.
+- [x] After the user accepts a mix of verdicts, exactly the criteria judged met are ticked. A skipped task ticks nothing and is passed over in a whole-plan run.
+- [x] With the check switched off, no verdicts are recorded and criteria are ticked from verification as before.
+- [x] A plan written before tasks runs to completion with each phase judged the same way.
 
 ### Milestone 2: Every coding agent gets a cheap, read-only reviewer, and epic runs stop safely
 
@@ -748,3 +748,110 @@ These items can only be settled by exercising the agents themselves at implement
 - **Removing reviewer files an older release installed.** No installer removes stale files today, and this plan adds no clean-up.
 - **The AGENTS.md managed sections.** No managed section is added or changed; sibling spec `000069_compact-agents-md` owns that surface.
 - **Refusing every merge of an in-progress spec.** `epic merge` refuses only at the goal check; other in-progress merges behave as before.
+
+## Changelog
+
+### 2026-10-21 — Task: Teach the plan reader criterion text and legacy phases
+
+**What was done**: The plan reader now keeps each acceptance criterion's text and ticked state in order (`Criteria.Items`, never serialised), joining an indented spec-style detail line onto its criterion. It parses every legacy `#### - [ ] Phase N.M:` block into a `Phase` (label, title, milestone, repo, completion, criteria) with `Plan.Phase` and `Plan.OpenPhases` lookups, and `PhaseFiles` reads the files a `### Phase N.M:` context section names. `status` copies only the criteria counts, so its JSON and pretty output stay byte-identical.
+
+**Deviations**: `Phase` also carries `Milestone` and `Repo` (from a phase's `**Repo:**` line), which the plan's struct did not list; `PhaseFiles` uses that repo as the attribution fallback, like a task's. There is no `plan export` command in the CLI (the export is served through `status`), so the byte-identity check compared `status --format json` and pretty output for three plans with binaries built before and after the change. The tests were written alongside the code in the main context rather than by a separate test sub-agent.
+
+**Files changed**:
+- `spektacular: internal/plantask/plantask.go`
+- `spektacular: internal/plantask/files.go`
+- `spektacular: internal/plantask/plantask_test.go`
+- `spektacular: internal/plantask/files_test.go`
+- `spektacular: internal/status/report.go`
+
+**Discoveries**: `status` builds `TaskStatus.AcceptanceCriteria` straight from the parsed `Criteria`, so any field added to `plantask.Criteria` reaches status's Go types even when it is excluded from JSON; status now copies only `Met`/`Total`.
+
+### 2026-10-21 — Task: Add the goal-check configuration
+
+**What was done**: The `implement` config section gains `goal_check` (`enabled`, default on, and an optional per-agent `models` map), parsed over the defaults so older configs load with the check on and no settings-format bump is needed. An unknown agent name or an empty model in `models` is refused with `config_invalid`, naming the valid agents and the fix. `workflow.Config` gains a runtime-only `GoalCheck` flag, which `implement new` and `implement goto` now both set through one helper, `implementWorkflowConfig`.
+
+**Deviations**: The two duplicated `workflow.Config` literals in `cmd/implement.go` were folded into `implementWorkflowConfig`, so the flag is set in exactly one place and is unit-tested there; the end-to-end proof that a run's steps see the flag comes with the `check_goal` step's walk tests.
+
+**Files changed**:
+- `spektacular: internal/config/config.go`
+- `spektacular: internal/config/config_test.go`
+- `spektacular: internal/workflow/workflow.go`
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/implement_goal_config_test.go`
+- `spektacular: internal/agent/agent_test.go`
+
+**Discoveries**: `config.SupportedAgentNames` duplicates `agent.Supported()` because `internal/config` cannot import `internal/agent`; `TestSupportedAgentNamesMatchConfig` pins the two together.
+
+### 2026-10-21 — Task: Add the goal package
+
+**What was done**: New package `internal/goal` owns the goal concept. `Build` turns a task (by id) or a legacy phase (by `Phase N.M` label) into a goal of its numbered criteria plus its scope (repo, the files its context section names, the fixed scope rule). `Current` picks the run's selected task or else the first open, not-skipped item. `ValidateReply` accepts only exactly one verdict with evidence per criterion, naming every problem otherwise. `Decide`/`NewCheck`/`NextAttempt` apply the rule (impossible stops at once, all met accepts, not met retries twice within a round, then exhausted), and `ApplyDecision` handles keep_fixing (new round), recheck (new round at check_goal), accept and skip. `Load`/`Save`/`AppendCheck`/`AppendDecision` keep the record as `goals.json` in the plan's folder of the plan store, deriving each item's attempt count and state on load.
+
+**Deviations**: `ValidateReply` also reads a bare verdict array and a reply wrapped in one Markdown code fence, since reviewers often fence JSON; the record still stores only the validated verdicts. `NextAttempt` refuses a new check while an item awaits the user's decision (`goal_decision_due`, a refusal code the plan did not list), and a check of an already-settled item opens a new round. Helpers `NextStep`, `RetriesLeft`, `Shortfall`, `CriteriaWith` and `OpenUnskipped` were added for the CLI verbs and step callbacks. Tests were written in the main context.
+
+**Files changed**:
+- `spektacular: internal/goal/goal.go`
+- `spektacular: internal/goal/decide.go`
+- `spektacular: internal/goal/current.go`
+- `spektacular: internal/goal/store.go`
+- `spektacular: internal/goal/goal_test.go`
+- `spektacular: internal/goal/decide_test.go`
+
+**Discoveries**: A `Decision` carries the round whose stop it answers, so an item's state is a pure function of its latest check and any decision on that round; no stored state field is trusted.
+
+### 2026-10-21 — Task: Add the implement goal commands
+
+**What was done**: New `spektacular implement goal record|decide|show` (`cmd/implement_goal.go`). `record` reads the reviewer's reply from `--from`, rebuilds the item's goal from the plan and context, refuses an item that is not the run's current one, validates the reply, appends the check and answers with the decision, round, attempt, retries left, the met/not-met/impossible criteria, `next_step` and the exact next command (the `decide` command shape for a stop). Before appending it compares each code root's live `git diff HEAD` and `git status --porcelain --untracked-files=all` with the `<repo>.diff`/`<repo>.status` staged under `.spektacular/tmp/<plan>/goal-check/`, storing `tree_unchanged` and a warning on a mismatch or missing file. `decide` records the user's answer and returns the next goto. `show` prints the outcome readably or as JSON, whatever the switch says. Every refusal carries a runnable `next_action`.
+
+**Deviations**: The tree comparison leaves `.spektacular/` paths out on both sides, since the agent stages its files and the CLI writes `goals.json` there during the check. Code roots are the spec's worktree roots, else every registered repo whose code is on disk (`repo.Set.LocalSource`). Extra refusals beyond the plan's list: `from_required`, `from_unreadable`, `plan_not_found`, `goal_decision_due` (a record while a stop awaits the user) and `goal_format_unsupported`. `cmd/instruction_contract_test.go` has no command-name oracle for implement subcommands, so nothing was added there. Tests were written in the main context.
+
+**Files changed**:
+- `spektacular: cmd/implement_goal.go`
+- `spektacular: cmd/implement_goal_test.go`
+
+**Discoveries**: `gitexec.Run` trims its output, so the staged diff and status are compared after trimming both sides; a reviewer's edit to the content of an already-untracked file is not visible to `git status` and so is not caught by the fingerprint.
+
+### 2026-10-21 — Task: Write the reviewer brief and skill
+
+**What was done**: The single reviewer brief lives in `templates/partials/goal-reviewer-brief.md`: the independent-reviewer stance, the read-only rule, the inputs, how to judge from the files and the diff rather than the implementer's claims, the three verdicts, the evidence rule and the fixed JSON reply shape. `templates/skills/skill_review-task-goal.md` wraps it with a short preamble, and `spektacular skill review-task-goal` serves it; the skill command now renders every library skill through the embedded-template renderer so a skill can include a shared partial.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: templates/partials/goal-reviewer-brief.md`
+- `spektacular: templates/skills/skill_review-task-goal.md`
+- `spektacular: cmd/skill.go`
+- `spektacular: cmd/skill_test.go`
+- `spektacular: templates/goal_reviewer_brief_test.go`
+
+**Discoveries**: `spektacular skill <name>` used to serve the file raw; no existing library skill contains a mustache tag, so rendering all of them is byte-identical for the existing skills. The brief must stay free of `{{`, `'''` and `"""` so it embeds unchanged in mustache-rendered and TOML helper definitions; a test pins this.
+
+### 2026-10-21 — Task: Add the check_goal step to the implement workflow
+
+**What was done**: The implement FSM gains `check_goal` (from `verify`) with loop-backs `check_goal → implement` and `check_goal → update_plan`; `verify` names `check_goal` as its next step only when `workflow.Config.GoalCheck` is on. The new `steps/implement/05b-check_goal.md` renders the current item's goal block verbatim, the staging of each code root's diff and status, the reviewer launch (the `spek-goal-reviewer` helper, Bob's `explore`, or a fresh-context sub-agent given `skill review-task-goal`) with the goal/verification/pointers-only input rule, the `implement goal record --from` command, and the exhausted and impossible stops with their options and the `decide` command. `implement` renders the reviewer's reasons on a retry; `update_plan` refuses (`goal_check_not_settled`, with a runnable next action, including the switch-off escape for a run upgraded mid-task) until the item is settled, then lists exactly the criteria judged met, or nothing for a skip. The current-task partial and `update_changelog` pass over skipped items, and a single-task run's last-task count and `finished` exclude skipped tasks. With the check off every instruction renders byte-identically to before.
+
+**Deviations**: `workflow.Config` also gains `Repos` (the registered repo names) so the step builds the same goal as `implement goal record`. The step stores the item it rendered as workflow data `goal_item` (cleared at `analyze`), because after a skip the current-item rule already passes over the skipped task and `update_plan` would otherwise act on the next one. A `goal_check` template flag is added to every implement step's variables when the check is on, so the shared current-task partial can carry the skipped-item clause. Tests that walk the FSM now use explicit `Goto`, since `verify` has two successors and `Next()` picks one at random; cmd walks pass through `check_goal` with a `passGoalCheck` helper that records an all-met reply, except walks over plans whose tasks are ticked up front, which go `verify → update_plan` as the FSM allows. The worktree auto-commit tests now expect `goals.json` in the project's artifacts commit.
+
+**Files changed**:
+- `spektacular: internal/steps/implement/steps.go`
+- `spektacular: internal/steps/implement/goalcheck.go`
+- `spektacular: internal/steps/implement/goalcheck_test.go`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: internal/workflow/workflow.go`
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/implement_goal.go`
+- `spektacular: templates/steps/implement/05b-check_goal.md`
+- `spektacular: templates/steps/implement/03-implement.md`
+- `spektacular: templates/steps/implement/06-update_plan.md`
+- `spektacular: templates/steps/implement/07-update_changelog.md`
+- `spektacular: templates/partials/implement-current-task.md`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: cmd/goalcheck_walk_test.go`
+- `spektacular: cmd/autocommit_test.go`
+- `spektacular: cmd/implement_test.go`
+- `spektacular: cmd/implement_task_run_test.go`
+- `spektacular: cmd/implement_lane_test.go`
+- `spektacular: cmd/milestones_test.go`
+- `spektacular: cmd/orchestrated_commit_test.go`
+
+**Discoveries**: looplab/fsm's `AvailableTransitions` iterates a map, so `Workflow.Next()` is nondeterministic from any step with two successors; walks must use `Goto`. Mustache `{{x}}` HTML-escapes apostrophes and quotes, so criterion text and evidence are rendered with `{{{x}}}`. `goals.json` sits in the plan's folder, so auto-commit sweeps it into the artifacts commit with the plan.
