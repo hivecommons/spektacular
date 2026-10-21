@@ -224,7 +224,7 @@ Add a new end-to-end harbor suite in which the project is initialised for the ag
 
 **Validation point**: In throwaway projects, `init` for each agent produces compact sections under 5,120 bytes with every link resolving to a guidance file. A project carrying today's full sections and its own content converts through `migrate` with the user content untouched. Re-running is byte-identical, stale guidance is refreshed, and every pre-existing phrase needle is found on the compact or guidance surface. The full Go test suite passes. No step touches this repository's own AGENTS.md or `.spektacular/`.
 
-#### - [ ] Task: Share one standing-rule installer across every agent
+#### - [x] Task: Share one standing-rule installer across every agent
 **Id:** b8dee74c-23b3-4a0a-bc94-db43b09ff41f
 **Repo:** spektacular
 **Depends on:** none
@@ -235,12 +235,12 @@ Replace the five hand-copied lists of eight section installers (Claude, Codex, B
 *Technical detail:* [context.md#task-share-one-standing-rule-installer-across-every-agent](./context.md#task-share-one-standing-rule-installer-across-every-agent)
 
 **Acceptance criteria**:
-- [ ] For every agent, an install into an empty project and into a project with existing content produces byte-identical files to the install before the change.
-- [ ] Every agent installs the eight rules in the same order as before, with where-the-code-lives still placed at the top.
-- [ ] omp still writes eight always-applied rule files, each equal to its AGENTS.md section.
-- [ ] Adding a rule requires only a new table entry and its template.
+- [x] For every agent, an install into an empty project and into a project with existing content produces byte-identical files to the install before the change.
+- [x] Every agent installs the eight rules in the same order as before, with where-the-code-lives still placed at the top.
+- [x] omp still writes eight always-applied rule files, each equal to its AGENTS.md section.
+- [x] Adding a rule requires only a new table entry and its template.
 
-#### - [ ] Task: Install compact sections and guidance files
+#### - [x] Task: Install compact sections and guidance files
 **Id:** e72523c4-3135-4984-af96-5164147515d4
 **Repo:** spektacular
 **Depends on:**
@@ -253,15 +253,15 @@ Give each of the eight rules a short template stating its binding obligation, th
 *Technical detail:* [context.md#task-install-compact-sections-and-guidance-files](./context.md#task-install-compact-sections-and-guidance-files)
 
 **Acceptance criteria**:
-- [ ] After installing, each rule appears in AGENTS.md as a short statement under its existing heading, naming when to read further and linking to its guidance file.
-- [ ] Each rule's guidance file exists under `.spektacular/guidance/` and holds the full text of today's rule, with no instruction removed.
-- [ ] The obligation an agent must always honour is stated in the short statement for every rule.
-- [ ] The store-access rule tells agents, in both forms, that guidance files are read directly and never edited.
-- [ ] No installed instruction file imports a guidance file or contains its body.
-- [ ] Every phrase previously asserted on a rule is still asserted, on the short statement or on the guidance file.
-- [ ] CLAUDE.md still imports AGENTS.md exactly as before.
+- [x] After installing, each rule appears in AGENTS.md as a short statement under its existing heading, naming when to read further and linking to its guidance file.
+- [x] Each rule's guidance file exists under `.spektacular/guidance/` and holds the full text of today's rule, with no instruction removed.
+- [x] The obligation an agent must always honour is stated in the short statement for every rule.
+- [x] The store-access rule tells agents, in both forms, that guidance files are read directly and never edited.
+- [x] No installed instruction file imports a guidance file or contains its body.
+- [x] Every phrase previously asserted on a rule is still asserted, on the short statement or on the guidance file.
+- [x] CLAUDE.md still imports AGENTS.md exactly as before.
 
-#### - [ ] Task: Prove conversion, refresh and the size budget for every agent
+#### - [x] Task: Prove conversion, refresh and the size budget for every agent
 **Id:** a1f2f163-775d-496b-8096-62db7e3ce6ee
 **Repo:** spektacular
 **Depends on:**
@@ -273,11 +273,11 @@ Add tests over real `init` and `migrate` runs in throwaway projects for Claude, 
 *Technical detail:* [context.md#task-prove-conversion-refresh-and-the-size-budget-for-every-agent](./context.md#task-prove-conversion-refresh-and-the-size-budget-for-every-agent)
 
 **Acceptance criteria**:
-- [ ] For each of the five agents, a fresh initialisation leaves Spektacular's AGENTS.md sections under 5,120 bytes. Each short statement is within 6 lines (15 for where-the-code-lives) and links to a guidance file that exists.
-- [ ] A project initialised before this change, with its own content before, between and after Spektacular's sections, upgrades to the compact form with that content unchanged and in place.
-- [ ] Running initialisation or upgrade twice leaves AGENTS.md and every guidance file identical to running it once.
-- [ ] After an upgrade from an older Spektacular version, every outdated or missing guidance file matches the shipped content.
-- [ ] omp's rule files hold the same short statements as AGENTS.md.
+- [x] For each of the five agents, a fresh initialisation leaves Spektacular's AGENTS.md sections under 5,120 bytes. Each short statement is within 6 lines (15 for where-the-code-lives) and links to a guidance file that exists.
+- [x] A project initialised before this change, with its own content before, between and after Spektacular's sections, upgrades to the compact form with that content unchanged and in place.
+- [x] Running initialisation or upgrade twice leaves AGENTS.md and every guidance file identical to running it once.
+- [x] After an upgrade from an older Spektacular version, every outdated or missing guidance file matches the shipped content.
+- [x] omp's rule files hold the same short statements as AGENTS.md.
 
 ### Milestone 3: The documentation site explains the compact layout and how upgrading converts a project
 
@@ -364,3 +364,115 @@ No other questions remain open. Everything else was resolved in planning and rec
 - The machine's `python3` has no pytest. Run the self-check with `uvx --with pytest pytest -p no:cacheprovider tests/harbor/standing-rules/tests/test_verifier_selfcheck.py`.
 - The session log's `command` excludes the binary name (`["repo","list"]`), and `spec file read` prints the raw markdown, so a sha256 of its stdout is a stable "unchanged" check.
 - `.gitignore` line `tests/harbor/.build/'` has a stray trailing quote, so `tests/harbor/.build/` may not actually be ignored. It was left alone because it is out of scope.
+
+### 2026-10-21 — Task: Share one standing-rule installer across every agent
+
+**What was done**: Added `internal/agent/standing_rules.go`. It holds the `standingRule` table (slug, unchanged heading, placement, log noun) of the eight rules in install order, `installStandingRules`, which walks the table, and `installStandingRule(slug)`. Claude, Codex, Bob, Copilot and omp now make one `installStandingRules` call instead of eight hand-copied ones. `installOMPRules` iterates the same table. The historical-artifacts rule's private copy of the locate/append/replace logic is deleted in favour of the generic managed-section path. Each per-rule `installXSection` wrapper is now a one-line call into the shared installer, kept so the per-rule fixture tests still compile.
+
+**Deviations**: None. Before and after the refactor, every agent's install into an empty project and into one with existing content, each run twice, was byte-identical, install logs included.
+
+**Files changed**:
+- `spektacular: internal/agent/standing_rules.go` (new)
+- `spektacular: internal/agent/standing_rules_test.go` (new)
+- `spektacular: internal/agent/claude.go`
+- `spektacular: internal/agent/codex.go`
+- `spektacular: internal/agent/bob.go`
+- `spektacular: internal/agent/copilot.go`
+- `spektacular: internal/agent/omp.go`
+- `spektacular: internal/agent/historical_artifacts.go`
+- `spektacular: internal/agent/repo_sources.go`
+- `spektacular: internal/agent/store_access.go`
+- `spektacular: internal/agent/memory_context.go`
+- `spektacular: internal/agent/knowledge_trigger.go`
+- `spektacular: internal/agent/spec_trigger.go`
+- `spektacular: internal/agent/design_trigger.go`
+- `spektacular: internal/agent/draft_presentation.go`
+
+**Discoveries**:
+- `installManagedSection` (the placeAtEnd shorthand) is now used only by `managed_section_test.go`.
+- A rule's template path is derived from its slug (`agents/<slug>.md`). The per-rule `*TemplatePath` constants remain only for the fixture tests.
+
+### 2026-10-21 — Task: Install compact sections and guidance files
+
+**What was done**: Added eight short templates under `templates/agents/short/`. Each holds the binding obligation, when to read further, and the line ``Managed by `{{command}} init`; full guidance: [{{guidance_path}}]({{guidance_path}}).``. The shared installer now renders each rule's full template into `.spektacular/guidance/<slug>.md`, before the section that links to it, then puts the short form into AGENTS.md under the unchanged heading. Every full template now starts with `# <heading>` and carries a banner rewritten for a standalone file. Store-access gained a paragraph saying guidance files are read with the agent's own tools and never edited. A real install's AGENTS.md is now 4,254 bytes for every agent, down from about 22 KB. Every existing phrase needle is still asserted: store-access and design-trigger literals moved to the guidance file, and compact needles and trigger phrases were added per rule.
+
+**Deviations**:
+- `managed_section.go` gained `installManagedSectionWith` plus a `renderTemplate` helper, which `installManagedSectionAt` delegates to.
+- The new guidance write errors name the folder and suggest re-running `init`.
+- Each guidance file is logged as `  Guidance: <path>` before its section's AGENTS.md line.
+- Wording of the store-access compact form: "yours to read, never edit: `.spektacular/guidance/`".
+- `cmd/instruction_contract_test.go` now adds the eight guidance files to the agent-facing corpus, so the full text stays under those guards.
+- The copilot install snapshot count went from 9 to 17.
+
+**Files changed**:
+- `spektacular: templates/agents/short/repo-sources.md` (new)
+- `spektacular: templates/agents/short/store-access.md` (new)
+- `spektacular: templates/agents/short/memory-context.md` (new)
+- `spektacular: templates/agents/short/knowledge-trigger.md` (new)
+- `spektacular: templates/agents/short/spec-trigger.md` (new)
+- `spektacular: templates/agents/short/design-trigger.md` (new)
+- `spektacular: templates/agents/short/draft-presentation.md` (new)
+- `spektacular: templates/agents/short/historical-artifacts.md` (new)
+- `spektacular: templates/agents/repo-sources.md`
+- `spektacular: templates/agents/store-access.md`
+- `spektacular: templates/agents/memory-context.md`
+- `spektacular: templates/agents/knowledge-trigger.md`
+- `spektacular: templates/agents/spec-trigger.md`
+- `spektacular: templates/agents/design-trigger.md`
+- `spektacular: templates/agents/draft-presentation.md`
+- `spektacular: templates/agents/historical-artifacts.md`
+- `spektacular: internal/agent/standing_rules.go`
+- `spektacular: internal/agent/managed_section.go`
+- `spektacular: internal/agent/standing_rules_test.go`
+- `spektacular: internal/agent/store_access_test.go`
+- `spektacular: internal/agent/design_trigger_test.go`
+- `spektacular: internal/agent/repo_sources_test.go`
+- `spektacular: internal/agent/draft_presentation_test.go`
+- `spektacular: internal/agent/memory_context_test.go`
+- `spektacular: internal/agent/knowledge_trigger_test.go`
+- `spektacular: internal/agent/spec_trigger_test.go`
+- `spektacular: internal/agent/historical_artifacts_test.go`
+- `spektacular: internal/agent/claude_test.go`
+- `spektacular: internal/agent/codex_test.go`
+- `spektacular: internal/agent/bob_test.go`
+- `spektacular: internal/agent/copilot_test.go`
+- `spektacular: cmd/instruction_contract_test.go`
+
+**Discoveries**:
+- Two sentences in the full guidance still read as if they sat in AGENTS.md, which they no longer do. They were left unchanged because rewording is out of scope:
+  - knowledge-trigger: "per the Memory & Context section above";
+  - store-access: "A sub-agent inherits this file".
+
+  A later wording pass could point them at AGENTS.md.
+- The `agents/` guard in `instruction_surface_test.go` walks recursively, so `agents/short/` is covered with no change.
+- mustache does not escape `/`, so `{{guidance_path}}` renders unchanged inside the markdown link.
+
+### 2026-10-21 — Task: Prove conversion, refresh and the size budget for every agent
+
+**What was done**: Added tests over real installs in throwaway projects for Claude, Codex, Bob, Copilot and omp, at two levels.
+- **Agent package**, in `internal/agent/standing_rules_test.go`. Five new tests plus an extended omp test cover:
+  - the byte budget (under 5,120 bytes, and under a quarter of the 21,722-byte baseline);
+  - the per-rule line limits (6 lines, 15 for repo-sources) and the 100-column prose limit;
+  - link resolution, and that no `@` import or guidance body appears in any instruction file;
+  - guidance files equal to the rendered full templates;
+  - conversion of a frozen pre-change AGENTS.md, with the user content before, between and after the sections kept byte for byte and in place;
+  - idempotency, fresh and from the legacy fixture;
+  - refresh of stale and deleted guidance;
+  - omp rule files equal to the short sections.
+- **Command level**, in `cmd/standing_rules_test.go`:
+  - `init` for every agent, run twice;
+  - `migrate` from `skills_version: 0.0.1` converting the legacy project, then a second migrate leaving it byte-identical;
+  - `migrate` refreshing outdated guidance.
+
+**Deviations**: The legacy fixture was captured from the pre-change binary's real install output rather than rendered from `git show HEAD~:templates/agents/*.md`. The result is the same text, and it is the bytes a real pre-change project holds. The fixture is copied byte for byte into `cmd/testdata/`, because no cmd test reads another package's testdata and `t.Chdir` breaks relative `../` paths.
+
+**Files changed**:
+- `spektacular: internal/agent/standing_rules_test.go`
+- `spektacular: internal/agent/testdata/agents-md-legacy.md` (new)
+- `spektacular: cmd/standing_rules_test.go` (new)
+- `spektacular: cmd/testdata/agents-md-legacy.md` (new)
+
+**Discoveries**:
+- Every agent's installed AGENTS.md now measures 4,254 bytes, 19.6% of the old 21,722 (an 80.4% reduction).
+- Body lines per rule: repo-sources 10, store-access 6, and the rest 3 to 5.
+- One store-access line is exactly 100 runes, so any rewording there will trip the line-length test.
