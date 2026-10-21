@@ -688,7 +688,7 @@ The plan-task design now says criteria are ticked only when judged met.
 
 **Validation point**: The docs site builds and type-checks cleanly. The design document reads back with the new tick rule.
 
-#### - [ ] Task: Update the tick rule in the plan-task-graph design
+#### - [x] Task: Update the tick rule in the plan-task-graph design
 **Id:** ecbf3c65-b5a3-40ba-abbe-0852b7d0ebe5
 **Repo:** spektacular
 **Depends on:**
@@ -700,11 +700,11 @@ The referenced task design still says criteria are ticked when they passed verif
 *Technical detail:* [context.md#task-update-the-tick-rule-in-the-plan-task-graph-design](./context.md#task-update-the-tick-rule-in-the-plan-task-graph-design)
 
 **Acceptance criteria**:
-- [ ] The plan-task-graph design says acceptance criteria are ticked only when judged met by the goal check, or from verification when the check is switched off.
-- [ ] The design keeps its capture date and lists both specs that reference it.
-- [ ] Nothing else in the design changes.
+- [x] The plan-task-graph design says acceptance criteria are ticked only when judged met by the goal check, or from verification when the check is switched off.
+- [x] The design keeps its capture date and lists both specs that reference it.
+- [x] Nothing else in the design changes.
 
-#### - [ ] Task: Document the goal check on the docs site
+#### - [x] Task: Document the goal check on the docs site
 **Id:** c41f3c86-6417-4e0d-bb9d-b9612c617241
 **Repo:** docs
 **Depends on:**
@@ -722,11 +722,11 @@ The documentation site describes the goal check:
 *Technical detail:* [context.md#task-document-the-goal-check-on-the-docs-site](./context.md#task-document-the-goal-check-on-the-docs-site)
 
 **Acceptance criteria**:
-- [ ] The workflow reference describes the goal check, where it runs, and its three verdicts (met, not yet met, impossible) with what each one does.
-- [ ] The plan tasks page says criteria are ticked only when the goal check judged them met.
-- [ ] The configuration reference lists the on/off setting, the per-agent model override and each agent's default reviewer model.
-- [ ] The configuration reference states each agent's model limitations: Bob has no per-helper model, Copilot ignores the helper's model under `Auto`, and Codex's reviewer is read-only by instruction only.
-- [ ] The site builds and type-checks cleanly.
+- [x] The workflow reference describes the goal check, where it runs, and its three verdicts (met, not yet met, impossible) with what each one does.
+- [x] The plan tasks page says criteria are ticked only when the goal check judged them met.
+- [x] The configuration reference lists the on/off setting, the per-agent model override and each agent's default reviewer model.
+- [x] The configuration reference states each agent's model limitations: Bob has no per-helper model, Copilot ignores the helper's model under `Auto`, and Codex's reviewer is read-only by instruction only.
+- [x] The site builds and type-checks cleanly.
 
 ## Open Questions
 
@@ -934,3 +934,31 @@ These items can only be settled by exercising the agents themselves at implement
 - `spektacular: Makefile`
 
 **Discoveries**: In a harbor image whose seed copies only `config.yaml`, the registered repo's `repo.yaml` appears once the agent's own `init` runs, so the code root the goal check fingerprints resolves to `/app` from then on.
+
+### 2026-10-21 — Task: Update the tick rule in the plan-task-graph design
+
+**What was done**: The `Acceptance criteria` row of the "Tasks in plan.md" table in design `design:plan-task-graph.md` now says criteria are ticked by implement only when the goal check judged the criterion met, or, with `implement.goal_check.enabled: false`, only when it passed verification. `design read` shows the new row, `created_date: "2026-09-25"` and `specs` listing `000058_plan-task-graph` and `000068_task-goal-validation`; nothing else in the document changed, and `design ref list` for this spec still resolves.
+
+**Deviations**: As an orchestrated child, this run staged the revision and handed it back as a `QUESTION:`; the orchestrator applied it with `design author` after the user approved it.
+
+**Amendments**: Design `design:plan-task-graph.md`, the acceptance-criteria tick rule, revised as spec 000068's constraint requires; recorded by the orchestrator with `spektacular spec amend` carrying the design field.
+
+**Files changed**:
+- `spektacular: design:plan-task-graph.md` (through `spektacular design author`)
+
+**Discoveries**: None.
+
+### 2026-10-21 — Task: Document the goal check on the docs site
+
+**What was done**: How it works: the Implement stage's step tree names `check_goal`, the Implement pipeline node reads "independent reviewer checks each criterion", and a new paragraph describes the fresh-context, read-only reviewer, the three verdicts and what each does, the two-retry rule and the keep fixing, accept or skip stop, `implement goal show`, the epic stop and the off switch. Plan tasks: criteria are ticked only when the goal check judged them met, or from verification with the check off. Configuration: the example and the `implement` key document `implement.goal_check.enabled` and `implement.goal_check.models.<agent>`, each agent's default reviewer model and each agent's limits. The docs `CHANGELOG.md` gains an entry. `make build` and `make check` are clean (0 errors, 0 warnings; the 2 hints are the existing JSON-LD script ones), and there is no layout HTML in page bodies and no em dash in the new text.
+
+**Deviations**: The homepage's Implement pipeline node (`src/pages/index.mdx`) repeated the same "validates against acceptance criteria" wording, so it was updated too, as the plan allowed. The configuration page's frontmatter description lists no `implement` sub-keys and was left unchanged. The reviewer models are those the installer task confirmed: `haiku`, `gpt-6-luna`, `Claude Haiku 4.5` and `@smol`.
+
+**Files changed**:
+- `docs: src/pages/how-it-works.mdx`
+- `docs: src/pages/index.mdx`
+- `docs: src/pages/plan-tasks.mdx`
+- `docs: src/pages/configuration.mdx`
+- `docs: CHANGELOG.md`
+
+**Discoveries**: None.

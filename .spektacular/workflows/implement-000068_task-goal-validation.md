@@ -7,3 +7,5 @@
 - Design task (plan-task-graph tick rule): child must not write a design; hand back QUESTION with the staged revision.
 - Tasks 1-5 done (plan reader, config, goal package, goal commands, reviewer brief). Helpers in scratchpad: tick.py (tick task + criteria), addlog.py (append changelog), g.sh (goto).
 - Decisions so far: goal package refuses record while awaiting decision (goal_decision_due); tree fingerprint ignores .spektacular/ paths; skill cmd renders partials.
+- Tasks 1-10 done; milestones 1-3 committed (a6b7fa5, 70274d5, aa9f31d). Oracle harbor runs pass: implement-epic (54 tests) and goal-check unmet/met.
+- Current: task "Update the tick rule in the plan-task-graph design" at analyze. Staged revision at .spektacular/tmp/000068_task-goal-validation/plan-task-graph.md (only the Acceptance criteria row changed). Handed back QUESTION for the orchestrator to apply with `design author`. On answer: verify with `design read` (created_date 2026-09-25, specs both), `design ref list`, then implement→...→update_changelog; then docs task (run `npm ci` in docs worktree first).

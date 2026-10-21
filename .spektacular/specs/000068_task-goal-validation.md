@@ -6,6 +6,10 @@ designs:
     - source: design
       path: plan-task-graph.md
 epic: 000001_agent-workflow-improvements
+amendments:
+    - at: "2026-10-21T15:53:12Z"
+      design: {source: design, path: plan-task-graph.md}
+      hash: sha256:23da0a4e465434953d1ea94c45268f6f1795c80372b3c6aba91acb959e85bff5
 ---
 
 # Feature: 000068_task-goal-validation
@@ -154,3 +158,8 @@ When an agent implements a planned task today, the same agent that wrote the cod
 
 - Spec-level goals (checking a spec's own success criteria when the spec is reconciled, or gating an epic's merge on them) are a possible follow-up, not part of this spec.
 - Running the verification commands stays as it is today; the check adds a judgement and does not replace how commands are run.
+
+## Amendments
+
+- **2026-10-21: design design:plan-task-graph.md** (epic 000001_agent-workflow-improvements implement run, task Update the tick rule in the plan-task-graph design)
+  plan-task-graph design Acceptance criteria row updated: implement ticks criteria the goal check judged met, falling back to verification only when implement.goal_check.enabled is false
