@@ -199,7 +199,7 @@ Existing suites need no oracle changes. They are re-run to show pass rates do no
 
 **Validation point**: The suite builds and runs for each of Claude, Codex and Bob against the current full-text rules, and its verifier's self-check tests pass. The baseline results are recorded for comparison in the implementation test plan. The full Go test suite passes.
 
-#### - [ ] Task: Add the standing-rules harbor suite
+#### - [x] Task: Add the standing-rules harbor suite
 **Id:** 60cf1809-b0f5-4cd1-bbe5-de5327c59509
 **Repo:** spektacular
 **Depends on:** none
@@ -210,13 +210,13 @@ Add a new end-to-end harbor suite in which the project is initialised for the ag
 *Technical detail:* [context.md#task-add-the-standing-rules-harbor-suite](./context.md#task-add-the-standing-rules-harbor-suite)
 
 **Acceptance criteria**:
-- [ ] The suite's image starts the agent in a project already initialised for that agent, with a registered repository outside the starting directory and a seeded final spec.
-- [ ] The verifier passes only when the agent consulted the repo registry and answered the code question with a fact that exists only in the registered repository.
-- [ ] The verifier passes only when the spec was read through the CLI and is unchanged at the end of the run.
-- [ ] The verifier passes only when no spec workflow was started and the agent's answer offers to capture the feature as a spec.
-- [ ] Self-check tests show each verifier rule fails on a deliberately non-compliant session log and passes on a compliant one, without running an agent.
-- [ ] Claude, Codex and Bob each have a make target for the suite, and existing suites' sources are unchanged.
-- [ ] The Bob harbor agent lives in the shared location the Makefile expects, and Bob runs of the new suite and the existing suites find it.
+- [x] The suite's image starts the agent in a project already initialised for that agent, with a registered repository outside the starting directory and a seeded final spec.
+- [x] The verifier passes only when the agent consulted the repo registry and answered the code question with a fact that exists only in the registered repository.
+- [x] The verifier passes only when the spec was read through the CLI and is unchanged at the end of the run.
+- [x] The verifier passes only when no spec workflow was started and the agent's answer offers to capture the feature as a spec.
+- [x] Self-check tests show each verifier rule fails on a deliberately non-compliant session log and passes on a compliant one, without running an agent.
+- [x] Claude, Codex and Bob each have a make target for the suite, and existing suites' sources are unchanged.
+- [x] The Bob harbor agent lives in the shared location the Makefile expects, and Bob runs of the new suite and the existing suites find it.
 
 ### Milestone 2: Every initialised or upgraded project gets compact standing rules with guidance on demand
 
@@ -330,3 +330,37 @@ No other questions remain open. Everything else was resolved in planning and rec
 - **Changing the wording or substance of any rule's full guidance**, beyond retitling it as a standalone file, rewriting its managed banner, and adding the store-access read exemption.
 - **A spektacular README change.** Its agent descriptions stay accurate, and the website carries the new documentation.
 - **Updating the store-files knowledge entry.** The guidance folder is not a store, so the entry stays correct. An optional clarifying note is offered to the user as a discovery, not planned as a task.
+
+## Changelog
+
+### 2026-10-21 — Task: Add the standing-rules harbor suite
+
+**What was done**: Added `tests/harbor/standing-rules`, a harbor suite whose image runs `spektacular init <agent>` at build time, registers `/srv/inventory` (a tiny Python service with `REORDER_THRESHOLD = 37`) as a repo outside `/app`, and seeds the final spec `20260101000001-low-stock-alerts`. The agent gets three plain requests (a code question, a spec summary, a multi-requirement feature idea) and writes `/app/answers.md`. The session-log verifier checks `repo list` was run, the code answer gives 37, the spec was read through `spec file read` and is byte-identical to the seeded digest, no `spec new` ran, and the feature answer offers a spec. Added Makefile targets for Claude, Codex and Bob plus README lines, and moved the Bob harbor agent to `tests/harbor/agents/`.
+
+**Deviations**:
+- The offer-phrase list is slightly wider than the plan's four phrases ("write it up", "would you like", "shall i" added), and "spec" must match as a whole word so "specific" does not count.
+- The seed's leak check looks for the code (`REORDER_THRESHOLD`/`needs_reorder`) under `/app` rather than a bare "37", which any timestamp can contain.
+- The seed also `git init`s and commits `/app` after init, so the agent starts in an ordinary checkout.
+- README's harbor make-target list gained the three new targets. This is not the agent-description change the plan ruled out.
+- The baseline harbor runs against the full-text rules were not run here: they need agent credentials and are manual test-plan items. Instead, Docker builds of the rendered environment were checked for all three agents, and the verifier was dry-run in the container (compliant run: reward 1; violating run: every rule fails).
+
+**Files changed**:
+- `spektacular: tests/harbor/standing-rules/task.toml`
+- `spektacular: tests/harbor/standing-rules/instruction.md`
+- `spektacular: tests/harbor/standing-rules/environment/Dockerfile`
+- `spektacular: tests/harbor/standing-rules/environment/inventory/stock.py`
+- `spektacular: tests/harbor/standing-rules/environment/seed/seed.sh`
+- `spektacular: tests/harbor/standing-rules/environment/seed/spec.md`
+- `spektacular: tests/harbor/standing-rules/tests/test.sh`
+- `spektacular: tests/harbor/standing-rules/tests/test_standing_rules.py`
+- `spektacular: tests/harbor/standing-rules/tests/test_verifier_selfcheck.py`
+- `spektacular: tests/harbor/agents/bob_agent.py` (moved from `tests/harbor/implement-epic-workflow/agents/`)
+- `spektacular: tests/harbor/agents/bob.json` (moved)
+- `spektacular: tests/harbor/agents/bob-artifacts.toml` (moved)
+- `spektacular: Makefile`
+- `spektacular: README.md`
+
+**Discoveries**:
+- The machine's `python3` has no pytest. Run the self-check with `uvx --with pytest pytest -p no:cacheprovider tests/harbor/standing-rules/tests/test_verifier_selfcheck.py`.
+- The session log's `command` excludes the binary name (`["repo","list"]`), and `spec file read` prints the raw markdown, so a sha256 of its stdout is a stable "unchanged" check.
+- `.gitignore` line `tests/harbor/.build/'` has a stray trailing quote, so `tests/harbor/.build/` may not actually be ignored. It was left alone because it is out of scope.
