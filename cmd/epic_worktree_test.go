@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/hivecommons/spektacular/internal/autocommit"
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/testutil/gittest"
@@ -290,6 +292,81 @@ func TestEpicMerge_CleanMergeReportsMergedAndRemoved(t *testing.T) {
 	_, ok, err := worktree.ReadRecord(f.proj, "alpha")
 	require.NoError(t, err)
 	require.False(t, ok, "the worktree record outlived the merge")
+}
+
+// mergeReadyProject is the worktree fixture with alpha's work committed in
+// both of its worktrees, ready to merge.
+func mergeReadyProject(t *testing.T) worktreeFixture {
+	t.Helper()
+	f := worktreeProject(t, true)
+	runEpicWorktreeCmd(t)
+	wtWriteFile(t, f.wt("testproj"), "main.txt", "main v2\n")
+	wtCommitAll(t, f.wt("testproj"), "project work")
+	wtWriteFile(t, f.wt("docs"), "lib.txt", "lib v2\n")
+	wtCommitAll(t, f.wt("docs"), "docs work")
+	return f
+}
+
+// Two merges at once in one main checkout collide in git, so a merge queues
+// on the project commit lock: with the lock held by someone else, it waits,
+// merges nothing while it waits, and merges once the lock is released.
+func TestEpicMerge_WaitsForTheCommitLock(t *testing.T) {
+	f := mergeReadyProject(t)
+	head := gittest.RunGit(t, f.proj, "rev-parse", "HEAD")
+
+	release, err := autocommit.AcquireLock(filepath.Join(f.proj, ".spektacular"))
+	require.NoError(t, err)
+	const hold = 500 * time.Millisecond
+	headWhileHeld := make(chan string, 1)
+	timer := time.AfterFunc(hold, func() {
+		headWhileHeld <- strings.TrimSpace(gittest.RunGit(t, f.proj, "rev-parse", "HEAD"))
+		release()
+	})
+	t.Cleanup(func() {
+		if timer.Stop() {
+			release()
+		}
+	})
+
+	start := time.Now()
+	stdout, code := runEpic(t, "merge", "--data", `{"spec":"alpha"}`)
+	require.Equalf(t, 0, code, "epic merge failed: %s", stdout)
+	require.GreaterOrEqual(t, time.Since(start), hold, "the merge must wait for the lock")
+	require.Equal(t, head, <-headWhileHeld, "nothing may be merged into the main checkout while another holds the lock")
+
+	main, err := os.ReadFile(filepath.Join(f.proj, "main.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "main v2\n", string(main))
+	require.NoFileExists(t, filepath.Join(f.proj, ".spektacular", autocommit.LockFile), "the merge releases the lock")
+}
+
+// A lock never released within LockTimeout refuses the merge as
+// merge_lock_timeout, naming the spec, and neither repo moves.
+func TestEpicMerge_ReportsALockTimeout(t *testing.T) {
+	f := mergeReadyProject(t)
+	heads := map[string]string{
+		f.proj: gittest.RunGit(t, f.proj, "rev-parse", "HEAD"),
+		f.site: gittest.RunGit(t, f.site, "rev-parse", "HEAD"),
+	}
+
+	prev := autocommit.LockTimeout
+	autocommit.LockTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { autocommit.LockTimeout = prev })
+	release, err := autocommit.AcquireLock(filepath.Join(f.proj, ".spektacular"))
+	require.NoError(t, err)
+	t.Cleanup(release)
+
+	stdout, code := runEpic(t, "merge", "--data", `{"spec":"alpha"}`)
+	require.Equal(t, 1, code)
+	var er output.ErrorResponse
+	require.NoError(t, json.Unmarshal([]byte(stdout), &er))
+	require.Equal(t, "merge_lock_timeout", er.Code)
+	require.Equal(t, "alpha", er.Resource)
+	require.Contains(t, er.Message, "timed out waiting for the commit lock")
+	for dir, head := range heads {
+		require.Equal(t, head, gittest.RunGit(t, dir, "rev-parse", "HEAD"), dir)
+	}
+	require.DirExists(t, f.wt("testproj"), "a refused merge leaves the worktrees in place")
 }
 
 // Criterion 5, through the command: a conflict in the sibling alone is

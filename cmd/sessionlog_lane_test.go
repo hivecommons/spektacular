@@ -25,6 +25,11 @@ func TestSnapshotStatePath(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(lanePath), 0o755))
 	require.NoError(t, os.WriteFile(lanePath, []byte(`{"kind":"plan","current_step":"overview","data":{"name":"alpha","orchestrated":true}}`), 0o644))
 
+	// gamma has both a plan and an implement lane.
+	for _, k := range []string{"plan", "implement"} {
+		require.NoError(t, os.WriteFile(workflow.LaneStatePath(dataDir, k, "gamma"), []byte(`{"kind":"`+k+`","current_step":"overview","data":{"name":"gamma","orchestrated":true}}`), 0o644))
+	}
+
 	shared := stateFilePath(dataDir)
 	alphaPlan := lanePath
 	gotoAlpha := `{"step":"discovery","name":"alpha"}`
@@ -56,6 +61,15 @@ func TestSnapshotStatePath(t *testing.T) {
 		{"malformed data", []string{"plan", "goto", "--data", `{"name":`}, shared},
 		{"--data with no value", []string{"plan", "goto", "--data"}, shared},
 		{"no arguments", nil, shared},
+		{"plan file read naming a spec with a lane", []string{"plan", "file", "read", "alpha", "plan"}, alphaPlan},
+		{"plan file write naming a spec with a lane", []string{"plan", "file", "write", "alpha", "plan", "--from", "x.md"}, alphaPlan},
+		{"spec file read naming a spec with a lane", []string{"spec", "file", "read", "alpha"}, alphaPlan},
+		{"status naming a spec with a lane", []string{"status", "alpha", "--format", "json"}, alphaPlan},
+		{"status naming no lane, as for an epic", []string{"status", "todo-epic", "--format", "json"}, shared},
+		{"argument naming a spec with no lane", []string{"plan", "file", "read", "beta", "plan"}, shared},
+		{"argument that is not a spec name", []string{"plan", "file", "write", "alpha", "plan", "--from", ".spektacular/tmp/x.md"}, alphaPlan},
+		{"plan command prefers the plan lane", []string{"plan", "file", "read", "gamma", "plan"}, workflow.LaneStatePath(dataDir, "plan", "gamma")},
+		{"implement command prefers the implement lane", []string{"implement", "status", "gamma"}, workflow.LaneStatePath(dataDir, "implement", "gamma")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, snapshotStatePath(tc.argv))

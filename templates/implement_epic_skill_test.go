@@ -403,3 +403,42 @@ func TestImplementEpicSkillAppliesApprovedAmendmentsFromTheProjectRoot(t *testin
 	child := flat(section(t, installedImplementEpicSkill(t), "# Step 4: The child prompt"))
 	require.NotContains(t, child, "spec amend", "a child never runs spec amend itself")
 }
+
+// A child that ends without a hand-back was cut off by its agent's limit on
+// how long one sub-agent may run. The skill resumes it from its lane and
+// worktrees straight away, gives up after two cut-offs at the same step, and
+// reports every resume with the remedy.
+func TestImplementEpicSkillResumesAChildCutOffWithoutAHandBack(t *testing.T) {
+	skill := installedImplementEpicSkill(t)
+
+	handling := flat(section(t, skill, "# Step 6: Handling a hand-back"))
+	requirePhrases(t, "Handling a hand-back", handling,
+		"**No hand-back at all**",
+		"does not open with `DONE:`, `QUESTION:` or `FAILED:`",
+		"cut off by the agent's own limit on how long one sub-agent may run",
+		"its code stays in its worktrees and its progress in its lane",
+		"Start a fresh child on the same spec straight away, on your own and without waiting for the user, with the **resume** prompt",
+		"If a spec is cut off twice in a row at the same step in `status`, treat it as `FAILED:`.",
+	)
+
+	loop := flat(section(t, skill, "# Step 3: The loop"))
+	requirePhrases(t, "The loop", loop,
+		"A child that ended without a hand-back is no longer running (Step 6).",
+	)
+
+	report := flat(section(t, skill, "# Step 8: The final report"))
+	requirePhrases(t, "The final report", report,
+		"**Resumed after being cut off:**",
+		"`session.maxTurns` in `~/.bob/settings/settings.json`",
+	)
+}
+
+// A merge refused only because another merge or commit held the project's
+// commit lock is retried, not treated as a stop.
+func TestImplementEpicSkillRetriesAMergeThatWaitedTooLongForTheLock(t *testing.T) {
+	merging := flat(section(t, installedImplementEpicSkill(t), "# Step 5: Merging a finished spec"))
+	requirePhrases(t, "Merging a finished spec", merging,
+		"On `merge_lock_timeout`, another merge or commit in the project was still running and nothing was merged: run the same merge again.",
+		"Any other refusal from `epic worktree` or `epic merge` is handled the same way as a conflict",
+	)
+}

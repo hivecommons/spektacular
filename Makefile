@@ -4,7 +4,26 @@ VERSION := dev
 HARBOR_AUTH := CLAUDE_CODE_OAUTH_TOKEN=$$(python3 -c "import json; print(json.load(open('$$HOME/.claude/.credentials.json'))['claudeAiOauth']['accessToken'])")
 HARBOR_MODEL := claude-sonnet-4-6
 
-.PHONY: build test lint clean install install-local cross harbor-install harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo
+# How harbor runs each agent, for targets that take AGENT. Like Claude, Bob
+# signs in with the login on this machine: tests/harbor/agents/bob_agent.py
+# extends harbor's ACP agent to upload your Bob Shell login into the container
+# before launching `bob acp`. Set BOBSHELL_API_KEY to use a key instead. Bob
+# takes no -m: its ACP server cannot choose a model, and harbor fails the run
+# when it cannot apply one.
+HARBOR_ARGS_claude = -a claude-code -m $(HARBOR_MODEL)
+HARBOR_ARGS_codex = -a codex -m $(HARBOR_MODEL)
+HARBOR_ARGS_bob = -a bob_agent:BobAgent --ae BOB_LOG_LEVEL=debug $(if $(BOBSHELL_API_KEY),--ae BOBSHELL_API_KEY=$$BOBSHELL_API_KEY)
+HARBOR_AUTH_claude = $(HARBOR_AUTH)
+HARBOR_AUTH_codex = $(HARBOR_AUTH)
+HARBOR_AUTH_bob = PYTHONPATH=$(CURDIR)/tests/harbor/agents
+
+# Artifacts only the agent being run writes, such as its own log directory,
+# appended to a rendered task's task.toml. They are declared only for that
+# agent because `harbor trial regrade` refuses a trial in which a declared
+# artifact failed to collect. Agents with no file of their own add nothing.
+AGENT_ARTIFACTS = tests/harbor/agents/$(AGENT)-artifacts.toml
+
+.PHONY: build test lint clean install install-local cross harbor-install harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-test-epic harbor-test-epic-claude harbor-test-epic-codex harbor-test-epic-bob _harbor-test-epic harbor-test-plan-claude harbor-test-plan-codex harbor-test-plan-bob _harbor-test-plan harbor-test-implement-epic harbor-test-implement-epic-claude harbor-test-implement-epic-codex harbor-test-implement-epic-bob harbor-test-implement-epic-bob-unlimited _harbor-test-implement-epic
 
 build:
 	go build -ldflags "-X github.com/hivecommons/spektacular/cmd.version=$(VERSION)" -o ./bin/$(BINARY) .
@@ -64,6 +83,7 @@ _harbor-test-spec:
 		tests/harbor/.build/spec-workflow-$(AGENT)/tests
 	GOOS=linux GOARCH=amd64 go build -o tests/harbor/.build/spec-workflow-$(AGENT)/environment/spektacular .
 	cp tests/harbor/spec-workflow/task.toml tests/harbor/.build/spec-workflow-$(AGENT)/task.toml
+	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> tests/harbor/.build/spec-workflow-$(AGENT)/task.toml; fi
 	cp tests/harbor/spec-workflow/environment/Dockerfile tests/harbor/.build/spec-workflow-$(AGENT)/environment/Dockerfile
 	cp tests/harbor/spec-workflow/solution/solve.sh tests/harbor/.build/spec-workflow-$(AGENT)/solution/solve.sh
 	cp tests/harbor/spec-workflow/tests/test.sh tests/harbor/.build/spec-workflow-$(AGENT)/tests/test.sh
@@ -96,6 +116,7 @@ _harbor-test-repo:
 		tests/harbor/.build/repo-workflow-$(SCENARIO)/tests
 	GOOS=linux GOARCH=amd64 go build -o tests/harbor/.build/repo-workflow-$(SCENARIO)/environment/spektacular .
 	cp tests/harbor/repo-workflow/task.toml tests/harbor/.build/repo-workflow-$(SCENARIO)/task.toml
+	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> tests/harbor/.build/repo-workflow-$(SCENARIO)/task.toml; fi
 	cp tests/harbor/repo-workflow/environment/Dockerfile tests/harbor/.build/repo-workflow-$(SCENARIO)/environment/Dockerfile
 	cp tests/harbor/repo-workflow/solution/solve.sh tests/harbor/.build/repo-workflow-$(SCENARIO)/solution/solve.sh
 	cp tests/harbor/repo-workflow/tests/test.sh tests/harbor/.build/repo-workflow-$(SCENARIO)/tests/test.sh
@@ -111,12 +132,38 @@ _harbor-test-repo:
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/repo-workflow-$(SCENARIO)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
 
-harbor-test-plan:
-	GOOS=linux GOARCH=amd64 go build -o tests/harbor/plan-workflow/environment/spektacular .
-	$(HARBOR_AUTH) harbor run -p tests/harbor/plan-workflow -a claude-code -m $(HARBOR_MODEL) -o tests/harbor/jobs
+harbor-test-plan: harbor-test-plan-claude
+
+harbor-test-plan-claude:
+	$(MAKE) _harbor-test-plan AGENT=claude SPEK_PLAN='/spek:plan 20260101000000-user-auth'
+
+harbor-test-plan-codex:
+	$(MAKE) _harbor-test-plan AGENT=codex SPEK_PLAN='$$$$spek-plan 20260101000000-user-auth'
+
+harbor-test-plan-bob:
+	$(MAKE) _harbor-test-plan AGENT=bob SPEK_PLAN='/spek-plan 20260101000000-user-auth'
+
+# Renders tests/harbor/plan-workflow into tests/harbor/.build/plan-workflow-$(AGENT)
+# with the agent and its skill invocation substituted into instruction.md, then
+# runs harbor with that agent's arguments. The verifier reads a Claude Code
+# transcript, or the trajectory harbor records for an ACP agent such as Bob.
+# Callers must set AGENT and SPEK_PLAN.
+_harbor-test-plan:
+	@test -n "$(AGENT)" || (echo "AGENT is required" && exit 1)
+	@test -n "$(HARBOR_ARGS_$(AGENT))" || (echo "no harbor arguments for AGENT=$(AGENT)" && exit 1)
+	@rm -rf tests/harbor/.build/plan-workflow-$(AGENT)
+	@mkdir -p tests/harbor/.build/plan-workflow-$(AGENT)
+	cp -r tests/harbor/plan-workflow/environment tests/harbor/plan-workflow/solution tests/harbor/plan-workflow/tests \
+		tests/harbor/plan-workflow/task.toml tests/harbor/.build/plan-workflow-$(AGENT)/
+	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> tests/harbor/.build/plan-workflow-$(AGENT)/task.toml; fi
+	GOOS=linux GOARCH=amd64 go build -o tests/harbor/.build/plan-workflow-$(AGENT)/environment/spektacular .
+	sed -e 's|{{agent}}|$(AGENT)|g' -e 's|{{spek_plan}}|$(SPEK_PLAN)|g' \
+		tests/harbor/plan-workflow/instruction.md \
+		> tests/harbor/.build/plan-workflow-$(AGENT)/instruction.md
+	$(HARBOR_AUTH_$(AGENT)) harbor run -p tests/harbor/.build/plan-workflow-$(AGENT) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
-	@cat $$(ls -td tests/harbor/jobs/*/plan-workflow__*/verifier/test-stdout.txt 2>/dev/null | head -1)
+	@cat $$(ls -td tests/harbor/jobs/*/plan-workflow-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
 
 harbor-test-implement:
 	GOOS=linux GOARCH=amd64 go build -o tests/harbor/implement-workflow/environment/spektacular .
@@ -124,3 +171,82 @@ harbor-test-implement:
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/implement-workflow__*/verifier/test-stdout.txt 2>/dev/null | head -1)
+
+harbor-test-epic: harbor-test-epic-claude
+
+harbor-test-epic-claude:
+	$(MAKE) _harbor-test-epic AGENT=claude SPEK_PLAN_EPIC='/spek-plan-epic'
+
+harbor-test-epic-codex:
+	$(MAKE) _harbor-test-epic AGENT=codex SPEK_PLAN_EPIC='$$$$spek-plan-epic'
+
+harbor-test-epic-bob:
+	$(MAKE) _harbor-test-epic AGENT=bob SPEK_PLAN_EPIC='/spek-plan-epic'
+
+# Renders tests/harbor/epic-workflow into tests/harbor/.build/epic-workflow-$(AGENT)
+# with the agent and its skill invocation substituted into instruction.md, then
+# runs harbor with that agent's arguments. The verifier reads only CLI state and
+# the session log, so it is the same for every agent. Its timeline of the run is
+# at the top of the results. Callers must set AGENT and SPEK_PLAN_EPIC.
+_harbor-test-epic:
+	@test -n "$(AGENT)" || (echo "AGENT is required" && exit 1)
+	@test -n "$(HARBOR_ARGS_$(AGENT))" || (echo "no harbor arguments for AGENT=$(AGENT)" && exit 1)
+	@rm -rf tests/harbor/.build/epic-workflow-$(AGENT)
+	@mkdir -p tests/harbor/.build/epic-workflow-$(AGENT)
+	cp -r tests/harbor/epic-workflow/environment tests/harbor/epic-workflow/tests \
+		tests/harbor/epic-workflow/task.toml tests/harbor/.build/epic-workflow-$(AGENT)/
+	cp tests/harbor/shared/*.py tests/harbor/.build/epic-workflow-$(AGENT)/tests/
+	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> tests/harbor/.build/epic-workflow-$(AGENT)/task.toml; fi
+	GOOS=linux GOARCH=amd64 go build -o tests/harbor/.build/epic-workflow-$(AGENT)/environment/spektacular .
+	sed -e 's|{{agent}}|$(AGENT)|g' -e 's|{{spek_plan_epic}}|$(SPEK_PLAN_EPIC)|g' \
+		tests/harbor/epic-workflow/instruction.md \
+		> tests/harbor/.build/epic-workflow-$(AGENT)/instruction.md
+	$(HARBOR_AUTH_$(AGENT)) harbor run -p tests/harbor/.build/epic-workflow-$(AGENT) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
+	@echo ""
+	@echo "=== Test Results ==="
+	@cat $$(ls -td tests/harbor/jobs/*/epic-workflow-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
+
+harbor-test-implement-epic: harbor-test-implement-epic-claude
+
+harbor-test-implement-epic-claude:
+	$(MAKE) _harbor-test-implement-epic AGENT=claude SPEK_IMPLEMENT_EPIC='/spek-implement-epic'
+
+harbor-test-implement-epic-codex:
+	$(MAKE) _harbor-test-implement-epic AGENT=codex SPEK_IMPLEMENT_EPIC='$$$$spek-implement-epic'
+
+# Bob with its default turn limit of 100 per task, sub-agents included: the
+# setup that cuts epic children off mid-step.
+harbor-test-implement-epic-bob:
+	$(MAKE) _harbor-test-implement-epic AGENT=bob SPEK_IMPLEMENT_EPIC='/spek-implement-epic'
+
+# Bob with no turn limit (session.maxTurns 0), to compare against the default.
+harbor-test-implement-epic-bob-unlimited:
+	BOB_MAX_TURNS=0 $(MAKE) _harbor-test-implement-epic AGENT=bob VARIANT=-unlimited SPEK_IMPLEMENT_EPIC='/spek-implement-epic'
+
+# Renders tests/harbor/implement-epic-workflow into
+# tests/harbor/.build/implement-epic-workflow-$(AGENT)$(VARIANT), with the shared
+# session-log helpers copied into its tests and the agent and its skill
+# invocation substituted into instruction.md, then runs harbor with that
+# agent's arguments. The verifier reads only CLI state, git, the app's behaviour
+# and the session log, so it is the same for every agent; its timeline of the
+# run is at the top of the results. Callers must set AGENT and
+# SPEK_IMPLEMENT_EPIC; VARIANT names a second build of the same agent. Harbor
+# cuts a trial's name to 32 characters, so the results are found by that prefix.
+IMPLEMENT_EPIC_BUILD = tests/harbor/.build/implement-epic-workflow-$(AGENT)$(VARIANT)
+_harbor-test-implement-epic:
+	@test -n "$(AGENT)" || (echo "AGENT is required" && exit 1)
+	@test -n "$(HARBOR_ARGS_$(AGENT))" || (echo "no harbor arguments for AGENT=$(AGENT)" && exit 1)
+	@rm -rf $(IMPLEMENT_EPIC_BUILD)
+	@mkdir -p $(IMPLEMENT_EPIC_BUILD)
+	cp -r tests/harbor/implement-epic-workflow/environment tests/harbor/implement-epic-workflow/solution \
+		tests/harbor/implement-epic-workflow/tests tests/harbor/implement-epic-workflow/task.toml $(IMPLEMENT_EPIC_BUILD)/
+	cp tests/harbor/shared/*.py $(IMPLEMENT_EPIC_BUILD)/tests/
+	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> $(IMPLEMENT_EPIC_BUILD)/task.toml; fi
+	GOOS=linux GOARCH=amd64 go build -o $(IMPLEMENT_EPIC_BUILD)/environment/spektacular .
+	sed -e 's|{{agent}}|$(AGENT)|g' -e 's|{{spek_implement_epic}}|$(SPEK_IMPLEMENT_EPIC)|g' \
+		tests/harbor/implement-epic-workflow/instruction.md \
+		> $(IMPLEMENT_EPIC_BUILD)/instruction.md
+	$(HARBOR_AUTH_$(AGENT)) harbor run -p $(IMPLEMENT_EPIC_BUILD) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
+	@echo ""
+	@echo "=== Test Results ==="
+	@cat $$(ls -td tests/harbor/jobs/*/$$(echo implement-epic-workflow-$(AGENT)$(VARIANT) | cut -c1-32)__*/verifier/test-stdout.txt 2>/dev/null | head -1)

@@ -1,0 +1,30 @@
+version = "1.0"
+
+[metadata]
+author_name = "Jumppad Labs"
+author_email = "team@jumppad.dev"
+difficulty_explanation = "Orchestrates a full plan workflow per spec of an epic through background sub-agents, in dependency order, then settles cross-plan decisions and writes the epic's planning summary"
+category = "agent-orchestration"
+tags = ["spektacular", "epic-workflow", "plan-workflow", "sub-agents", "multi-step", "cli"]
+
+[agent]
+# One plan workflow has an 1800s budget in plan-workflow. Here two specs plan
+# side by side, then the third once its dependency is planned: two rounds of
+# plan workflows, plus the summary and review. 3600s covers two rounds at the
+# single-plan budget. A run that needs more has stalled in the orchestration,
+# which is exactly what this suite exists to expose; read the timeline in the
+# verifier output before raising it.
+timeout_sec = 3600.0
+
+[verifier]
+timeout_sec = 180.0
+
+[environment]
+build_timeout_sec = 600.0
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240
+
+[[artifacts]]
+source = "/app/.spektacular"
+destination = "spektacular"

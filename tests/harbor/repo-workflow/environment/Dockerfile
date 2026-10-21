@@ -12,6 +12,10 @@ RUN uv python install 3.12 && uv tool install pytest==8.4.1
 COPY spektacular /usr/local/bin/spektacular
 RUN chmod +x /usr/local/bin/spektacular
 
+# Record every spektacular call, whichever agent drives the run, to
+# .spektacular/debug/, which comes back with the .spektacular artifact.
+ENV SPEKTACULAR_SESSION_LOG=on
+
 # The repo the agent will be asked to add. It states enough about itself that
 # every proposal after the first question can be drawn from it: a README with
 # opening prose, a manifest declaring a name and a description that differ from

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -93,4 +94,89 @@ func TestBobAgent_Install(t *testing.T) {
 	for skill := range skillAssertions {
 		validateSkillFrontmatter(t, filepath.Join(tmp, ".bob", "skills", skill, "SKILL.md"))
 	}
+}
+
+func writeBobSettings(t *testing.T, home, body string) string {
+	t.Helper()
+	path := BobSettingsPath(home)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+	return path
+}
+
+func TestBobMaxTurns(t *testing.T) {
+	t.Run("no settings file is Bob's default", func(t *testing.T) {
+		n, err := BobMaxTurns(t.TempDir())
+		require.NoError(t, err)
+		require.Equal(t, BobDefaultMaxTurns, n)
+	})
+	t.Run("settings without the key is Bob's default", func(t *testing.T) {
+		home := t.TempDir()
+		writeBobSettings(t, home, `{"bobShell":{"lastRunVersion":"2.0.6"}}`)
+		n, err := BobMaxTurns(home)
+		require.NoError(t, err)
+		require.Equal(t, BobDefaultMaxTurns, n)
+	})
+	t.Run("a configured value", func(t *testing.T) {
+		home := t.TempDir()
+		writeBobSettings(t, home, `{"session":{"maxTurns":250}}`)
+		n, err := BobMaxTurns(home)
+		require.NoError(t, err)
+		require.Equal(t, 250, n)
+	})
+	t.Run("zero is no limit", func(t *testing.T) {
+		home := t.TempDir()
+		writeBobSettings(t, home, `{"session":{"maxTurns":0}}`)
+		n, err := BobMaxTurns(home)
+		require.NoError(t, err)
+		require.Zero(t, n)
+	})
+	t.Run("a non-number is an error", func(t *testing.T) {
+		home := t.TempDir()
+		writeBobSettings(t, home, `{"session":{"maxTurns":"lots"}}`)
+		_, err := BobMaxTurns(home)
+		require.Error(t, err)
+	})
+	t.Run("a file that is not JSON is an error", func(t *testing.T) {
+		home := t.TempDir()
+		writeBobSettings(t, home, `not json`)
+		_, err := BobMaxTurns(home)
+		require.Error(t, err)
+	})
+}
+
+func TestRaiseBobTurnLimit(t *testing.T) {
+	t.Run("creates the settings file when there is none", func(t *testing.T) {
+		home := t.TempDir()
+		require.NoError(t, RaiseBobTurnLimit(home))
+		n, err := BobMaxTurns(home)
+		require.NoError(t, err)
+		require.Zero(t, n)
+	})
+	t.Run("keeps every other setting and the file mode", func(t *testing.T) {
+		home := t.TempDir()
+		path := writeBobSettings(t, home, `{"bobShell":{"lastRunVersion":"2.0.6"},"session":{"maxTurns":100,"defaultMode":"agent"},"locale":"en"}`)
+		require.NoError(t, RaiseBobTurnLimit(home))
+
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal(data, &got))
+		require.Equal(t, map[string]any{
+			"bobShell": map[string]any{"lastRunVersion": "2.0.6"},
+			"session":  map[string]any{"maxTurns": float64(0), "defaultMode": "agent"},
+			"locale":   "en",
+		}, got)
+		info, err := os.Stat(path)
+		require.NoError(t, err)
+		require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	})
+	t.Run("refuses a file that is not JSON and leaves it alone", func(t *testing.T) {
+		home := t.TempDir()
+		path := writeBobSettings(t, home, `not json`)
+		require.Error(t, RaiseBobTurnLimit(home))
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		require.Equal(t, "not json", string(data))
+	})
 }

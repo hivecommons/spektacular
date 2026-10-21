@@ -1,0 +1,37 @@
+version = "1.0"
+
+[metadata]
+author_name = "Jumppad Labs"
+author_email = "team@jumppad.dev"
+difficulty_explanation = "Orchestrates a full implement workflow per spec of a four-spec epic through background sub-agents, each in its own git worktrees, running independent specs in parallel and merging each back before its dependents start"
+category = "agent-orchestration"
+tags = ["spektacular", "epic-workflow", "implement-workflow", "sub-agents", "worktrees", "multi-step", "cli"]
+
+[agent]
+# Three rounds of implement workflows: storage and format side by side, then
+# commands, then export. One implement run has a 1200s budget in
+# implement-workflow, so three rounds plus the merges is 3600s and change;
+# 5400s leaves room for a resumed child without hiding a stalled run. Read
+# the timeline in the verifier output before raising it.
+timeout_sec = 5400.0
+
+[verifier]
+timeout_sec = 300.0
+
+[environment]
+build_timeout_sec = 600.0
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240
+
+[[artifacts]]
+source = "/app/.spektacular"
+destination = "spektacular"
+
+# Appended to a rendered task's task.toml when it runs Bob (see the Makefile's
+# render targets). Bob writes its own log here, at the debug level the Bob
+# harbor arguments set. Only the log directory, never ~/.bob/settings, which
+# holds the login bob_agent.py uploads.
+[[artifacts]]
+source = "/root/.bob/logs"
+destination = "agent-logs/bob"

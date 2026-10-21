@@ -690,6 +690,58 @@ func TestSessionLog_EnvOffLeavesACommandOut(t *testing.T) {
 	require.Empty(t, sessionLogFiles(t, dir))
 }
 
+// SPEKTACULAR_SESSION_LOG=on records a command even with debug off, so a
+// harness or a user reproducing a problem can capture a session without
+// editing the project config.
+func TestSessionLog_EnvOnRecordsWithDebugOff(t *testing.T) {
+	for _, debug := range []string{"", "debug:\n  enabled: false\n"} {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		writeSpecCommandConfig(t, dir, debug)
+		resetRootCmd(t)
+		t.Setenv(sessionLogEnv, "on")
+
+		stdout, _, code := runRootCmd(t, "spec", "new", "--data", `{"name":"billing"}`)
+		require.Equal(t, 0, code, stdout)
+		require.Len(t, sessionLogFiles(t, dir), 1, "config %q", debug)
+	}
+}
+
+// SPEKTACULAR_SESSION_LOG=on outside a project records nothing and creates
+// no .spektacular/ directory, so a command run in a repo's code checkout
+// leaves it untouched.
+func TestSessionLog_EnvOnOutsideAProjectWritesNothing(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	resetRootCmd(t)
+	t.Setenv(sessionLogEnv, "on")
+
+	runRootCmd(t, "version")
+	require.NoDirExists(t, filepath.Join(dir, ".spektacular"))
+}
+
+func TestSessionLogOn(t *testing.T) {
+	for _, tc := range []struct {
+		config    bool
+		inProject bool
+		env       string
+		want      bool
+	}{
+		{false, true, "", false},
+		{true, true, "", true},
+		{false, true, "on", true},
+		{true, true, "on", true},
+		{false, false, "on", false},
+		{false, true, "off", false},
+		{true, true, "off", false},
+		{false, true, "yes", false},
+		{true, true, "yes", true},
+	} {
+		require.Equal(t, tc.want, sessionLogOn(tc.config, tc.inProject, tc.env),
+			"config=%v inProject=%v env=%q", tc.config, tc.inProject, tc.env)
+	}
+}
+
 // Phase 1.2, criterion 2: with debug on, a command that succeeds and a
 // command that is rejected (fails validation, returning an
 // *output.ErrorResponse via the standard envelope machinery) each produce a

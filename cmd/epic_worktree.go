@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hivecommons/spektacular/internal/autocommit"
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/repo"
@@ -168,7 +169,30 @@ var worktreeMergeOutputSchema = &schemaObj{
 // writeMergeResult merges spec back through the worktree manager and writes
 // the result, or refuses with the conflicts; shared by epic merge and
 // implement merge so the two can never report a merge differently.
+//
+// The merge is taken under the project commit lock. An orchestrator handed
+// two finished specs at once may merge both at the same moment, and two
+// merges into one main checkout collide in git ("You have not concluded your
+// merge"); the lock makes the second wait for the first, as implement
+// commits into the main checkouts already do.
 func writeMergeResult(cmd *cobra.Command, m worktree.Manager, spec string) error {
+	dir, err := dataDir()
+	if err != nil {
+		return err
+	}
+	release, err := autocommit.AcquireLock(dir)
+	if err != nil {
+		var held *autocommit.LockError
+		if errors.As(err, &held) {
+			return output.NewError("merge_lock_timeout",
+				fmt.Sprintf("%s was not merged: %s, so another merge or commit is still running", spec, held.Error())).
+				WithResource(spec).
+				WithNextAction("run the same merge again once the other has finished; nothing was merged")
+		}
+		return err
+	}
+	defer release()
+
 	res, err := m.Merge(spec)
 	if err != nil {
 		return err

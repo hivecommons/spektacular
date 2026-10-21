@@ -433,3 +433,31 @@ func TestPlanEpicSkillCountsContradictionsAsGenuineQuestions(t *testing.T) {
 		"While the user considers it, the other children keep going.",
 	)
 }
+
+// A child that ends without a hand-back was cut off by its agent's limit on
+// how long one sub-agent may run, not stopped by the workflow. The skill
+// resumes it straight away, gives up after two cut-offs at the same step, and
+// reports every resume with the remedy.
+func TestPlanEpicSkillResumesAChildCutOffWithoutAHandBack(t *testing.T) {
+	skill := installedPlanEpicSkill(t)
+
+	handling := flat(section(t, skill, "# Step 4: Handling a hand-back"))
+	requirePhrases(t, "Handling a hand-back", handling,
+		"**No hand-back at all**",
+		"does not open with `DONE:`, `QUESTION:` or `FAILED:`",
+		"cut off by the agent's own limit on how long one sub-agent may run",
+		"Start a fresh child on the same spec straight away, on your own and without waiting for the user, with the **resume** prompt",
+		"If a spec is cut off twice in a row at the same step in `status`, treat it as `FAILED:`.",
+	)
+
+	loop := flat(section(t, skill, "# Step 2: The loop"))
+	requirePhrases(t, "The loop", loop,
+		"A child that ended without a hand-back is no longer running (Step 4).",
+	)
+
+	report := flat(section(t, skill, "# Step 8: The final report"))
+	requirePhrases(t, "The final report", report,
+		"**Resumed after being cut off:**",
+		"`session.maxTurns` in `~/.bob/settings/settings.json`",
+	)
+}

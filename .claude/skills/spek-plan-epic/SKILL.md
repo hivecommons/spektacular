@@ -47,7 +47,7 @@ Repeat until nothing is left to start and no child is running:
 
 Use your agent's own way of running sub-agents in the background, so independent specs are planned in overlapping time. Start every ready spec; there is no limit on how many run at once.
 
-A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not.
+A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not. A child that ended without a hand-back is no longer running (Step 4).
 
 # Step 3: The child prompt
 
@@ -79,6 +79,7 @@ Only a stop the plan workflow itself defines earns a question: a design referenc
 - **`QUESTION:`** — put the question to the user. Present it as ordinary text first, naming the spec, the options and the recommended default, then ask. While the user considers it, the other children keep going. Send the user's answer back to the same child, so it continues where it stopped. If your agent cannot continue a stopped child, start a fresh child on the same spec with the answer included in its prompt; it resumes the plan from its lane with the `goto` above.
 - **The user declines to answer now** ("not now", "I'll think about it") — enter stopping mode.
 - **`FAILED:`** — enter stopping mode.
+- **No hand-back at all** — a child whose final message does not open with `DONE:`, `QUESTION:` or `FAILED:` (typically a sentence announcing its next action, such as "Now run the next goto") did not stop: it was cut off by the agent's own limit on how long one sub-agent may run. Nothing is lost, since its plan stays in progress in its lane. Start a fresh child on the same spec straight away, on your own and without waiting for the user, with the **resume** prompt; it carries on from the step its lane records. Name the resume in your next progress line. If a spec is cut off twice in a row at the same step in `status`, treat it as `FAILED:`.
 
 **Stopping mode:** start no new child, let the children already running finish, then go to the final report. A child waiting on a question the user declined to answer is not resumed: its plan stays in progress in its lane, and repeating the request picks it up. Name the spec that stopped the run and why. Before the final report, still run Step 6 when its conditions hold.
 
@@ -116,5 +117,6 @@ End every run, finished or stopped, with:
 - **Skipped:** each spec that already had a plan.
 - **Dependencies added for shared files:** how many `epic order` added, each named in the summary.
 - **Still outstanding:** each spec not planned, and why: blocked on which specs, stopped by which failure, or waiting on a question the user chose not to answer.
+- **Resumed after being cut off:** each spec whose child had to be restarted because it ended without a hand-back, and how many times. When there are any, say that the agent limits how long one sub-agent may run, and that raising that limit avoids the restarts (for Bob, `session.maxTurns` in `~/.bob/settings/settings.json`; `0` means no limit).
 
 When everything is planned, say the epic is ready to implement with "implement this epic".

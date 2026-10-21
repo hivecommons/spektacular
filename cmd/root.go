@@ -97,15 +97,21 @@ func Execute() {
 // SPEKTACULAR_SESSION_LOG=off leaves one command out of the session log,
 // for a caller that polls, such as an editor or agent-host mod refreshing
 // status every few seconds, whose calls would otherwise bury the session.
+// SPEKTACULAR_SESSION_LOG=on records a command even with debug.enabled off,
+// so a whole session can be captured without editing the project config:
+// an evaluation harness sets it in the environment the agent runs in, and a
+// user reproducing a problem sets it for one session. It records only where
+// a project config exists, so a command run anywhere else, such as in a
+// repo's code checkout, never leaves a .spektacular/ directory behind.
 // sessionLogEnv names the variable that, set to "off", keeps a command out
-// of the debug session log.
+// of the debug session log, and set to "on", puts it in.
 const sessionLogEnv = "SPEKTACULAR_SESSION_LOG"
 
 func runRoot() int {
 	// The debug probe must tolerate running outside a project — the gate
 	// belongs to the command handlers, not here.
 	cfg, cfgErr := loadConfigLenient()
-	debugEnabled := cfgErr == nil && cfg.Debug.Enabled && os.Getenv(sessionLogEnv) != "off"
+	debugEnabled := cfgErr == nil && sessionLogOn(cfg.Debug.Enabled, projectConfigExists(), os.Getenv(sessionLogEnv))
 
 	var argv []string
 	var start time.Time
@@ -197,6 +203,20 @@ func isWorkflowStart(executedCmd *cobra.Command, exitCode int) bool {
 	return !dryRun
 }
 
+// sessionLogOn decides whether one command is recorded: the
+// SPEKTACULAR_SESSION_LOG value, when it is "on" or "off", overrides the
+// project's debug.enabled setting, and any other value leaves it to config.
+// "on" applies only inside a project.
+func sessionLogOn(configEnabled, inProject bool, env string) bool {
+	switch env {
+	case "on":
+		return inProject
+	case "off":
+		return false
+	}
+	return configEnabled
+}
+
 // stateSnapshotFile is the subset of internal/workflow's State shape needed
 // to build a sessionlog.StateSnapshot, read directly rather than importing
 // internal/workflow — cmd already owns the path-construction logic for
@@ -210,9 +230,17 @@ type stateSnapshotFile struct {
 
 // snapshotStatePath is the state file a command's session record follows:
 // the lane of an orchestrated plan or implement workflow the command names —
-// an orchestrated `new`, or a `goto` naming a spec that has a lane — and
-// .spektacular/state.json otherwise. It is decided once, before the command
-// runs, so both snapshots read the same file. "" means none can be found.
+// an orchestrated `new`, a `goto` naming a spec that has a lane, or any other
+// command whose arguments name a spec with a running lane, such as a child's
+// `plan file write <spec> plan` — and .spektacular/state.json otherwise. It is
+// decided once, before the command runs, so both snapshots read the same
+// file. "" means none can be found.
+//
+// Filing by argument keeps a child's work in its own lane, so the shared log
+// holds the orchestrator's commands and the few a child runs without naming
+// its spec. An orchestrator command naming a spec whose lane is still running
+// is filed under that lane too; once the lane finishes and its files are
+// removed, commands naming the spec go to the shared log again.
 func snapshotStatePath(argv []string) string {
 	dir, err := dataDir()
 	if err != nil {
@@ -221,6 +249,7 @@ func snapshotStatePath(argv []string) string {
 	shared := stateFilePath(dir)
 
 	var kind, verb, data string
+	var args []string
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
 		switch {
@@ -238,17 +267,19 @@ func snapshotStatePath(argv []string) string {
 			kind = a
 		case verb == "":
 			verb = a
+		default:
+			args = append(args, a)
 		}
 	}
 	if kind != "plan" && kind != "implement" {
-		return shared
+		return laneNamedByArgs(dir, kind, append([]string{verb}, args...), shared)
 	}
 	var input struct {
 		Name         string `json:"name"`
 		Orchestrated bool   `json:"orchestrated"`
 	}
 	if json.Unmarshal([]byte(data), &input) != nil || input.Name == "" || !nameRegexp.MatchString(input.Name) {
-		return shared
+		return laneNamedByArgs(dir, kind, args, shared)
 	}
 	lane := workflow.LaneStatePath(dir, kind, input.Name)
 	switch verb {
@@ -267,7 +298,30 @@ func snapshotStatePath(argv []string) string {
 			return lane
 		}
 	}
-	return shared
+	return laneNamedByArgs(dir, kind, args, shared)
+}
+
+// laneNamedByArgs is the state file of a running lane whose spec one of args
+// names, preferring the lane of the command's own kind, or fallback when none
+// does. An argument that is not a spec name never matches, since only a
+// running orchestrated workflow has a lane file.
+func laneNamedByArgs(dir, kind string, args []string, fallback string) string {
+	kinds := []string{"plan", "implement"}
+	if kind == "implement" {
+		kinds = []string{"implement", "plan"}
+	}
+	for _, k := range kinds {
+		for _, a := range args {
+			if !nameRegexp.MatchString(a) {
+				continue
+			}
+			lane := workflow.LaneStatePath(dir, k, a)
+			if _, err := os.Stat(lane); err == nil {
+				return lane
+			}
+		}
+	}
+	return fallback
 }
 
 // dryRunArg reports whether argv asks for a dry run.
@@ -358,6 +412,17 @@ func configFilePath() (string, error) {
 		return "", fmt.Errorf("getting working directory: %w", err)
 	}
 	return filepath.Join(cwd, ".spektacular", "config.yaml"), nil
+}
+
+// projectConfigExists reports whether the current working directory holds
+// a project config.
+func projectConfigExists() bool {
+	cfgPath, err := configFilePath()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(cfgPath)
+	return err == nil
 }
 
 // loadConfig loads the project config from the current working directory.

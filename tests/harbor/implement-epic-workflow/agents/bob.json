@@ -1,0 +1,13 @@
+{
+  "id": "bob",
+  "name": "IBM Bob Shell",
+  "version": "2.0.6",
+  "description": "IBM Bob Shell driven through its Agent Client Protocol server (bob acp). bobshell is not on the npm registry; IBM publishes the tarball its own installer (https://bob.ibm.com/download/bobshell.sh) downloads, and npx installs that tarball directly.",
+  "website": "https://bob.ibm.com",
+  "distribution": {
+    "npx": {
+      "package": "https://s3.us-south.cloud-object-storage.appdomain.cloud/bob-shell/bobshell-2.0.6.tgz",
+      "args": ["acp", "--trust", "--auto-approve", "--accept-license"]
+    }
+  }
+}

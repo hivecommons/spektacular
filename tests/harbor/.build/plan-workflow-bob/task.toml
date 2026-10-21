@@ -1,0 +1,32 @@
+version = "1.0"
+
+[metadata]
+author_name = "Jumppad Labs"
+author_email = "team@jumppad.dev"
+difficulty_explanation = "Multi-step CLI workflow requiring the agent to drive the spektacular plan workflow from start to finish, retrieve referenced skills, spawn sub-agents during discovery, and produce three substantive artefact files"
+category = "agent-orchestration"
+tags = ["spektacular", "plan-workflow", "multi-step", "cli", "sub-agents", "skills"]
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 120.0
+
+[environment]
+build_timeout_sec = 600.0
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240
+
+[[artifacts]]
+source = "/app/.spektacular"
+destination = "spektacular"
+
+# Appended to a rendered task's task.toml when it runs Bob (see the Makefile's
+# render targets). Bob writes its own log here, at the debug level the Bob
+# harbor arguments set. Only the log directory, never ~/.bob/settings, which
+# holds the login bob_agent.py uploads.
+[[artifacts]]
+source = "/root/.bob/logs"
+destination = "agent-logs/bob"

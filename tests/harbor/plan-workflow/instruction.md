@@ -9,7 +9,7 @@ against a pre-existing specification. The binary is already installed at
 First initialize the project:
 
 ```bash
-spektacular init claude
+spektacular init {{agent}}
 ```
 
 A specification file already exists describing a stateless JWT authentication
@@ -23,10 +23,10 @@ spektacular spec file read 20260101000000-user-auth
 ## Task
 
 Drive the full plan workflow against the `20260101000000-user-auth` specification by using
-the `/spek:plan` skill that was installed during init:
+the `spek-plan` skill that was installed during init:
 
 ```
-/spek:plan 20260101000000-user-auth
+{{spek_plan}}
 ```
 
 The skill will guide you through every plan step from `overview` through

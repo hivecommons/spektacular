@@ -53,7 +53,13 @@ import pytest
 
 PROJECT_DIR = Path("/app")
 SPEK_DIR = PROJECT_DIR / ".spektacular"
-TRANSCRIPT = Path("/logs/agent/claude-code.txt")
+AGENT_LOG_DIR = Path("/logs/agent")
+TRANSCRIPT = AGENT_LOG_DIR / "claude-code.txt"
+# Agents run through harbor's ACP agent, such as Bob, leave no Claude
+# transcript. Harbor records their run as a trajectory of tool calls and
+# results, and summarises how the session ended.
+ACP_TRAJECTORY = AGENT_LOG_DIR / "trajectory.json"
+ACP_SUMMARY = AGENT_LOG_DIR / "acp-summary.json"
 
 # Hand-maintained canonical step order — the behavioural oracle for
 # state-machine correctness. When a legitimate state-machine change lands
@@ -315,6 +321,99 @@ def parse_frontmatter(text: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def is_acp_run() -> bool:
+    """True when an ACP agent drove the run instead of Claude Code."""
+    return not TRANSCRIPT.exists() and ACP_SUMMARY.exists()
+
+
+def agent_record() -> Path:
+    """The file this run's tool calls are read from."""
+    return ACP_TRAJECTORY if is_acp_run() else TRANSCRIPT
+
+
+def _acp_summary() -> dict:
+    try:
+        return json.loads(ACP_SUMMARY.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _acp_steps() -> list:
+    try:
+        return json.loads(ACP_TRAJECTORY.read_text()).get("steps") or []
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def _acp_call_type(function_name: str) -> str:
+    """Map an ACP agent's tool to the Claude Code tool it stands for.
+
+    Bob's names: `execute` runs a shell command, `Using skill <name>` loads a
+    skill, `Running subagent: <prompt>` spawns a sub-agent. A tool whose name
+    mentions a question is taken as asking the user. Anything else is "".
+    """
+    if function_name == "execute":
+        return "Bash"
+    if function_name.startswith("Using skill"):
+        return "Skill"
+    if function_name.startswith("Running subagent"):
+        return "Agent"
+    if "question" in function_name.lower():
+        return "AskUserQuestion"
+    return ""
+
+
+ACP_FILE_TOOLS = frozenset({"edit", "write", "write_to_file", "apply_diff", "insert_content"})
+
+
+def _acp_tool_calls() -> list:
+    calls: list = []
+    for step in _acp_steps():
+        for tc in step.get("tool_calls") or []:
+            name = tc.get("function_name", "")
+            kind = _acp_call_type(name)
+            if not kind:
+                continue
+            args = tc.get("arguments") or {}
+            if kind == "Bash":
+                inp = {"command": args.get("command", "")}
+            elif kind == "Skill":
+                inp = {"skill": args.get("skill_name") or name.removeprefix("Using skill").strip()}
+            else:
+                inp = dict(args)
+            calls.append(
+                ToolCall(index=len(calls), type=kind, name=name, input=inp,
+                         tool_use_id=tc.get("tool_call_id", "") or "")
+            )
+    return calls
+
+
+def _acp_file_edits() -> list:
+    edits: list = []
+    for step in _acp_steps():
+        for tc in step.get("tool_calls") or []:
+            if tc.get("function_name") not in ACP_FILE_TOOLS:
+                continue
+            args = tc.get("arguments") or {}
+            edits.append({"name": tc["function_name"], "file_path": args.get("path") or args.get("file_path") or ""})
+    return edits
+
+
+def _acp_tool_results() -> dict:
+    results: dict = {}
+    for step in _acp_steps():
+        for r in (step.get("observation") or {}).get("results") or []:
+            tid = r.get("source_call_id", "")
+            content = r.get("content", "")
+            if isinstance(content, list):
+                content = "".join(
+                    (part.get("text", "") if isinstance(part, dict) else str(part)) for part in content
+                )
+            if tid:
+                results[tid] = str(content)
+    return results
+
+
 def _iter_transcript_objects():
     assert TRANSCRIPT.exists(), f"Agent transcript not found at {TRANSCRIPT}"
     for line in TRANSCRIPT.read_text().splitlines():
@@ -335,6 +434,8 @@ def extract_tool_calls() -> list:
     consumer filters by call.type or by Bash command content, so the
     AskUserQuestion entries only surface in tests that ask for them.
     """
+    if is_acp_run():
+        return _acp_tool_calls()
     calls: list = []
     for obj in _iter_transcript_objects():
         if obj.get("type") != "assistant":
@@ -364,6 +465,8 @@ def extract_builtin_file_edits() -> list:
     the agent must NOT use on the plan documents — `extract_tool_calls` does
     not capture them, so this walks the transcript separately.
     """
+    if is_acp_run():
+        return _acp_file_edits()
     edits: list = []
     for obj in _iter_transcript_objects():
         if obj.get("type") != "assistant":
@@ -381,6 +484,8 @@ def extract_builtin_file_edits() -> list:
 
 def extract_tool_results() -> dict:
     """Return a map of tool_use_id → result text extracted from user turns."""
+    if is_acp_run():
+        return _acp_tool_results()
     results: dict = {}
     for obj in _iter_transcript_objects():
         if obj.get("type") != "user":
@@ -525,13 +630,31 @@ def _results_cache() -> dict:
 
 
 def _agent_result_events() -> list:
-    """Return all `result`-type events from the transcript, in order."""
+    """Return all `result`-type events from the transcript, in order.
+
+    An ACP run has no such events; its summary's prompt response stands in
+    as one result, an error when the session ended in an error.
+    """
+    if is_acp_run():
+        summary = _acp_summary()
+        if "prompt_response" in summary:
+            return [{"type": "result", "is_error": False, "result": summary["prompt_response"]}]
+        if "error" in summary:
+            return [{"type": "result", "is_error": True, "result": summary["error"]}]
+        return []
     return [o for o in _iter_transcript_objects() if o.get("type") == "result"]
 
 
 def _agent_auth_failure():
     """Return the first transcript object signalling an Anthropic API
-    authentication failure (HTTP 401), or None if there is none."""
+    authentication failure (HTTP 401), or None if there is none. For an ACP
+    run, the summary's error when the agent required authentication."""
+    if is_acp_run():
+        error = _acp_summary().get("error") or {}
+        message = error.get("message", "") if isinstance(error, dict) else str(error)
+        if "auth" in message.lower():
+            return {"error": message, "api_error_status": None}
+        return None
     for obj in _iter_transcript_objects():
         if obj.get("error") == "authentication_failed":
             return obj
@@ -556,9 +679,9 @@ def _abort_on_failed_agent_run():
     the wrong thing) does NOT trip this, so the full suite still reports every
     such failure.
     """
-    if not TRANSCRIPT.exists():
+    if not agent_record().exists():
         pytest.exit(
-            f"Agent transcript not found at {TRANSCRIPT} — the agent never ran. "
+            f"Agent transcript not found at {agent_record()} — the agent never ran. "
             "Aborting before the misleading downstream cascade.",
             returncode=1,
         )
@@ -599,8 +722,8 @@ class TestAgentExecution:
     """
 
     def test_transcript_exists(self):
-        assert TRANSCRIPT.exists(), (
-            f"Agent transcript not found at {TRANSCRIPT} — the agent never ran."
+        assert agent_record().exists(), (
+            f"Agent transcript not found at {agent_record()} — the agent never ran."
         )
 
     def test_agent_authenticated(self):
@@ -1196,6 +1319,29 @@ class TestArtefactStatusLifecycle:
 # ---------------------------------------------------------------------------
 
 
+def _step_payload(result_text: str):
+    """The plan step response in a command's output, or None.
+
+    An agent may chain other commands around a `plan goto`, such as a
+    `plan file write` before it or a `head` of the plan files after it, so
+    the output is not always one JSON document. Every top-level JSON object
+    in it is decoded, and the first carrying a "step" or "instruction" is the
+    step response.
+    """
+    decoder = json.JSONDecoder()
+    i = result_text.find("{")
+    while i != -1:
+        try:
+            obj, end = decoder.raw_decode(result_text, i)
+        except json.JSONDecodeError:
+            i = result_text.find("{", i + 1)
+            continue
+        if isinstance(obj, dict) and ("step" in obj or "instruction" in obj):
+            return obj
+        i = result_text.find("{", end)
+    return None
+
+
 class TestInstructionNextStepValidity:
     """Every rendered instruction's next_step directive must reference a
     step name the state machine actually accepts.
@@ -1220,11 +1366,10 @@ class TestInstructionNextStepValidity:
             result_text = results.get(call.tool_use_id, "")
             if not result_text:
                 continue
-            try:
-                payload = json.loads(result_text)
-            except json.JSONDecodeError:
-                # Not all stdout lines are pure JSON (error paths, wrapped
-                # harness output). Skip.
+            payload = _step_payload(result_text)
+            if payload is None:
+                # Error paths and wrapped harness output carry no step
+                # response. Skip.
                 continue
             instruction = (
                 payload.get("instruction", "") if isinstance(payload, dict) else ""
@@ -1269,11 +1414,10 @@ class TestInstructionNextStepValidity:
             result_text = results.get(call.tool_use_id, "")
             if not result_text:
                 continue
-            try:
-                payload = json.loads(result_text)
-            except json.JSONDecodeError:
-                # Not all stdout lines are pure JSON (error paths, wrapped
-                # harness output). Skip.
+            payload = _step_payload(result_text)
+            if payload is None:
+                # Error paths and wrapped harness output carry no step
+                # response. Skip.
                 continue
             step = payload.get("step") if isinstance(payload, dict) else None
             if step:

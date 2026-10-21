@@ -59,7 +59,7 @@ Repeat until nothing is left to start or merge and no child is running:
 
 Use your agent's own way of running sub-agents in the background, so independent specs are implemented in overlapping time. Start every ready spec; there is no limit on how many run at once.
 
-A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not.
+A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not. A child that ended without a hand-back is no longer running (Step 6).
 
 # Step 4: The child prompt
 
@@ -95,7 +95,7 @@ spektacular epic merge --data '{"spec":"<spec>"}'
 
 The merge is all or nothing across the spec's repos. On success the spec's worktrees and branches are removed and its changes are in every repo's main line, so specs that depend on it can start. On `epic_merge_conflict`, nothing was merged in any repo: show the user the conflicting paths for each repo, leave the worktrees in place, and enter stopping mode. Never resolve a conflict yourself.
 
-Any other refusal from `epic worktree` or `epic merge` is handled the same way: relay its `message` and `next_action` to the user, leave the worktrees as they are, and enter stopping mode.
+On `merge_lock_timeout`, another merge or commit in the project was still running and nothing was merged: run the same merge again. Any other refusal from `epic worktree` or `epic merge` is handled the same way as a conflict: relay its `message` and `next_action` to the user, leave the worktrees as they are, and enter stopping mode.
 
 # Step 6: Handling a hand-back
 
@@ -104,6 +104,7 @@ Any other refusal from `epic worktree` or `epic merge` is handled the same way: 
 - **An amendment the user approves** — when a `QUESTION:` proposes amending the spec or a design, apply it yourself only after the user's explicit approval, from the project root and never in a worktree. For the spec, read it with `spektacular spec file read <spec>`, change only the sections the user approved, stage the full result under `.spektacular/tmp/<spec>/`, and run `spektacular spec amend --data '{"name":"<spec>","reason":"<why>","run":"epic <epic> implement run, task <task>"}' --from <staged file>`. For a design, revise it with `spektacular design author`, or store the new version the user supplies with `spektacular design write` for a design they wrote, then record it with `spektacular spec amend` and a `"design":{"source":"<name>","path":"<path>"}` field. Note the amendment in `.spektacular/working-context.md`, then answer the child naming what changed, so it re-reads the amended text and re-verifies its task. If the user rejects the amendment, answer the child with their decision.
 - **The user declines to answer now** — enter stopping mode.
 - **`FAILED:`** — enter stopping mode.
+- **No hand-back at all** — a child whose final message does not open with `DONE:`, `QUESTION:` or `FAILED:` (typically a sentence announcing its next action, such as "Now run the next goto") did not stop: it was cut off by the agent's own limit on how long one sub-agent may run. Nothing is lost, since its code stays in its worktrees and its progress in its lane. Start a fresh child on the same spec straight away, on your own and without waiting for the user, with the **resume** prompt; it carries on from the step its lane records. Name the resume in your next progress line. If a spec is cut off twice in a row at the same step in `status`, treat it as `FAILED:`.
 
 **Stopping mode:** start no new child, let the children already running finish (and merge each one that finishes cleanly, since specs depending on it may already be waiting), then go to the final report. A child waiting on a question the user declined to answer is not resumed: its work stays in progress in its worktree, and repeating the request picks it up. Name the spec that stopped the run and why.
 
@@ -118,6 +119,7 @@ End every run, finished or stopped, with:
 - **Completed in this run:** each spec implemented and merged now, with its summary.
 - **Skipped:** each spec that was already implemented.
 - **Still outstanding:** each spec not implemented, and why: blocked on which specs, stopped by which failure or conflict, or waiting on a question the user chose not to answer.
+- **Resumed after being cut off:** each spec whose child had to be restarted because it ended without a hand-back, and how many times. When there are any, say that the agent limits how long one sub-agent may run, and that raising that limit avoids the restarts (for Bob, `session.maxTurns` in `~/.bob/settings/settings.json`; `0` means no limit).
 - **Worktrees left behind:** each spec whose worktrees remain unmerged, with their paths, so the user can inspect or finish them.
 
 Offer to save any durable discovery the children reported with the `spek-knowledge` skill, and save it only if the user accepts.

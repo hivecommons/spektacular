@@ -100,7 +100,10 @@ Speks are plain markdown with a small set of structured sections (overview, requ
 Spek ships with five coding-agent integrations. `spektacular init <agent>` runs the chosen agent's install step, writing its workflow skills (and, where the agent has no skill mechanism, command wrappers) into your project:
 
 - **claude** — installs the workflow skills under `.claude/skills/` and ensures the project's `CLAUDE.md` imports `@AGENTS.md`, so the Spek agent rules take effect.
-- **bob** — installs skills under `.bob/skills/` and command wrappers under `.bob/commands/`.
+- **bob** — installs skills under `.bob/skills/` and command wrappers under `.bob/commands/`. Bob stops every
+  sub-agent after `session.maxTurns` turns (100 by default) and hands back whatever it said last, which cuts
+  epic children off mid-step. `init bob` warns while a limit is set; `spektacular init bob --raise-bob-turn-limit`
+  sets it to `0` (no limit) in `~/.bob/settings/settings.json`. The epic skills resume a cut-off child either way.
 - **codex** — installs skills under `.agents/skills/`.
 - **copilot** — GitHub Copilot CLI; installs the eight workflow skills under `.github/skills/` and the same standing rules in root `AGENTS.md`, with no command wrappers or extra instruction files.
 - **omp** — installs the same six skills under `.omp/skills/`, Markdown wrappers and native input-preserving handlers under `.omp/commands/`, and eight always-applied `spek-*.md` rules under `.omp/rules/`. The rules mirror only Spektacular's sections of root `AGENTS.md`, keeping them visible even when omp selects another instruction file. Other project instructions, rules, skills and settings are left alone.
@@ -261,7 +264,7 @@ command: spektacular
 agent: claude
 auto_commit: "off"                  # off | workflow | full: automatic git commits (local only)
 debug:
-  enabled: false                    # true records every command and response to a session log; SPEKTACULAR_SESSION_LOG=off leaves one call out
+  enabled: false                    # true records every command and response to a session log; SPEKTACULAR_SESSION_LOG=off leaves one call out, =on records it even when false
 spec:
   provider: file
   id_method: timestamp              # timestamp + random suffix; counter is legacy and branch-local
@@ -403,10 +406,29 @@ Makefile wrappers run the suites for you, building the binary and wiring up the 
 make harbor-test-spec            # spec workflow (claude)
 make harbor-test-spec-codex      # spec workflow (codex)
 make harbor-test-plan            # plan workflow (claude)
+make harbor-test-plan-codex      # plan workflow (codex)
+make harbor-test-plan-bob        # plan workflow (IBM Bob)
 make harbor-test-implement       # implement workflow (claude)
 make harbor-test-repo            # guided repo add, answering each question (claude)
 make harbor-test-repo-delegated  # guided repo add, handing the whole set over (claude)
+make harbor-test-epic            # plan a whole epic through background sub-agents (claude)
+make harbor-test-epic-codex      # the same, with codex
+make harbor-test-epic-bob        # the same, with IBM Bob
+make harbor-test-implement-epic             # implement a planned four-spec epic, two specs in parallel (claude)
+make harbor-test-implement-epic-codex       # the same, with codex
+make harbor-test-implement-epic-bob         # the same, with Bob at its default turn limit
+make harbor-test-implement-epic-bob-unlimited  # the same, with Bob's turn limit removed
 ```
+
+Bob has no Harbor agent of its own. `harbor-test-epic-bob` runs it through
+`tests/harbor/agents/bob_agent.py`, which extends Harbor's generic ACP agent: it installs Bob from
+IBM's published tarball and launches `bob acp` as described in `tests/harbor/agents/bob.json`. The plan suite's verifier reads Bob's run from the trajectory Harbor
+records for an ACP agent, since Bob leaves no Claude transcript.
+Like the Claude targets, it signs in with the login already on your machine, uploading your Bob
+Shell login into the container before Bob starts, so run `bob` and sign in once first. Set
+`BOBSHELL_API_KEY` to use an API key instead. If the container's Bob refreshes the session, you may
+need to sign in to Bob again locally. Bob runs without `-m`, because its ACP server cannot choose a
+model.
 
 #### Test results
 
@@ -416,7 +438,10 @@ Results are written to `tests/harbor/jobs/` (gitignored). Each run produces:
 tests/harbor/jobs/<timestamp>/
 ├── result.json                    # Overall pass/fail and metrics
 └── spec-workflow__<id>/
-    ├── agent/                     # Agent output log
+    ├── agent/                     # Agent output log and native session transcripts
+    ├── artifacts/
+    │   ├── spektacular/           # The project's .spektacular, with debug/ session logs
+    │   └── agent-logs/bob/        # Bob's own debug log, on Bob runs only
     ├── verifier/
     │   ├── test-stdout.txt        # pytest output
     │   └── reward.txt             # 1 = pass, 0 = fail
@@ -430,6 +455,15 @@ tests/harbor/jobs/<timestamp>/
 | `tests/harbor/spec-workflow` | Full spec creation workflow, end to end |
 | `tests/harbor/plan-workflow` | Full plan generation workflow, end to end |
 | `tests/harbor/repo-workflow` | Guided repo add, checked against the agent's own transcript |
+| `tests/harbor/epic-workflow` | Plans a seeded three-spec epic with `spek-plan-epic`, checked against CLI state and the session log, so the same verifier serves every agent |
+| `tests/harbor/implement-epic-workflow` | Implements a seeded, planned four-spec epic with `spek-implement-epic`: storage and format in parallel, commands after both are merged, export after commands. Checked against CLI state, git, the finished app's behaviour and the session log |
+
+Every suite sets `SPEKTACULAR_SESSION_LOG=on`, so each run's `artifacts/spektacular/debug/` holds a
+timestamped line per `spektacular` call, whichever agent ran. The epic suite prints a timeline from
+that log at the top of its results: when each spec's child started and finished, its slowest step,
+and how long the orchestrator took to start each child and to notice it had finished. Both epic suites print it, and it also lists every child that had to be resumed and the step it
+stopped at, and, on Bob runs, how often Bob ended a task at its turn limit. Run it on a collected job
+with `python3 tests/harbor/shared/timeline.py <job>/<trial>/artifacts/spektacular/debug [<job>/<trial>/artifacts/agent-logs/bob]`.
 
 The repo-workflow suite is the one whose assertions are about the conversation rather than the
 files: that only the repo itself is asked for cold, that every later question carries a proposed
