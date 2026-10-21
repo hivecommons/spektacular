@@ -12,11 +12,12 @@
     "update_changelog"
   ],
   "created_at": "2026-10-21T15:09:33.395004523Z",
-  "updated_at": "2026-10-21T15:40:29.532191181Z",
+  "updated_at": "2026-10-21T15:49:21.048263745Z",
   "data": {
     "committed_milestones": [
       1,
-      2
+      2,
+      3
     ],
     "name": "000068_task-goal-validation",
     "orchestrated": true

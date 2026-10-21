@@ -623,7 +623,7 @@ In an epic, a spec whose run stops at the goal check hands a question back to th
 
 **Validation point**: The harbor suites build and their verifiers pass locally against recorded runs. The repeated-run success metrics are captured in the implementation test plan.
 
-#### - [ ] Task: Update the implement and implement-epic harbor suites
+#### - [x] Task: Update the implement and implement-epic harbor suites
 **Id:** 2b37b105-9a88-410e-a62e-d53724bcdbd3
 **Repo:** spektacular
 **Depends on:**
@@ -640,11 +640,11 @@ This task brings the existing harbor suites in line with the new step.
 *Technical detail:* [context.md#task-update-the-implement-and-implement-epic-harbor-suites](./context.md#task-update-the-implement-and-implement-epic-harbor-suites)
 
 **Acceptance criteria**:
-- [ ] The implement suite expects the goal check between verification and the plan update.
-- [ ] The implement-epic solution walks through the goal check and records verdicts for every task.
-- [ ] The implement-epic verifier fails a run in which any task of any spec has no recorded verdicts.
+- [x] The implement suite expects the goal check between verification and the plan update.
+- [x] The implement-epic solution walks through the goal check and records verdicts for every task.
+- [x] The implement-epic verifier fails a run in which any task of any spec has no recorded verdicts.
 
-#### - [ ] Task: Add the goal-check harbor suite
+#### - [x] Task: Add the goal-check harbor suite
 **Id:** 6cad4738-30a2-40f0-bd5e-de2248854c0c
 **Repo:** spektacular
 **Depends on:**
@@ -669,12 +669,12 @@ The verifier works from the CLI's recorded outcome and session log, so one verif
 *Technical detail:* [context.md#task-add-the-goal-check-harbor-suite](./context.md#task-add-the-goal-check-harbor-suite)
 
 **Acceptance criteria**:
-- [ ] The unmet scenario's verifier passes only when the seeded criterion is first judged not yet met, a retry follows and the recorded attempt count rises.
-- [ ] The met scenario's verifier passes only when every criterion is judged met on the first attempt.
-- [ ] Both scenarios fail a run in which any criterion is ticked before a verdict exists for all of them, or a criterion not judged met is ticked.
-- [ ] Both scenarios fail a run in which the reviewer changed any file, or its recorded input holds anything beyond the goal, the verification results and pointers.
-- [ ] On Claude, the verifier confirms that the verdicts came from a separate reviewer helper running on a cheaper model than the main agent.
-- [ ] The suite builds and runs for Claude, Codex and Bob from make targets, with the scenario chosen per run.
+- [x] The unmet scenario's verifier passes only when the seeded criterion is first judged not yet met, a retry follows and the recorded attempt count rises.
+- [x] The met scenario's verifier passes only when every criterion is judged met on the first attempt.
+- [x] Both scenarios fail a run in which any criterion is ticked before a verdict exists for all of them, or a criterion not judged met is ticked.
+- [x] Both scenarios fail a run in which the reviewer changed any file, or its recorded input holds anything beyond the goal, the verification results and pointers.
+- [x] On Claude, the verifier confirms that the verdicts came from a separate reviewer helper running on a cheaper model than the main agent.
+- [x] The suite builds and runs for Claude, Codex and Bob from make targets, with the scenario chosen per run.
 
 ### Milestone 4: The check is documented and the task design matches it
 
@@ -894,3 +894,43 @@ These items can only be settled by exercising the agents themselves at implement
 - `spektacular: internal/steps/implement/orchestrated_test.go`
 
 **Discoveries**: None.
+
+### 2026-10-21 — Task: Update the implement and implement-epic harbor suites
+
+**What was done**: The implement suite's `EXPECTED_STEP_ORDER` and seeded `state.json` include `check_goal` between `verify` and `update_plan` (its run starts at `test_plan`, so nothing in it reaches `update_plan`). The implement-epic solution walk now takes every task of every spec through `analyze → implement → test → verify → check_goal`, records an all-met reply with `implement goal record`, then `update_plan`, ticks that task and runs `update_changelog`, before the wrap-up. Its verifier gains `TestGoalCheck`: every task of every spec (from `status`) must have recorded checks with one verdict with evidence per criterion, and in each spec's lane every move into `update_plan` must follow a recorded `goal record` or `decide`. The agent timeout rises from 5400s to 7000s. An oracle harbor run of the rendered suite passed all 54 verifier tests, the 8 new ones included.
+
+**Deviations**: `implement goal record|decide|show` naming a spec with a running implement lane are now filed under that lane in the session log (`cmd/root.go` `snapshotStatePath`), so the verifier finds each record in the lane it gates; before this they went to the shared log. The Bob harbor agent was already in `tests/harbor/agents/` (sibling 000069 landed first), so no note was needed.
+
+**Files changed**:
+- `spektacular: tests/harbor/implement-workflow/tests/test_implement_workflow.py`
+- `spektacular: tests/harbor/implement-workflow/environment/state.json`
+- `spektacular: tests/harbor/implement-epic-workflow/solution/solve.sh`
+- `spektacular: tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py`
+- `spektacular: tests/harbor/implement-epic-workflow/task.toml`
+- `spektacular: cmd/root.go`
+- `spektacular: cmd/sessionlog_lane_test.go`
+
+**Discoveries**: The session log files a command under a lane only for `new`, `goto` and commands whose positional arguments name the spec; a verb that names its spec only in `--data` needs its own case in `snapshotStatePath`.
+
+### 2026-10-21 — Task: Add the goal-check harbor suite
+
+**What was done**: New suite `tests/harbor/goal-check-workflow/`. Its image commits a small todo app, then `seed/seed.sh` writes a final spec and a one-task plan (criteria: `todo count` prints the count, unit tests cover it, the README documents it) through the CLI, puts the task's work in the working tree (README line only in the `met` scenario), walks the implement run to `verify` and fails the build unless the tests pass and the run stands at `verify`. `instruction.md` resumes the run with `spek-implement`; the `unmet` scenario adds the false claim that the work is complete. The agent-independent verifier `tests/test_goal_check.py` checks, from `implement goal show`, the plan and the session log: N verdicts with evidence per check, the recorded goal and scope, the scenario's verdicts (unmet: criterion 3 `not_met` first, a `goto implement`, a second check with a higher attempt; met: one all-met check), nothing ticked or `update_plan` before the first record, only met criteria ticked, and `tree_unchanged` on every check. From Claude's transcript (and Bob's ACP trajectory) it checks the reviewer's input carries the goal and staged paths but not the claim, and on Claude that a `spek-goal-reviewer` helper returned on a haiku model while the main agent did not run on haiku. `tests/harbor/shared/transcripts.py` holds the transcript readers, and `test_verifier_selfcheck.py` proves every rule fails a run that breaks it (10 passing). `make harbor-test-goal-check[-claude|-codex|-bob]` with `SCENARIO=unmet|met` renders and runs it. Oracle harbor runs of both scenarios pass (6 passed, the 2 transcript checks skipped).
+
+**Deviations**: The seeded work is left uncommitted rather than committed, so the staged `git diff HEAD` the reviewer reads shows the task's work. The seed sets `implement.worktrees: false`, so the run works in `/app` itself. The scenario is baked into the build (`environment/seed/scenario` and `tests/scenario`) as well as exported as `SPEK_SCENARIO`, since the seed needs it at image build time. The no-tick-before-check rule reads the session log's `plan file write` and `goto update_plan` events, as their content is not logged. The transcript readers were written fresh for this suite in `tests/harbor/shared/transcripts.py` rather than copied from the plan suite, which keeps its own.
+
+**Files changed**:
+- `spektacular: tests/harbor/goal-check-workflow/instruction.md`
+- `spektacular: tests/harbor/goal-check-workflow/scenario-unmet.md`
+- `spektacular: tests/harbor/goal-check-workflow/scenario-met.md`
+- `spektacular: tests/harbor/goal-check-workflow/task.toml`
+- `spektacular: tests/harbor/goal-check-workflow/environment/Dockerfile`
+- `spektacular: tests/harbor/goal-check-workflow/environment/app/`
+- `spektacular: tests/harbor/goal-check-workflow/environment/seed/`
+- `spektacular: tests/harbor/goal-check-workflow/solution/solve.sh`
+- `spektacular: tests/harbor/goal-check-workflow/tests/test.sh`
+- `spektacular: tests/harbor/goal-check-workflow/tests/test_goal_check.py`
+- `spektacular: tests/harbor/goal-check-workflow/tests/test_verifier_selfcheck.py`
+- `spektacular: tests/harbor/shared/transcripts.py`
+- `spektacular: Makefile`
+
+**Discoveries**: In a harbor image whose seed copies only `config.yaml`, the registered repo's `repo.yaml` appears once the agent's own `init` runs, so the code root the goal check fingerprints resolves to `/app` from then on.
