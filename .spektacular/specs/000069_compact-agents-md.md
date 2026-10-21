@@ -2,6 +2,7 @@
 created_date: "2026-10-21"
 document_status: final
 closed_date: "2026-10-21"
+epic: 000001_agent-workflow-improvements
 ---
 
 # Feature: 000069_compact-agents-md

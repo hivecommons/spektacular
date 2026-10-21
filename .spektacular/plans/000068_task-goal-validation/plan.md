@@ -122,7 +122,7 @@ The user's answer is recorded with `spektacular implement goal decide`, which re
 - **Harbor suites** (changed and new, `spektacular`).
   - The `implement-workflow` and `implement-epic-workflow` surfaces gain the new step. In implement-epic this covers the solution walk and a verdict assertion for every task.
   - A new goal-check suite seeds a task whose criterion is subtly unmet while its tests pass, and one whose criteria are all met. It is rendered for Claude, Codex and Bob, and its verifier reads `implement goal show` and the session log. The reviewer's launch and model are checked where a transcript can show them.
-  - The Bob harbor agent moves to the shared location the Makefile already expects.
+  - Bob runs rely on the Bob harbor agent being in the shared location the Makefile expects. Sibling spec 000069_compact-agents-md moves it in its first milestone (epic decision); this plan does not move it.
 - **Documentation site** (changed, `docs`).
   - The how-it-works implement step list and the Implement stage describe the check and its three verdicts.
   - The plan-tasks acceptance-criteria rule changes to "ticked only when judged met".
@@ -635,7 +635,7 @@ This task brings the existing harbor suites in line with the new step.
 
 - **Implement suite.** Its expected step order and seeded run state now include the goal check.
 - **Implement-epic suite.** Its solution walk records verdicts at the goal check, and its verifier asserts that every task of every spec has recorded verdicts, whichever agent ran.
-- **Bob.** The Bob harbor agent moves to the shared location the Makefile already expects, so Bob runs of these suites can start.
+- **Bob.** Bob runs of these suites rely on the Bob harbor agent in the shared location the Makefile expects, which sibling spec 000069_compact-agents-md moves there. This task does not move it.
 
 *Technical detail:* [context.md#task-update-the-implement-and-implement-epic-harbor-suites](./context.md#task-update-the-implement-and-implement-epic-harbor-suites)
 
@@ -643,7 +643,6 @@ This task brings the existing harbor suites in line with the new step.
 - [ ] The implement suite expects the goal check between verification and the plan update.
 - [ ] The implement-epic solution walks through the goal check and records verdicts for every task.
 - [ ] The implement-epic verifier fails a run in which any task of any spec has no recorded verdicts.
-- [ ] Bob runs of the implement-epic suite find the Bob harbor agent.
 
 #### - [ ] Task: Add the goal-check harbor suite
 **Id:** 6cad4738-30a2-40f0-bd5e-de2248854c0c

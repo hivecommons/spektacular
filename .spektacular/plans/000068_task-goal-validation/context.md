@@ -19,7 +19,7 @@ closed_date: "2026-10-21"
 - **Harbor.**
   - `implement-workflow` is Claude-only with one fixed scenario starting at `test_plan`.
   - `implement-epic-workflow` is agent-independent, reading CLI state and the session log, with a hard-coded solution step list (`solution/solve.sh:16`).
-  - The Bob harbor agent's files sit in `tests/harbor/implement-epic-workflow/agents/`, while the Makefile looks in `tests/harbor/agents/`.
+  - The Bob harbor agent's files sit in `tests/harbor/implement-epic-workflow/agents/`, while the Makefile looks in `tests/harbor/agents/`. Sibling spec 000069_compact-agents-md moves them to `tests/harbor/agents/` in its first milestone (epic decision).
 - **Docs.** No per-step workflow reference page exists. `how-it-works.mdx` has the step tree and the Implement stage. `plan-tasks.mdx:88-93` states today's tick rule, and `configuration.mdx:301-313` documents `implement`.
 
 **Requirement → repo and files**
@@ -330,7 +330,7 @@ Repo: `spektacular`.
 - `tests/harbor/implement-epic-workflow/solution/solve.sh:16`: STEPS becomes `analyze implement test verify check_goal update_plan …`. At `check_goal`, `goto()` writes a reply judging every criterion `met`, with evidence "solution walk", built from `spektacular implement goal show <spec> --format json` or the plan, then runs `implement goal record` before the next goto.
 - `tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py`: add `test_every_task_has_recorded_verdicts`. For each seeded spec, `cli("implement","goal","show",spec,"--format","json")` must list every task id from `plan export --format json`, each with at least one check whose verdict count equals the task's criteria count. Add `test_goal_record_precedes_update_plan`: in each lane (`tests/harbor/shared/sessionlog.py`), every `goto update_plan` is preceded by an `implement goal record` (or `decide`) event for the same item.
 - `tests/harbor/implement-epic-workflow/task.toml:16`: review the 5400s agent timeout against one extra reviewer launch per task. Raise it by the success metric's ~2 minutes per task (×13 seeded tasks), to about 7000s.
-- Bob harbor agent: `git mv tests/harbor/implement-epic-workflow/agents/{bob_agent.py,bob.json,bob-artifacts.toml} tests/harbor/agents/`, matching `Makefile:8,18,24`. Remove the stale `__pycache__`. Grep the Makefile and suites for any path that pointed at the old location.
+- Bob harbor agent: not moved here. Sibling spec 000069_compact-agents-md moves it to `tests/harbor/agents/` (epic decision). If the files are still only in `tests/harbor/implement-epic-workflow/agents/` when Bob harbor runs are needed, the move has not landed yet: note it in the test plan rather than moving the files here.
 - `.claude/skills` and other installed copies are not touched (convention).
 
 **Complexity**: Medium

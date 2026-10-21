@@ -152,6 +152,11 @@ closed_date: "2026-10-21"
 - **Rationale**: the spec's success metric compares pass rates "before the change". The new suite can only have a "before" if it exists first.
 - **Rejected**: building the suite alongside the compact change (no baseline).
 
+### Bob harbor agent files move to `tests/harbor/agents/` in Milestone 1 (epic decision)
+- **Decision**: the standing-rules harbor suite task moves the tracked Bob harbor agent files from `tests/harbor/implement-epic-workflow/agents/` to `tests/harbor/agents/`, where `Makefile:8,18,24` already looks.
+- **Rationale**: settled by the user while planning epic 000001_agent-workflow-improvements. Bob runs of the new suite (and of every existing suite) cannot start otherwise, and Milestone 1 needs a Bob baseline. Sibling spec 000068_task-goal-validation had planned the move late in its own harbor milestone; it now relies on this one instead.
+- **Rejected**: 000069 depending on 000068 for the move (would serialise the specs); pointing the Makefile at the suite-local folder (every suite needs the agent).
+
 ### Installer refactor folded into Milestone 2 (milestones)
 - **Decision**: the table-driven installer refactor is a task inside Milestone 2, not its own milestone.
 - **Rationale**: it has no user-visible effect on its own and exists to make the compact change land once for all agents.

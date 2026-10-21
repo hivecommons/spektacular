@@ -69,7 +69,7 @@ Behaviour is proven at three layers, per the testing-architecture knowledge entr
 
 - **Template-contract and install tests (changed and new, spektacular).** The per-rule phrase tests now render both surfaces, and each needle is asserted on the surface that must carry it (binding parts on the compact form, detail on the guidance file). New tests cover the size budget, link resolution, the read exemption, conversion of a pre-change AGENTS.md, idempotency, refresh of outdated guidance, preservation of user content, all five agents, and the CLAUDE.md import.
 
-- **Standing-rules harbor suite (new, spektacular).** An end-to-end suite whose image initialises the project for the agent under test before the session starts. The registered code then lives outside the starting directory, and a final spec is seeded. The agent is asked an ad-hoc code question, asked about the spec, and led through a multi-requirement feature discussion. The verifier reads the CLI session log and the agent's answer file: it checks that the registry was consulted, the spec was read through the CLI and never edited, and no spec workflow was started. It runs for Claude, Codex and Bob, alongside the existing suites, whose sources need no oracle change.
+- **Standing-rules harbor suite (new, spektacular).** An end-to-end suite whose image initialises the project for the agent under test before the session starts. The registered code then lives outside the starting directory, and a final spec is seeded. The agent is asked an ad-hoc code question, asked about the spec, and led through a multi-requirement feature discussion. The verifier reads the CLI session log and the agent's answer file: it checks that the registry was consulted, the spec was read through the CLI and never edited, and no spec workflow was started. It runs for Claude, Codex and Bob, alongside the existing suites, whose sources need no oracle change. The same task moves the Bob harbor agent to `tests/harbor/agents/`, where the Makefile already looks, so Bob runs of every suite can start (an epic decision shared with 000068_task-goal-validation, which relies on the move).
 
 - **Documentation (changed, docs repo).** The configuration reference gains a section describing the compact AGENTS.md layout and the guidance folder, and its migrate section says how an upgrade converts a project. The omp plugin and getting-started text say the omp rules mirror the compact sections.
 
@@ -205,7 +205,7 @@ Existing suites need no oracle changes. They are re-run to show pass rates do no
 **Depends on:** none
 **Execution:** agent
 
-Add a new end-to-end harbor suite in which the project is initialised for the agent under test while the image is built, so AGENTS.md (and CLAUDE.md for Claude) are the agent's real project instructions when the session starts. The project registers a code repository that lives outside the starting directory and holds a final spec. The agent is given three plain requests: answer a question about the code, summarise the spec, and discuss a multi-requirement feature idea. The verifier checks, from the CLI's own session log and the agent's answer file, that the agent used the repo registry, read the spec only through the CLI, and offered a spec rather than starting one. One Makefile target per agent (Claude, Codex, Bob) runs it, mirroring the epic suite.
+Add a new end-to-end harbor suite in which the project is initialised for the agent under test while the image is built, so AGENTS.md (and CLAUDE.md for Claude) are the agent's real project instructions when the session starts. The project registers a code repository that lives outside the starting directory and holds a final spec. The agent is given three plain requests: answer a question about the code, summarise the spec, and discuss a multi-requirement feature idea. The verifier checks, from the CLI's own session log and the agent's answer file, that the agent used the repo registry, read the spec only through the CLI, and offered a spec rather than starting one. One Makefile target per agent (Claude, Codex, Bob) runs it, mirroring the epic suite. The task also moves the Bob harbor agent to the shared location the Makefile already expects, so Bob runs of this suite and every existing suite can start; sibling spec 000068_task-goal-validation relies on this move.
 
 *Technical detail:* [context.md#task-add-the-standing-rules-harbor-suite](./context.md#task-add-the-standing-rules-harbor-suite)
 
@@ -215,7 +215,8 @@ Add a new end-to-end harbor suite in which the project is initialised for the ag
 - [ ] The verifier passes only when the spec was read through the CLI and is unchanged at the end of the run.
 - [ ] The verifier passes only when no spec workflow was started and the agent's answer offers to capture the feature as a spec.
 - [ ] Self-check tests show each verifier rule fails on a deliberately non-compliant session log and passes on a compliant one, without running an agent.
-- [ ] Claude, Codex and Bob each have a make target for the suite, and existing suites are unchanged.
+- [ ] Claude, Codex and Bob each have a make target for the suite, and existing suites' sources are unchanged.
+- [ ] The Bob harbor agent lives in the shared location the Makefile expects, and Bob runs of the new suite and the existing suites find it.
 
 ### Milestone 2: Every initialised or upgraded project gets compact standing rules with guidance on demand
 

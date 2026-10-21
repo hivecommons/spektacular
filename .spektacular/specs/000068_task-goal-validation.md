@@ -5,6 +5,7 @@ closed_date: "2026-10-21"
 designs:
     - source: design
       path: plan-task-graph.md
+epic: 000001_agent-workflow-improvements
 ---
 
 # Feature: 000068_task-goal-validation

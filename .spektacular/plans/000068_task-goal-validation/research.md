@@ -211,10 +211,10 @@ A `goals` document in the plan's folder that the agent writes like `test-plan`.
 - **Rationale**: the spec requires the design update, and the epic child prompt forbids children writing design documents, so the existing amendment-style hand-back is the path.
 - **Rejected**: doing it during planning (outside the plan workflow's remit); a `human` task (no human-only reason applies).
 
-### Bob harbor agent files move to `tests/harbor/agents/` (tasks)
-- **Decision**: move the tracked Bob harbor agent files from `tests/harbor/implement-epic-workflow/agents/` to `tests/harbor/agents/`, where `Makefile:8,18,24` already looks.
-- **Rationale**: Bob runs of the touched suites and the new suite cannot start otherwise.
-- **Rejected**: pointing the Makefile at the suite-local folder (the new suite needs the agent too).
+### Bob harbor agent files move to `tests/harbor/agents/` in sibling spec 000069 (epic decision)
+- **Decision**: this plan does not move the Bob harbor agent. Sibling spec 000069_compact-agents-md moves the tracked files from `tests/harbor/implement-epic-workflow/agents/` to `tests/harbor/agents/`, where `Makefile:8,18,24` already looks, in its first milestone.
+- **Rationale**: settled by the user while planning epic 000001_agent-workflow-improvements. 000069's first milestone needs a Bob baseline before anything else lands, so the move belongs there; Bob runs of this plan's suites rely on it.
+- **Rejected**: moving it in this plan's harbor milestone (originally drafted; too late for 000069's baseline); pointing the Makefile at the suite-local folder (every suite needs the agent).
 
 ### Default reviewer models for Codex and Copilot are confirmed at implementation (tasks)
 - **Decision**: Claude `haiku` and omp `@smol` are fixed; the Codex mini model and the cheap Copilot model names are confirmed against current agent docs when the installer task starts, and recorded in a code comment and the docs.
