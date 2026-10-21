@@ -12,6 +12,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/repo"
 	"github.com/hivecommons/spektacular/internal/store"
+	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/hivecommons/spektacular/internal/worktree"
 	"github.com/spf13/cobra"
 )
@@ -152,7 +153,29 @@ func runEpicMerge(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	if err := refuseOpenGoalCheck(cfg.Command, spec); err != nil {
+		return err
+	}
 	return writeMergeResult(cmd, m, spec)
+}
+
+// refuseOpenGoalCheck stops an epic merge while the spec's implement lane is
+// stopped at the goal check: the child has handed a question back that the
+// user has not answered, so the spec's work is not finished. Any other state,
+// including no lane at all, merges as before.
+func refuseOpenGoalCheck(command, spec string) error {
+	dir, err := dataDir()
+	if err != nil {
+		return err
+	}
+	lane, err := workflow.ReadLane(dir, "implement", spec)
+	if err != nil || lane == nil || !lane.InProgress() || lane.CurrentStep != "check_goal" {
+		return err
+	}
+	return output.NewError("goal_check_open",
+		fmt.Sprintf("%s's implement run is stopped at the goal check, waiting for an answer to its open question; its work cannot be merged until the question is answered", spec)).
+		WithResource(spec).
+		WithNextAction(fmt.Sprintf(`answer the spec's open question and resume its run: %s implement new --data '{"name":"%s","orchestrated":true}'; merge it once its run hands back DONE`, command, spec))
 }
 
 // worktreeMergeOutputSchema is what both merge commands, epic merge and

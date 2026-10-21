@@ -281,7 +281,8 @@ func TestImplementEpicSkillDefinesHandBackAndStopping(t *testing.T) {
 	requirePhrases(t, "What counts as a genuine open question", questions,
 		"Only a stop the implement workflow itself defines earns a question: the plan no longer matching the code, "+
 			"the spec or a design it references being wrong, a task outgrowing its scope, "+
-			"or a verification failure the child cannot fix within the task.",
+			"a verification failure the child cannot fix within the task, "+
+			"or the goal check running out of attempts or judging a criterion impossible.",
 		"Everything else the child decides itself and records in the plan's changelog.",
 		"A child never asks whether to continue to its next task.",
 	)
@@ -441,4 +442,14 @@ func TestImplementEpicSkillRetriesAMergeThatWaitedTooLongForTheLock(t *testing.T
 		"On `merge_lock_timeout`, another merge or commit in the project was still running and nothing was merged: run the same merge again.",
 		"Any other refusal from `epic worktree` or `epic merge` is handled the same way as a conflict",
 	)
+}
+
+// Goal-check stops are genuine questions: the orchestrator relays a child's
+// exhausted or impossible goal check to the user, the child prompt says how
+// to hand it back, and a spec with an open goal-check question is not merged.
+func TestImplementEpicSkillTreatsGoalCheckStopsAsGenuineQuestions(t *testing.T) {
+	out := installedImplementEpicSkill(t)
+	require.Contains(t, out, "or the goal check running out of attempts or judging a criterion impossible.")
+	require.Contains(t, out, "If the goal check stops your task, because its attempts ran out or it judged a criterion impossible, hand it back as a `QUESTION:`")
+	require.Contains(t, out, "Never merge a spec while its goal-check question is open: `epic merge` refuses it (`goal_check_open`)")
 }

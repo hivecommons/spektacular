@@ -107,6 +107,8 @@ func TestMigrate_FormatBehindAndSkillsStaleReachesMatch(t *testing.T) {
 	require.Equal(t, "9.9.9", rep.Skills.Installed)
 
 	require.FileExists(t, filepath.Join(dir, ".claude", "skills", "spek-new", "SKILL.md"))
+	require.FileExists(t, filepath.Join(dir, ".claude", "agents", "spek-goal-reviewer.md"),
+		"migrate's reinstall refreshes the goal reviewer helper")
 	cfg := readSettingsMap(t, cfgPath)
 	require.Equal(t, 4, cfg["schema"])
 	require.Equal(t, "0.20.0", cfg["skills_version"])

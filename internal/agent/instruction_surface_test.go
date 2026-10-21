@@ -69,8 +69,8 @@ var retiredPathVariables = regexp.MustCompile(`\{\{[{&#^/]?\s*(spec_path|plan_pa
 
 // instructionTemplateRoots are the embedded template trees that reach an
 // agent: workflow skills, step instructions, the partials they include and
-// the managed AGENTS.md sections.
-var instructionTemplateRoots = []string{"skills/workflows", "steps", "partials", "agents"}
+// the managed AGENTS.md sections, and the installed sub-agent definitions.
+var instructionTemplateRoots = []string{"skills/workflows", "steps", "partials", "agents", "subagents"}
 
 // TestEmbeddedTemplatesAvoidStdinInstructionSurface walks the embedded
 // templates that reach an agent and asserts no markdown file contains a

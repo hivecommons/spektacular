@@ -22,6 +22,9 @@ func (claudeAgent) Install(projectPath string, cfg config.Config, out io.Writer)
 	if err := installWorkflowSkills(projectPath, ".claude/skills", cfg, out); err != nil {
 		return err
 	}
+	if err := installGoalReviewer(projectPath, "claude", cfg, out); err != nil {
+		return err
+	}
 	if err := installStandingRules(projectPath, cfg, out); err != nil {
 		return err
 	}

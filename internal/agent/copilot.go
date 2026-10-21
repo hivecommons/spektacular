@@ -16,6 +16,9 @@ func (copilotAgent) Install(projectPath string, cfg config.Config, out io.Writer
 	if err := installWorkflowSkills(projectPath, ".github/skills", cfg, out); err != nil {
 		return err
 	}
+	if err := installGoalReviewer(projectPath, "copilot", cfg, out); err != nil {
+		return err
+	}
 	return installStandingRules(projectPath, cfg, out)
 }
 
