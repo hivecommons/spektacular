@@ -20,3 +20,5 @@
 - Task 4: legacy fixture internal/agent/testdata/agents-md-legacy.md, built from the pre-change binary's real AGENTS.md (snap-before/claude-empty) plus user blocks (Keep A before, '## Our section' between store-access and memory-context, '## Trailing' at the end). A manual init converts it to 4,324 bytes with the blocks in place. The task is test-only; there is no production code change.
 - Task 4 test: 5 new agent tests + extended omp test; cmd/standing_rules_test.go (3 tests) with cmd/testdata/agents-md-legacy.md copy. Measured: 4,254 bytes (19.6% of baseline); store-access longest line is exactly 100 runes.
 - Task 4 done; Milestone 2 commit on advance.
+- Task 5 (docs): new configuration.mdx section 'Standing rules: AGENTS.md and .spektacular/guidance/' (surface true, after migrate), a migrate bullet, and omp wording in plugins.mdx and getting-started.mdx. The docs repo has no test suite, so the test step had nothing to write; checks are the build guards in verify.
+- Task 5 done; Milestone 3 commit on advance to test_plan.

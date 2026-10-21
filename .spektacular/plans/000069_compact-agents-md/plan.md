@@ -285,7 +285,7 @@ Add tests over real `init` and `migrate` runs in throwaway projects for Claude, 
 
 **Validation point**: The docs site builds and type-checks cleanly, the page-body layout guard finds no layout HTML, no em dashes are introduced, and the rendered pages describe the layout, the guidance folder and the upgrade conversion.
 
-#### - [ ] Task: Document the compact layout on the docs site
+#### - [x] Task: Document the compact layout on the docs site
 **Id:** 3adb6bae-2971-4422-9424-c224f3e527af
 **Repo:** docs
 **Depends on:**
@@ -308,10 +308,10 @@ Add a section to the configuration reference that explains the compact AGENTS.md
 *Technical detail:* [context.md#task-document-the-compact-layout-on-the-docs-site](./context.md#task-document-the-compact-layout-on-the-docs-site)
 
 **Acceptance criteria**:
-- [ ] The configuration page has a section describing the compact layout, the guidance folder and that guidance is read on demand.
-- [ ] The upgrade section says how `migrate` converts an existing project and refreshes guidance without touching the team's own content.
-- [ ] The omp integration and getting-started text describe the omp rules as mirroring the compact sections.
-- [ ] The site builds and type-checks cleanly, the page bodies contain no layout HTML, and the new prose uses no em dashes.
+- [x] The configuration page has a section describing the compact layout, the guidance folder and that guidance is read on demand.
+- [x] The upgrade section says how `migrate` converts an existing project and refreshes guidance without touching the team's own content.
+- [x] The omp integration and getting-started text describe the omp rules as mirroring the compact sections.
+- [x] The site builds and type-checks cleanly, the page bodies contain no layout HTML, and the new prose uses no em dashes.
 
 ## Open Questions
 
@@ -476,3 +476,24 @@ No other questions remain open. Everything else was resolved in planning and rec
 - Every agent's installed AGENTS.md now measures 4,254 bytes, 19.6% of the old 21,722 (an 80.4% reduction).
 - Body lines per rule: repo-sources 10, store-access 6, and the rest 3 to 5.
 - One store-access line is exactly 100 runes, so any rewording there will trip the line-length test.
+
+### 2026-10-21 — Task: Document the compact layout on the docs site
+
+**What was done**:
+- The configuration reference gains a section, "Standing rules: AGENTS.md and .spektacular/guidance/", placed after the migrate section with `surface={true}`. It covers:
+  - what each short statement holds;
+  - the guidance folder tree;
+  - that agents read guidance on demand and it is never imported up front;
+  - that the files are regenerated, so they should not be edited;
+  - how each agent reads `AGENTS.md`.
+- The migrate section's "One run:" list gains a bullet: migrate converts the standing rules to their short form, installs or refreshes the guidance, and leaves the team's own `AGENTS.md` content in place.
+- The omp text in `plugins.mdx` and `getting-started.mdx` now says the omp rules mirror the short sections and link to the guidance.
+
+**Deviations**: The docs repo has no test suite, so the test step wrote no tests. The build guards stood in during verify: `npm run build`, `npx astro check`, the layout-HTML grep and an em-dash check, all clean.
+
+**Files changed**:
+- `docs: src/pages/configuration.mdx`
+- `docs: src/pages/plugins.mdx`
+- `docs: src/content/tutorials/getting-started.mdx`
+
+**Discoveries**: The docs worktree starts without `node_modules`. Run `npm ci` inside it before the build guards.
