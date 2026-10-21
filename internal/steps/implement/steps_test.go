@@ -97,6 +97,7 @@ func TestStepsOrderMatchesExpected(t *testing.T) {
 		"implement",
 		"test",
 		"verify",
+		"check_goal",
 		"update_plan",
 		"update_changelog",
 		"test_plan",
@@ -156,10 +157,10 @@ func TestFSMWalkFromNewToFinished(t *testing.T) {
 	require.Equal(t, "start", wf.Current())
 
 	// new auto-advances to read_plan, so the first Next lands on read_plan.
-	// Walk forward with Next() up through update_changelog. Then use explicit
-	// Goto() to disambiguate the multi-source exit (update_changelog has two
-	// legal successors — analyze via the loop, and test_plan — so Next()
-	// cannot pick one deterministically).
+	// Walk forward with explicit Goto() up through update_changelog: verify
+	// has two legal successors (check_goal, and update_plan when the goal
+	// check is off) and update_changelog two more (analyze via the loop, and
+	// test_plan), so Next() cannot pick one deterministically.
 	linear := []string{
 		"read_plan",
 		"analyze",
@@ -170,7 +171,7 @@ func TestFSMWalkFromNewToFinished(t *testing.T) {
 		"update_changelog",
 	}
 	for _, want := range linear {
-		require.NoError(t, wf.Next(), "transition to %s failed", want)
+		require.NoError(t, advance(wf, want), "transition to %s failed", want)
 		require.Equal(t, want, wf.Current(), "expected state %s after transition", want)
 	}
 
@@ -197,8 +198,8 @@ func TestFSMHasNoUpdateRepoChangelogStep(t *testing.T) {
 	tmp := t.TempDir()
 	wf := workflow.New(Steps(), filepath.Join(tmp, "state.json"), workflow.Config{Command: "spektacular", DryRun: true}, store.NewFileStore(tmp, "project"), &captureWriter{})
 	wf.SetData("name", "test")
-	for range []string{"read_plan", "analyze", "implement", "test", "verify", "update_plan", "update_changelog"} {
-		require.NoError(t, wf.Next())
+	for _, step := range []string{"read_plan", "analyze", "implement", "test", "verify", "update_plan", "update_changelog"} {
+		require.NoError(t, advance(wf, step))
 	}
 	require.Error(t, wf.Goto("update_repo_changelog"))
 	require.NoError(t, wf.Goto("test_plan"))
@@ -216,7 +217,7 @@ func TestFSMLoopFromUpdateChangelogBackToAnalyze(t *testing.T) {
 
 	// Walk through to update_changelog the first time.
 	for _, want := range []string{"read_plan", "analyze", "implement", "test", "verify", "update_plan", "update_changelog"} {
-		require.NoError(t, wf.Next())
+		require.NoError(t, advance(wf, want))
 		require.Equal(t, want, wf.Current())
 	}
 
@@ -226,7 +227,7 @@ func TestFSMLoopFromUpdateChangelogBackToAnalyze(t *testing.T) {
 
 	// Walk forward again to update_changelog.
 	for _, want := range []string{"implement", "test", "verify", "update_plan", "update_changelog"} {
-		require.NoError(t, wf.Next())
+		require.NoError(t, advance(wf, want))
 		require.Equal(t, want, wf.Current())
 	}
 
@@ -441,6 +442,7 @@ func TestStopOnMismatchDirectivePresentInEveryNonTerminalTemplate(t *testing.T) 
 		"implement":                implementStep(),
 		"test":                     testStep(),
 		"verify":                   verify(),
+		"check_goal":               checkGoalOn(),
 		"update_plan":              updatePlan(),
 		"update_changelog":         updateChangelog(),
 		"test_plan":                testPlan(),
@@ -594,6 +596,7 @@ func TestNoImplementTemplateMentionsRootChangelogFile(t *testing.T) {
 		"implement":                implementStep(),
 		"test":                     testStep(),
 		"verify":                   verify(),
+		"check_goal":               checkGoalOn(),
 		"update_plan":              updatePlan(),
 		"update_changelog":         updateChangelog(),
 		"test_plan":                testPlan(),
@@ -747,10 +750,31 @@ func repoListSteps() map[string]workflow.StepCallback {
 // each carry their own "Where the code lives" section.
 func subAgentCodeSteps() map[string]workflow.StepCallback {
 	return map[string]workflow.StepCallback{
-		"analyze":   analyze(),
-		"implement": implementStep(),
-		"test":      testStep(),
-		"verify":    verify(),
+		"analyze":    analyze(),
+		"implement":  implementStep(),
+		"test":       testStep(),
+		"verify":     verify(),
+		"check_goal": checkGoalOn(),
+	}
+}
+
+// advance moves wf to step: through new's auto-advance from the start, and by
+// an explicit Goto everywhere else, since several steps have more than one
+// legal successor.
+func advance(wf *workflow.Workflow, step string) error {
+	if wf.Current() == "start" {
+		return wf.Next()
+	}
+	return wf.Goto(step)
+}
+
+// checkGoalOn is the check_goal callback run with the goal check switched
+// on, as every render of it is: with the check off the step refuses.
+func checkGoalOn() workflow.StepCallback {
+	cb := checkGoal()
+	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
+		cfg.GoalCheck = true
+		return cb(data, out, st, cfg)
 	}
 }
 
@@ -1107,10 +1131,11 @@ const specConflictHeading = "### If the spec or a design is wrong"
 // stop, keyed by step name.
 func specConflictSteps() map[string]workflow.StepCallback {
 	return map[string]workflow.StepCallback{
-		"analyze":   analyze(),
-		"implement": implementStep(),
-		"test":      testStep(),
-		"verify":    verify(),
+		"analyze":    analyze(),
+		"implement":  implementStep(),
+		"test":       testStep(),
+		"verify":     verify(),
+		"check_goal": checkGoalOn(),
 	}
 }
 

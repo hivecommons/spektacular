@@ -204,7 +204,7 @@ func runImplementNew(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode(), CodeRoots: codeRoots}
+	wfCfg := implementWorkflowConfig(cfg, dryRun, codeRoots)
 	steps := implement.Steps()
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, projectStore, out)
@@ -308,7 +308,7 @@ func runImplementGoto(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "implement", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, ChangelogDir: cfg.Changelog.Config.Directory, AutoCommit: cfg.AutoCommitMode(), CodeRoots: codeRoots}
+	wfCfg := implementWorkflowConfig(cfg, dryRun, codeRoots)
 	return gotoWithAutoCommit(cmd, cfg, root, slot.StatePath, "implement",
 		implement.Steps(), wfCfg, input, stepVal, "no active implement workflow found — run 'implement new' first")
 }
@@ -555,4 +555,32 @@ func init() {
 	implementGotoCmd.Flags().String("file", "", "Read a file at <path> (relative to cwd) and store its contents under the filename's basename (without extension)")
 
 	implementCmd.AddCommand(implementNewCmd, implementGotoCmd, implementStepsCmd)
+}
+
+// implementWorkflowConfig is the runtime workflow config every implement
+// invocation runs with, new and goto alike: the project's store directories
+// and auto-commit mode, the spec's worktree code roots, and whether the goal
+// check is switched on.
+func implementWorkflowConfig(cfg config.Config, dryRun bool, codeRoots []workflow.CodeRoot) workflow.Config {
+	return workflow.Config{
+		Command:      cfg.Command,
+		Kind:         "implement",
+		DryRun:       dryRun,
+		SpecDir:      cfg.Spec.Config.Directory,
+		PlanDir:      cfg.Plan.Config.Directory,
+		ChangelogDir: cfg.Changelog.Config.Directory,
+		AutoCommit:   cfg.AutoCommitMode(),
+		CodeRoots:    codeRoots,
+		GoalCheck:    cfg.Implement.GoalCheck.Enabled,
+		Repos:        repoNames(cfg),
+	}
+}
+
+// repoNames are the registered repo names, in registry order.
+func repoNames(cfg config.Config) []string {
+	names := make([]string, 0, len(cfg.Repos))
+	for _, r := range cfg.Repos {
+		names = append(names, r.Name)
+	}
+	return names
 }

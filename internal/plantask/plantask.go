@@ -8,7 +8,7 @@
 //
 // Plans written before the task format describe their work as
 // "#### - [ ] Phase N.M:" headings under "## Milestones & Phases". Those parse
-// as FormatLegacy: they carry milestone completion but no tasks.
+// as FormatLegacy: they carry milestone completion and Phases, but no tasks.
 package plantask
 
 import (
@@ -47,6 +47,10 @@ type Plan struct {
 	Format     Format
 	Milestones []Milestone // in plan order
 	Tasks      []Task      // in plan order, across milestones
+	// Phases are the "#### - [ ] Phase N.M:" blocks of a plan written before
+	// tasks, in plan order. A task-format plan that still carries phase
+	// headings lists them too, but its work items are its Tasks.
+	Phases []Phase
 
 	// openPhases counts unticked legacy phase headings in the section,
 	// whether or not a milestone heading precedes them.
@@ -70,10 +74,33 @@ type Execution struct {
 	Reason string `json:"reason"` // set for human tasks
 }
 
-// Criteria counts a task's acceptance-criteria checkboxes.
+// Criteria counts a task's acceptance-criteria checkboxes. Items holds each
+// criterion's text in plan order; it is never serialised, so every JSON
+// surface that reports Criteria keeps its {met,total} shape.
 type Criteria struct {
-	Met   int `json:"met"`
-	Total int `json:"total"`
+	Met   int         `json:"met"`
+	Total int         `json:"total"`
+	Items []Criterion `json:"-"`
+}
+
+// Criterion is one acceptance-criterion checkbox: the text after its "- [ ] "
+// or "- [x] " box, trimmed, with any indented continuation lines joined on with
+// a space, and whether its box is ticked.
+type Criterion struct {
+	Text string
+	Met  bool
+}
+
+// Phase is one "#### - [ ] Phase N.M: <title>" block of a plan written before
+// tasks. Its Label ("Phase N.M") is what addresses it, since such a plan has no
+// task ids.
+type Phase struct {
+	Label     string // "Phase N.M"
+	Title     string
+	Milestone int
+	Repo      string // its "**Repo:**" line when it names exactly one repo
+	Completed bool
+	Criteria  Criteria
 }
 
 // Task is one unit of work read from a "#### - [ ] Task:" block.
@@ -101,13 +128,15 @@ var (
 	milestoneHeading = regexp.MustCompile(`^###\s+Milestone\s+(\d+)\s*:\s*(.*)$`)
 	taskHeading      = regexp.MustCompile(`^####\s+-\s+\[([ xX])\]\s+Task:\s*(.+?)\s*$`)
 	legacyHeading    = regexp.MustCompile(`^####\s+-\s+\[([ xX])\]\s+Phase\b`)
-	idLine           = regexp.MustCompile(`^\*\*Id:\*\*\s*(.*)$`)
-	repoLine         = regexp.MustCompile(`^\*\*Repo:\*\*\s*(.*)$`)
-	dependsLine      = regexp.MustCompile(`^\*\*Depends on:\*\*\s*(.*)$`)
-	executionLine    = regexp.MustCompile(`^\*\*Execution:\*\*\s*(.*)$`)
-	criteriaMarker   = regexp.MustCompile(`^\*\*Acceptance criteria:?\*\*:?`)
-	criterionBox     = regexp.MustCompile(`^\s*-\s+\[([ xX])\]`)
-	listItem         = regexp.MustCompile(`^\s*-\s+(.*)$`)
+	// legacyDetail captures a phase heading's number and title.
+	legacyDetail   = regexp.MustCompile(`^####\s+-\s+\[[ xX]\]\s+Phase\s+([0-9][0-9.]*[0-9]|[0-9])?\s*:?\s*(.*?)\s*$`)
+	idLine         = regexp.MustCompile(`^\*\*Id:\*\*\s*(.*)$`)
+	repoLine       = regexp.MustCompile(`^\*\*Repo:\*\*\s*(.*)$`)
+	dependsLine    = regexp.MustCompile(`^\*\*Depends on:\*\*\s*(.*)$`)
+	executionLine  = regexp.MustCompile(`^\*\*Execution:\*\*\s*(.*)$`)
+	criteriaMarker = regexp.MustCompile(`^\*\*Acceptance criteria:?\*\*:?`)
+	criterionBox   = regexp.MustCompile(`^\s*-\s+\[([ xX])\]`)
+	listItem       = regexp.MustCompile(`^\s*-\s+(.*)$`)
 	// separator splits "<id> — <title>" and "human — <reason>". The em dash is
 	// the format's separator; "-", "--" and ":" are accepted as hand-typed
 	// stand-ins.
@@ -128,13 +157,13 @@ func Parse(markdown []byte) Plan {
 	inSection := false
 	milestone := -1 // index into p.Milestones, -1 before the first
 	task := -1      // index into p.Tasks of the open task block, -1 outside one
-	inCriteria := false
-	inDepends := false
+	phase := -1     // index into p.Phases of the open phase block, -1 outside one
+	var st blockState
 
 	closeBlock := func() {
 		task = -1
-		inCriteria = false
-		inDepends = false
+		phase = -1
+		st = blockState{}
 	}
 
 	for raw := range strings.SplitSeq(string(markdown), "\n") {
@@ -191,13 +220,21 @@ func Parse(markdown []byte) Plan {
 			if m[1] == " " {
 				p.openPhases++
 			}
+			ph := Phase{Completed: m[1] != " "}
+			if d := legacyDetail.FindStringSubmatch(line); d != nil {
+				ph.Label = strings.TrimSpace("Phase " + d[1])
+				ph.Title = d[2]
+			}
 			if milestone >= 0 {
 				ms := &p.Milestones[milestone]
+				ph.Milestone = ms.Number
 				ms.Items++
 				if m[1] == " " {
 					ms.Open++
 				}
 			}
+			p.Phases = append(p.Phases, ph)
+			phase = len(p.Phases) - 1
 			continue
 		}
 		if strings.HasPrefix(line, "#### ") {
@@ -205,10 +242,12 @@ func Parse(markdown []byte) Plan {
 			continue
 		}
 
-		if task < 0 {
-			continue
+		switch {
+		case task >= 0:
+			readTaskLine(&p.Tasks[task], line, &st)
+		case phase >= 0:
+			readPhaseLine(&p.Phases[phase], line, &st)
 		}
-		readTaskLine(&p.Tasks[task], line, &inDepends, &inCriteria)
 	}
 
 	switch {
@@ -220,25 +259,29 @@ func Parse(markdown []byte) Plan {
 	return p
 }
 
+// blockState is what the reader carries between the lines of one task or
+// phase block.
+type blockState struct {
+	inDepends  bool // inside a "**Depends on:**" list
+	inCriteria bool // past the "**Acceptance criteria**:" marker
+	// continues says an indented line continues the last criterion's text.
+	continues bool
+}
+
 // readTaskLine folds one line inside a task block into t.
-func readTaskLine(t *Task, line string, inDepends, inCriteria *bool) {
-	if *inDepends {
+func readTaskLine(t *Task, line string, st *blockState) {
+	if st.inDepends {
 		if m := listItem.FindStringSubmatch(line); m != nil && !criterionBox.MatchString(line) {
 			if id := firstToken(m[1]); id != "" {
 				t.DependsOn = append(t.DependsOn, id)
 			}
 			return
 		}
-		*inDepends = false
+		st.inDepends = false
 	}
 
-	if *inCriteria {
-		if m := criterionBox.FindStringSubmatch(line); m != nil {
-			t.Criteria.Total++
-			if m[1] != " " {
-				t.Criteria.Met++
-			}
-		}
+	if st.inCriteria {
+		readCriterionLine(&t.Criteria, line, st)
 		return
 	}
 
@@ -265,14 +308,56 @@ func readTaskLine(t *Task, line string, inDepends, inCriteria *bool) {
 				}
 			}
 		default:
-			*inDepends = true
+			st.inDepends = true
 		}
 	case executionLine.MatchString(line):
 		t.hasExec = true
 		t.Execution = parseExecution(executionLine.FindStringSubmatch(line)[1])
 	case criteriaMarker.MatchString(line):
-		*inCriteria = true
+		st.inCriteria = true
 	}
+}
+
+// readPhaseLine folds one line inside a legacy phase block into ph: its
+// "**Repo:**" line and its acceptance criteria.
+func readPhaseLine(ph *Phase, line string, st *blockState) {
+	if st.inCriteria {
+		readCriterionLine(&ph.Criteria, line, st)
+		return
+	}
+	switch {
+	case repoLine.MatchString(line):
+		if repos := splitRepos(repoLine.FindStringSubmatch(line)[1]); len(repos) == 1 {
+			ph.Repo = repos[0]
+		}
+	case criteriaMarker.MatchString(line):
+		st.inCriteria = true
+	}
+}
+
+// readCriterionLine folds one line of an acceptance-criteria block into c: a
+// checkbox opens a criterion, and an indented line straight after it (the
+// detail line of a spec-style criterion) continues its text.
+func readCriterionLine(c *Criteria, line string, st *blockState) {
+	if m := criterionBox.FindStringSubmatch(line); m != nil {
+		met := m[1] != " "
+		c.Total++
+		if met {
+			c.Met++
+		}
+		text := strings.TrimSpace(line[len(m[0]):])
+		c.Items = append(c.Items, Criterion{Text: text, Met: met})
+		st.continues = true
+		return
+	}
+	trimmed := strings.TrimSpace(line)
+	indented := line != "" && (line[0] == ' ' || line[0] == '\t')
+	if st.continues && indented && trimmed != "" && !listItem.MatchString(line) && len(c.Items) > 0 {
+		last := &c.Items[len(c.Items)-1]
+		last.Text = strings.TrimSpace(last.Text + " " + trimmed)
+		return
+	}
+	st.continues = false
 }
 
 // parseExecution splits "human — <reason>" into its type and reason. The type
@@ -319,6 +404,28 @@ func (p Plan) Task(id string) (Task, bool) {
 		}
 	}
 	return Task{}, false
+}
+
+// Phase returns the legacy phase with the given label ("Phase N.M").
+func (p Plan) Phase(label string) (Phase, bool) {
+	for _, ph := range p.Phases {
+		if ph.Label != "" && ph.Label == label {
+			return ph, true
+		}
+	}
+	return Phase{}, false
+}
+
+// OpenPhases returns the legacy phases whose heading checkbox is not ticked,
+// in plan order.
+func (p Plan) OpenPhases() []Phase {
+	var open []Phase
+	for _, ph := range p.Phases {
+		if !ph.Completed {
+			open = append(open, ph)
+		}
+	}
+	return open
 }
 
 // OpenTasks returns the tasks whose heading checkbox is not ticked, in plan

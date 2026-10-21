@@ -13,6 +13,18 @@ Do not rely on an earlier step's output still being in your context. Read the ta
 
 If the section is missing, unreadable, or empty, STOP and ask the user whether to fix the plan's `context.md` before proceeding. This is a plan/reality mismatch — do not guess.
 
+{{#goal_retry}}
+### The goal check sent this task back
+
+The goal check judged these criteria not yet met (round {{round}}, attempt {{attempt}}). Fix exactly these, using the reviewer's evidence, and change nothing that belongs to another task:
+
+{{#criteria}}
+- Criterion {{n}} ({{verdict}}): {{{text}}}. Reviewer's evidence: {{{evidence}}}
+{{/criteria}}
+
+The task then runs through `test`, `verify` and the goal check again.
+
+{{/goal_retry}}
 {{> partials/implement-code-locations}}
 
 ### Step 2: Write the code

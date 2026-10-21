@@ -307,6 +307,7 @@ func TestImplementGoto_UpdateFeatureChangelogInstructsChangelogWrite(t *testing.
 		"implement",
 		"test",
 		"verify",
+		"check_goal",
 		"update_plan",
 		"update_changelog",
 		"test_plan",
@@ -317,6 +318,9 @@ func TestImplementGoto_UpdateFeatureChangelogInstructsChangelogWrite(t *testing.
 		stdout, _ = setupImplementCmd(t)
 		rootCmd.SetArgs([]string{"implement", "goto", "--data", `{"step":"` + step + `"}`})
 		require.NoError(t, rootCmd.Execute())
+		if step == "check_goal" {
+			passGoalCheck(t, "fixture")
+		}
 	}
 
 	var result map[string]any
@@ -342,7 +346,7 @@ func TestImplementSteps_ListsAllSteps(t *testing.T) {
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &result))
 	steps := result["steps"].([]any)
-	require.Len(t, steps, 12)
+	require.Len(t, steps, 13)
 	expected := []string{
 		"new",
 		"read_plan",
@@ -350,6 +354,7 @@ func TestImplementSteps_ListsAllSteps(t *testing.T) {
 		"implement",
 		"test",
 		"verify",
+		"check_goal",
 		"update_plan",
 		"update_changelog",
 		"test_plan",

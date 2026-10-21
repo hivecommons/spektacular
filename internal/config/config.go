@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/hivecommons/spektacular/internal/output"
@@ -158,8 +160,56 @@ type EpicConfig struct {
 // the project turns it off, including in a config written before the key
 // existed, since configs are parsed over NewDefault. Epic runs always use
 // worktrees, whatever it says.
+//
+// GoalCheck is the implement.goal_check subsection. Like worktrees it needs no
+// settings-format bump or migration step: a config written before the key
+// existed parses over NewDefault and so gets the check switched on.
 type ImplementConfig struct {
-	Worktrees bool `yaml:"worktrees"`
+	Worktrees bool            `yaml:"worktrees"`
+	GoalCheck GoalCheckConfig `yaml:"goal_check"`
+}
+
+// GoalCheckConfig configures the implement workflow's goal check, in which a
+// separate read-only reviewer judges each task's acceptance criteria before
+// any is ticked. Enabled is on unless the project switches it off, including
+// in a config written before the key existed, since configs are parsed over
+// NewDefault. Models maps a coding agent's name to the model its installed
+// reviewer runs on; an agent absent from it keeps its default reviewer model.
+type GoalCheckConfig struct {
+	Enabled bool              `yaml:"enabled"`
+	Models  map[string]string `yaml:"models,omitempty"`
+}
+
+// SupportedAgentNames are the coding agents Spektacular installs for, the
+// valid keys of implement.goal_check.models. It mirrors agent.Supported(),
+// which this package cannot import; a test in internal/agent pins the two
+// equal.
+var SupportedAgentNames = []string{"bob", "claude", "codex", "copilot", "omp"}
+
+// Validate checks the goal-check models map names only supported agents and
+// gives each a model.
+func (g GoalCheckConfig) Validate() error {
+	names := make([]string, 0, len(g.Models))
+	for name := range g.Models {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	valid := strings.Join(SupportedAgentNames, ", ")
+	for _, name := range names {
+		if !slices.Contains(SupportedAgentNames, name) {
+			return output.NewError("config_invalid",
+				fmt.Sprintf("implement.goal_check.models names %q, which is not a supported agent; valid agents are %s", name, valid)).
+				WithResource("implement.goal_check.models").
+				WithNextAction(fmt.Sprintf("rename implement.goal_check.models.%s in .spektacular/config.yaml to one of %s, or remove it", name, valid))
+		}
+		if strings.TrimSpace(g.Models[name]) == "" {
+			return output.NewError("config_invalid",
+				fmt.Sprintf("implement.goal_check.models.%s has no model", name)).
+				WithResource("implement.goal_check.models").
+				WithNextAction(fmt.Sprintf("set implement.goal_check.models.%s in .spektacular/config.yaml to a model name, or remove it to use %s's default reviewer model", name, name))
+		}
+	}
+	return nil
 }
 
 // FileEpicConfig is the file-provider configuration for the epic section.
@@ -393,7 +443,7 @@ func NewDefault() Config {
 				Directory: filepath.Join(ProjectConfigDirName, DefaultChangelogDir),
 			},
 		},
-		Implement: ImplementConfig{Worktrees: true},
+		Implement: ImplementConfig{Worktrees: true, GoalCheck: GoalCheckConfig{Enabled: true}},
 		Epic: EpicConfig{
 			Provider: ProviderFile,
 			Config: FileEpicConfig{
@@ -673,6 +723,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := c.Epic.Validate(); err != nil {
+		return err
+	}
+	if err := c.Implement.GoalCheck.Validate(); err != nil {
 		return err
 	}
 	// Only the project's store directories are bound to the project root; a

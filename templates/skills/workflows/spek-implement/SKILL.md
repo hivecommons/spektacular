@@ -12,7 +12,7 @@ description: Implement an approved Spec by executing its Plan.
 
 This skill drives a **multi-step interactive workflow** that implements a spec by executing its approved plan held in the plan store, producing working code, tests, and a changelog. The workflow is owned by the `{{command}}` CLI, not by you — the CLI is the state machine and you are the executor, and the CLI (not the filesystem) is how you reach every plan document.
 
-On each turn, the CLI returns JSON containing an `instruction` field. That instruction describes exactly one step (e.g. analyze, implement a task, verify, update changelog, write the test plan, …). You must:
+On each turn, the CLI returns JSON containing an `instruction` field. That instruction describes exactly one step (e.g. analyze, implement a task, verify, check the task's goal, update changelog, write the test plan, …). You must:
 
 1. Read the `instruction` carefully.
 2. Perform the step — this may mean reading the plan, spawning subagents, editing code, running tests, or writing to the changelog.

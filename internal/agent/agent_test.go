@@ -291,3 +291,10 @@ func validateSkillFrontmatter(t *testing.T, path string) {
 
 	require.NotEmpty(t, fm.Description, "skill description in %s must be non-empty", path)
 }
+
+// config.SupportedAgentNames is the list implement.goal_check.models is
+// validated against; config cannot import this package, so this pins the copy
+// to the registry.
+func TestSupportedAgentNamesMatchConfig(t *testing.T) {
+	require.ElementsMatch(t, Supported(), config.SupportedAgentNames)
+}

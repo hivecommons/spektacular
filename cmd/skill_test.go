@@ -109,3 +109,22 @@ func TestSkillSpawnPlanningAgents_FansResearchOutPerRepo(t *testing.T) {
 	require.Contains(t, instructions, "description, role, and tags",
 		"repo metadata must scope which repos a research question is relevant to")
 }
+
+// The goal reviewer's brief is served as a library skill, with its shared
+// partial rendered in, and listed with the other skills.
+func TestSkillReviewTaskGoal_ServesTheReviewerBrief(t *testing.T) {
+	skillProject(t)
+	instructions := fetchSkillInstructions(t, "review-task-goal")
+	require.Contains(t, instructions, "# Review Task Goal")
+	require.Contains(t, instructions, "## You are read-only")
+	require.Contains(t, instructions, `{"verdicts":[`)
+	require.NotContains(t, instructions, "{{", "the partial is rendered, not served raw")
+
+	stdout, _, code := runRootCmd(t, "skill", "list")
+	require.Equal(t, 0, code)
+	var listed struct {
+		Skills []string `json:"skills"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &listed))
+	require.Contains(t, listed.Skills, "review-task-goal")
+}
