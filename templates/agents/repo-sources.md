@@ -1,8 +1,9 @@
-## Where the Code Lives — Read This First
+# Where the Code Lives — Read This First
 
-> Managed by `{{command}} init` — edit `templates/agents/repo-sources.md`
-> in the Spektacular source, not this section in place. Hand edits will not
-> survive the next init.
+> Managed by `{{command}} init` and refreshed by `{{command}} migrate` — edit
+> `templates/agents/repo-sources.md` in the Spektacular source, not this file in
+> place. Hand edits will not survive the next init. Agents read this file
+> when its rule's short section in `AGENTS.md` sends them here, and never edit it.
 
 **STOP. The directory you are running in is not necessarily the code.**
 

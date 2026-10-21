@@ -17,5 +17,5 @@ const (
 // re-running for the same projectPath leaves a single section and does not
 // duplicate.
 func installSpecTriggerSection(projectPath string, cfg config.Config, out io.Writer) error {
-	return installManagedSection(projectPath, cfg, out, specTriggerTemplatePath, specTriggerHeading, "Spec-Worthy Discussion Recognition section")
+	return installStandingRule(projectPath, cfg, out, "spec-trigger")
 }

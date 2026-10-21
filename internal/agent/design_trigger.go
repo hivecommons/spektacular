@@ -16,5 +16,5 @@ const (
 // rendering the embedded template against cfg.Command. Idempotent: re-running
 // for the same projectPath leaves a single section and does not duplicate.
 func installDesignTriggerSection(projectPath string, cfg config.Config, out io.Writer) error {
-	return installManagedSection(projectPath, cfg, out, designTriggerTemplatePath, designTriggerHeading, "Design-Worthy Detail Recognition section")
+	return installStandingRule(projectPath, cfg, out, "design-trigger")
 }

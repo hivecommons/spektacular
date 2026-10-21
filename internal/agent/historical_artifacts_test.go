@@ -20,12 +20,23 @@ import (
 func fixtureHistoricalArtifactsFS() fs.FS {
 	return fstest.MapFS{
 		historicalArtifactsTemplatePath: &fstest.MapFile{
+			Data: []byte("# Historical Artifacts: Specs and Plans as Archaeology\n\nFull guidance: route through {{command}} plan file read.\n"),
+		},
+		historicalArtifactsShortTemplatePath: &fstest.MapFile{
 			Data: []byte("## Historical Artifacts: Specs and Plans as Archaeology\n\nRoute reads through {{command}} plan file read.\n"),
 		},
 	}
 }
 
 const fixtureHistoricalArtifactsRenderedDefault = "## Historical Artifacts: Specs and Plans as Archaeology\n\nRoute reads through go run . plan file read.\n"
+
+// historicalArtifactsShortTemplatePath is the embedded path of the rule's short
+// AGENTS.md section, hand-written here rather than taken from the standing-rule table.
+const historicalArtifactsShortTemplatePath = "agents/short/historical-artifacts.md"
+
+// fixtureHistoricalArtifactsGuidanceDefault is the fixture's full guidance rendered
+// for cfg.Command = "go run .": it lands in .spektacular/guidance/historical-artifacts.md, not in AGENTS.md.
+const fixtureHistoricalArtifactsGuidanceDefault = "# Historical Artifacts: Specs and Plans as Archaeology\n\nFull guidance: route through go run . plan file read.\n"
 
 func TestInstallHistoricalArtifactsSection_CreatesFromMissing(t *testing.T) {
 	withSourceFS(t, fixtureHistoricalArtifactsFS())
@@ -37,6 +48,8 @@ func TestInstallHistoricalArtifactsSection_CreatesFromMissing(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
 	require.Equal(t, fixtureHistoricalArtifactsRenderedDefault, string(got))
+	require.Equal(t, fixtureHistoricalArtifactsGuidanceDefault, readGuidanceFile(t, tmp, "historical-artifacts"),
+		"the full guidance lands in its own guidance file, not in AGENTS.md")
 }
 
 func TestInstallHistoricalArtifactsSection_AppendsAfterTesslBlock(t *testing.T) {
@@ -125,6 +138,8 @@ func TestInstallHistoricalArtifactsSection_PicksUpTemplateChange(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
 	require.Equal(t, want, string(got))
+	require.Equal(t, "# Historical Artifacts: Specs and Plans as Archaeology\n\nFull guidance: route through spektacular plan file read.\n", readGuidanceFile(t, tmp, "historical-artifacts"),
+		"the guidance file is re-rendered with the new command")
 }
 
 func TestInstallHistoricalArtifactsSection_CrossAgentIdempotency(t *testing.T) {

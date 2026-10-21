@@ -348,9 +348,10 @@ func TestNextCommandsCarryPrefix(t *testing.T) {
 const oldWorkingContextPath = ".spektacular/context.md"
 
 // agentFacingCorpus extends workflowInstructionCorpus with the rest of the
-// text an agent reads: the managed AGENTS.md sections the claude install
-// writes and every helper skill served through the skill command. It chdirs
-// into a fresh skill project fixture, so callers must not run in parallel.
+// text an agent reads: the managed AGENTS.md sections and standing-rule
+// guidance files the claude install writes and every helper skill served
+// through the skill command. It chdirs into a fresh skill project fixture, so
+// callers must not run in parallel.
 func agentFacingCorpus(t *testing.T, command string) []instructionSource {
 	t.Helper()
 	corpus, _, _ := agentFacingCorpusWithRoots(t, command)
@@ -367,6 +368,17 @@ func agentFacingCorpusWithRoots(t *testing.T, command string) (corpus []instruct
 	agentsMD, err := os.ReadFile(filepath.Join(installDir, "AGENTS.md"))
 	require.NoError(t, err, "the claude install must write the managed AGENTS.md sections")
 	corpus = append(corpus, instructionSource{"AGENTS.md (managed sections)", string(agentsMD)})
+
+	// The short sections link to each standing rule's full guidance, which an
+	// agent reads on demand: keep that text under the same guards.
+	guidanceFiles, err := filepath.Glob(filepath.Join(installDir, ".spektacular", "guidance", "*.md"))
+	require.NoError(t, err)
+	require.Len(t, guidanceFiles, 8, "the claude install must write one guidance file per standing rule")
+	for _, path := range guidanceFiles {
+		body, err := os.ReadFile(path)
+		require.NoError(t, err)
+		corpus = append(corpus, instructionSource{"guidance " + filepath.Base(path), string(body)})
+	}
 
 	skillProject(t)
 	projectDir, err = os.Getwd()

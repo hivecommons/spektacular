@@ -10,14 +10,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// draftPresentationRenderedDefault is the real templates/agents/draft-presentation.md
-// content with {{command}} rendered by hand for cfg.Command = "go run .". Kept
-// byte-accurate with the source template rather than computed via mustache.Render.
+// draftPresentationRenderedDefault is the real
+// templates/agents/short/draft-presentation.md content with {{command}} and
+// {{guidance_path}} rendered by hand for cfg.Command = "go run .": the short
+// section AGENTS.md carries. Kept byte-accurate with the source template rather
+// than computed via mustache.Render.
 const draftPresentationRenderedDefault = "## Presenting Drafts and Confirmations\n" +
 	"\n" +
-	"> Managed by `go run . init` — edit `templates/agents/draft-presentation.md`\n" +
-	"> in the Spektacular source, not this section in place. Hand edits will not\n" +
-	"> survive the next init.\n" +
+	"Always show a draft in full as plain chat text first; never put the draft itself inside a yes/no\n" +
+	"or multiple-choice dialog. A short confirmation question may follow it.\n" +
+	"Managed by `go run . init`; full guidance: [.spektacular/guidance/draft-presentation.md](.spektacular/guidance/draft-presentation.md).\n"
+
+// draftPresentationGuidanceRenderedDefault is the real
+// templates/agents/draft-presentation.md content with {{command}} rendered by
+// hand for cfg.Command = "go run .": the full guidance written to
+// .spektacular/guidance/draft-presentation.md. Kept byte-accurate with the
+// source template rather than computed via mustache.Render.
+const draftPresentationGuidanceRenderedDefault = "# Presenting Drafts and Confirmations\n" +
+	"\n" +
+	"> Managed by `go run . init` and refreshed by `go run . migrate` — edit\n" +
+	"> `templates/agents/draft-presentation.md` in the Spektacular source, not this file in\n" +
+	"> place. Hand edits will not survive the next init. Agents read this file\n" +
+	"> when its rule's short section in `AGENTS.md` sends them here, and never edit it.\n" +
 	"\n" +
 	"When you have drafted substantial content for the user to review — an architecture write-up, a set of options, a written section, a summary, a plan or spec excerpt — always present that draft as normal, readable chat text first, in full. Never embed the draft itself inside a structured yes/no or multiple-choice dialog element: that kind of UI truncates or compresses long text, making it hard for the user to actually read what you're proposing.\n" +
 	"\n" +
@@ -34,6 +48,7 @@ func TestInstallDraftPresentationSection_CreatesFromMissing(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
 	require.Equal(t, draftPresentationRenderedDefault, string(got))
+	require.Equal(t, draftPresentationGuidanceRenderedDefault, readGuidanceFile(t, tmp, "draft-presentation"))
 }
 
 func TestInstallDraftPresentationSection_AppendsAfterTesslBlock(t *testing.T) {
@@ -114,6 +129,10 @@ func TestInstallDraftPresentationSection_PicksUpTemplateChange(t *testing.T) {
 
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
-	require.Contains(t, string(got), "> Managed by `spektacular init`")
+	require.Contains(t, string(got), "Managed by `spektacular init`; full guidance:")
 	require.NotContains(t, string(got), "go run . init")
+
+	guidance := readGuidanceFile(t, tmp, "draft-presentation")
+	require.Contains(t, guidance, "> Managed by `spektacular init`")
+	require.NotContains(t, guidance, "go run . init")
 }

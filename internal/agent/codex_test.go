@@ -54,4 +54,8 @@ func TestCodexAgent_Install(t *testing.T) {
 	for skill := range skillAssertions {
 		validateSkillFrontmatter(t, filepath.Join(tmp, ".agents", "skills", skill, "SKILL.md"))
 	}
+
+	// Every standing rule's full guidance lands in its own file under
+	// .spektacular/guidance/, which the short AGENTS.md sections link to.
+	requireGuidanceFilesInstalled(t, tmp)
 }

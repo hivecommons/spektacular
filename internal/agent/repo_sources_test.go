@@ -10,16 +10,37 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// repoSourcesRenderedDefault is the real templates/agents/repo-sources.md
-// content with {{command}} rendered by hand for cfg.Command = "go run .".
-// Kept byte-accurate with the source template rather than computed via
-// mustache.Render, so a template change that loses the instruction fails
-// here instead of silently agreeing with itself.
+// repoSourcesRenderedDefault is the real templates/agents/short/repo-sources.md
+// content with {{command}} and {{guidance_path}} rendered by hand for
+// cfg.Command = "go run .": the short section AGENTS.md carries. Kept
+// byte-accurate with the source template rather than computed via
+// mustache.Render, so a template change that loses the instruction fails here
+// instead of silently agreeing with itself.
 const repoSourcesRenderedDefault = "## Where the Code Lives — Read This First\n" +
 	"\n" +
-	"> Managed by `go run . init` — edit `templates/agents/repo-sources.md`\n" +
-	"> in the Spektacular source, not this section in place. Hand edits will not\n" +
-	"> survive the next init.\n" +
+	"**STOP. The directory you are running in is not necessarily the code.** A project holding only\n" +
+	"`.spektacular/`, `knowledge/` and `repos/` is normal: its code lives wherever the registry says.\n" +
+	"\n" +
+	"- **Before any code-touching work** (searching, reading, editing, running tests, verifying, or\n" +
+	"  answering how something works), run `go run . repo list` and work in each repo's `root`.\n" +
+	"- **Never assume the starting directory holds a repo's code, and never guess a path.** The\n" +
+	"  registry is the only authority on where code lives.\n" +
+	"- **Pass the relevant repo's `root` explicitly to every sub-agent you launch.**\n" +
+	"- **If a repo's `root` is not on disk, stop and tell the user** the path the registry gave.\n" +
+	"\n" +
+	"This binds everywhere: every workflow, ad-hoc question, skill and sub-agent.\n" +
+	"Managed by `go run . init`; full guidance: [.spektacular/guidance/repo-sources.md](.spektacular/guidance/repo-sources.md).\n"
+
+// repoSourcesGuidanceRenderedDefault is the real templates/agents/repo-sources.md
+// content with {{command}} rendered by hand for cfg.Command = "go run .": the
+// full guidance written to .spektacular/guidance/repo-sources.md. Kept
+// byte-accurate with the source template for the same reason as above.
+const repoSourcesGuidanceRenderedDefault = "# Where the Code Lives — Read This First\n" +
+	"\n" +
+	"> Managed by `go run . init` and refreshed by `go run . migrate` — edit\n" +
+	"> `templates/agents/repo-sources.md` in the Spektacular source, not this file in\n" +
+	"> place. Hand edits will not survive the next init. Agents read this file\n" +
+	"> when its rule's short section in `AGENTS.md` sends them here, and never edit it.\n" +
 	"\n" +
 	"**STOP. The directory you are running in is not necessarily the code.**\n" +
 	"\n" +
@@ -75,6 +96,7 @@ func TestInstallRepoSourcesSection_CreatesFromMissing(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
 	require.Equal(t, repoSourcesRenderedDefault, string(got))
+	require.Equal(t, repoSourcesGuidanceRenderedDefault, readGuidanceFile(t, tmp, "repo-sources"))
 }
 
 // The section's whole purpose is to be read before the agent opens a file, so
@@ -190,9 +212,14 @@ func TestInstallRepoSourcesSection_PicksUpTemplateChange(t *testing.T) {
 
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
-	require.Contains(t, string(got), "> Managed by `spektacular init`")
+	require.Contains(t, string(got), "Managed by `spektacular init`; full guidance:")
 	require.Contains(t, string(got), "spektacular repo list")
 	require.NotContains(t, string(got), "go run . repo list")
+
+	guidance := readGuidanceFile(t, tmp, "repo-sources")
+	require.Contains(t, guidance, "> Managed by `spektacular init`")
+	require.Contains(t, guidance, "spektacular repo list")
+	require.NotContains(t, guidance, "go run . repo list")
 }
 
 // Every registered agent installs the section, and installs it at the top:
@@ -212,6 +239,8 @@ func TestEveryAgentInstallsRepoSourcesSectionAtTheTop(t *testing.T) {
 			require.Truef(t, len(string(got)) >= len(repoSourcesRenderedDefault) &&
 				string(got)[:len(repoSourcesRenderedDefault)] == repoSourcesRenderedDefault,
 				"agent %q must install the Where the Code Lives section at the very top of AGENTS.md", name)
+			require.Equalf(t, repoSourcesGuidanceRenderedDefault, readGuidanceFile(t, tmp, "repo-sources"),
+				"agent %q must install the Where the Code Lives guidance file", name)
 		})
 	}
 }

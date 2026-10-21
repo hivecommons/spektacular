@@ -20,12 +20,23 @@ import (
 func fixtureSpecTriggerFS() fs.FS {
 	return fstest.MapFS{
 		specTriggerTemplatePath: &fstest.MapFile{
+			Data: []byte("# Spec-Worthy Discussion Recognition\n\nFull guidance: route through {{command}} spec new.\n"),
+		},
+		specTriggerShortTemplatePath: &fstest.MapFile{
 			Data: []byte("## Spec-Worthy Discussion Recognition\n\nRoute writes through {{command}} spec new.\n"),
 		},
 	}
 }
 
 const fixtureSpecTriggerRenderedDefault = "## Spec-Worthy Discussion Recognition\n\nRoute writes through go run . spec new.\n"
+
+// specTriggerShortTemplatePath is the embedded path of the rule's short
+// AGENTS.md section, hand-written here rather than taken from the standing-rule table.
+const specTriggerShortTemplatePath = "agents/short/spec-trigger.md"
+
+// fixtureSpecTriggerGuidanceDefault is the fixture's full guidance rendered
+// for cfg.Command = "go run .": it lands in .spektacular/guidance/spec-trigger.md, not in AGENTS.md.
+const fixtureSpecTriggerGuidanceDefault = "# Spec-Worthy Discussion Recognition\n\nFull guidance: route through go run . spec new.\n"
 
 func TestInstallSpecTriggerSection_CreatesFromMissing(t *testing.T) {
 	withSourceFS(t, fixtureSpecTriggerFS())
@@ -37,6 +48,8 @@ func TestInstallSpecTriggerSection_CreatesFromMissing(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
 	require.Equal(t, fixtureSpecTriggerRenderedDefault, string(got))
+	require.Equal(t, fixtureSpecTriggerGuidanceDefault, readGuidanceFile(t, tmp, "spec-trigger"),
+		"the full guidance lands in its own guidance file, not in AGENTS.md")
 }
 
 func TestInstallSpecTriggerSection_AppendsAfterTesslBlock(t *testing.T) {
@@ -125,6 +138,8 @@ func TestInstallSpecTriggerSection_PicksUpTemplateChange(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
 	require.Equal(t, want, string(got))
+	require.Equal(t, "# Spec-Worthy Discussion Recognition\n\nFull guidance: route through spektacular spec new.\n", readGuidanceFile(t, tmp, "spec-trigger"),
+		"the guidance file is re-rendered with the new command")
 }
 
 func TestInstallSpecTriggerSection_CrossAgentIdempotency(t *testing.T) {

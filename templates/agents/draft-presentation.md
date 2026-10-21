@@ -1,8 +1,9 @@
-## Presenting Drafts and Confirmations
+# Presenting Drafts and Confirmations
 
-> Managed by `{{command}} init` — edit `templates/agents/draft-presentation.md`
-> in the Spektacular source, not this section in place. Hand edits will not
-> survive the next init.
+> Managed by `{{command}} init` and refreshed by `{{command}} migrate` — edit
+> `templates/agents/draft-presentation.md` in the Spektacular source, not this file in
+> place. Hand edits will not survive the next init. Agents read this file
+> when its rule's short section in `AGENTS.md` sends them here, and never edit it.
 
 When you have drafted substantial content for the user to review — an architecture write-up, a set of options, a written section, a summary, a plan or spec excerpt — always present that draft as normal, readable chat text first, in full. Never embed the draft itself inside a structured yes/no or multiple-choice dialog element: that kind of UI truncates or compresses long text, making it hard for the user to actually read what you're proposing.
 

@@ -20,12 +20,23 @@ import (
 func fixtureMemoryFS() fs.FS {
 	return fstest.MapFS{
 		memoryContextTemplatePath: &fstest.MapFile{
+			Data: []byte("# Memory & Context\n\nFull guidance: route through {{command}} knowledge write.\n"),
+		},
+		memoryContextShortTemplatePath: &fstest.MapFile{
 			Data: []byte("## Memory & Context\n\nRoute writes through {{command}} knowledge write.\n"),
 		},
 	}
 }
 
 const fixtureRenderedDefault = "## Memory & Context\n\nRoute writes through go run . knowledge write.\n"
+
+// memoryContextShortTemplatePath is the embedded path of the rule's short
+// AGENTS.md section, hand-written here rather than taken from the standing-rule table.
+const memoryContextShortTemplatePath = "agents/short/memory-context.md"
+
+// fixtureMemoryGuidanceDefault is the fixture's full guidance rendered
+// for cfg.Command = "go run .": it lands in .spektacular/guidance/memory-context.md, not in AGENTS.md.
+const fixtureMemoryGuidanceDefault = "# Memory & Context\n\nFull guidance: route through go run . knowledge write.\n"
 
 func TestInstallMemoryContextSection_CreatesFromMissing(t *testing.T) {
 	withSourceFS(t, fixtureMemoryFS())
@@ -37,6 +48,8 @@ func TestInstallMemoryContextSection_CreatesFromMissing(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
 	require.Equal(t, fixtureRenderedDefault, string(got))
+	require.Equal(t, fixtureMemoryGuidanceDefault, readGuidanceFile(t, tmp, "memory-context"),
+		"the full guidance lands in its own guidance file, not in AGENTS.md")
 }
 
 func TestInstallMemoryContextSection_AppendsAfterTesslBlock(t *testing.T) {
@@ -125,6 +138,8 @@ func TestInstallMemoryContextSection_PicksUpTemplateChange(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
 	require.Equal(t, want, string(got))
+	require.Equal(t, "# Memory & Context\n\nFull guidance: route through spektacular knowledge write.\n", readGuidanceFile(t, tmp, "memory-context"),
+		"the guidance file is re-rendered with the new command")
 }
 
 func TestInstallMemoryContextSection_CrossAgentIdempotency(t *testing.T) {
