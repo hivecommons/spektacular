@@ -23,7 +23,7 @@ HARBOR_AUTH_bob = PYTHONPATH=$(CURDIR)/tests/harbor/agents
 # artifact failed to collect. Agents with no file of their own add nothing.
 AGENT_ARTIFACTS = tests/harbor/agents/$(AGENT)-artifacts.toml
 
-.PHONY: build test lint clean install install-local cross harbor-install harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-test-epic harbor-test-epic-claude harbor-test-epic-codex harbor-test-epic-bob _harbor-test-epic harbor-test-plan-claude harbor-test-plan-codex harbor-test-plan-bob _harbor-test-plan harbor-test-implement-epic harbor-test-implement-epic-claude harbor-test-implement-epic-codex harbor-test-implement-epic-bob harbor-test-implement-epic-bob-unlimited _harbor-test-implement-epic
+.PHONY: build test lint clean install install-local cross harbor-install harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-test-epic harbor-test-epic-claude harbor-test-epic-codex harbor-test-epic-bob _harbor-test-epic harbor-test-plan-claude harbor-test-plan-codex harbor-test-plan-bob _harbor-test-plan harbor-test-implement-epic harbor-test-implement-epic-claude harbor-test-implement-epic-codex harbor-test-implement-epic-bob harbor-test-implement-epic-bob-unlimited _harbor-test-implement-epic harbor-test-standing-rules harbor-test-standing-rules-claude harbor-test-standing-rules-codex harbor-test-standing-rules-bob _harbor-test-standing-rules
 
 build:
 	go build -ldflags "-X github.com/hivecommons/spektacular/cmd.version=$(VERSION)" -o ./bin/$(BINARY) .
@@ -205,6 +205,46 @@ _harbor-test-epic:
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/epic-workflow-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
+
+harbor-test-standing-rules: harbor-test-standing-rules-claude
+
+harbor-test-standing-rules-claude:
+	$(MAKE) _harbor-test-standing-rules AGENT=claude
+
+harbor-test-standing-rules-codex:
+	$(MAKE) _harbor-test-standing-rules AGENT=codex
+
+harbor-test-standing-rules-bob:
+	$(MAKE) _harbor-test-standing-rules AGENT=bob
+
+# Renders tests/harbor/standing-rules into
+# tests/harbor/.build/standing-rules-$(AGENT), with the agent substituted into
+# the seed, which runs `spektacular init $(AGENT)` while the image is built so
+# the standing rules in AGENTS.md are the agent's project instructions from its
+# first turn. The verifier reads only CLI state, the session log and the
+# agent's answer file, so it is the same for every agent. Only the verifier is
+# copied into tests: its self-check runs locally, never in the image.
+# Callers must set AGENT.
+_harbor-test-standing-rules:
+	@test -n "$(AGENT)" || (echo "AGENT is required" && exit 1)
+	@test -n "$(HARBOR_ARGS_$(AGENT))" || (echo "no harbor arguments for AGENT=$(AGENT)" && exit 1)
+	@rm -rf tests/harbor/.build/standing-rules-$(AGENT)
+	@mkdir -p tests/harbor/.build/standing-rules-$(AGENT)/tests
+	cp -r tests/harbor/standing-rules/environment tests/harbor/standing-rules/task.toml \
+		tests/harbor/.build/standing-rules-$(AGENT)/
+	cp tests/harbor/standing-rules/tests/test.sh tests/harbor/standing-rules/tests/test_standing_rules.py \
+		tests/harbor/.build/standing-rules-$(AGENT)/tests/
+	cp tests/harbor/shared/*.py tests/harbor/.build/standing-rules-$(AGENT)/tests/
+	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> tests/harbor/.build/standing-rules-$(AGENT)/task.toml; fi
+	GOOS=linux GOARCH=amd64 go build -o tests/harbor/.build/standing-rules-$(AGENT)/environment/spektacular .
+	sed -e 's|{{agent}}|$(AGENT)|g' tests/harbor/standing-rules/environment/seed/seed.sh \
+		> tests/harbor/.build/standing-rules-$(AGENT)/environment/seed/seed.sh
+	sed -e 's|{{agent}}|$(AGENT)|g' tests/harbor/standing-rules/instruction.md \
+		> tests/harbor/.build/standing-rules-$(AGENT)/instruction.md
+	$(HARBOR_AUTH_$(AGENT)) harbor run -p tests/harbor/.build/standing-rules-$(AGENT) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
+	@echo ""
+	@echo "=== Test Results ==="
+	@cat $$(ls -td tests/harbor/jobs/*/standing-rules-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
 
 harbor-test-implement-epic: harbor-test-implement-epic-claude
 

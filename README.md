@@ -418,6 +418,9 @@ make harbor-test-implement-epic             # implement a planned four-spec epic
 make harbor-test-implement-epic-codex       # the same, with codex
 make harbor-test-implement-epic-bob         # the same, with Bob at its default turn limit
 make harbor-test-implement-epic-bob-unlimited  # the same, with Bob's turn limit removed
+make harbor-test-standing-rules            # standing rules in AGENTS.md, in a project initialised before the session (claude)
+make harbor-test-standing-rules-codex      # the same, with codex
+make harbor-test-standing-rules-bob        # the same, with IBM Bob
 ```
 
 Bob has no Harbor agent of its own. `harbor-test-epic-bob` runs it through
