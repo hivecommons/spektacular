@@ -38,7 +38,7 @@ printf '{"suite": "%s", "scenario": %s, "agent": "%s", "spektacular_version": "%
 	> $(1)/build.json
 endef
 
-.PHONY: build test lint clean install install-local cross harbor-install harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-test-epic harbor-test-epic-claude harbor-test-epic-codex harbor-test-epic-bob _harbor-test-epic harbor-test-plan-claude harbor-test-plan-codex harbor-test-plan-bob _harbor-test-plan harbor-test-implement-epic harbor-test-implement-epic-claude harbor-test-implement-epic-codex harbor-test-implement-epic-bob harbor-test-implement-epic-bob-unlimited _harbor-test-implement-epic harbor-test-standing-rules harbor-test-standing-rules-claude harbor-test-standing-rules-codex harbor-test-standing-rules-bob _harbor-test-standing-rules harbor-test-goal-check harbor-test-goal-check-claude harbor-test-goal-check-codex harbor-test-goal-check-bob _harbor-test-goal-check
+.PHONY: build test lint clean install install-local cross harbor-install harbor-report harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-test-epic harbor-test-epic-claude harbor-test-epic-codex harbor-test-epic-bob _harbor-test-epic harbor-test-plan-claude harbor-test-plan-codex harbor-test-plan-bob _harbor-test-plan harbor-test-implement-epic harbor-test-implement-epic-claude harbor-test-implement-epic-codex harbor-test-implement-epic-bob harbor-test-implement-epic-bob-unlimited _harbor-test-implement-epic harbor-test-standing-rules harbor-test-standing-rules-claude harbor-test-standing-rules-codex harbor-test-standing-rules-bob _harbor-test-standing-rules harbor-test-goal-check harbor-test-goal-check-claude harbor-test-goal-check-codex harbor-test-goal-check-bob _harbor-test-goal-check
 
 build:
 	go build -ldflags "-X github.com/hivecommons/spektacular/cmd.version=$(VERSION)" -o ./bin/$(BINARY) .
@@ -79,6 +79,15 @@ cross:
 harbor-install:
 	@command -v uv >/dev/null 2>&1 || (echo "uv is required to install harbor: https://docs.astral.sh/uv/getting-started/installation/" && exit 1)
 	uv tool install --upgrade harbor
+
+# Reports the metrics records collected harbor runs left in tests/harbor/jobs.
+# It reads only each trial's verifier/metrics.json and result.json, so it
+# needs no sudo for the root-owned files a run leaves. Pass options in ARGS:
+#   make harbor-report                                # every run, by suite
+#   make harbor-report ARGS='--run <trial>'           # one run's step breakdown
+#   make harbor-report ARGS='tests/harbor/jobs/fix2-*'  # only some jobs
+harbor-report:
+	@python3 tests/harbor/shared/report.py $(ARGS)
 
 harbor-test-spec: harbor-test-spec-claude
 

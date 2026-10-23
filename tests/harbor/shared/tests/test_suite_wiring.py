@@ -191,7 +191,9 @@ def test_write_build_info_writes_build_json_with_suite_and_scenario():
 def test_shared_copy_is_never_recursive():
     # The self-checks under shared/tests/ must stay out of every image.
     copies = [
-        line for line in makefile_lines() if "tests/harbor/shared" in line and line.startswith("\t")
+        line
+        for line in makefile_lines()
+        if "tests/harbor/shared" in line and line.startswith("\t") and line.strip().startswith("cp ")
     ]
     assert len(copies) == len(SUITES)
     for line in copies:
