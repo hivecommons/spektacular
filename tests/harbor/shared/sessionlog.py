@@ -19,9 +19,17 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-LANE_FILE = re.compile(
-    r"^\d{8}T\d{6}\.\d+Z_[^_]+_(?P<kind>plan|implement)_(?P<name>.+)\.jsonl$"
-)
+LANE_KINDS = ("plan", "implement")
+
+
+def lane_file(kinds: tuple[str, ...] = LANE_KINDS) -> re.Pattern:
+    """Matches a lane file of one of the given workflow kinds."""
+    return re.compile(
+        r"^\d{8}T\d{6}\.\d+Z_[^_]+_(?P<kind>" + "|".join(kinds) + r")_(?P<name>.+)\.jsonl$"
+    )
+
+
+LANE_FILE = lane_file()
 
 # Go writes nanoseconds; datetime holds microseconds.
 _FRACTION = re.compile(r"^(?P<head>.*\.\d{6})\d*(?P<tail>.*)$")
@@ -111,6 +119,19 @@ RESUME_REFUSAL = "workflow_in_progress"
 
 
 @dataclass
+class StepWindow:
+    """One stretch of a lane spent at one workflow step."""
+
+    step: str
+    start: datetime
+    end: datetime
+
+    @property
+    def duration_s(self) -> float:
+        return (self.end - self.start).total_seconds()
+
+
+@dataclass
 class Lane:
     """Every command filed under one orchestrated workflow, across its files.
 
@@ -173,16 +194,54 @@ class Lane:
                 return e
         return None
 
+    def step_windows(self) -> list[StepWindow]:
+        """The steps the lane entered, in order, each with its start and end.
+
+        A step starts at the command that moved the workflow onto it and ends
+        at the command that moved it on; a failed command moves nothing. The
+        last step of each child's run, `finished` included, ends with its last
+        command. A new file or a resumed child always opens a fresh window,
+        so the hand-off between children is never counted as time in a step.
+        """
+        resumes = {id(e) for e in self.resumes}
+        out: list[StepWindow] = []
+        for segment in self.segments:
+            events = sorted(segment, key=lambda e: e.at)
+            step: str | None = None
+            start: datetime | None = None
+            last: Event | None = None
+            for e in events:
+                if id(e) in resumes:
+                    if step is not None and last is not None:
+                        out.append(StepWindow(step, start, last.end))
+                    step = (e.state_after or e.state_before or {}).get("current_step") or step
+                    start = e.at
+                elif e.ok and e.step_after:
+                    if step is None:
+                        step, start = e.step_after, e.at
+                    elif e.step_after != step:
+                        out.append(StepWindow(step, start, e.at))
+                        step, start = e.step_after, e.at
+                last = e
+            if step is not None and events:
+                out.append(StepWindow(step, start, max(e.end for e in events)))
+        return out
+
 
 class SessionLog:
-    def __init__(self, debug_dir: Path):
+    def __init__(self, debug_dir: Path, kinds: tuple[str, ...] = LANE_KINDS):
+        """Reads every log file under debug_dir. Files of the given workflow
+        kinds become lanes; the epic readers use plan and implement only, and
+        the metrics recorder adds spec, whose single-agent runs also log to a
+        file of their own."""
+        pattern = LANE_FILE if kinds == LANE_KINDS else lane_file(kinds)
         self.debug_dir = Path(debug_dir)
         self.lanes: dict[tuple[str, str], Lane] = {}
         self.shared: list[Event] = []
         if not self.debug_dir.is_dir():
             return
         for path in sorted(self.debug_dir.glob("*.jsonl")):
-            m = LANE_FILE.match(path.name)
+            m = pattern.match(path.name)
             if m:
                 key = (m["kind"], m["name"])
                 lane = self.lanes.setdefault(key, Lane(kind=m["kind"], name=m["name"]))

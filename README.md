@@ -471,7 +471,9 @@ tests/harbor/jobs/<timestamp>/
     │   └── agent-logs/bob/        # Bob's own debug log, on Bob runs only
     ├── verifier/
     │   ├── test-stdout.txt        # pytest output
-    │   └── reward.txt             # 1 = pass, 0 = fail
+    │   ├── junit.xml              # pytest results, one testcase per check
+    │   ├── reward.txt             # 1 = pass, 0 = fail
+    │   └── metrics.json           # the run's metrics record (see Run metrics below)
     └── trial.log                  # Full trial log
 ```
 
@@ -492,6 +494,87 @@ and how long the orchestrator took to start each child and to notice it had fini
 stopped at, and, on Bob runs, how often Bob ended a task at its turn limit. Run it on a collected job
 with `python3 tests/harbor/shared/timeline.py <job>/<trial>/artifacts/spektacular/debug [<job>/<trial>/artifacts/agent-logs/bob]`.
 
+#### Run metrics
+
+Every suite's verifier leaves `verifier/metrics.json` beside `reward.txt`, in the same shape for
+every agent and suite. `tests/harbor/shared/metrics.py` writes it after the reward is written, and
+the verifier ignores how it exits, so recording metrics never changes a run's pass or fail. The
+record's identity comes from a `build.json` that each `make harbor-test-*` target writes into the
+suite it renders, beside the recorder and the shared helpers it copies there. A suite run straight
+from its source directory, without its make target, has no recorder in its tests and leaves no
+record.
+
+A value a run's logs do not supply is `null`, and its field is listed under `unknown` with the
+reason. It is never written as zero.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | The record's shape, currently `1` |
+| `run` | `suite`, `scenario`, `agent`, `model`, `spektacular_version` (`git describe`), `commit`, and `dirty` (the tree had uncommitted changes when the suite was built) |
+| `result` | `reward` as written to `reward.txt`. `checks` holds `passed`, `total` and `score` (passed over total, skipped tests excluded). `groups` gives the same per group, under its `name`: the test class, or the test module for suites written as plain functions |
+| `totals` | `wall_time_s`, `model_time_s` (time spent in model calls, summed across sub-agents, so it can exceed the wall time), `turns`, `cost_usd`, `input_tokens` (uncached), `output_tokens`, `cache_read_tokens`, `cache_write_tokens` |
+| `steps` | `unit` (`characters`), then one entry in `workflows` per spec, plan or implement workflow the run drove: its `kind` and `name`, and in `steps` each step it entered, in order, with its `step` name, `started_at`, `duration_s` and `output`, the characters the agent wrote there (text, thinking and tool-call input). `workflows` is `null` when the run left no session log. A Claude run that drove several workflows at once also has `orchestrator_output`, the characters written outside every workflow |
+| `subagents` | `started`, `completed`, `failed` and `stopped`, and `durations_s` for each sub-agent that reported one |
+| `unknown` | One `{field, reason}` per measure the record could not fill |
+
+Step durations come from Spektacular's own session log, so they mean the same for every agent. A
+step runs from the command that moved the workflow onto it (the workflow's `new`, or a `goto`) to
+the one that moved it on; the last step ends at the workflow's last command, and a child that
+resumes a workflow opens a fresh window, so the hand-off is not counted. The agent's setup before
+the workflow starts falls outside every step, so one workflow's steps add up to less than the wall
+time. Workflows driven at once run in parallel, so steps summed across them can exceed it.
+
+Claude's totals come from the `result` summary at the end of its transcript, with tokens summed over
+every model it used. When background sub-agents split a Claude run into several summaries, turns are
+summed, cost, tokens and model time come from the last summary, and wall time is the span from the
+transcript's first message to its last. The other agents report less:
+
+| Agent | Unknown in its record |
+|---|---|
+| Bob | Tokens, cost, model time, model, and every sub-agent measure but `started`. Its wall time comes from Bob's own shell logs, and its characters are placed by its `goto` calls |
+| Codex | Every sub-agent measure, model time and cache writes. Cost too, unless Harbor can price the model. When Harbor left no `trajectory.json` and the record falls back to Codex's own rollout, cost and every step's `output` are unknown as well |
+| Oracle (no agent) | Every agent total, the model, every sub-agent measure and every step's `output`. Wall time comes from the session log |
+
+A Bob or Codex run that drove several workflows at once has its per-step `output` unknown, because
+their logs cannot split it between workflows.
+
+#### Comparing runs
+
+`tests/harbor/shared/report.py` reads the records collected under `tests/harbor/jobs/`, and groups
+runs by suite and scenario, so, for example, repo-workflow's one-at-a-time and delegated runs are
+kept apart. It opens
+only each trial's `verifier/metrics.json` and `result.json`, never the agent's own files, so it runs
+as your normal user even though Claude runs leave root-owned files under `agent/`. Trials without a
+record, such as runs from before the recorder, are skipped. `make harbor-report` runs it, passing
+`ARGS` through:
+
+```bash
+make harbor-report                                     # one row per run, grouped by suite
+make harbor-report ARGS='tests/harbor/jobs/fix2-*'     # only some jobs (directories or globs)
+make harbor-report ARGS='--run plan-workflow-claude__<id>'    # one run's step breakdown, by a trial name from the table
+make harbor-report ARGS="--baseline 'tests/harbor/jobs/before-*' --candidate 'tests/harbor/jobs/after-*'"
+```
+
+The table shows each run's agent and model, wall time in minutes, turns, output and cache-read
+tokens, cost, check score and pass or fail. `--run` takes a trial directory, a trial name, or a prefix that names one
+trial. It lists every step with its duration, its share of the run and the characters written,
+then the sub-agents and every unknown measure with its reason. A step taking more than a third of
+the run's wall time is marked `◀ dominant`.
+
+`--baseline` and `--candidate` each take job directories or globs: the runs before a change and the
+runs after it. For each suite (and scenario) present in both, it prints the median of wall time,
+turns, output tokens, total tokens, cost and check score in each set, and the change. A median is
+taken over the runs whose value is known. A measure is marked
+`◀ regression` when the candidate's median is at least twice the baseline's, or when the check
+score falls by 0.1 or more. A measure no run in a set knows prints `unknown` there and is never
+flagged.
+Suites present in only one set are listed as unmatched. The thresholds are constants at the top of
+`report.py`.
+
+The recorder can also be run by hand on a collected trial, for example to re-record it:
+`python3 tests/harbor/shared/metrics.py --agent-dir <trial>/agent --debug-dir <trial>/artifacts/spektacular/debug --bob-logs <trial>/artifacts/agent-logs/bob --junit <trial>/verifier/junit.xml --reward <trial>/verifier/reward.txt --build-info <build.json> --out <file>`.
+Reading `agent/` there needs the same permissions as the files Harbor left in it.
+
 The repo-workflow suite is the one whose assertions are about the conversation rather than the
 files: that only the repo itself is asked for cold, that every later question carries a proposed
 value, that the questions arrive one per exchange, and that none of Spektacular's internal
@@ -501,6 +584,15 @@ pytest with no container and proves each rule fails on a transcript that breaks 
 
 ```bash
 python3 -m pytest tests/harbor/repo-workflow/tests/test_verifier_selfcheck.py
+```
+
+The shared helpers have self-checks of their own, also without a container: the log readers, the
+step windows, the recorder (including every way an input can be missing or broken), the report,
+and the wiring of the recorder into every suite. They live in `tests/harbor/shared/tests/`, which
+the make targets never copy into an image:
+
+```bash
+uvx --with pytest pytest --import-mode=importlib tests/harbor/shared/tests
 ```
 
 ## Building from Source
