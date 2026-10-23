@@ -10,6 +10,8 @@ are skipped.
 
     python3 report.py [jobs or trial dirs or globs ...]   # one row per run, by suite
     python3 report.py --run <trial dir or trial name>     # one run's step breakdown
+    python3 report.py --baseline <dirs or globs> --candidate <dirs or globs>
+                                                          # per-suite medians, before and after
 
 With no paths it reads tests/harbor/jobs. A value it cannot read prints
 as `unknown`, never as zero.
@@ -20,6 +22,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import statistics
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -313,15 +316,148 @@ def breakdown(run: Run) -> str:
     return "\n".join(out)
 
 
+# Comparing a baseline set of runs with a candidate set.
+
+
+@dataclass
+class Measure:
+    label: str
+    value: object  # Run -> float | None
+    fmt: object  # float -> str
+    is_score: bool = False
+
+
+def total_tokens(run: Run) -> float | None:
+    parts = [run.total(n) for n in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")]
+    return None if any(p is None for p in parts) else sum(parts)
+
+
+def check_score(run: Run) -> float | None:
+    return ((run.record.get("result") or {}).get("checks") or {}).get("score")
+
+
+def count(value: float) -> str:
+    return f"{value:,.0f}" if float(value).is_integer() else f"{value:,.1f}"
+
+
+MEASURES = [
+    Measure("wall m", lambda r: r.total("wall_time_s"), lambda v: f"{v / 60:.1f}"),
+    Measure("turns", lambda r: r.total("turns"), count),
+    Measure("out tok", lambda r: r.total("output_tokens"), count),
+    Measure("total tok", total_tokens, count),
+    Measure("cost $", lambda r: r.total("cost_usd"), lambda v: f"{v:.2f}"),
+    Measure("check score", check_score, lambda v: f"{v:.2f}", is_score=True),
+]
+
+
+@dataclass
+class Flag:
+    group: tuple[str, str | None]
+    measure: str
+    baseline: float
+    candidate: float
+
+
+def median(runs: list[Run], measure: Measure) -> float | None:
+    """The median over the runs whose value is known, or None if none is."""
+    known = [v for v in (measure.value(r) for r in runs) if v is not None]
+    return statistics.median(known) if known else None
+
+
+def is_regression(measure: Measure, base: float | None, cand: float | None) -> bool:
+    """A cost-like measure at least REGRESSION_RATIO times the baseline, or a
+    check score down by SCORE_DROP or more. An unknown side never flags."""
+    if base is None or cand is None:
+        return False
+    if measure.is_score:
+        return round(base - cand, 9) >= SCORE_DROP
+    return base > 0 and cand >= REGRESSION_RATIO * base
+
+
+def by_group(runs: list[Run]) -> dict[tuple[str, str | None], list[Run]]:
+    groups: dict[tuple[str, str | None], list[Run]] = {}
+    for run in runs:
+        groups.setdefault(run.group, []).append(run)
+    return groups
+
+
+def regressions(baseline: list[Run], candidate: list[Run]) -> list[Flag]:
+    base, cand = by_group(baseline), by_group(candidate)
+    flags = []
+    for group in sorted(base.keys() & cand.keys(), key=lambda g: (g[0], g[1] or "")):
+        for m in MEASURES:
+            b, c = median(base[group], m), median(cand[group], m)
+            if is_regression(m, b, c):
+                flags.append(Flag(group, m.label, b, c))
+    return flags
+
+
+def change(measure: Measure, base: float | None, cand: float | None) -> str:
+    if base is None or cand is None:
+        return UNKNOWN
+    if measure.is_score:
+        return f"{cand - base:+.2f}"
+    delta = measure.fmt(abs(cand - base))
+    sign = "-" if cand < base else "+"
+    return f"{sign}{delta}" + (f" (x{cand / base:.2f})" if base > 0 else "")
+
+
+def compare(baseline: list[Run], candidate: list[Run]) -> str:
+    """Per suite present in both sets, the median of each measure before and
+    after, the change, and a mark on each regression."""
+    base, cand = by_group(baseline), by_group(candidate)
+    flagged = {(f.group, f.measure) for f in regressions(baseline, candidate)}
+    out = []
+    for group in sorted(base.keys() & cand.keys(), key=lambda g: (g[0], g[1] or "")):
+        out.append(f"{group_title(group)}  baseline {len(base[group])} run(s), candidate {len(cand[group])} run(s)")
+        rows, marks = [], []
+        for m in MEASURES:
+            b, c = median(base[group], m), median(cand[group], m)
+            rows.append([m.label, UNKNOWN if b is None else m.fmt(b), UNKNOWN if c is None else m.fmt(c), change(m, b, c)])
+            marks.append("  ◀ regression" if (group, m.label) in flagged else "")
+        lines = render(["median", "baseline", "candidate", "change"], rows, right={1, 2, 3})
+        out.extend(line + mark for line, mark in zip(lines, ["", "", *marks]))
+        out.append("")
+    only_base = sorted(base.keys() - cand.keys(), key=lambda g: (g[0], g[1] or ""))
+    only_cand = sorted(cand.keys() - base.keys(), key=lambda g: (g[0], g[1] or ""))
+    if only_base or only_cand:
+        out.append("Unmatched, in one set only:")
+        out.extend(f"  {group_title(g).strip('= ')}: baseline only" for g in only_base)
+        out.extend(f"  {group_title(g).strip('= ')}: candidate only" for g in only_cand)
+        out.append("")
+    if not base.keys() & cand.keys():
+        out.insert(0, "No suite has runs in both sets.\n")
+    return "\n".join(out)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Report the metrics records of collected harbor runs.")
     parser.add_argument("paths", nargs="*", help=f"job or trial directories, or globs (default: {DEFAULT_JOBS})")
     parser.add_argument("--run", metavar="TRIAL", help="show one run's step breakdown: a trial directory or trial name")
+    parser.add_argument("--baseline", nargs="+", metavar="DIR", help="job directories or globs: the runs before a change")
+    parser.add_argument("--candidate", nargs="+", metavar="DIR", help="job directories or globs: the runs after it")
     args = parser.parse_args(argv)
+
+    if args.baseline or args.candidate:
+        if not (args.baseline and args.candidate) or args.run or args.paths:
+            print(
+                "report: a comparison takes --baseline and --candidate together, each with job directories "
+                "or globs, and no other paths or --run",
+                file=sys.stderr,
+            )
+            return 2
+        baseline, candidate = load_runs(args.baseline), load_runs(args.candidate)
+        if not baseline or not candidate:
+            empty = "baseline" if not baseline else "candidate"
+            print(f"report: the {empty} set has no metrics records; pass job directories whose runs have one", file=sys.stderr)
+            return 2
+        print(compare(baseline, candidate))
+        return 0
 
     paths = args.paths or [str(DEFAULT_JOBS)]
     if args.run and Path(args.run).is_dir():
-        paths.append(args.run)  # a trial dir is found wherever it lives
+        # A trial dir is found wherever it lives, without the default jobs.
+        paths = [*args.paths, args.run]
     runs = load_runs(paths)
     if args.run:
         try:

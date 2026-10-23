@@ -366,11 +366,8 @@ def test_unreadable_record_is_skipped_with_a_warning(tmp_path, capsys):
     assert captured.out == PLAN_GROUP + "\n"
 
 
-# BUG: a metrics.json that parses but is not a JSON object (e.g. `[]`) is
-# skipped silently. read_json returns None for a non-dict without calling
-# warn(), so the run vanishes with nothing on stderr. Input: a trial whose
-# verifier/metrics.json is `[]`; expected a "report: skipping ..." warning;
-# actual: stderr is empty.
+# A metrics.json that parses but is not a JSON object (e.g. `[]`) is skipped
+# with a warning, not silently.
 def test_non_object_record_is_skipped_with_a_warning(tmp_path, capsys):
     jobs = tmp_path / "jobs"
     trial = write_trial(jobs, "job", "plan-workflow__list1", None, started_at="2026-10-20T10:00:00Z", reward=1.0)
@@ -462,11 +459,8 @@ def test_no_match_exits_2(tmp_path, capsys):
     )
 
 
-# BUG: `--run <trial dir>` without positional paths only searches the default
-# tests/harbor/jobs, so a trial directory anywhere else is never found, even
-# though the docstring's usage line is `report.py --run <trial dir or trial
-# name>`. Input: main(["--run", "<tmp>/jobs/fix-plan-2026-10-20/plan-workflow__a1Xy9"]);
-# expected: exit 0 with that run's breakdown; actual: exit 2, "no recorded run matches".
+# `--run <trial dir>` finds a trial directory wherever it lives, without it
+# also being passed as a path.
 def test_run_by_trial_dir_outside_the_default_jobs_without_paths(tmp_path, capsys):
     jobs = standard_jobs(tmp_path)
 
@@ -691,3 +685,386 @@ def test_report_runs_as_a_normal_user_over_unreadable_agent_files(tmp_path, caps
 
 def test_thresholds_are_the_documented_values():
     assert report.DOMINANT_STEP_SHARE == 1 / 3
+
+
+def test_comparison_thresholds_are_the_documented_values():
+    assert report.REGRESSION_RATIO == 2.0
+    assert report.SCORE_DROP == 0.1
+
+
+# 6. Comparing a baseline set with a candidate set.
+
+PLAN = ("plan-workflow", "default")
+
+
+def compared_trial(
+    jobs: Path, job: str, trial: str, wall, turns, out, cache_read, cost, score, suite="plan-workflow", scenario="default"
+):
+    """A trial in <jobs>/<job>/ whose record has these totals (input tokens
+    100, cache-write tokens 0) and this check score."""
+    record = make_record(
+        suite=suite,
+        scenario=scenario,
+        checks={"passed": None if score is None else round(score * 10), "total": 10, "score": score},
+        totals=totals(wall, turns, out, cache_read, cost),
+    )
+    return write_trial(jobs, job, trial, record, started_at="2026-10-20T10:00:00Z", reward=1.0)
+
+
+def comparison_jobs(tmp_path: Path) -> tuple[Path, Path]:
+    """Three plan-workflow runs in each set, chosen so every median differs
+    from the mean, plus a suite only in the baseline and one only in the
+    candidate.
+
+    Baseline medians: wall 660 s, turns 11, out 1,100, total 12,200 (11,100 /
+    12,200 / 55,100), cost 1.10, score 0.9. Candidate medians: wall 1,320 s
+    (exactly twice), turns 12, out 900, total 10,600 (10,600 / 21,000 /
+    10,100), cost 2.00 (x1.82), score 0.8 (a drop of 0.10)."""
+    base, cand = tmp_path / "base", tmp_path / "cand"
+    compared_trial(tmp_path, "base", "plan-workflow__b1", 600.0, 10, 1000, 10000, 1.0, 1.0)
+    compared_trial(tmp_path, "base", "plan-workflow__b2", 660.0, 11, 1100, 11000, 1.1, 0.9)
+    compared_trial(tmp_path, "base", "plan-workflow__b3", 3000.0, 50, 5000, 50000, 5.0, 0.5)
+    compared_trial(tmp_path, "base", "spec-workflow__b4", 300.0, 5, 500, 5000, 0.5, 1.0, suite="spec-workflow", scenario=None)
+    compared_trial(tmp_path, "cand", "plan-workflow__c1", 1200.0, 5, 500, 10000, 2.0, 0.8)
+    compared_trial(tmp_path, "cand", "plan-workflow__c2", 1320.0, 12, 900, 20000, 2.5, 0.7)
+    compared_trial(tmp_path, "cand", "plan-workflow__c3", 1400.0, 100, 9000, 1000, 0.1, 1.0)
+    compared_trial(tmp_path, "cand", "implement-workflow__c4", 900.0, 30, 3000, 9000, 1.5, 1.0, suite="implement-workflow")
+    return base, cand
+
+
+FULL_COMPARISON = """\
+== plan-workflow (default) ==  baseline 3 run(s), candidate 3 run(s)
+median       baseline  candidate          change
+-----------  --------  ---------  --------------
+wall m           11.0       22.0   +11.0 (x2.00)  ◀ regression
+turns              11         12      +1 (x1.09)
+out tok         1,100        900    -200 (x0.82)
+total tok      12,200     10,600  -1,600 (x0.87)
+cost $           1.10       2.00   +0.90 (x1.82)
+check score      0.90       0.80           -0.10  ◀ regression
+
+Unmatched, in one set only:
+  spec-workflow: baseline only
+  implement-workflow (default): candidate only
+"""
+
+
+def test_comparison_prints_medians_change_and_unmatched_suites(tmp_path, capsys):
+    base, cand = comparison_jobs(tmp_path)
+
+    assert main(["--baseline", str(base), "--candidate", str(cand)]) == 0
+
+    captured = capsys.readouterr()
+    assert captured.out == FULL_COMPARISON + "\n"
+    assert captured.err == ""
+
+
+def test_regressions_returns_the_flags_of_the_full_comparison(tmp_path):
+    base, cand = comparison_jobs(tmp_path)
+
+    flags = report.regressions(load_runs([str(base)]), load_runs([str(cand)]))
+
+    assert flags == [
+        report.Flag(PLAN, "wall m", 660.0, 1320.0),
+        report.Flag(PLAN, "check score", 0.9, 0.8),
+    ]
+
+
+def test_no_suite_in_both_sets_says_so_and_lists_the_unmatched(tmp_path, capsys):
+    compared_trial(tmp_path, "base", "spec-workflow__b1", 300.0, 5, 500, 5000, 0.5, 1.0, suite="spec-workflow", scenario=None)
+    compared_trial(tmp_path, "cand", "plan-workflow__c1", 600.0, 10, 1000, 10000, 1.0, 1.0)
+
+    assert main(["--baseline", str(tmp_path / "base"), "--candidate", str(tmp_path / "cand")]) == 0
+
+    assert capsys.readouterr().out == (
+        "No suite has runs in both sets.\n"
+        "\n"
+        "Unmatched, in one set only:\n"
+        "  spec-workflow: baseline only\n"
+        "  plan-workflow (default): candidate only\n"
+        "\n"
+    )
+
+
+# Each cost-like measure: one baseline run, and a candidate run that changes
+# only that measure, to exactly 2.0x and to 1.99x. The baseline's total tokens
+# are 100 + 1,000 + 8,900 + 0 = 10,000; the total-token case moves cache-read
+# tokens only, so the output-token measure is unchanged.
+BASE_TOTALS = {"wall": 600.0, "turns": 100, "out": 1000, "cache_read": 8900, "cost": 1.0}
+RATIO_CASES = [
+    ("wall m", {"wall": 1200.0}, {"wall": 1194.0}, 600.0, 1200.0),
+    ("turns", {"turns": 200}, {"turns": 199}, 100, 200),
+    ("out tok", {"out": 2000}, {"out": 1990}, 1000, 2000),
+    ("total tok", {"cache_read": 18900}, {"cache_read": 18800}, 10000, 20000),
+    ("cost $", {"cost": 2.0}, {"cost": 1.99}, 1.0, 2.0),
+]
+
+
+def ratio_runs(**override) -> list[Run]:
+    t = {**BASE_TOTALS, **override}
+    return [run_of(make_record(totals=totals(t["wall"], t["turns"], t["out"], t["cache_read"], t["cost"])))]
+
+
+@pytest.mark.parametrize("label, doubled, under, base_median, cand_median", RATIO_CASES, ids=[c[0] for c in RATIO_CASES])
+def test_ratio_of_exactly_two_is_flagged_and_just_under_is_not(label, doubled, under, base_median, cand_median):
+    baseline = ratio_runs()
+
+    assert report.regressions(baseline, ratio_runs(**doubled)) == [report.Flag(PLAN, label, base_median, cand_median)]
+    assert report.regressions(baseline, ratio_runs(**under)) == []
+
+    flagged = [line for line in report.compare(baseline, ratio_runs(**doubled)).splitlines() if line.startswith(label + " ")]
+    assert len(flagged) == 1 and flagged[0].endswith("(x2.00)  ◀ regression")
+    plain = [line for line in report.compare(baseline, ratio_runs(**under)).splitlines() if line.startswith(label + " ")]
+    assert len(plain) == 1 and plain[0].endswith("(x1.99)")
+
+
+def score_runs(*scores) -> list[Run]:
+    return [run_of(make_record(checks={"passed": None, "total": 10, "score": s})) for s in scores]
+
+
+@pytest.mark.parametrize(
+    "base, cand, flagged",
+    [
+        (1.0, 0.9, True),  # 0.09999999999999998 in floating point: still a tenth
+        (0.8, 0.7, True),  # 0.10000000000000009
+        (0.3, 0.2, True),  # 0.09999999999999998
+        (0.95, 0.85, True),
+        (0.9, 0.5, True),
+        (1.0, 0.91, False),
+        (0.5, 0.41, False),
+        (0.9, 0.9, False),
+        (0.5, 1.0, False),  # a rise never flags
+        (0.0, 0.9, False),
+    ],
+)
+def test_check_score_drop_of_a_tenth_or_more_is_flagged(base, cand, flagged):
+    flags = report.regressions(score_runs(base), score_runs(cand))
+
+    assert flags == ([report.Flag(PLAN, "check score", base, cand)] if flagged else [])
+
+
+def test_check_score_line_shows_the_signed_change():
+    # The change column is as wide as "+0.00 (x1.00)", the other rows' change.
+    text = report.compare(score_runs(1.0), score_runs(0.9))
+    assert text.endswith("check score      1.00       0.90          -0.10  ◀ regression\n")
+
+    text = report.compare(score_runs(0.5), score_runs(1.0))
+    assert text.endswith("check score      0.50       1.00          +0.50\n")
+
+
+def test_score_median_is_over_the_runs_of_each_set():
+    # Baseline median 0.9 (mean 0.8), candidate median 0.85 (mean 0.6): no flag.
+    assert report.regressions(score_runs(1.0, 0.9, 0.5), score_runs(0.0, 0.85, 0.95)) == []
+    # Baseline median 0.95 of an even count, candidate 0.85: flagged.
+    assert report.regressions(score_runs(1.0, 0.9), score_runs(0.85)) == [report.Flag(PLAN, "check score", 0.95, 0.85)]
+
+
+UNKNOWN_BASELINE = """\
+== plan-workflow (default) ==  baseline 3 run(s), candidate 3 run(s)
+median       baseline  candidate   change
+-----------  --------  ---------  -------
+wall m        unknown       10.0  unknown
+turns         unknown         40  unknown
+out tok       unknown      9,000  unknown
+total tok     unknown    530,000  unknown
+cost $        unknown       0.50  unknown
+check score   unknown       1.00  unknown
+"""
+
+
+def null_compared_record():
+    return make_record(checks={"passed": None, "total": None, "score": None}, totals=NULL_TOTALS)
+
+
+def test_measure_unknown_in_one_set_prints_unknown_and_never_flags():
+    unknown = [run_of(null_compared_record(), trial=f"plan-workflow__n{i}") for i in range(3)]
+    known = [run_of(make_record(), trial=f"plan-workflow__k{i}") for i in range(3)]
+
+    assert report.compare(unknown, known) == UNKNOWN_BASELINE
+    assert report.regressions(unknown, known) == []
+    assert report.regressions(known, unknown) == []
+    assert "◀ regression" not in report.compare(known, unknown)
+    assert "0.0" not in report.compare(known, unknown).replace("10.0", "")
+
+
+def test_main_prints_unknown_for_an_all_null_baseline(tmp_path, capsys):
+    for i in range(3):
+        write_trial(tmp_path, "base", f"plan-workflow__n{i}", null_compared_record(), reward=1.0)
+        write_trial(tmp_path, "cand", f"plan-workflow__k{i}", make_record(), reward=1.0)
+
+    assert main(["--baseline", str(tmp_path / "base"), "--candidate", str(tmp_path / "cand")]) == 0
+
+    assert capsys.readouterr().out == UNKNOWN_BASELINE + "\n"
+
+
+def mixed_totals(wall, turns, inp, out, cost):
+    return {
+        "wall_time_s": wall,
+        "model_time_s": None,
+        "turns": turns,
+        "cost_usd": cost,
+        "input_tokens": inp,
+        "output_tokens": out,
+        "cache_read_tokens": 900,
+        "cache_write_tokens": 0,
+    }
+
+
+def mixed_run(trial, score, wall, turns, inp, out, cost) -> Run:
+    checks = {"passed": None, "total": None if score is None else 10, "score": score}
+    return run_of(make_record(checks=checks, totals=mixed_totals(wall, turns, inp, out, cost)), trial=trial)
+
+
+MIXED_BASELINE = """\
+== plan-workflow (default) ==  baseline 3 run(s), candidate 3 run(s)
+median       baseline  candidate          change
+-----------  --------  ---------  --------------
+wall m           10.8       20.8   +10.0 (x1.92)
+turns              20         20      +0 (x1.00)
+out tok         1,000      1,000      +0 (x1.00)
+total tok       2,000      4,000  +2,000 (x2.00)  ◀ regression
+cost $           2.00       2.00   +0.00 (x1.00)
+check score      0.90       0.90           +0.00
+"""
+
+
+def test_mixed_known_and_unknown_runs_take_the_median_of_the_known_ones():
+    # Baseline: wall [-, 600, 700] -> 650 (not 600, as a missing value read as
+    # zero would give, which would make the candidate's 1,250 a 2.08x flag);
+    # turns [10, -, 30] -> 20; out [1,000, 1,000, -] -> 1,000; total tokens
+    # known only for the second run, whose four parts are all known -> 2,000;
+    # cost [-, 1.0, 3.0] -> 2.0; score [-, 1.0, 0.8] -> 0.9.
+    # mixed_run(trial, score, wall, turns, input tokens, output tokens, cost)
+    baseline = [
+        mixed_run("plan-workflow__m1", None, None, 10, None, 1000, None),
+        mixed_run("plan-workflow__m2", 1.0, 600.0, None, 100, 1000, 1.0),
+        mixed_run("plan-workflow__m3", 0.8, 700.0, 30, 100, None, 3.0),
+    ]
+    # Candidate: total tokens [4,000, -, -] -> 4,000, exactly twice.
+    candidate = [
+        mixed_run("plan-workflow__k1", 0.9, 1250.0, 20, 2100, 1000, 2.0),
+        mixed_run("plan-workflow__k2", 0.9, 1250.0, 20, None, 1000, 2.0),
+        mixed_run("plan-workflow__k3", 0.9, 1250.0, 20, None, 1000, 2.0),
+    ]
+
+    assert report.compare(baseline, candidate) == MIXED_BASELINE
+    assert report.regressions(baseline, candidate) == [report.Flag(PLAN, "total tok", 2000, 4000)]
+
+
+ZERO_BASELINE = """\
+== plan-workflow (default) ==  baseline 1 run(s), candidate 1 run(s)
+median       baseline  candidate    change
+-----------  --------  ---------  --------
+wall m            0.0       10.0     +10.0
+turns               0         40       +40
+out tok             0      9,000    +9,000
+total tok           0    509,100  +509,100
+cost $           0.00       5.00     +5.00
+check score      1.00       1.00     +0.00
+"""
+
+
+def test_zero_baseline_never_flags_a_ratio():
+    zeros = {**dict.fromkeys(NULL_TOTALS, 0), "wall_time_s": 0.0, "model_time_s": None, "cost_usd": 0.0}
+    baseline = [run_of(make_record(totals=zeros))]
+    candidate = [run_of(make_record(totals=totals(600.0, 40, 9000, 500000, 5.0)))]
+
+    assert report.regressions(baseline, candidate) == []
+    assert report.compare(baseline, candidate) == ZERO_BASELINE
+
+
+def test_scenario_groups_are_matched_separately(tmp_path, capsys):
+    # Pooled, both sets would have wall medians of 900 s and 1,200 s: no flag.
+    for job, trial, wall, scenario in [
+        ("base", "repo-workflow__b1", 600.0, "default"),
+        ("base", "repo-workflow__b2", 1200.0, "one-at-a-time"),
+        ("cand", "repo-workflow__c1", 1200.0, "default"),
+        ("cand", "repo-workflow__c2", 1200.0, "one-at-a-time"),
+    ]:
+        compared_trial(tmp_path, job, trial, wall, 10, 1000, 10000, 1.0, 1.0, suite="repo-workflow", scenario=scenario)
+
+    assert main(["--baseline", str(tmp_path / "base"), "--candidate", str(tmp_path / "cand")]) == 0
+
+    out = capsys.readouterr().out
+    titles = [line for line in out.splitlines() if line.startswith("==")]
+    assert titles == [
+        "== repo-workflow (default) ==  baseline 1 run(s), candidate 1 run(s)",
+        "== repo-workflow (one-at-a-time) ==  baseline 1 run(s), candidate 1 run(s)",
+    ]
+    walls = [line for line in out.splitlines() if line.startswith("wall m")]
+    assert walls == [
+        "wall m           10.0       20.0  +10.0 (x2.00)  ◀ regression",
+        "wall m           20.0       20.0   +0.0 (x1.00)",
+    ]
+    assert "Unmatched" not in out
+    assert report.regressions(load_runs([str(tmp_path / "base")]), load_runs([str(tmp_path / "cand")])) == [
+        report.Flag(("repo-workflow", "default"), "wall m", 600.0, 1200.0)
+    ]
+
+
+def test_baseline_glob_pools_several_job_dirs_into_one_set(tmp_path, capsys):
+    compared_trial(tmp_path, "base-1", "plan-workflow__b1", 600.0, 10, 1000, 10000, 1.0, 1.0)
+    compared_trial(tmp_path, "base-1", "plan-workflow__b2", 660.0, 11, 1100, 11000, 1.1, 0.9)
+    compared_trial(tmp_path, "base-2", "plan-workflow__b3", 3000.0, 50, 5000, 50000, 5.0, 0.5)
+    compared_trial(tmp_path, "cand-1", "plan-workflow__c1", 1200.0, 5, 500, 10000, 2.0, 0.8)
+    compared_trial(tmp_path, "cand-2", "plan-workflow__c2", 1320.0, 12, 900, 20000, 2.5, 0.7)
+    compared_trial(tmp_path, "cand-2", "plan-workflow__c3", 1400.0, 100, 9000, 1000, 0.1, 1.0)
+
+    assert main(["--baseline", f"{tmp_path}/base-*", "--candidate", str(tmp_path / "cand-1"), str(tmp_path / "cand-2")]) == 0
+
+    captured = capsys.readouterr()
+    assert captured.out == FULL_COMPARISON.split("\nUnmatched")[0] + "\n"
+    assert captured.err == ""
+    assert [r.trial for r in load_runs([f"{tmp_path}/base-*"])] == ["plan-workflow__b1", "plan-workflow__b2", "plan-workflow__b3"]
+
+
+USAGE_ERROR = (
+    "report: a comparison takes --baseline and --candidate together, each with job directories "
+    "or globs, and no other paths or --run\n"
+)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--baseline", "{base}"],
+        ["--candidate", "{cand}"],
+        ["--run", "plan-workflow__b1", "--baseline", "{base}", "--candidate", "{cand}"],
+        ["{base}", "--baseline", "{base}", "--candidate", "{cand}"],
+    ],
+    ids=["baseline only", "candidate only", "with --run", "with a positional path"],
+)
+def test_comparison_usage_errors_exit_2(tmp_path, capsys, argv):
+    base, cand = comparison_jobs(tmp_path)
+
+    assert main([a.format(base=base, cand=cand) for a in argv]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == USAGE_ERROR
+
+
+def test_empty_candidate_set_exits_2(tmp_path, capsys):
+    base, _ = comparison_jobs(tmp_path)
+    empty = tmp_path / "old"
+    write_trial(empty, "job", C3, None, started_at="2026-01-01T00:00:00Z", reward=1.0)
+
+    assert main(["--baseline", str(base), "--candidate", str(empty)]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "report: the candidate set has no metrics records; pass job directories whose runs have one\n"
+
+
+def test_empty_baseline_glob_exits_2(tmp_path, capsys):
+    _, cand = comparison_jobs(tmp_path)
+    pattern = f"{tmp_path}/nightly-*"
+
+    assert main(["--baseline", pattern, "--candidate", str(cand)]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == (
+        f"report: {pattern} matches nothing\n"
+        "report: the baseline set has no metrics records; pass job directories whose runs have one\n"
+    )
