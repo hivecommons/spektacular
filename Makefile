@@ -27,6 +27,17 @@ HARBOR_AUTH_bob = PYTHONPATH=$(CURDIR)/tests/harbor/agents
 # artifact failed to collect. Agents with no file of their own add nothing.
 AGENT_ARTIFACTS = tests/harbor/agents/$(AGENT)-artifacts.toml
 
+# Writes build.json into a rendered suite's tests directory: the run's identity
+# for the metrics recorder (tests/harbor/shared/metrics.py), which the container
+# cannot discover for itself. Call it as
+# $(call write_build_info,<tests dir>,<suite>,<scenario, or empty for none>).
+define write_build_info
+printf '{"suite": "%s", "scenario": %s, "agent": "%s", "spektacular_version": "%s", "commit": "%s", "dirty": %s}\n' \
+	'$(2)' '$(if $(3),"$(3)",null)' '$(AGENT)' "$$(git describe --tags --always)" "$$(git rev-parse HEAD)" \
+	"$$(if [ -n "$$(git status --porcelain --untracked-files=no)" ]; then echo true; else echo false; fi)" \
+	> $(1)/build.json
+endef
+
 .PHONY: build test lint clean install install-local cross harbor-install harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-test-epic harbor-test-epic-claude harbor-test-epic-codex harbor-test-epic-bob _harbor-test-epic harbor-test-plan-claude harbor-test-plan-codex harbor-test-plan-bob _harbor-test-plan harbor-test-implement-epic harbor-test-implement-epic-claude harbor-test-implement-epic-codex harbor-test-implement-epic-bob harbor-test-implement-epic-bob-unlimited _harbor-test-implement-epic harbor-test-standing-rules harbor-test-standing-rules-claude harbor-test-standing-rules-codex harbor-test-standing-rules-bob _harbor-test-standing-rules harbor-test-goal-check harbor-test-goal-check-claude harbor-test-goal-check-codex harbor-test-goal-check-bob _harbor-test-goal-check
 
 build:
@@ -92,6 +103,8 @@ _harbor-test-spec:
 	cp tests/harbor/spec-workflow/solution/solve.sh tests/harbor/.build/spec-workflow-$(AGENT)/solution/solve.sh
 	cp tests/harbor/spec-workflow/tests/test.sh tests/harbor/.build/spec-workflow-$(AGENT)/tests/test.sh
 	cp tests/harbor/spec-workflow/tests/test_spec_workflow.py tests/harbor/.build/spec-workflow-$(AGENT)/tests/test_spec_workflow.py
+	cp tests/harbor/shared/*.py tests/harbor/.build/spec-workflow-$(AGENT)/tests/
+	$(call write_build_info,tests/harbor/.build/spec-workflow-$(AGENT)/tests,spec-workflow,)
 	sed -e 's|{{agent}}|$(AGENT)|g' -e 's|{{spek_new}}|$(SPEK_NEW)|g' \
 		tests/harbor/spec-workflow/instruction.md \
 		> tests/harbor/.build/spec-workflow-$(AGENT)/instruction.md
@@ -126,6 +139,8 @@ _harbor-test-repo:
 	cp tests/harbor/repo-workflow/tests/test.sh tests/harbor/.build/repo-workflow-$(SCENARIO)/tests/test.sh
 	cp tests/harbor/repo-workflow/tests/test_repo_workflow.py tests/harbor/.build/repo-workflow-$(SCENARIO)/tests/test_repo_workflow.py
 	echo $(SCENARIO) > tests/harbor/.build/repo-workflow-$(SCENARIO)/tests/scenario
+	cp tests/harbor/shared/*.py tests/harbor/.build/repo-workflow-$(SCENARIO)/tests/
+	$(call write_build_info,tests/harbor/.build/repo-workflow-$(SCENARIO)/tests,repo-workflow,$(SCENARIO))
 	SCENARIO_BODY=$$(cat tests/harbor/repo-workflow/scenario-$(SCENARIO).md); \
 	awk -v scenario="$$SCENARIO_BODY" -v agent="$(AGENT)" -v skill="$(SKILL)" \
 		'{ gsub(/\{\{agent\}\}/, agent); gsub(/\{\{skill_invocation\}\}/, skill); \
@@ -160,6 +175,8 @@ _harbor-test-plan:
 	@mkdir -p tests/harbor/.build/plan-workflow-$(AGENT)
 	cp -r tests/harbor/plan-workflow/environment tests/harbor/plan-workflow/solution tests/harbor/plan-workflow/tests \
 		tests/harbor/plan-workflow/task.toml tests/harbor/.build/plan-workflow-$(AGENT)/
+	cp tests/harbor/shared/*.py tests/harbor/.build/plan-workflow-$(AGENT)/tests/
+	$(call write_build_info,tests/harbor/.build/plan-workflow-$(AGENT)/tests,plan-workflow,)
 	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> tests/harbor/.build/plan-workflow-$(AGENT)/task.toml; fi
 	GOOS=linux GOARCH=amd64 go build -o tests/harbor/.build/plan-workflow-$(AGENT)/environment/spektacular .
 	sed -e 's|{{agent}}|$(AGENT)|g' -e 's|{{spek_plan}}|$(SPEK_PLAN)|g' \
@@ -170,12 +187,24 @@ _harbor-test-plan:
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/plan-workflow-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
 
+# Renders tests/harbor/implement-workflow into
+# tests/harbor/.build/implement-workflow-claude, with the shared helpers and
+# build info in its tests, then runs harbor with Claude. Its verifier reads a
+# Claude transcript, so Claude is the only agent it runs.
+harbor-test-implement: AGENT = claude
 harbor-test-implement:
-	GOOS=linux GOARCH=amd64 go build -o tests/harbor/implement-workflow/environment/spektacular .
-	$(HARBOR_AUTH) harbor run $(HARBOR_RUN_FLAGS) -p tests/harbor/implement-workflow -a claude-code -m $(HARBOR_MODEL) -o tests/harbor/jobs
+	@rm -rf tests/harbor/.build/implement-workflow-$(AGENT)
+	@mkdir -p tests/harbor/.build/implement-workflow-$(AGENT)
+	cp -r tests/harbor/implement-workflow/environment tests/harbor/implement-workflow/tests \
+		tests/harbor/implement-workflow/task.toml tests/harbor/implement-workflow/instruction.md \
+		tests/harbor/.build/implement-workflow-$(AGENT)/
+	cp tests/harbor/shared/*.py tests/harbor/.build/implement-workflow-$(AGENT)/tests/
+	$(call write_build_info,tests/harbor/.build/implement-workflow-$(AGENT)/tests,implement-workflow,)
+	GOOS=linux GOARCH=amd64 go build -o tests/harbor/.build/implement-workflow-$(AGENT)/environment/spektacular .
+	$(HARBOR_AUTH) harbor run $(HARBOR_RUN_FLAGS) -p tests/harbor/.build/implement-workflow-$(AGENT) -a claude-code -m $(HARBOR_MODEL) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
-	@cat $$(ls -td tests/harbor/jobs/*/implement-workflow__*/verifier/test-stdout.txt 2>/dev/null | head -1)
+	@cat $$(ls -td tests/harbor/jobs/*/implement-workflow-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
 
 harbor-test-epic: harbor-test-epic-claude
 
@@ -201,6 +230,7 @@ _harbor-test-epic:
 	cp -r tests/harbor/epic-workflow/environment tests/harbor/epic-workflow/tests \
 		tests/harbor/epic-workflow/task.toml tests/harbor/.build/epic-workflow-$(AGENT)/
 	cp tests/harbor/shared/*.py tests/harbor/.build/epic-workflow-$(AGENT)/tests/
+	$(call write_build_info,tests/harbor/.build/epic-workflow-$(AGENT)/tests,epic-workflow,)
 	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> tests/harbor/.build/epic-workflow-$(AGENT)/task.toml; fi
 	GOOS=linux GOARCH=amd64 go build -o tests/harbor/.build/epic-workflow-$(AGENT)/environment/spektacular .
 	sed -e 's|{{agent}}|$(AGENT)|g' -e 's|{{spek_plan_epic}}|$(SPEK_PLAN_EPIC)|g' \
@@ -240,6 +270,7 @@ _harbor-test-standing-rules:
 	cp tests/harbor/standing-rules/tests/test.sh tests/harbor/standing-rules/tests/test_standing_rules.py \
 		tests/harbor/.build/standing-rules-$(AGENT)/tests/
 	cp tests/harbor/shared/*.py tests/harbor/.build/standing-rules-$(AGENT)/tests/
+	$(call write_build_info,tests/harbor/.build/standing-rules-$(AGENT)/tests,standing-rules,)
 	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> tests/harbor/.build/standing-rules-$(AGENT)/task.toml; fi
 	GOOS=linux GOARCH=amd64 go build -o tests/harbor/.build/standing-rules-$(AGENT)/environment/spektacular .
 	sed -e 's|{{agent}}|$(AGENT)|g' tests/harbor/standing-rules/environment/seed/seed.sh \
@@ -286,6 +317,7 @@ _harbor-test-implement-epic:
 	cp -r tests/harbor/implement-epic-workflow/environment tests/harbor/implement-epic-workflow/solution \
 		tests/harbor/implement-epic-workflow/tests tests/harbor/implement-epic-workflow/task.toml $(IMPLEMENT_EPIC_BUILD)/
 	cp tests/harbor/shared/*.py $(IMPLEMENT_EPIC_BUILD)/tests/
+	$(call write_build_info,$(IMPLEMENT_EPIC_BUILD)/tests,implement-epic-workflow,$(patsubst -%,%,$(VARIANT)))
 	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> $(IMPLEMENT_EPIC_BUILD)/task.toml; fi
 	GOOS=linux GOARCH=amd64 go build -o $(IMPLEMENT_EPIC_BUILD)/environment/spektacular .
 	sed -e 's|{{agent}}|$(AGENT)|g' -e 's|{{spek_implement_epic}}|$(SPEK_IMPLEMENT_EPIC)|g' \
@@ -328,6 +360,7 @@ _harbor-test-goal-check:
 		tests/harbor/goal-check-workflow/task.toml $(GOAL_CHECK_BUILD)/
 	cp tests/harbor/goal-check-workflow/tests/test.sh tests/harbor/goal-check-workflow/tests/test_goal_check.py $(GOAL_CHECK_BUILD)/tests/
 	cp tests/harbor/shared/*.py $(GOAL_CHECK_BUILD)/tests/
+	$(call write_build_info,$(GOAL_CHECK_BUILD)/tests,goal-check-workflow,$(SCENARIO))
 	echo $(SCENARIO) > $(GOAL_CHECK_BUILD)/environment/seed/scenario
 	echo $(AGENT) > $(GOAL_CHECK_BUILD)/environment/seed/agent
 	echo $(SCENARIO) > $(GOAL_CHECK_BUILD)/tests/scenario
