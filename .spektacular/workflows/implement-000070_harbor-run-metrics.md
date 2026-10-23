@@ -53,3 +53,10 @@
 - Comparison view (`--baseline/--candidate`) deferred to task 6 to keep task boundaries.
 - Task 5 test step found + fixed: non-object metrics.json now warns; `--run <trial dir>` is searched even outside the default jobs; malformed result.json warns "ignoring" (run kept); `Run.suite/scenario` null-safe. Wiring check now counts only `cp` lines (harbor-report recipe mentions tests/harbor/shared).
 - Task 5 DONE; Milestone 2 complete (commit on advance). Next: task 6 compare (Milestone 3, not last).
+
+## Task 6 (compare)
+- Score-drop check rounds `base - cand` to 9 places before comparing to SCORE_DROP (1.0-0.9 == 0.0999... in float).
+- `--baseline`/`--candidate` must come together and exclude positional paths and --run (exit 2); an empty set exits 2.
+- Task 6 DONE (no commit; not last of Milestone 3). Next: task 7 README docs — LAST task; ends Milestone 3 -> commit_message_from required when advancing to test_plan.
+- Task 7: README fixed after doc check (step window wording, model_time can exceed wall, oracle/codex-rollout unknowns, grouping by suite+scenario, median over known values, --bob-logs in hand-run command). --run <trial dir> with no paths no longer reads default jobs.
+- Task 7 DONE; all tasks ticked. Milestone 3 commit on advance to test_plan. Next: test_plan step.

@@ -333,7 +333,7 @@ Add a local report command, with a make wrapper, that finds every recorded run u
 
 **Validation point**: The comparison's self-checks pass at and just below both thresholds. The README section's commands run as written against collected jobs.
 
-#### - [ ] Task: Compare baseline and candidate runs
+#### - [x] Task: Compare baseline and candidate runs
 **Id:** cd421be0-6ee1-44a8-8a3f-4beafd94bb87
 **Repo:** spektacular
 **Depends on:**
@@ -346,12 +346,12 @@ Add the report's comparison view. Given a baseline set and a candidate set of jo
 
 **Acceptance criteria**:
 
-- [ ] For each suite present in both sets, the comparison prints baseline, candidate and change for time, turns, tokens, cost and check score. Suites present in only one set are named as unmatched.
-- [ ] A measure whose candidate value is at least twice the baseline's is flagged, and one just under twice is not.
-- [ ] A check score that falls by a tenth or more is flagged, and a smaller drop is not.
-- [ ] A measure unknown in either set is shown as unknown and is never flagged.
+- [x] For each suite present in both sets, the comparison prints baseline, candidate and change for time, turns, tokens, cost and check score. Suites present in only one set are named as unmatched.
+- [x] A measure whose candidate value is at least twice the baseline's is flagged, and one just under twice is not.
+- [x] A check score that falls by a tenth or more is flagged, and a smaller drop is not.
+- [x] A measure unknown in either set is shown as unknown and is never flagged.
 
-#### - [ ] Task: Document run metrics and the report with the harbor suites
+#### - [x] Task: Document run metrics and the report with the harbor suites
 **Id:** 899c287f-5f93-4a0b-83be-43ccd388c0ce
 **Repo:** spektacular
 **Depends on:**
@@ -368,9 +368,9 @@ Extend the README's end-to-end section, where the suites are already described, 
 
 **Acceptance criteria**:
 
-- [ ] The README's harbor section shows where a run's metrics record is, explains every field in it, and says which fields are unknown for Bob and for Codex.
-- [ ] It shows how to run the report, its single-run view and its comparison, and the commands work as written.
-- [ ] The job layout shown in the README includes the new record and test results file.
+- [x] The README's harbor section shows where a run's metrics record is, explains every field in it, and says which fields are unknown for Bob and for Codex.
+- [x] It shows how to run the report, its single-run view and its comparison, and the commands work as written.
+- [x] The job layout shown in the README includes the new record and test results file.
 
 ## Open Questions
 
@@ -504,3 +504,51 @@ No other uncertainties remain that only implementation can resolve.
 **Discoveries**:
 - On the reference plan run, `--run` alone names the slow step. `assemble` takes 368.8 s, 39% of the 948.4 s run and 77,921 characters, and it is the only step flagged. The next largest steps are 14%. This is the spec's success metric "the plan workflow's slowest step is identifiable from the report alone", shown on real data.
 - The `report.py` file lands in every suite image through the shared `*.py` copy. That is harmless, since nothing in the container runs it.
+
+### 2026-10-23 — Task: Compare baseline and candidate runs
+
+**What was done**: Added the report's comparison view, `--baseline <dirs or globs> --candidate <dirs or globs>`. Each set is grouped by suite and scenario. For each group present in both sets, the view prints the median of wall time, turns, output tokens, total tokens, cost and check score, before and after, with the change. Cost-like measures show the change as signed and as a ratio, and the check score shows it in points. A measure is marked `◀ regression` when its candidate median is at least 2× the baseline's, or when the check score drops by 0.1 or more. Groups in only one set are listed as unmatched. Medians use only known values, an unknown on either side prints `unknown` and never flags, and a zero baseline never flags a ratio.
+
+**Deviations**:
+- Total tokens are known only when all four token counts are. Otherwise they are unknown, as the context specified.
+- The score-drop comparison rounds `baseline - candidate` to nine decimal places first, because `1.0 - 0.9` is `0.0999…` in floating point and would otherwise miss the 0.1 threshold.
+- `--baseline` and `--candidate` must be given together, and not with positional paths or `--run`. An empty set exits 2 with a message saying what to pass.
+- Replaced the two `BUG:` comments the previous task's test step left in `test_report.py` with plain statements of the now-fixed behaviour.
+
+**Files changed**:
+- `tests/harbor/shared/report.py`
+- `tests/harbor/shared/tests/test_report.py`
+
+**Discoveries**:
+- A score drop smaller than 0.005 prints as `-0.00`. This is cosmetic and was left as is.
+
+### 2026-10-23 — Task: Document run metrics and the report with the harbor suites
+
+**What was done**: The README's end-to-end (Harbor) section now documents the metrics record and the report.
+- **Test results tree:** gains `verifier/junit.xml` and `verifier/metrics.json`.
+- **New `#### Run metrics` subsection:** covers where the record comes from and why it never changes the reward, and a field table for every key in the record. It explains how step windows are drawn and why steps sum to less than the wall time for one workflow, and Claude's single-versus-several summary rule. A per-agent table lists what Bob, Codex (trajectory or rollout fallback) and oracle runs leave unknown.
+- **New `#### Comparing runs` subsection:** documents `make harbor-report` and its table, `--run` and comparison invocations, the flag rules, grouping by suite and scenario, medians over known values, and running the recorder by hand.
+- **Self-check paragraph:** gains the shared helpers' self-checks.
+- **Doc-sync self-check:** `test_readme_metrics.py` keeps the README in step with the record's keys and the report's commands.
+
+**Deviations**:
+- Added `tests/harbor/shared/tests/test_readme_metrics.py`, a doc-sync self-check that the plan did not ask for. It asserts that the results tree lists the two new files, that the field table names every record key (hand-listed from `metrics.py`), that the per-agent table has Bob and Codex rows, and that the report and self-check commands are shown.
+- The test step's review of the README against the code corrected these statements before acceptance:
+  - step windows start at `new` or `goto`;
+  - model time can exceed the wall time;
+  - steps summed across parallel workflows can exceed the wall time;
+  - the oracle and Codex-rollout unknowns;
+  - `orchestrator_output` is Claude-only;
+  - the report groups by suite and scenario, and its medians are taken over known values;
+  - the hand-run recorder command needs `--bob-logs`.
+- The README's `--run` example uses a placeholder trial name (`plan-workflow-claude__<id>`), because no collected job has a record until the suites run again.
+- `report.py`: `--run <trial dir>` with no positional paths no longer also reads the default jobs directory, which used to print a spurious "not a directory" warning in a checkout with no jobs.
+
+**Files changed**:
+- `README.md`
+- `tests/harbor/shared/report.py`
+- `tests/harbor/shared/tests/test_readme_metrics.py` (new)
+
+**Discoveries**:
+- No collected job has a `metrics.json` yet. Every record shown so far was made by running the recorder by hand over old trials. The first real records arrive with the manual end-to-end runs in the test plan.
+- The main checkout has no `report.py` until this branch is merged, so `make harbor-report` over the real jobs only works from the worktree, with the jobs path passed explicitly.
