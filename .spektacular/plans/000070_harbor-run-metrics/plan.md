@@ -308,7 +308,7 @@ Make all eight suites write the record the same way. Every render target copies 
 
 **Validation point**: The report's self-checks pass for the table and the single-run view, including the dominant-step flag and unknowns printed as unknown. The command runs over a jobs directory holding root-owned agent files without a permission error.
 
-#### - [ ] Task: Report runs and step breakdowns
+#### - [x] Task: Report runs and step breakdowns
 **Id:** b19b3bd0-0f9d-4726-bdf2-46501bc3f734
 **Repo:** spektacular
 **Depends on:**
@@ -321,11 +321,11 @@ Add a local report command, with a make wrapper, that finds every recorded run u
 
 **Acceptance criteria**:
 
-- [ ] Over a jobs directory, the report prints one row per run that has a record, grouped by suite, with time, turns, tokens, cost, check score and result. Runs without a record are skipped.
-- [ ] For one named run, it prints every step the run reached with its duration and characters written.
-- [ ] A step taking more than a third of its run's wall time is flagged, and one just under a third is not.
-- [ ] Unknown values print as unknown, never as zero.
-- [ ] It runs as a normal user over jobs that contain root-owned agent files.
+- [x] Over a jobs directory, the report prints one row per run that has a record, grouped by suite, with time, turns, tokens, cost, check score and result. Runs without a record are skipped.
+- [x] For one named run, it prints every step the run reached with its duration and characters written.
+- [x] A step taking more than a third of its run's wall time is flagged, and one just under a third is not.
+- [x] Unknown values print as unknown, never as zero.
+- [x] It runs as a normal user over jobs that contain root-owned agent files.
 
 ### Milestone 3: Changes are judged by a before-and-after comparison, and the metrics are documented
 
@@ -480,3 +480,27 @@ No other uncertainties remain that only implementation can resolve.
 - Executing the output of `make -n harbor-test-<suite>` runs a real harbor trial, because the recursive `$(MAKE) _harbor-test-...` line is printed and then executed. This happened once during verification: a spec-workflow Claude trial was stopped during container setup, and its container, image and root-owned job directory were removed. To dry-render a suite, call its `_harbor-test-*` target directly and drop the `make`, `harbor run` and `go build` lines.
 - `tests/harbor/plan-workflow/tests/temp.py` is tracked, and `_harbor-test-plan` copies it into the plan image (`cp -r .../tests`). It opens a hard-coded path from an old jobs directory when imported. It is harmless because `test.sh` runs only `test_plan_workflow.py`, but it looks like a stray file. Left untouched, as it is outside this plan.
 - Every `build.json` from a working tree with uncommitted changes records `dirty: true`, so comparisons between runs can tell uncommitted builds apart.
+
+### 2026-10-23 — Task: Report runs and step breakdowns
+
+**What was done**: Added `tests/harbor/shared/report.py`, a stdlib-only local report, and a `make harbor-report ARGS=...` wrapper. It finds every `verifier/metrics.json` under the given job directories, trial directories or globs (default `tests/harbor/jobs`) and joins each with its trial's `result.json`. It prints one row per run, grouped by suite and scenario, with wall minutes, turns, output and cache-read tokens, cost, checks P/N (score) and pass/fail. `--run <trial dir, trial name or unique prefix>` prints that run's step breakdown: duration, share of the run, and characters for each step, with a step over a third of the run marked `◀ dominant`. It then prints the orchestrator output, the sub-agents and the unknowns with their reasons. It reads nothing but those two files, so root-owned agent files never block it.
+
+**Deviations**:
+- The comparison view's `--baseline`/`--candidate` options are left for the next task rather than added to the parser now, to keep this task's surface to what it delivers.
+- The test step found four bugs, all fixed here:
+  - A `metrics.json` that was valid JSON but not an object was skipped silently. It now warns.
+  - `--run <trial dir>` failed for a directory outside the default jobs unless that directory was also passed as a path. A trial directory is now always searched.
+  - A malformed `result.json` warned "skipping" even though the run is kept. It now says "ignoring".
+  - A null `run` section would have crashed `Run.suite`.
+- The wiring self-check now counts only `cp` lines, because the new `harbor-report` recipe also names `tests/harbor/shared`.
+- The table's result column takes `result.json`'s reward, falling back to the record's. The step marker sits outside the table, so no column rule is drawn under an empty header.
+
+**Files changed**:
+- `tests/harbor/shared/report.py` (new)
+- `Makefile`
+- `tests/harbor/shared/tests/test_report.py` (new)
+- `tests/harbor/shared/tests/test_suite_wiring.py`
+
+**Discoveries**:
+- On the reference plan run, `--run` alone names the slow step. `assemble` takes 368.8 s, 39% of the 948.4 s run and 77,921 characters, and it is the only step flagged. The next largest steps are 14%. This is the spec's success metric "the plan workflow's slowest step is identifiable from the report alone", shown on real data.
+- The `report.py` file lands in every suite image through the shared `*.py` copy. That is harmless, since nothing in the container runs it.

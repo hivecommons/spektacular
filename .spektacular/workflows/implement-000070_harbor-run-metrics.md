@@ -47,3 +47,9 @@
 - GOTCHA hit: `make -n harbor-test-<x>` prints the recursive `$(MAKE) _harbor-test-...` line, and executing that output runs the REAL suite (harbor run). It started a spec-workflow Claude trial (killed during setup; container, image and the root-owned job dir removed via docker). To dry-render, call the `_harbor-test-*` target directly and drop `make`/`harbor run`/`go build` lines.
 - All 8 render targets verified: tests/ holds metrics.py, transcripts.py, sessionlog.py, timeline.py and valid build.json; implement-epic VARIANT -unlimited -> scenario "unlimited".
 - Task 4 DONE; Milestone 1 complete; commit made on advance to analyze. Next: task 5 report (Milestone 2).
+
+## Task 5 (report)
+- `tests/harbor/shared/report.py` + `make harbor-report ARGS=...`. Default jobs dir resolved from the script's location (tests/harbor/jobs). `--run` accepts a trial dir, exact trial name, or unique trial-name prefix; ambiguity exits 2 listing trial dirs. report.py also lands in images via the shared/*.py copy (harmless).
+- Comparison view (`--baseline/--candidate`) deferred to task 6 to keep task boundaries.
+- Task 5 test step found + fixed: non-object metrics.json now warns; `--run <trial dir>` is searched even outside the default jobs; malformed result.json warns "ignoring" (run kept); `Run.suite/scenario` null-safe. Wiring check now counts only `cp` lines (harbor-report recipe mentions tests/harbor/shared).
+- Task 5 DONE; Milestone 2 complete (commit on advance). Next: task 6 compare (Milestone 3, not last).
