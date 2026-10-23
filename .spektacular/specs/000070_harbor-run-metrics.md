@@ -33,27 +33,27 @@ Every automated test run of a coding agent through Spektacular records a standar
 -->
 ## Requirements
 
-- [ ] **Every run records its metrics in a standard record**
+- [x] **Every run records its metrics in a standard record**
   Each automated test run produces one metrics record that is collected with its pass-or-fail result, in the same shape for every agent and every test suite.
-- [ ] **The record holds the run's totals**
+- [x] **The record holds the run's totals**
   The record holds the run's wall time, time spent waiting on the model, turns, cost, and input, output and cached tokens, together with the agent, the model, the suite, and the Spektacular version and commit the run was made from.
-- [ ] **The record breaks the run down by workflow step**
+- [x] **The record breaks the run down by workflow step**
   For each Spektacular workflow step the run passed through, the record holds how long the agent spent in it and how much text the agent produced while there, in a unit the record states.
-- [ ] **The record describes the run's sub-agents**
+- [x] **The record describes the run's sub-agents**
   The record holds how many sub-agents the run started, how many completed, failed or were stopped, and how long each one ran.
-- [ ] **The record scores the run's checks**
+- [x] **The record scores the run's checks**
   The record holds the fraction of the run's checks that passed, overall and for each group of related checks.
-- [ ] **Unknown values are recorded as unknown**
+- [x] **Unknown values are recorded as unknown**
   A measure an agent's logs do not supply, such as Bob's tokens and cost or Codex's sub-agents, or that cannot be read because a run's logs are missing or unreadable, is recorded as unknown, never as zero; the run still produces its record and its pass-or-fail result.
-- [ ] **A local report lists runs across collected jobs**
+- [x] **A local report lists runs across collected jobs**
   Users can run one command, without elevated permissions, that reads every collected run and prints one row per run with its totals, check score and result, grouped by suite.
-- [ ] **The report shows one run's step breakdown**
+- [x] **The report shows one run's step breakdown**
   Users can ask the report for a single run and see each step's duration and output volume, so the slowest step stands out.
-- [ ] **The report compares two sets of runs**
+- [x] **The report compares two sets of runs**
   Users can name a baseline set of runs and a candidate set, each as a list or pattern of job directories, and the report shows, per suite, how time, turns, tokens, cost and check score changed between them.
-- [ ] **The report flags likely problems**
+- [x] **The report flags likely problems**
   The report highlights outliers, such as a step that takes a large share of its run, or a measure notably worse in the candidate set than in the baseline, so a problem stands out without reading every number.
-- [ ] **The metrics are documented for the people running the suites**
+- [x] **The metrics are documented for the people running the suites**
   The people running the harbor suites can find where a run's metrics record is, what each of its fields means, and how to use the report.
 
 <!--
@@ -84,33 +84,33 @@ Every automated test run of a coding agent through Spektacular records a standar
 
 - [ ] **Every suite leaves a metrics record**
   After one run of each harbor suite with each of Claude, Codex and Bob, every run's collected verifier output contains a metrics record, and every record has the same top-level fields.
-- [ ] **Claude totals match the agent's own log**
+- [x] **Claude totals match the agent's own log**
   For a Claude run, the record's wall time, model time, turns, cost and input, output and cached token counts equal the values in that run's agent log summary.
-- [ ] **Run identity is recorded**
+- [x] **Run identity is recorded**
   Every record names the run's agent, model, suite, Spektacular version and commit; a model the agent did not report is recorded as unknown.
-- [ ] **Step breakdown covers every step the run reached**
+- [x] **Step breakdown covers every step the run reached**
   For a plan workflow run, the record lists every workflow step the run's own command log shows it entered, in order, each with a duration and an output volume, and the step durations add up to no more than the run's wall time.
-- [ ] **Sub-agent counts match the agent's own log**
+- [x] **Sub-agent counts match the agent's own log**
   For a Claude run that started sub-agents, the record's started, completed, failed and stopped counts equal the agent log summary's, and each sub-agent has a duration.
-- [ ] **Check score reflects the verifier's checks**
+- [x] **Check score reflects the verifier's checks**
   For a run whose verifier ran N checks of which P passed, the record's overall score is P/N, each group's score is its own passed fraction, and the run's pass-or-fail result is still 1 only when every check passed.
-- [ ] **Bob runs record unknowns, not zeros**
+- [x] **Bob runs record unknowns, not zeros**
   For a Bob run, the record's tokens and cost are marked unknown, and its wall time and turns are present.
 - [ ] **Codex runs record unknowns, not zeros**
   For a Codex run, the record's sub-agent measures are marked unknown, and its wall time and turns are present.
-- [ ] **A run with unreadable logs still scores normally**
+- [x] **A run with unreadable logs still scores normally**
   When a run's agent log is missing or unreadable, the run's pass-or-fail result is unchanged, the verifier does not fail because of it, and the record marks the affected measures unknown.
-- [ ] **The report lists every collected run**
+- [x] **The report lists every collected run**
   Running the report over the collected jobs directory prints one row per run that has a metrics record, grouped by suite, each row showing totals, check score and result, without needing elevated permissions.
-- [ ] **The report shows a run's step breakdown**
+- [x] **The report shows a run's step breakdown**
   Running the report for one named run prints each step it reached with its duration and output volume.
-- [ ] **The report compares baseline with candidate**
+- [x] **The report compares baseline with candidate**
   Running the report with two sets of job directories prints, for each suite present in both, the baseline value, candidate value and change for time, turns, tokens, cost and check score.
-- [ ] **A dominant step is flagged**
+- [x] **A dominant step is flagged**
   For a run in which one step takes more than a third of the run's wall time, such as a plan run where one step took 5.9 of 15.8 minutes, the report's step breakdown flags that step.
-- [ ] **A regression is flagged**
+- [x] **A regression is flagged**
   When a suite's candidate runs take at least twice the baseline's time, turns, tokens or cost, or their check score falls by a tenth or more, the comparison flags that measure for that suite.
-- [ ] **Usage is documented with the harbor suites**
+- [x] **Usage is documented with the harbor suites**
   The harbor suites' documentation in this repository explains where a run's metrics record is, what each field means, and how to run the report, its single-run view and its comparison.
 
 <!--
