@@ -1,16 +1,15 @@
 #!/bin/bash
 # Reference solution for the goal-check-workflow harbor task.
 #
-# It documents the CLI sequence a correct run follows from the seeded verify
-# step and proves the verifier passes on it: stage the work, record the
-# reviewer's verdicts, and act on the decision. In the unmet scenario the
+# It documents the CLI sequence a correct run follows from the seeded
+# check_goal step and proves the verifier passes on it: stage the work, record
+# the reviewer's verdicts, and act on the decision. In the unmet scenario the
 # first reply judges the README criterion not_met, the run goes back to
 # implement, the README line is added and the second check accepts. The
 # verdicts here are scripted; the real test is a harbor run with an agent.
 set -euo pipefail
 
 cd /app
-spektacular init claude >/dev/null
 PLAN=20260301000000-todo-count
 TASK=5d1e7a3c-2b4f-4c6d-8e9a-0b1c2d3e4f50
 STAGE=.spektacular/tmp/$PLAN/goal-check
@@ -34,8 +33,6 @@ record() {
   rm -rf "$STAGE"
 }
 
-goto verify
-goto check_goal
 stage_work
 if grep -q "todo count" README.md; then
   record met

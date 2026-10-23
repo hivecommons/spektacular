@@ -8,6 +8,24 @@ Add a `count` command to the todo CLI that prints how many todos the list holds,
 
 All work lands in the single registered repo, `todo-app`. `todo/cli.py` gains a `count` subcommand whose handler prints `len(load())`. `tests/test_count.py` covers it, and the README's Usage section gains a `todo count` line.
 
+## Component Breakdown
+
+- `todo/cli.py`: the `count` subcommand.
+- `tests/test_count.py` (new): tests for it.
+- `README.md`: a `todo count` line in the Usage section.
+
+## Data Structures & Interfaces
+
+- `todo count` prints `len(load())` followed by a newline.
+
+## Implementation Detail
+
+Per task, in [context.md](./context.md).
+
+## Dependencies
+
+The existing `todo.storage.load()`. Python 3 standard library otherwise.
+
 ## Testing Approach
 
 `tests/test_count.py` uses `unittest` and checks an empty list and a list of two.

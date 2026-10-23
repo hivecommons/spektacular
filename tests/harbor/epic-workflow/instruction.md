@@ -30,7 +30,7 @@ during init. Run the skill:
 {{spek_plan_epic}}
 ```
 
-The skill makes you the orchestrator: it has you start a separate background
+The skill makes you the orchestrator: it has you start a separate
 sub-agent for each spec, each running the full plan workflow for that one
 spec, in the order the specs' dependencies allow. Follow every instruction it
 gives you, and the instructions each spec's plan workflow gives its
@@ -45,10 +45,13 @@ There is no human at the other end of this session. You are playing both
 roles: you drive the epic **and** you supply the answers the user would give.
 
 - When a sub-agent hands back a question meant for the user, answer it
-  yourself from the specs above, then let that sub-agent carry on.
+  yourself from the specs above, then let that spec carry on, as the point
+  below says.
 - When the skill puts a disagreement between plans to you with a proposed
   answer, accept the proposal.
 - At the end-of-planning review, confirm the summary without changes.
+- This session is headless: no one replies between your turns. The answers
+  above are all you will get.
 - If you are offered to save something to the knowledge base, decline.
 - Make a reasonable decision on anything else, record it where the workflow
   asks, and move on.

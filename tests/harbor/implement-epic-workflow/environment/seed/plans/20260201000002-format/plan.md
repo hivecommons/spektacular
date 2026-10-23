@@ -8,6 +8,23 @@ Add `todo/format.py` with `format_todos(todos)`, the one place the todo list's p
 
 All work lands in the single registered repo, `todo-app`. A new module, `todo/format.py`, exposes the pure function `format_todos(todos: list[dict]) -> list[str]`. It sorts by `id` and renders each todo as `<id>. [ ] <title>`, or `[x]` when `done` is true. An empty list renders as `["No todos."]`. It does no I/O.
 
+## Component Breakdown
+
+- `todo/format.py` (new): `format_todos`.
+- `tests/test_format.py` (new): unit tests for it.
+
+## Data Structures & Interfaces
+
+- `format_todos(todos: list[dict]) -> list[str]`: one line per todo, sorted by `id`; `["No todos."]` for an empty list.
+
+## Implementation Detail
+
+Per task, in [context.md](./context.md).
+
+## Dependencies
+
+Python 3 standard library only. No other spec.
+
 ## Testing Approach
 
 `tests/test_format.py` uses `unittest` and checks the layout, the ordering and the empty list.

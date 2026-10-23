@@ -44,7 +44,7 @@ Summary: two to four plain-language sentences.
 | `**Repo:**` | Required. Exactly one registered repo name. |
 | `**Depends on:**` | Required. Either `none` on the same line, or a list with one `- <id> — <title>` entry per dependency. Only the id is parsed; the title is for readers and may drift without breaking anything. |
 | `**Execution:**` | Required. `agent`, or `human — <reason>` with a non-empty reason. |
-| Acceptance criteria | `- [ ]` / `- [x]` checkboxes, ticked by implement only when the criterion passed verification. |
+| Acceptance criteria | `- [ ]` / `- [x]` checkboxes, ticked by implement only when the goal check judged the criterion met; with `implement.goal_check.enabled: false`, only when it passed verification. |
 
 A task with no dependencies is written:
 

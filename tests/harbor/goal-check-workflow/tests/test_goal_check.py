@@ -1,6 +1,6 @@
 """Verifier for the goal-check-workflow harbor task.
 
-The agent resumed an implement run at `verify` for a one-task plan whose
+The agent resumed an implement run at `check_goal`, after verify, for a one-task plan whose
 three acceptance criteria are: `todo count` prints the number of items, unit
 tests cover it, and the README documents it. In the `unmet` scenario the
 README line is missing while every test passes and the agent is told the

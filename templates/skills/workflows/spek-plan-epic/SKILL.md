@@ -43,6 +43,8 @@ Repeat until nothing is left to start and no child is running:
 
 Use your agent's own way of running sub-agents in the background, so independent specs are planned in overlapping time. Start every ready spec; there is no limit on how many run at once.
 
+**In a headless session, keep every child inside your turn.** A session is headless when no one replies between your turns: you were started non-interactively, or your prompt says so. There, a sub-agent still running in the background after you end your turn may be stopped before it finishes; headless Claude Code stops one after ten minutes. So instead of starting children in the background, start the ready specs as foreground sub-agents in a single message, so they still run in overlapping time, and handle every hand-back (Step 4) before you end the turn.
+
 A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not. A child that ended without a hand-back is no longer running (Step 4).
 
 # Step 3: The child prompt
@@ -72,7 +74,7 @@ Only a stop the plan workflow itself defines earns a question: a design referenc
 # Step 4: Handling a hand-back
 
 - **`DONE:`** — keep its summary for Step 6; nothing is written to the epic's planning summary yet, because the summary is produced only once every decision between the plans is settled. Re-read `status` and start any spec that has just become ready.
-- **`QUESTION:`** — put the question to the user. Present it as ordinary text first, naming the spec, the options and the recommended default, then ask. While the user considers it, the other children keep going. Send the user's answer back to the same child, so it continues where it stopped. If your agent cannot continue a stopped child, start a fresh child on the same spec with the answer included in its prompt; it resumes the plan from its lane with the `goto` above.
+- **`QUESTION:`** — put the question to the user. Present it as ordinary text first, naming the spec, the options and the recommended default, then ask. While the user considers it, the other children keep going. Send the user's answer back to the same child, so it continues where it stopped. If your agent cannot continue a stopped child, start a fresh child on the same spec with the answer included in its prompt; it resumes the plan from its lane with the `goto` above. In a headless session, always start the fresh child, in the foreground: a stopped child that is continued may carry on in the background, where it can be stopped. Do one or the other, never both: if you start a fresh child, the stopped one must not also be continued, because only one child may work on a spec at a time.
 - **The user declines to answer now** ("not now", "I'll think about it") — enter stopping mode.
 - **`FAILED:`** — enter stopping mode.
 - **No hand-back at all** — a child whose final message does not open with `DONE:`, `QUESTION:` or `FAILED:` (typically a sentence announcing its next action, such as "Now run the next goto") did not stop: it was cut off by the agent's own limit on how long one sub-agent may run. Nothing is lost, since its plan stays in progress in its lane. Start a fresh child on the same spec straight away, on your own and without waiting for the user, with the **resume** prompt; it carries on from the step its lane records. Name the resume in your next progress line. If a spec is cut off twice in a row at the same step in `status`, treat it as `FAILED:`.

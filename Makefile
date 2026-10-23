@@ -3,6 +3,10 @@ VERSION := dev
 
 HARBOR_AUTH := CLAUDE_CODE_OAUTH_TOKEN=$$(python3 -c "import json; print(json.load(open('$$HOME/.claude/.credentials.json'))['claudeAiOauth']['accessToken'])")
 HARBOR_MODEL := claude-sonnet-4-6
+# Installing the agent in a fresh container (apt packages, then the agent
+# itself) takes two to four minutes against harbor's 360-second default, so a
+# slow mirror fails a run before the agent starts. Double the allowance.
+HARBOR_RUN_FLAGS := --agent-setup-timeout-multiplier 2
 
 # How harbor runs each agent, for targets that take AGENT. Like Claude, Bob
 # signs in with the login on this machine: tests/harbor/agents/bob_agent.py
@@ -91,7 +95,7 @@ _harbor-test-spec:
 	sed -e 's|{{agent}}|$(AGENT)|g' -e 's|{{spek_new}}|$(SPEK_NEW)|g' \
 		tests/harbor/spec-workflow/instruction.md \
 		> tests/harbor/.build/spec-workflow-$(AGENT)/instruction.md
-	$(HARBOR_AUTH) harbor run -p tests/harbor/.build/spec-workflow-$(AGENT) -a $(HARBOR_AGENT) -m $(HARBOR_MODEL) -o tests/harbor/jobs
+	$(HARBOR_AUTH) harbor run $(HARBOR_RUN_FLAGS) -p tests/harbor/.build/spec-workflow-$(AGENT) -a $(HARBOR_AGENT) -m $(HARBOR_MODEL) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/spec-workflow-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
@@ -121,13 +125,14 @@ _harbor-test-repo:
 	cp tests/harbor/repo-workflow/solution/solve.sh tests/harbor/.build/repo-workflow-$(SCENARIO)/solution/solve.sh
 	cp tests/harbor/repo-workflow/tests/test.sh tests/harbor/.build/repo-workflow-$(SCENARIO)/tests/test.sh
 	cp tests/harbor/repo-workflow/tests/test_repo_workflow.py tests/harbor/.build/repo-workflow-$(SCENARIO)/tests/test_repo_workflow.py
+	echo $(SCENARIO) > tests/harbor/.build/repo-workflow-$(SCENARIO)/tests/scenario
 	SCENARIO_BODY=$$(cat tests/harbor/repo-workflow/scenario-$(SCENARIO).md); \
 	awk -v scenario="$$SCENARIO_BODY" -v agent="$(AGENT)" -v skill="$(SKILL)" \
 		'{ gsub(/\{\{agent\}\}/, agent); gsub(/\{\{skill_invocation\}\}/, skill); \
 		   if ($$0 == "{{scenario}}") print scenario; else print }' \
 		tests/harbor/repo-workflow/instruction.md \
 		> tests/harbor/.build/repo-workflow-$(SCENARIO)/instruction.md
-	SPEK_SCENARIO=$(SCENARIO) $(HARBOR_AUTH) harbor run -p tests/harbor/.build/repo-workflow-$(SCENARIO) -a $(HARBOR_AGENT) -m $(HARBOR_MODEL) -o tests/harbor/jobs
+	SPEK_SCENARIO=$(SCENARIO) $(HARBOR_AUTH) harbor run $(HARBOR_RUN_FLAGS) -p tests/harbor/.build/repo-workflow-$(SCENARIO) -a $(HARBOR_AGENT) -m $(HARBOR_MODEL) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/repo-workflow-$(SCENARIO)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
@@ -160,14 +165,14 @@ _harbor-test-plan:
 	sed -e 's|{{agent}}|$(AGENT)|g' -e 's|{{spek_plan}}|$(SPEK_PLAN)|g' \
 		tests/harbor/plan-workflow/instruction.md \
 		> tests/harbor/.build/plan-workflow-$(AGENT)/instruction.md
-	$(HARBOR_AUTH_$(AGENT)) harbor run -p tests/harbor/.build/plan-workflow-$(AGENT) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
+	$(HARBOR_AUTH_$(AGENT)) harbor run $(HARBOR_RUN_FLAGS) -p tests/harbor/.build/plan-workflow-$(AGENT) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/plan-workflow-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
 
 harbor-test-implement:
 	GOOS=linux GOARCH=amd64 go build -o tests/harbor/implement-workflow/environment/spektacular .
-	$(HARBOR_AUTH) harbor run -p tests/harbor/implement-workflow -a claude-code -m $(HARBOR_MODEL) -o tests/harbor/jobs
+	$(HARBOR_AUTH) harbor run $(HARBOR_RUN_FLAGS) -p tests/harbor/implement-workflow -a claude-code -m $(HARBOR_MODEL) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/implement-workflow__*/verifier/test-stdout.txt 2>/dev/null | head -1)
@@ -201,7 +206,7 @@ _harbor-test-epic:
 	sed -e 's|{{agent}}|$(AGENT)|g' -e 's|{{spek_plan_epic}}|$(SPEK_PLAN_EPIC)|g' \
 		tests/harbor/epic-workflow/instruction.md \
 		> tests/harbor/.build/epic-workflow-$(AGENT)/instruction.md
-	$(HARBOR_AUTH_$(AGENT)) harbor run -p tests/harbor/.build/epic-workflow-$(AGENT) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
+	$(HARBOR_AUTH_$(AGENT)) harbor run $(HARBOR_RUN_FLAGS) -p tests/harbor/.build/epic-workflow-$(AGENT) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/epic-workflow-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
@@ -241,7 +246,7 @@ _harbor-test-standing-rules:
 		> tests/harbor/.build/standing-rules-$(AGENT)/environment/seed/seed.sh
 	sed -e 's|{{agent}}|$(AGENT)|g' tests/harbor/standing-rules/instruction.md \
 		> tests/harbor/.build/standing-rules-$(AGENT)/instruction.md
-	$(HARBOR_AUTH_$(AGENT)) harbor run -p tests/harbor/.build/standing-rules-$(AGENT) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
+	$(HARBOR_AUTH_$(AGENT)) harbor run $(HARBOR_RUN_FLAGS) -p tests/harbor/.build/standing-rules-$(AGENT) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/standing-rules-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
@@ -286,12 +291,12 @@ _harbor-test-implement-epic:
 	sed -e 's|{{agent}}|$(AGENT)|g' -e 's|{{spek_implement_epic}}|$(SPEK_IMPLEMENT_EPIC)|g' \
 		tests/harbor/implement-epic-workflow/instruction.md \
 		> $(IMPLEMENT_EPIC_BUILD)/instruction.md
-	$(HARBOR_AUTH_$(AGENT)) harbor run -p $(IMPLEMENT_EPIC_BUILD) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
+	$(HARBOR_AUTH_$(AGENT)) harbor run $(HARBOR_RUN_FLAGS) -p $(IMPLEMENT_EPIC_BUILD) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/$$(echo implement-epic-workflow-$(AGENT)$(VARIANT) | cut -c1-32)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
 
-# The goal-check suite: an implement run resumed at verify for one task whose
+# The goal-check suite: an implement run resumed at check_goal for one task whose
 # README criterion is missing while its tests pass (SCENARIO=unmet, the
 # default for the per-agent targets) or whose criteria all hold (SCENARIO=met). Renders
 # tests/harbor/goal-check-workflow into
@@ -324,6 +329,7 @@ _harbor-test-goal-check:
 	cp tests/harbor/goal-check-workflow/tests/test.sh tests/harbor/goal-check-workflow/tests/test_goal_check.py $(GOAL_CHECK_BUILD)/tests/
 	cp tests/harbor/shared/*.py $(GOAL_CHECK_BUILD)/tests/
 	echo $(SCENARIO) > $(GOAL_CHECK_BUILD)/environment/seed/scenario
+	echo $(AGENT) > $(GOAL_CHECK_BUILD)/environment/seed/agent
 	echo $(SCENARIO) > $(GOAL_CHECK_BUILD)/tests/scenario
 	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> $(GOAL_CHECK_BUILD)/task.toml; fi
 	GOOS=linux GOARCH=amd64 go build -o $(GOAL_CHECK_BUILD)/environment/spektacular .
@@ -333,7 +339,7 @@ _harbor-test-goal-check:
 		   if ($$0 == "{{scenario}}") print scenario; else print }' \
 		tests/harbor/goal-check-workflow/instruction.md \
 		> $(GOAL_CHECK_BUILD)/instruction.md
-	SPEK_SCENARIO=$(SCENARIO) $(HARBOR_AUTH_$(AGENT)) harbor run -p $(GOAL_CHECK_BUILD) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
+	SPEK_SCENARIO=$(SCENARIO) $(HARBOR_AUTH_$(AGENT)) harbor run $(HARBOR_RUN_FLAGS) -p $(GOAL_CHECK_BUILD) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/$$(echo goal-check-workflow-$(AGENT)-$(SCENARIO) | cut -c1-32)__*/verifier/test-stdout.txt 2>/dev/null | head -1)

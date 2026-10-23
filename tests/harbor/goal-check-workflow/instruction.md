@@ -1,27 +1,25 @@
 # Finish implementing a planned task using Spektacular
 
 You are testing the `spektacular` CLI tool by finishing an implement run. The
-binary is already installed at `/usr/local/bin/spektacular`.
-
-## Setup
-
-First initialize the project:
-
-```bash
-spektacular init {{agent}}
-```
+binary is already installed at `/usr/local/bin/spektacular`, and the project
+in `/app` is already initialised for {{agent}}: do not run `spektacular init`.
 
 ## Task
 
 The project in `/app` is a small Python todo app, committed to git. Its plan
 `20260301000000-todo-count` has one task, "Add the count command", and an
-implement run for it is already in progress: it stopped at the `verify` step.
-The task's work is in the working tree, uncommitted.
+implement run for it is already in progress: it stopped at the `check_goal`
+step. The task's work is in the working tree, uncommitted. The verify step
+already ran, and its results were:
+
+```
+python3 -m unittest discover -s tests  -> pass (3 tests)
+python3 -m todo count                  -> pass (prints 0, then 2 after two adds)
+```
 
 {{scenario}}
 
-Resume the implement run with the `spek-implement` skill that was installed
-during init:
+Resume the implement run with the `spek-implement` skill that init installed:
 
 ```
 {{spek_implement}}

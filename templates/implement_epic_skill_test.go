@@ -131,6 +131,8 @@ func TestImplementEpicSkillRunsSpecsInWorktreesAndMergesBeforeDependents(t *test
 		"specs that are `blocked` wait for the specs in their `waiting_on`, which must be implemented **and merged** first.",
 		"independent specs are implemented in overlapping time",
 		"Start every ready spec; there is no limit on how many run at once.",
+		"**In a headless session, keep every child inside your turn.**",
+		"start the ready specs as foreground sub-agents in a single message, so they still run in overlapping time, and handle every hand-back (Step 6) before you end the turn.",
 		"A child that handed back a `QUESTION:` and is waiting for its answer still counts as running.",
 		"Never start a second child for a spec that already has one, waiting or not.",
 	)
@@ -201,6 +203,9 @@ func TestImplementEpicSkillAsksNothingBetweenSpecs(t *testing.T) {
 		"Present it as ordinary text first, naming the spec, the options and the recommended default, then ask.",
 		"the other children keep going",
 		"Send the user's answer back to the same child",
+		"Do one or the other, never both",
+		"only one child may work on a spec at a time",
+		"In a headless session, always start the fresh child, in the foreground",
 	)
 
 	// Every mention of asking, outside the version-check partial, is one of

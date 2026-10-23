@@ -110,6 +110,8 @@ func TestPlanEpicSkillPlansOutstandingSpecsInDependencyOrder(t *testing.T) {
 		"Specs that are `done` are skipped; specs that are `blocked` wait for the specs in their `waiting_on`.",
 		"independent specs are planned in overlapping time",
 		"Start every ready spec; there is no limit on how many run at once.",
+		"**In a headless session, keep every child inside your turn.**",
+		"start the ready specs as foreground sub-agents in a single message, so they still run in overlapping time, and handle every hand-back (Step 4) before you end the turn.",
 		"Problems never block planning",
 	)
 
@@ -144,6 +146,9 @@ func TestPlanEpicSkillStopsOnlyForQuestionsAndTheReview(t *testing.T) {
 		"Present it as ordinary text first, naming the spec, the options and the recommended default, then ask.",
 		"the other children keep going",
 		"Send the user's answer back to the same child",
+		"Do one or the other, never both",
+		"only one child may work on a spec at a time",
+		"In a headless session, always start the fresh child, in the foreground",
 	)
 
 	review := flat(section(t, skill, "# Step 7: The end-of-planning review"))

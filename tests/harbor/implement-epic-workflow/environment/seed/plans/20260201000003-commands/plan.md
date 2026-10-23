@@ -8,6 +8,25 @@ Add the `add`, `list` and `done` commands to `todo/cli.py`, reading and writing 
 
 All work lands in the single registered repo, `todo-app`. `todo/cli.py` gains `argparse` subparsers `add <title>`, `list` and `done <id>`, each with a one-line `help` string and dispatched to a small handler through `set_defaults(func=...)`. `add` appends `{"id": max_id + 1, "title": title, "done": False}` (id 1 for an empty list), saves, and prints `Added <id>`. `list` prints each line of `format_todos(load())`. `done` marks the todo done, saves, and prints `Done <id>`; an unknown id prints `No todo <id>` to stderr and returns 1. With no subcommand, `main` prints the usage and returns 0. The README gains a `## Usage` section.
 
+## Component Breakdown
+
+- `todo/cli.py`: the `add`, `list` and `done` subcommands and their handlers.
+- `README.md`: a `## Usage` section.
+- `tests/test_commands.py` (new): tests for each command, the help text and the README.
+
+## Data Structures & Interfaces
+
+- `main(argv: list[str] | None = None) -> int`: parses `argv` and dispatches to the subcommand's handler.
+- Output: `Added <id>`, the lines of `format_todos(load())`, `Done <id>`, or `No todo <id>` on stderr.
+
+## Implementation Detail
+
+Per task, in [context.md](./context.md).
+
+## Dependencies
+
+`todo.storage` (spec `20260201000001-storage`) and `todo.format` (spec `20260201000002-format`), both merged before this one starts. Python 3 standard library otherwise.
+
 ## Testing Approach
 
 `tests/test_commands.py` uses `unittest`, points `TODO_FILE` at a temporary file, and calls `main([...])` in-process, capturing stdout and stderr. Each task adds the tests for its own behaviour and runs the whole suite.

@@ -33,7 +33,7 @@ installed during init. Run the skill:
 ```
 
 The skill makes you the orchestrator: it has you give each spec its own git
-worktrees and start a separate background sub-agent for it, running the full
+worktrees and start a separate sub-agent for it, running the full
 implement workflow for that one spec, in the order the specs' dependencies
 allow, and merge each finished spec back before anything that depends on it
 starts. Specs that do not depend on each other are implemented at the same
@@ -50,7 +50,9 @@ roles: you drive the epic **and** you supply the answers the user would give.
   just installed, not code.
 - When a sub-agent hands back a question meant for the user, answer it
   yourself with the default it recommends, or from the specs and plans, then
-  let that sub-agent carry on.
+  let that spec carry on, as the next point says.
+- This session is headless: no one replies between your turns. The answers
+  above are all you will get.
 - If you are offered to save something to the knowledge base, decline.
 - Make a reasonable decision on anything else and move on.
 

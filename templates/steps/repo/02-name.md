@@ -16,9 +16,9 @@ Here is what the repo says about itself:
 {{/evidence.languages_line}}{{#evidence.top_level_line}}- at its top level: {{evidence.top_level_line}}
 {{/evidence.top_level_line}}
 
-Propose a name drawn from this, not from the folder name, and state it inside the question so that agreeing alone is enough to record it. Prefer what the repo calls itself where that reads well. It has to be unique in this project and safe to use in a path.
+Propose a name drawn from this, not from the folder name, and state it inside the question so that agreeing alone is enough to record it. Make it a real question, such as "Shall I call it `<name>`?", not a statement of what you will do. Prefer what the repo calls itself where that reads well. It has to be unique in this project and safe to use in a path.
 
-**Offer to take the rest, once.** Along with this first proposal, tell the user you can fill in the remaining details yourself if they would rather not go through them one at a time. Make the offer here and nowhere else.
+**Offer to take the rest, once.** Along with this first proposal, tell the user you can fill in the remaining details yourself if they would rather not go through them one at a time. Call them "the rest" or "the remaining details", never by name: listing the description, the role or the tags here is mentioning them. Make the offer here and nowhere else.
 {{/evidence.readable}}
 {{^evidence.readable}}
 This repo says nothing about itself that you can read, so you have nothing to propose. Ask the user what it should be called, and say plainly that you could not tell from the repo. Do not guess from the folder name and present it as though you had read it.

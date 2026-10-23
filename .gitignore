@@ -50,7 +50,7 @@ vendor/
 # Harbor test results
 tests/harbor/jobs/
 tests/harbor/*/environment/spektacular
-tests/harbor/.build/'
+tests/harbor/.build/
 tests/harbor/shared/__pycache__
 jobs/
 

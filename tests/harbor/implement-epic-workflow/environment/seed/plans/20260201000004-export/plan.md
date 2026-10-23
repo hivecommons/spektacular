@@ -8,6 +8,24 @@ Add `todo/export.py` with `to_markdown(todos)` and a `todo export` command that 
 
 All work lands in the single registered repo, `todo-app`. A new module, `todo/export.py`, exposes the pure function `to_markdown(todos: list[dict]) -> str`: todos sorted by `id`, each rendered `- [ ] <title>` or `- [x] <title>` followed by a newline, joined into one string; an empty list gives `""`. `todo/cli.py` gains an `export` subparser whose handler writes `to_markdown(load())` to stdout with `sys.stdout.write`, adding nothing, and returns 0.
 
+## Component Breakdown
+
+- `todo/export.py` (new): `to_markdown`.
+- `todo/cli.py`: the `export` subcommand.
+- `tests/test_export.py` (new): tests for both.
+
+## Data Structures & Interfaces
+
+- `to_markdown(todos: list[dict]) -> str`: one `- [ ] <title>` or `- [x] <title>` line per todo, sorted by `id`; `""` for an empty list.
+
+## Implementation Detail
+
+Per task, in [context.md](./context.md).
+
+## Dependencies
+
+`todo.storage` (spec `20260201000001-storage`) and the `todo/cli.py` subcommands (spec `20260201000003-commands`), both merged before this one starts. Python 3 standard library otherwise.
+
 ## Testing Approach
 
 `tests/test_export.py` uses `unittest`: `to_markdown` directly, and `main(["export"])` in-process with `TODO_FILE` pointed at a temporary file.

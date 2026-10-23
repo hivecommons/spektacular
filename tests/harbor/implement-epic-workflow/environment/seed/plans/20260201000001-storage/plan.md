@@ -8,6 +8,25 @@ Add `todo/storage.py`, which keeps the todo list in a JSON file: `~/.todo.json`,
 
 All work lands in the single registered repo, `todo-app`. A new module, `todo/storage.py`, exposes `load() -> list[dict]` and `save(todos: list[dict]) -> None`. A private `_path()` resolves the file on every call: `TODO_FILE` when set and non-empty, otherwise `Path.home() / ".todo.json"`. `load()` returns `[]` for a missing file. `save()` writes JSON to a `tempfile.mkstemp` file in the target's directory and `os.replace`s it over the target, removing the temporary file if anything fails first.
 
+## Component Breakdown
+
+- `todo/storage.py` (new): `load`, `save` and the private `_path`.
+- `tests/test_storage.py` (new): unit tests for the module.
+
+## Data Structures & Interfaces
+
+- `load() -> list[dict]`: the stored todos, `[]` when the file is missing.
+- `save(todos: list[dict]) -> None`: writes the list as JSON, atomically.
+- A todo is `{"id": int, "title": str, "done": bool}`.
+
+## Implementation Detail
+
+Per task, in [context.md](./context.md).
+
+## Dependencies
+
+Python 3 standard library only (`json`, `os`, `pathlib`, `tempfile`). No other spec.
+
 ## Testing Approach
 
 `tests/test_storage.py` uses `unittest`. Every test points `TODO_FILE` and `HOME` at a temporary directory, so the real home directory is never touched.
