@@ -252,10 +252,11 @@ def window_of(windows: list[StepWindow], at: datetime) -> int | None:
 
 
 def lane_for(prompt: str, names: list[str]) -> str | None:
-    """The lane whose spec name a sub-agent's launch prompt names, the
-    longest name winning when one contains another."""
+    """The lane whose spec name a sub-agent's launch prompt names first, the
+    longest name winning when one contains another. A prompt names its own
+    spec before any it depends on."""
     named = [n for n in names if n in prompt]
-    return max(named, key=len) if named else None
+    return min(named, key=lambda n: (prompt.index(n), -len(n))) if named else None
 
 
 def step_breakdown(

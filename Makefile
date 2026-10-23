@@ -2,7 +2,7 @@ BINARY := spektacular
 VERSION := dev
 
 HARBOR_AUTH := CLAUDE_CODE_OAUTH_TOKEN=$$(python3 -c "import json; print(json.load(open('$$HOME/.claude/.credentials.json'))['claudeAiOauth']['accessToken'])")
-HARBOR_MODEL := claude-sonnet-4-6
+HARBOR_MODEL := claude-sonnet-5-5
 # Installing the agent in a fresh container (apt packages, then the agent
 # itself) takes two to four minutes against harbor's 360-second default, so a
 # slow mirror fails a run before the agent starts. Double the allowance.

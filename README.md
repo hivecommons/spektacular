@@ -421,7 +421,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 Then run:
 
 ```bash
-harbor run -p tests/harbor/spec-workflow -a claude-code -m claude-sonnet-4-6 -o tests/harbor/jobs
+harbor run -p tests/harbor/spec-workflow -a claude-code -m claude-sonnet-5-5 -o tests/harbor/jobs
 ```
 
 Makefile wrappers run the suites for you, building the binary and wiring up the agent-specific placeholders:

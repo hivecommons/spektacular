@@ -25,7 +25,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from metrics import Paths, build_record, main, score_checks, write_record  # noqa: E402
+from metrics import Paths, build_record, lane_for, main, score_checks, write_record  # noqa: E402
 
 NAME = "20260101000000-user-auth"
 LANE_A = "20261001-user-auth"
@@ -963,6 +963,19 @@ def test_codex_rollout_run_has_no_step_outputs(tmp_path):
 
 
 # --- two lanes ----------------------------------------------------------------
+
+
+def test_lane_for_takes_the_spec_the_prompt_names_first():
+    # an epic sub-agent's prompt names its own spec, then the ones it builds on
+    names = ["20260201000003-commands", "20260201000004-export"]
+    prompt = "You are implementing spec `20260201000004-export`. It depends on `20260201000003-commands`."
+    assert lane_for(prompt, names) == "20260201000004-export"
+
+
+def test_lane_for_takes_the_longer_name_where_one_contains_another():
+    assert lane_for(f"plan {LANE_B}", [LANE_A, LANE_B]) == LANE_B
+    assert lane_for(f"plan {LANE_A}", [LANE_A, LANE_B]) == LANE_A
+    assert lane_for("look around", [LANE_A, LANE_B]) is None
 
 
 def test_two_lane_claude_run_splits_characters_by_lane(tmp_path):
