@@ -225,7 +225,7 @@ flags: dominant_step(run) / regressions(baseline, candidate) -> list[Flag]
 
 **Validation point**: The recorder's self-checks pass, including Claude totals matching the summary, unknowns for Bob and Codex, and a broken-log record. The existing verifier self-checks and the Go test suite still pass. Rendering any suite through its make target puts the shared helpers and build info in its tests directory.
 
-#### - [ ] Task: Read run summaries from every agent log
+#### - [x] Task: Read run summaries from every agent log
 **Id:** 92a98299-5d35-41a2-83b7-65a2837a337d
 **Repo:** spektacular
 **Depends on:** none
@@ -242,13 +242,13 @@ Whatever a log does not supply comes back as unknown with a reason, so the recor
 
 **Acceptance criteria**:
 
-- [ ] For a Claude run with one summary, wall time, model time, turns, cost and input, output and cached tokens equal that summary's values.
-- [ ] For a Claude run split by background sub-agents, turns are the sum across summaries, cost, tokens and model time come from the last summary, and wall time is the span from first to last message.
-- [ ] Sub-agent counts for started, completed, failed and stopped equal the Claude summary's, and each sub-agent has a duration.
-- [ ] A Bob trajectory yields turns and messages with tokens and cost unknown. A Codex trajectory yields turns and tokens with sub-agents unknown.
-- [ ] The functions the existing verifiers already use behave exactly as before.
+- [x] For a Claude run with one summary, wall time, model time, turns, cost and input, output and cached tokens equal that summary's values.
+- [x] For a Claude run split by background sub-agents, turns are the sum across summaries, cost, tokens and model time come from the last summary, and wall time is the span from first to last message.
+- [x] Sub-agent counts for started, completed, failed and stopped equal the Claude summary's, and each sub-agent has a duration.
+- [x] A Bob trajectory yields turns and messages with tokens and cost unknown. A Codex trajectory yields turns and tokens with sub-agents unknown.
+- [x] The functions the existing verifiers already use behave exactly as before.
 
-#### - [ ] Task: Turn the session log into step windows
+#### - [x] Task: Turn the session log into step windows
 **Id:** b1822747-0d20-4713-96a8-70a263ef994b
 **Repo:** spektacular
 **Depends on:** none
@@ -260,11 +260,11 @@ Give the shared session-log reader a way to list, for each workflow lane, the st
 
 **Acceptance criteria**:
 
-- [ ] A plan lane lists every step its command log shows it entered, in order, each with a start and end.
-- [ ] A step re-entered later, or a lane resumed by a second child, appears as separate windows rather than one window spanning the gap.
-- [ ] The epic timeline and the verifiers that read lanes behave exactly as before.
+- [x] A plan lane lists every step its command log shows it entered, in order, each with a start and end.
+- [x] A step re-entered later, or a lane resumed by a second child, appears as separate windows rather than one window spanning the gap.
+- [x] The epic timeline and the verifiers that read lanes behave exactly as before.
 
-#### - [ ] Task: Build and write the run metrics record
+#### - [x] Task: Build and write the run metrics record
 **Id:** ad91e65b-cb09-4607-8c8c-882c84eaaade
 **Repo:** spektacular
 **Depends on:**
@@ -278,13 +278,13 @@ Add the recorder a suite's verifier runs once the reward is written. It reads th
 
 **Acceptance criteria**:
 
-- [ ] Records for Claude, Codex, Bob and oracle runs all have the same top-level fields.
-- [ ] For N checks of which P passed, the overall score is P/N, each group's score is its own passed fraction, and groups follow test classes, or modules for suites written as plain functions.
-- [ ] A plan run's step breakdown lists every step its command log entered, in order, each with a duration and a character count. The durations add up to no more than the wall time.
-- [ ] A missing or unreadable agent log, session log, test result file or build info leaves a record with the affected fields marked unknown. The recorder still exits successfully and never writes the reward.
-- [ ] A Claude run's record lists nothing unknown under totals or steps.
+- [x] Records for Claude, Codex, Bob and oracle runs all have the same top-level fields.
+- [x] For N checks of which P passed, the overall score is P/N, each group's score is its own passed fraction, and groups follow test classes, or modules for suites written as plain functions.
+- [x] A plan run's step breakdown lists every step its command log entered, in order, each with a duration and a character count. The durations add up to no more than the wall time.
+- [x] A missing or unreadable agent log, session log, test result file or build info leaves a record with the affected fields marked unknown. The recorder still exits successfully and never writes the reward.
+- [x] A Claude run's record lists nothing unknown under totals or steps.
 
-#### - [ ] Task: Wire the recorder into every harbor suite
+#### - [x] Task: Wire the recorder into every harbor suite
 **Id:** c05ca510-c9c4-48ed-965e-592e3b986446
 **Repo:** spektacular
 **Depends on:**
@@ -297,10 +297,10 @@ Make all eight suites write the record the same way. Every render target copies 
 
 **Acceptance criteria**:
 
-- [ ] Rendering any suite through its make target leaves the shared helpers and a build info file in that suite's tests directory, and the source tree stays clean.
-- [ ] Every suite's reward is still 1 exactly when every check passes and 0 otherwise. The recorder runs only after the reward is written and its failure is ignored.
-- [ ] The implement suite's make target still runs the same suite with the same agent, from a rendered copy instead of the source directory.
-- [ ] Every suite image can run the recorder.
+- [x] Rendering any suite through its make target leaves the shared helpers and a build info file in that suite's tests directory, and the source tree stays clean.
+- [x] Every suite's reward is still 1 exactly when every check passes and 0 otherwise. The recorder runs only after the reward is written and its failure is ignored.
+- [x] The implement suite's make target still runs the same suite with the same agent, from a rendered copy instead of the source directory.
+- [x] Every suite image can run the recorder.
 
 ### Milestone 2: One command shows where runs spend their time
 
@@ -391,3 +391,92 @@ No other uncertainties remain that only implementation can resolve.
 - **Changing harbor itself, or its empty `agent_result` totals.** The record is built from the agent logs, not from harbor's summary.
 - **Exact Claude-style totals for Bob and Codex.** Their records carry unknowns until those agents report more, as the spec's known risk anticipates.
 - **Re-owning collected job directories** or otherwise fixing root-owned agent files. The report avoids them instead.
+
+## Changelog
+
+### 2026-10-23 — Task: Read run summaries from every agent log
+
+**What was done**: The shared transcript helper now reads each agent's own summary of a run. It covers Claude's `result` events, using the single-versus-several rule for runs split by background sub-agents, along with Claude's per-message characters and timestamps, sub-agent counts and durations, and nested-launch roots. It also reads the ATIF trajectory harbor writes for Bob and Codex, and Codex's native rollout as a fallback. Every measure a log does not supply comes back as `None` with an `Unknown(field, reason)`. Self-checks cover each reader on synthetic input, and they confirm that the existing readers are unchanged.
+
+**Deviations**:
+- `claude_subagents(objs)` finds the last `result` event itself, rather than taking it as a second argument as the context notes describe.
+- A Claude transcript with no `result` event still takes the model from its `system/init` event.
+- ATIF's `total_prompt_tokens` and Codex's rollout `input_tokens` include cached tokens, so the readers record `input_tokens` as prompt minus cached. That keeps the field meaning uncached input, as it does for Claude.
+- `codex_rollout_summary` counts as a turn only a `token_count` event that carries usage. Codex also emits usage-less events for rate-limit updates, and harbor's own converter skips those too.
+- Added `goto_step_of(command)`, `atif_subagents(traj)` and `parse_timestamp`, which the recorder needs: goto detection from shell commands, Bob launch counts with outcomes unknown, Codex sub-agents all unknown, and ISO timestamp parsing.
+- Implemented directly instead of with the two parallel agents the strategy suggested, because the readers share dataclasses and are small.
+
+**Files changed**:
+- `tests/harbor/shared/transcripts.py`
+- `tests/harbor/shared/tests/test_transcripts_summary.py` (new)
+
+**Discoveries**:
+- Claude's stream-json puts `timestamp` only on `assistant` and `user` objects. `system/*` events, including `task_notification`, carry none. A sub-agent that failed may send a `task_notification` with no `usage.duration_ms` (`epic-claude-epic`: 3 spawned, 2 durations).
+- `thinking` blocks in recent Claude transcripts are redacted to empty text, so thinking contributes nothing to character counts in practice.
+- Harbor's Codex conversion fills `final_metrics.total_cost_usd` only when litellm knows the model's price, so Codex cost may be present or unknown from run to run.
+- `atif_messages` numbers `order` by trajectory step index, user steps included. It is used for ordering only, not as a dense index.
+- The host's `python3` has no pytest. Run self-checks with `uvx --with pytest pytest -p no:cacheprovider <file>`.
+
+### 2026-10-23 — Task: Turn the session log into step windows
+
+**What was done**: The shared session-log reader gained `StepWindow(step, start, end)` with `duration_s`, and `Lane.step_windows()`, which lists each step a lane entered, in order. A step opens at the command that moved the workflow onto it and closes at the command that moved it on. Failed commands never move the step. The last window of each lane file closes at that file's last command. Self-checks cover a full plan lane, a step re-entered later, a lane split across two files, a resume inside one file, failed gotos, and the existing lane readers on the same fixtures.
+
+**Deviations**:
+- A resume inside one lane file is also a window boundary. A resume is the refused `<kind> new` that reports `workflow_in_progress`, and it starts no new file. The open window closes at the previous command's end, and a fresh window for the same step opens at the resume, so the hand-off gap between children is never counted as time in a step. The plan named only new segments (files) as boundaries, but its acceptance criterion requires a resumed lane to show separate windows, and that needs this rule.
+
+**Files changed**:
+- `tests/harbor/shared/sessionlog.py`
+- `tests/harbor/shared/tests/test_sessionlog_windows.py` (new)
+
+**Discoveries**:
+- Real session logs record `duration_ms: 0` for every command, so a window's end is the next step-changing command's start. Only a segment's final window uses `Event.end`.
+- On the reference plan run (`epic-claude-plan`), the 19 windows sum exactly to the lane's 923.2 s span, and `assemble` is 368.8 s. The lane starts at `plan new`, so the agent's setup before that (`init`, reading the spec) falls outside every step, and the lane span is shorter than the 948.4 s wall time.
+- Running several suites' `test_verifier_selfcheck.py` in one pytest call fails collection, because the files share a basename and have no `__init__.py`. Use `--import-mode=importlib` or run them one at a time.
+
+### 2026-10-23 — Task: Build and write the run metrics record
+
+**What was done**: Added the recorder, `tests/harbor/shared/metrics.py`. It reads the build info, the agent's own log (Claude stream-json, an ATIF trajectory, or a Codex rollout), the session log, pytest's JUnit XML and the reward, then writes `metrics.json` atomically with mode 0644 in the shared shape. That shape covers identity, check score overall and per group, totals, per-step durations and characters, and sub-agents, plus an `unknown` list with a reason for every null. Each section is gathered on its own, so one bad input costs only its own fields. The recorder always exits 0 and only ever reads the reward.
+
+**Deviations**:
+- `SessionLog` gained an optional `kinds` parameter. The spec suite writes `*_spec_<name>.jsonl` lane files, which the existing pattern (plan and implement only) never matched, so a spec run's steps would have been unknown. The recorder passes spec, plan and implement. The default is unchanged, so the epic timeline and verifiers read lanes exactly as before.
+- A session log with commands but no workflow lane (the repo suite) gives `workflows: []` with no unknown, because an empty list is a known value. `steps` is unknown only when the session log is missing or empty. The context notes had said "no lanes" was unknown, which would have made every repo run's step breakdown unknown.
+- In multi-lane Claude runs, sub-agent characters whose launch prompt names no lane, or that fall outside every window, count toward `orchestrator_output` along with the main agent's characters.
+- In order-based attribution (Bob), a message that issues a `goto` has its characters counted in the step it was issued from, and the step then advances.
+- The wall-time fallback (Bob shell logs, then the session-log span) applies to any run whose agent log leaves wall time unknown, including an oracle run or a missing log, not only Bob.
+- When there is no `build.json`, `run.agent` is taken from the agent log and is not listed as unknown. The test step caught the first version listing it anyway.
+- Implemented directly instead of with parallel agents, and the self-checks were written by a test sub-agent.
+
+**Files changed**:
+- `tests/harbor/shared/metrics.py` (new)
+- `tests/harbor/shared/sessionlog.py`
+- `tests/harbor/shared/tests/test_metrics.py` (new)
+
+**Discoveries**:
+- On the real reference trials, the recorder reproduces the hand analysis. The Claude plan run's `assemble` step is 368.8 s and 77,921 characters out of a 948.4 s run. The Bob plan run's wall time is 659.9 s from its shell log, with characters attributed by its gotos. The epic run splits its three plan lanes by launch prompt and gives 19,441 orchestrator characters.
+- A lane's span starts at `<kind> new`, so the agent's setup before that (`init`, reading the spec) belongs to no step. Step durations therefore always sum to less than the wall time.
+- Old collected jobs have no `junit.xml` or `build.json`, so running the recorder over them by hand gives `result.checks` and `run.*` unknown, as intended.
+
+### 2026-10-23 — Task: Wire the recorder into every harbor suite
+
+**What was done**: All eight suites now write the metrics record the same way.
+- **`test.sh`:** every script gives pytest `--junitxml=/logs/verifier/junit.xml` and leaves the reward block as it was. After the reward, it calls `python3 /tests/metrics.py || true`.
+- **Makefile:** a `write_build_info` macro writes `build.json` (agent, suite, scenario, `git describe`, commit, dirty) into each rendered tests directory. Every render target now copies `tests/harbor/shared/*.py` and calls that macro.
+- **Implement suite:** `harbor-test-implement` renders into `tests/harbor/.build/implement-workflow-claude` like the other suites, instead of running harbor on its source directory.
+- **Images:** the spec, plan, repo and implement images install `python3`.
+- **Self-check:** a static self-check reads the Makefile, the `test.sh` scripts and the Dockerfiles, and asserts all of this wiring.
+
+**Deviations**:
+- Added `tests/harbor/shared/tests/test_suite_wiring.py`, a static self-check. It covers the shared-helper copy, the build-info call and suite name per render target, a single pytest line with JUnit output, the reward block directly after pytest, the recorder as the last command, no early exit, the implement target running the rendered copy, and `python3` in every image. The plan expected no automated test for this task, but the eight hand-maintained copies are exactly the coupling the testing-architecture knowledge warns about.
+- goal-check and implement-epic do not pass `--bob-logs`, because the recorder's default is already `/root/.bob/logs`. Every `test.sh` uses the same single call.
+- implement-epic's scenario is `$(VARIANT)` without its leading `-` (`unlimited`), or null when unset.
+
+**Files changed**:
+- `Makefile`
+- `tests/harbor/{spec,plan,repo,implement,epic,implement-epic,goal-check}-workflow/tests/test.sh`, `tests/harbor/standing-rules/tests/test.sh`
+- `tests/harbor/{spec,plan,repo,implement}-workflow/environment/Dockerfile`
+- `tests/harbor/shared/tests/test_suite_wiring.py` (new)
+
+**Discoveries**:
+- Executing the output of `make -n harbor-test-<suite>` runs a real harbor trial, because the recursive `$(MAKE) _harbor-test-...` line is printed and then executed. This happened once during verification: a spec-workflow Claude trial was stopped during container setup, and its container, image and root-owned job directory were removed. To dry-render a suite, call its `_harbor-test-*` target directly and drop the `make`, `harbor run` and `go build` lines.
+- `tests/harbor/plan-workflow/tests/temp.py` is tracked, and `_harbor-test-plan` copies it into the plan image (`cp -r .../tests`). It opens a hard-coded path from an old jobs directory when imported. It is harmless because `test.sh` runs only `test_plan_workflow.py`, but it looks like a stray file. Left untouched, as it is outside this plan.
+- Every `build.json` from a working tree with uncommitted changes records `dirty: true`, so comparisons between runs can tell uncommitted builds apart.
