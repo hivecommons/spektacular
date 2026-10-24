@@ -72,9 +72,12 @@ follows the design.
 
 Then:
 
-1. Present the draft to the user as ordinary readable text, in full, and get their explicit
-   agreement before writing anything.
-2. Stage it under `.spektacular/tmp/<slug>.md` with your own `Write` tool.
+1. Stage the draft under `.spektacular/tmp/<slug>.md` with your own `Write` tool.
+2. Show it to the user and get their explicit agreement before writing it to the source. A design
+   document is almost always large: give the user the staged file's path with a short summary of
+   what it covers and the decisions it records, rather than printing it in the terminal. Only a
+   draft of a few lines is shown inline instead. When the user asks for changes, update the
+   staged file in place and say what changed.
 3. Write it:
    ```
    {{command}} design author --data '{"source":"<name>","path":"<path>"}' --from .spektacular/tmp/<slug>.md
@@ -116,7 +119,9 @@ Triggered when a design that already exists has changed.
 1. Read the current document: `{{command}} design read --data '{"source":"<name>","path":"<path>"}'`.
 2. Establish what changed. If the conversation has already settled it, do not re-interview; if it
    has not, run the author branch's interview on the delta alone rather than on the whole design.
-3. Present the revised document to the user in full and get their explicit agreement.
+3. Stage the revised document under `.spektacular/tmp/<slug>.md`, show it to the user exactly as
+   in the author branch — its path and a summary of what changed, not the document printed in
+   the terminal — and get their explicit agreement.
 4. Rewrite it with `{{command}} design author`, exactly as in the author branch. For a document
    Spektacular authored this is an update in place: it keeps the document's original capture date
    and the specs already referencing it, so existing references keep resolving. Pass
