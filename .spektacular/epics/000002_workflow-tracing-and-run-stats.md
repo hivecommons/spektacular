@@ -6,10 +6,14 @@ specs:
       depends_on: []
     - name: 000073_log-mode-and-logger-providers
       depends_on: []
+    - name: 000074_trace-spans-for-agent-work
+      depends_on:
+        - 000073_log-mode-and-logger-providers
 sources:
     - uri: docs/workflow-performance-investigation.md
       retrieved_date: "2026-10-24"
 ---
+
 
 # Workflow tracing and run stats
 
