@@ -1,6 +1,6 @@
 # Verify Implementation
 
-Guide for running a plan task's verification commands and reporting a concise pass/fail summary. Use this skill when the implement workflow reaches its `verify` step and needs to delegate command execution to a sub-agent.
+Guide for running a plan task's verification commands and reporting a concise pass/fail summary. Use this skill when the implement workflow reaches its `verify` step. The agent driving the workflow runs the commands itself, keeping each command's output short.
 
 ## Instructions
 
@@ -18,15 +18,15 @@ If no commands are documented, fall back to the standard Go pipeline: `go build 
 
 ### Step 2: Run each command
 
-Run every command in sequence. For each one:
+Run every command in sequence, with its output trimmed so a passing run prints almost nothing (pipe it through `tail -n 20`, or use a quiet flag). For each one:
 
 - Capture the exit code.
 - On failure, capture a **short excerpt** (5–10 lines) of the failing output — typically the test that failed, the file:line where it failed, and the assertion message. Do NOT capture the full test output.
 - On success, just note "pass".
 
-### Step 3: Return a concise summary
+### Step 3: Write a concise summary
 
-Return a terse report to the main agent, **one line per command**. Example:
+Write a terse report, **one line per command**. Example:
 
 ```
 make test     → pass
@@ -49,8 +49,8 @@ make test     → FAIL
 make lint     → pass
 ```
 
-Do **not** dump the full test output — the main agent has limited context and needs a digest, not a transcript.
+Do **not** keep the full test output — the context is limited and needs a digest, not a transcript.
 
 ### Step 4: Do not try to fix failures
 
-Your job is to report, not to fix. If a command fails, return the failing excerpt and let the main agent decide what to do. The implement workflow's `verify` step will handle the branching logic (re-run the implement step, ask the user, or abandon the task).
+Verification reports; it does not fix. If a command fails, keep the failing excerpt and do not change the code while verifying. The implement workflow's `verify` step will handle the branching logic (re-run the implement step, ask the user, or abandon the task).

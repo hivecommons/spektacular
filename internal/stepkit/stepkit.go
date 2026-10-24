@@ -58,6 +58,25 @@ type ResultBuilder func(stepName, instanceName, primaryPath, instruction string)
 // every step instruction that has a next step.
 const workingContextFooterPath = "partials/working-context-footer.md"
 
+// footerlessSteps are the continuing steps, per workflow kind, that get no
+// working-context footer. Each does work the plan already describes, or
+// commits documents already drafted, so it takes no decision worth carrying
+// to a resumed session; refreshing the working context on every one of them
+// cost a turn per step, most of all inside the implement task loop. The step
+// that closes the loop (update_changelog, for a task) still carries the
+// footer, and the CLI records a goal check's decisions itself.
+var footerlessSteps = map[string]map[string]bool{
+	"plan":      {"assemble": true, "write_plan": true, "write_context": true, "write_research": true},
+	"implement": {"analyze": true, "implement": true, "test": true, "verify": true, "check_goal": true, "update_plan": true},
+}
+
+// carriesWorkingContextFooter reports whether a step of the given workflow
+// kind ends with the working-context footer: every continuing step except the
+// footerless ones.
+func carriesWorkingContextFooter(kind, step, next string) bool {
+	return next != "" && !footerlessSteps[kind][step]
+}
+
 // orchestratedPartialPath is the shared fragment WriteStepResult appends to
 // every step of an orchestrated workflow, telling the agent to hand its
 // stops back to the orchestrator that started it rather than ask the user.
@@ -74,7 +93,8 @@ const gitCommitPartialPath = "partials/git-commit-message.md"
 // (templates/partials/working-context-footer.md) is appended after a
 // horizontal rule, so every continuing step ends with the identical
 // keep-context-current paragraph and step templates never carry their own
-// copy. Terminal steps (NextStep == "") get no footer.
+// copy. Terminal steps (NextStep == "") and the footerless steps get no
+// footer.
 //
 // The variable merge order is: standard vars → strategy path vars → extras.
 // Later entries win, so Extra can override both standard vars and strategy
@@ -168,7 +188,7 @@ func WriteStepResult(
 		}
 		instruction = strings.TrimRight(instruction, "\n") + "\n\n---\n\n" + partial
 	}
-	if req.NextStep != "" {
+	if carriesWorkingContextFooter(cfg.Kind, req.StepName, req.NextStep) {
 		footer, err := RenderTemplate(workingContextFooterPath, vars)
 		if err != nil {
 			return err

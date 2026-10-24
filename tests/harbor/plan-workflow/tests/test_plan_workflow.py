@@ -1246,14 +1246,16 @@ class TestArtefactStatusLifecycle:
             )
 
     def test_docs_draft_during_walkthrough(self):
-        """Docs read during the walkthrough still carry document_status: draft.
+        """Docs read before sign-off still carry document_status: draft.
 
-        The walkthrough template instructs the agent to read the committed
-        documents back with `plan file read`, so the walkthrough window
-        reliably contains such reads and their results include the
-        frontmatter. Every status observed there must be draft: a final
-        status during the walkthrough would mean the documents were
-        stamped before sign-off, i.e. the gating is broken.
+        The walkthrough reviews the documents the agent has just written,
+        and reads them back with `plan file read` only on a resumed session,
+        so a read is not guaranteed. Every `plan file read` result from the
+        first document write (`write_plan`) to the end of the walkthrough
+        must show draft: a final status there would mean the documents were
+        stamped before sign-off, i.e. the gating is broken. A run that read
+        none back is skipped: the finished step's stamp is covered by the Go
+        tests (TestPlanFinished_ClosesAllThreeSiblings).
         """
         windows = _windows_cache()
         calls = _calls_cache()
@@ -1263,8 +1265,9 @@ class TestArtefactStatusLifecycle:
             "Walkthrough step was never entered — cannot verify the "
             "draft status of the documents under review."
         )
+        first = windows.get("write_plan") or window
         observed = []  # (call index, status value)
-        for c in calls[window.start : window.end]:
+        for c in calls[first.start : window.end]:
             cmd = _bash_command(c)
             if "plan file read" not in cmd:
                 continue
@@ -1272,14 +1275,15 @@ class TestArtefactStatusLifecycle:
                 results.get(c.tool_use_id, "")
             ):
                 observed.append((c.index, status))
-        assert observed, (
-            "No `plan file read` result inside the walkthrough window "
-            "contained a status: frontmatter line — the walkthrough must "
-            "read the committed documents back for review."
-        )
+        if not observed:
+            pytest.skip(
+                "no `plan file read` result between write_plan and the end of "
+                "the walkthrough carried a status: line — the walkthrough used "
+                "the documents already in context"
+            )
         offenders = [o for o in observed if o[1] != STATUS_DRAFT]
         assert not offenders, (
-            "Documents read during the walkthrough already carried a "
+            "Documents read before sign-off already carried a "
             f"non-draft status (call index, status): {offenders} — "
             "the final stamp must wait for walkthrough sign-off."
         )

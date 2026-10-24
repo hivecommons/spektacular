@@ -53,11 +53,15 @@ Repeat until nothing is left to start or merge and no child is running:
    spektacular epic worktree --data '{"spec":"<spec>"}'
    ```
 
-   Then start a child to **start** it.
+   Then start a child to **start** it. Its prompt names each worktree path the command reported (Step 4).
 5. Specs that are `done` are skipped; specs that are `blocked` wait for the specs in their `waiting_on`, which must be implemented **and merged** first.
 6. Report progress (Step 7), then wait for a child to hand back and handle it (Step 6). Then go round again.
 
 Use your agent's own way of running sub-agents in the background, so independent specs are implemented in overlapping time. Start every ready spec; there is no limit on how many run at once.
+
+**In a headless session, keep every child inside your turn.** A session is headless when no one replies between your turns: you were started non-interactively, or your prompt says so. Being told that no one will answer is not on its own a reason to hold children in your turn; the reason is what a headless session does to a background child once your turn ends. Headless Claude Code stopped one about ten minutes after the main agent ended its turn, and its completion notice never woke the session (recorded on 2026-10-24 with Claude Code 2.1.310 by the background-child harbor probe). So instead of starting children in the background, start the ready specs as foreground sub-agents in a single message, so they still run in overlapping time, and handle every hand-back (Step 6) before you end the turn.
+
+**Never set a timed wake-up while children run.** Do not use a scheduled wake-up, a timer, a recurring job or a command that sleeps to check on your children: each child's hand-back, or its completion notice, is what wakes you. A wake-up still pending once the work is done keeps the session running with nothing left to do.
 
 A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not. A child that ended without a hand-back is no longer running (Step 6).
 
@@ -66,10 +70,12 @@ A child that handed back a `QUESTION:` and is waiting for its answer still count
 Give each child exactly what it needs, because it inherits nothing from you:
 
 - the spec name, and the project root to run every `spektacular` command from. The implement workflow's own instructions name where each repo's code lives in the spec's worktrees; it never runs `spektacular` from inside a worktree and never touches a worktree's `.spektacular` directory;
+- the spec's code locations: the worktree path of every repo that `spektacular epic worktree --data '{"spec":"<spec>"}'` reports for the spec, and that the child works on code only there. Running it again for a spec whose worktrees already exist reports the same paths, so a resumed child is given them too;
 - to **start** or **resume**: run `spektacular implement new --data '{"name":"<spec>","orchestrated":true}'`. If it returns a resume report for the spec's lane, read back what the report names (the plan documents and the lane's notes), then run the `goto` it gives, which carries `\"name\":\"<spec>\"`;
 - "Follow the `spek-implement` skill. This run is orchestrated: tasks run one after another without asking between them, every `goto` carries `\"name\":\"<spec>\"`, and you never ask the user anything yourself.";
 - "Never resolve a merge or git conflict yourself, and never merge, rebase or switch branches: your worktree's branch is merged by the orchestrator.";
 - "You never write the spec's text or a design document. If the spec or a design it references is wrong, propose the amendment in a `QUESTION:` hand-back, naming the document, the section, the conflict and the change you propose.";
+- "If the goal check stops your task, because its attempts ran out or it judged a criterion impossible, hand it back as a `QUESTION:` with the criteria not met or impossible and the reviewer's evidence, and the options the step offers.";
 - the store-access rule above, word for word;
 - the hand-back contract and the definition of a genuine open question, below.
 
@@ -83,11 +89,11 @@ A child ends every turn that stops its work with a final message whose **first l
 
 ## What counts as a genuine open question
 
-Only a stop the implement workflow itself defines earns a question: the plan no longer matching the code, the spec or a design it references being wrong, a task outgrowing its scope, or a verification failure the child cannot fix within the task. Everything else the child decides itself and records in the plan's changelog. A child never asks whether to continue to its next task.
+Only a stop the implement workflow itself defines earns a question: the plan no longer matching the code, the spec or a design it references being wrong, a task outgrowing its scope, a verification failure the child cannot fix within the task, or the goal check running out of attempts or judging a criterion impossible. Everything else the child decides itself and records in the plan's changelog. A child never asks whether to continue to its next task.
 
 # Step 5: Merging a finished spec
 
-Merge a spec as soon as its child hands back `DONE:`, and whenever `status` reports it `awaiting_merge`:
+Merge a spec as soon as its child hands back `DONE:`, and whenever `status` reports it `awaiting_merge`. Never merge a spec while its goal-check question is open: `epic merge` refuses it (`goal_check_open`) until the question is answered and its run goes on.
 
 ```
 spektacular epic merge --data '{"spec":"<spec>"}'
@@ -100,7 +106,7 @@ On `merge_lock_timeout`, another merge or commit in the project was still runnin
 # Step 6: Handling a hand-back
 
 - **`DONE:`** — merge the spec (Step 5), keep its summary for the final report, then re-read `status` and start the specs that have just become ready.
-- **`QUESTION:`** — put the question to the user. Present it as ordinary text first, naming the spec, the options and the recommended default, then ask. While the user considers it, the other children keep going. Send the user's answer back to the same child, so it continues where it stopped. If your agent cannot continue a stopped child, start a fresh child on the same spec with the answer included in its prompt; it resumes from its lane.
+- **`QUESTION:`** — put the question to the user. Present it as ordinary text first, naming the spec, the options and the recommended default, then ask. While the user considers it, the other children keep going. Send the user's answer back to the same child, so it continues where it stopped. If your agent cannot continue a stopped child, start a fresh child on the same spec with the answer included in its prompt; it resumes from its lane. In a headless session, always start the fresh child, in the foreground: a stopped child that is continued may carry on in the background, where it can be stopped. Do one or the other, never both: if you start a fresh child, the stopped one must not also be continued, because only one child may work on a spec at a time.
 - **An amendment the user approves** — when a `QUESTION:` proposes amending the spec or a design, apply it yourself only after the user's explicit approval, from the project root and never in a worktree. For the spec, read it with `spektacular spec file read <spec>`, change only the sections the user approved, stage the full result under `.spektacular/tmp/<spec>/`, and run `spektacular spec amend --data '{"name":"<spec>","reason":"<why>","run":"epic <epic> implement run, task <task>"}' --from <staged file>`. For a design, revise it with `spektacular design author`, or store the new version the user supplies with `spektacular design write` for a design they wrote, then record it with `spektacular spec amend` and a `"design":{"source":"<name>","path":"<path>"}` field. Note the amendment in `.spektacular/working-context.md`, then answer the child naming what changed, so it re-reads the amended text and re-verifies its task. If the user rejects the amendment, answer the child with their decision.
 - **The user declines to answer now** — enter stopping mode.
 - **`FAILED:`** — enter stopping mode.

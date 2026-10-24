@@ -4,7 +4,7 @@ Identify the current task, then research the codebase touchpoints before writing
 
 ### Step 1: Pick the current task
 
-Re-read plan.md through the plan store — `{{config.command}} plan file read {{plan_name}} plan` — and locate the current task.
+Locate the current task in plan.md. When the plan's current content is already in your context (you read it in `read_plan`, or wrote it back in the last task's `update_changelog`), use it as it is. Otherwise read it through the plan store: `{{config.command}} plan file read {{plan_name}} plan`.
 
 {{> partials/implement-current-task}}
 
@@ -21,13 +21,13 @@ If every task is already checked, STOP — this should only happen if the user m
 
 ### Step 2: Read the task's technical detail
 
-Read the plan's `context.md` through the plan store — `{{config.command}} plan file read {{plan_name}} context` — and find the section the `*Technical detail:*` link points to. Read the entire section. It should contain file:line references, complexity, token estimate, and an agent strategy.
+Find the section of the plan's `context.md` that the `*Technical detail:*` link points to, and read the entire section. Use the copy already in your context when you have one; otherwise read it through the plan store: `{{config.command}} plan file read {{plan_name}} context`. It should contain file:line references, complexity, token estimate, and an agent strategy.
 
 Always read the plan documents with `{{config.command}} plan file read`, never with the `Read` tool. If the section is missing, unreadable, or empty, STOP and ask the user whether to fix the plan's `context.md` before proceeding. This is a plan/reality mismatch — do not guess.
 
 ### Step 3: Delegate codebase research to sub-agents
 
-For non-trivial tasks (Medium or High complexity), delegate the codebase research to sub-agents running in parallel. For Low-complexity tasks, you can do it yourself in the main context. Use the skill below for orchestration guidance:
+For High-complexity tasks, delegate the codebase research to sub-agents running in parallel, and wait for them to return without sleeping, polling or scheduling a wake-up. For Low- and Medium-complexity tasks, do it yourself in the main context. Use the skill below for orchestration guidance:
 
 ```
 {{config.command}} skill spawn-implementation-agents

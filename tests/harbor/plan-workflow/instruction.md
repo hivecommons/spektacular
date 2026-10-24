@@ -63,7 +63,7 @@ The skill will guide you through every plan step from `overview` through
   blocking question (this spec contains none).
 - At the `walkthrough` step, conduct the guided review the instruction
   describes. You are acting as the reviewing user in this automated run:
-  present the walkthrough beats, then give an explicit affirmative sign-off
+  present the walkthrough summary, then give an explicit affirmative sign-off
   yourself and advance to `finished`. Do not skip the walkthrough or jump
   to `finished` before it has rendered.
 

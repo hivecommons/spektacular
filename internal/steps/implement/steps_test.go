@@ -340,22 +340,34 @@ func TestVerifyStepReferencesVerifyImplementation(t *testing.T) {
 	require.Contains(t, strings.ToLower(out), "pass/fail")
 }
 
-func TestTestStepRequiresSubAgentDelegation(t *testing.T) {
+// The test step delegates to a sub-agent only for a High-complexity task;
+// Low and Medium tasks are tested inline, which saves a child launch per task.
+func TestTestStepDelegatesOnlyHighComplexity(t *testing.T) {
 	out := renderStep(t, testStep())
-	require.Contains(t, out, "**If your agent can start sub-agents, launch one before any test is written.**")
-	require.Contains(t, out, "Writing the tests in your own context does not complete this step.")
-	// The hand-off to the child is unchanged.
-	require.Contains(t, out, "Pass the current task's acceptance criteria and its section of the plan's `context.md` to the sub-agent.")
+	require.Contains(t, out, "- **High**: the tests are written by a **sub-agent**")
+	require.Contains(t, out, "a High-complexity task's tests are never written in your own context.")
+	require.Contains(t, out, "- **Low or Medium**, or no complexity recorded: write the tests yourself, in this context. Do not launch a sub-agent for them.")
+	require.Contains(t, out, "For a High-complexity task, pass the current task's acceptance criteria and its section of the plan's `context.md` to the sub-agent.")
 	require.Contains(t, out, "skill follow-test-patterns")
+	require.Contains(t, out, "Do not sleep, poll its output or schedule a wake-up")
 }
 
-func TestVerifyStepRequiresSubAgentDelegation(t *testing.T) {
+// The verify step runs its commands inline with trimmed output, never in a
+// sub-agent.
+func TestVerifyStepRunsInline(t *testing.T) {
 	out := renderStep(t, verify())
-	require.Contains(t, out, "**If your agent can start sub-agents, the verification commands run in one.**")
-	require.Contains(t, out, "Running them in your own context does not complete this step.")
-	// The hand-off to the child is unchanged.
+	require.Contains(t, out, "Run the verification commands for the current task yourself, in this context")
+	require.Contains(t, out, "Do not launch a sub-agent for them")
+	require.Contains(t, out, "`tail -n 20`")
+	require.NotContains(t, out, "the verification commands run in one")
 	require.Contains(t, out, "skill verify-implementation")
 	require.Contains(t, out, "pass/fail")
+}
+
+// The goal check waits for its reviewer rather than polling for it.
+func TestCheckGoalStepWaitsForTheReviewerWithoutPolling(t *testing.T) {
+	out := renderStep(t, checkGoalOn())
+	require.Contains(t, out, "Then wait for the reviewer to return. Do not sleep, poll its output or schedule a wake-up while it runs")
 }
 
 // The implement, test and verify steps each load the current phase from the
@@ -413,44 +425,53 @@ func TestUpdateChangelogStepBranchesOnUncheckedPhases(t *testing.T) {
 	require.Contains(t, out, `"step":"analyze"`)
 	require.Contains(t, out, `"step":"test_plan"`)
 	require.NotContains(t, out, "update_repo_changelog")
-	require.Contains(t, strings.ToLower(out), "ask the user")
+	// A standalone run loops on without asking, and pauses only on request.
+	require.Contains(t, out, "By default, do not ask whether to continue: loop on to the next task automatically.")
+	require.Contains(t, out, "Pause here only if the user asked you to")
+	require.NotContains(t, out, "Continue, or stop here for review?")
 }
 
-// TestUpdateChangelogStepOffersKnowledgeCaptureForDurableDiscoveries asserts
-// the update_changelog step directs the agent to assess the phase's
-// Discoveries entry for durable knowledge and offer capture via the
-// spek-knowledge skill, gated on explicit acceptance with decline being final
-// (Phase 1.1 assessment-and-offer beat).
-func TestUpdateChangelogStepOffersKnowledgeCaptureForDurableDiscoveries(t *testing.T) {
+// TestUpdateChangelogStepCollectsKnowledgeCandidates asserts the
+// update_changelog step weighs the task's Discoveries entry for durable
+// knowledge but, rather than stopping the run to offer it, collects each
+// qualifying item for the finished step to offer once.
+func TestUpdateChangelogStepCollectsKnowledgeCandidates(t *testing.T) {
 	out := renderStep(t, updateChangelog())
 	lower := strings.ToLower(out)
 
-	// Durability assessment: each discovery is weighed for value beyond the
-	// current change.
 	require.Contains(t, lower, "durable", "update_changelog must direct a durability assessment of discoveries")
 	require.Contains(t, lower, "beyond this one change", "update_changelog must frame durability as holding beyond the current change")
-
-	// The offer: name what would be captured and why it is worth keeping.
-	require.Contains(t, lower, "offer", "update_changelog must direct offering knowledge capture, never writing unprompted")
-	require.Contains(t, lower, "name what you would capture and why it is worth keeping", "update_changelog must require the offer to name what and why")
-
-	// Selectivity bar: change-local discoveries produce no offer.
 	require.Contains(t, lower, "most tasks produce none", "update_changelog must state that most tasks produce no qualifying discovery")
 
-	// Confirm gate: capture only on explicit acceptance.
-	require.Contains(t, lower, "explicit acceptance", "update_changelog must gate capture on the user's explicit acceptance")
-
-	// Decline finality: a declined item is not offered again.
-	require.Contains(t, lower, "not offered again", "update_changelog must make a decline final for that discovery")
-
-	// The hand-off goes to the spek-knowledge skill.
-	require.Contains(t, out, "spek-knowledge", "update_changelog must hand accepted items to the spek-knowledge skill")
-
-	// Negative guard: there is no `skill spek-knowledge` CLI subcommand — the
-	// template must not direct the unreachable invocation
-	// `spektacular skill spek-knowledge` (the legitimate
-	// `skill update-changelog` reference must not trip this).
+	require.Contains(t, out, "do not offer it now, and do not stop the run for it")
+	require.Contains(t, out, "`## Knowledge candidates` list in `.spektacular/working-context.md`")
+	require.Contains(t, out, "The run's `finished` step offers every candidate to the user at once.")
+	require.NotContains(t, out, "knowledge write", "update_changelog must not write knowledge")
 	require.NotContains(t, out, "skill spek-knowledge", "update_changelog must not direct the nonexistent `skill spek-knowledge` CLI invocation")
+}
+
+// TestFinishedStepOffersKnowledgeCandidates asserts the finished step offers
+// the run's collected knowledge candidates once, through the spek-knowledge
+// skill, gated on explicit acceptance with a decline being final, for both a
+// whole-plan run and a single-task run.
+func TestFinishedStepOffersKnowledgeCandidates(t *testing.T) {
+	for name, out := range map[string]string{
+		"whole plan":  renderFinishedStep(t),
+		"single task": renderTaskStep(t, finished()),
+	} {
+		t.Run(name, func(t *testing.T) {
+			lower := strings.ToLower(out)
+			require.Contains(t, out, "### Offer the knowledge candidates")
+			require.Contains(t, out, "If this run collected a `## Knowledge candidates` list in `.spektacular/working-context.md`, offer its items to the user now, all in one message")
+			require.Contains(t, out, "use the list as you last wrote it")
+			require.Contains(t, lower, "naming what each would capture and why it is worth keeping")
+			require.Contains(t, lower, "explicit acceptance")
+			require.Contains(t, lower, "not offered again")
+			require.Contains(t, out, "spek-knowledge")
+			require.Contains(t, out, "If there is no such list, say nothing about knowledge capture.")
+			require.NotContains(t, out, "skill spek-knowledge")
+		})
+	}
 }
 
 func TestStopOnMismatchDirectivePresentInEveryNonTerminalTemplate(t *testing.T) {

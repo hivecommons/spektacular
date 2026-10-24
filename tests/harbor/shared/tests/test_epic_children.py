@@ -191,8 +191,8 @@ def spec_prompt(spec, worktrees):
 def implement_epic_run(tmp_path, *, skip_spec=None, skip_step=None, short_prompt=None, extra=(), background=False) -> delegation.Run:
     """Two implement lanes walked side by side from 10:00, each worked by a
     top-level child of its own launched before the lanes start, which starts
-    a child half a minute into each test, verify and check_goal step. The
-    orchestrator asked for each spec's worktree first. The spec children run
+    a child half a minute into each check_goal step. The orchestrator asked
+    for each spec's worktree first. The spec children run
     in the foreground and end at 10:05, and the orchestrator's one turn ends
     at 10:05:30 after them; with `background`, they run in the background and
     the turn ends at 09:59:10, once both are launched.
@@ -284,18 +284,18 @@ def test_a_well_delegated_implement_epic_run_passes_every_child_check(tmp_path, 
 
 def test_a_step_with_no_child_fails_naming_the_spec_and_step(tmp_path):
     # criterion 3
-    run = implement_epic_run(tmp_path, skip_step=(B, "test"))
+    run = implement_epic_run(tmp_path, skip_step=(B, "check_goal"))
     assert verdict(implement_verifier.TestChildren().test_required_steps_each_started_a_child, run) == [
-        f"missing_child implement:{B}:test: the test step completed without a child agent started in it"
+        f"missing_child implement:{B}:check_goal: the check_goal step completed without a child agent started in it"
     ]
 
 
-@pytest.mark.parametrize("step", ["verify", "check_goal"])
-def test_a_verify_or_goal_check_with_no_child_fails_naming_it(tmp_path, step):
+@pytest.mark.parametrize("step", ["test", "verify"])
+def test_a_test_or_verify_step_done_inline_passes(tmp_path, step):
+    # Tests for a task that is not High complexity, and every verification,
+    # are done in the agent's own context.
     run = implement_epic_run(tmp_path, skip_step=(A, step))
-    assert verdict(implement_verifier.TestChildren().test_required_steps_each_started_a_child, run) == [
-        f"missing_child implement:{A}:{step}: the {step} step completed without a child agent started in it"
-    ]
+    assert verdict(implement_verifier.TestChildren().test_required_steps_each_started_a_child, run) == []
 
 
 def test_a_child_not_given_its_worktree_fails_naming_the_child_and_the_path(tmp_path):

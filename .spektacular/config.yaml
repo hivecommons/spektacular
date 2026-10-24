@@ -32,6 +32,8 @@ epic:
         directory: epics
 implement:
     worktrees: true
+    goal_check:
+        enabled: true
 design:
     sources:
         - name: design

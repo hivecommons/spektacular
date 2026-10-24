@@ -235,9 +235,9 @@ def rule_cheaper_reviewer(launches: list, main_models: set[str]) -> list[str]:
 
 
 def rule_required_children(run) -> list[str]:
-    """The goal check, and the test and verify steps its unmet retry runs
-    again, each started a child agent: doing them inline does not complete
-    them. `run` is a delegation.Run."""
+    """Each goal check, including the one an unmet retry runs again, started
+    a child agent: checking the goal inline does not complete it. `run` is a
+    delegation.Run."""
     from delegation import missing_required
 
     return [str(f) for f in missing_required(run.placed, run.windows)]

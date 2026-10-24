@@ -333,9 +333,8 @@ class TestChildren:
         assert not failures, failed(failures)
 
     def test_required_steps_each_started_a_child(self, children_run):
-        """In every spec's lane, each test, verify and goal-check step ran in a
-        child agent of the spec's own child: doing it inline does not
-        complete it."""
+        """In every spec's lane, each goal-check step ran in a child agent of
+        the spec's own child: checking the goal inline does not complete it."""
         import delegation as dl
 
         failures = dl.missing_required(children_run.placed, children_run.windows)

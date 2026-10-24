@@ -37,6 +37,20 @@ type stepTemplateRow struct {
 	nextStep     string
 }
 
+// contractFooterlessSteps is a hand-maintained copy of stepkit's footerless
+// steps: the continuing steps, per workflow kind, that do work the plan
+// already describes and so carry no working-context footer.
+var contractFooterlessSteps = map[string]map[string]bool{
+	"plan":      {"assemble": true, "write_plan": true, "write_context": true, "write_research": true},
+	"implement": {"analyze": true, "implement": true, "test": true, "verify": true, "check_goal": true, "update_plan": true},
+}
+
+// carriesFooter reports whether a rendered step should end with the
+// working-context footer: every continuing step but the footerless ones.
+func (ri renderedInstruction) carriesFooter() bool {
+	return ri.nextStep != "" && !contractFooterlessSteps[ri.workflow][ri.stepName]
+}
+
 // stepTemplateTable is hand-maintained to mirror the writeStep calls in
 // internal/steps/{spec,plan,implement,repo}/steps.go. It is deliberately not
 // derived from Steps(): a step whose next step changes must be reflected here
@@ -224,9 +238,9 @@ func requireStepTableComplete(t *testing.T) {
 
 func TestContinuingStepsEndWithIdenticalFooter(t *testing.T) {
 	for _, ri := range renderAllStepInstructions(t, "spektacular") {
-		if ri.nextStep == "" {
+		if !ri.carriesFooter() {
 			require.NotContainsf(t, ri.body, "**Before you advance:**",
-				"%s is terminal and must carry no working-context footer", ri.templatePath)
+				"%s is terminal or footerless and must carry no working-context footer", ri.templatePath)
 			continue
 		}
 		require.Equalf(t, 1, strings.Count(ri.body, contractWorkingContextFooter),

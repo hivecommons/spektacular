@@ -37,9 +37,10 @@ from transcripts import Wakeup
 
 # Steps whose instructions require a child: doing the step in the agent's
 # own context does not complete it.
-REQUIRED = {("spec", "verification"), ("implement", "test"), ("implement", "verify"), ("implement", "check_goal")}
-# Steps whose instructions only suggest one. Recorded, never enforced.
-SUGGESTED = {("plan", "discovery"), ("implement", "analyze"), ("implement", "update_changelog")}
+REQUIRED = {("spec", "verification"), ("implement", "check_goal")}
+# Steps whose instructions only suggest one, or require one only for a
+# High-complexity task (test). Recorded, never enforced.
+SUGGESTED = {("plan", "discovery"), ("implement", "analyze"), ("implement", "test"), ("implement", "update_changelog")}
 # In an epic run, each spec lane of these kinds is worked by its own child.
 PER_SPEC_CHILD = {"plan", "implement"}
 

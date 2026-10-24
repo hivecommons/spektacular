@@ -473,22 +473,28 @@ func TestPlanFinished_SkipsClose_WhenPlanIncomplete(t *testing.T) {
 }
 
 // TestWalkthroughStepIsMandatoryGuidedReview asserts the walkthrough step
-// (Phase 1.1, acceptance criterion 2): it drives a section-by-section review of
-// the committed documents, applies requested changes immediately via the
-// existing `plan file write` command, and concludes only on an explicit
-// affirmative answer to a direct closing question — never framed as an
-// optional offer.
+// (Phase 1.1, acceptance criterion 2): it presents the committed documents in
+// one compact message, applies requested changes immediately via the existing
+// `plan file write` command, and concludes only on an explicit affirmative
+// answer to a single closing question — never framed as an optional offer.
 func TestWalkthroughStepIsMandatoryGuidedReview(t *testing.T) {
 	out := renderStep(t, walkthrough())
 	lower := strings.ToLower(out)
 
-	// Guided review of the committed documents, read back through the CLI.
+	// Guided review of the committed documents, read back through the CLI
+	// only when they are not already in context.
 	require.Contains(t, out, "plan file read", "walkthrough must read the committed documents via `plan file read`")
+	require.Contains(t, out, "Read them back through the CLI only on a resumed session or after a context compaction")
 	require.Contains(t, lower, "walk the user through", "walkthrough must direct a guided review of the plan")
+
+	// One message and one closing question, not paced beats.
+	require.Contains(t, out, "Present the plan in **one message**")
+	require.Contains(t, out, "End that message with a single closing question")
+	require.Contains(t, out, "Do not split the walkthrough into several turns")
 
 	// Change requests apply immediately through the document write command.
 	require.Contains(t, out, "plan file write", "walkthrough must apply change requests via `plan file write`")
-	require.Contains(t, lower, "apply it immediately", "walkthrough must apply change requests immediately, not defer them")
+	require.Contains(t, lower, "apply a change request immediately", "walkthrough must apply change requests immediately, not defer them")
 
 	// Sign-off gate: explicit affirmative to a direct closing question only.
 	require.Contains(t, lower, "explicit affirmative", "walkthrough must gate completion on an explicit affirmative answer")
@@ -520,14 +526,14 @@ func TestVerificationStepRequiresDraftingAssumptions(t *testing.T) {
 }
 
 // TestWalkthroughStepWalksDraftingAssumptions asserts the walkthrough step's
-// drafting-assumptions beat (Phase 2.2): it reads the `## Drafting assumptions`
-// section of research.md back through the CLI, walks the entries, and invites
-// the user to challenge each — a challenged assumption becoming a change
+// drafting-assumptions point (Phase 2.2): it lists every entry of the
+// `## Drafting assumptions` section of research.md, one line each, and invites
+// the user to challenge any — a challenged assumption becoming a change
 // request.
 func TestWalkthroughStepWalksDraftingAssumptions(t *testing.T) {
 	out := renderStep(t, walkthrough())
-	require.Contains(t, out, "Read the `## Drafting assumptions` section",
-		"walkthrough must read the Drafting assumptions section of research.md")
+	require.Contains(t, out, "from the `## Drafting assumptions` section of the plan's `research` document. List every entry, one line each",
+		"walkthrough must list every entry of the Drafting assumptions section of research.md")
 	require.Contains(t, strings.ToLower(out), "challenge",
 		"walkthrough must invite the user to challenge each assumption")
 	require.Contains(t, out, "challenged assumption is a change request",
@@ -832,8 +838,8 @@ func TestReviewsGoToTheTestPlanNotHumanTasks(t *testing.T) {
 // task and its reason before sign-off.
 func TestWalkthroughNamesHumanTasks(t *testing.T) {
 	out := renderStep(t, walkthrough())
-	require.Contains(t, out, "name every task whose `**Execution:**` is `human`, with its reason")
-	require.Contains(t, out, "Before asking for sign-off")
+	require.Contains(t, out, "Name every task whose `**Execution:**` is `human`, with its reason")
+	require.Contains(t, out, "End that message with a single closing question")
 	require.Contains(t, out, "If there are none, say so")
 }
 

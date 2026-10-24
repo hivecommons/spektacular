@@ -65,10 +65,18 @@ def read_jsonl(path: Path) -> list[dict]:
     return out
 
 
+def message_of(o: dict) -> dict:
+    """An object's message, or an empty one. Most objects carry a message
+    dict, but some (a system notice, a task notification) carry a plain
+    string, which has no model or content blocks."""
+    msg = o.get("message")
+    return msg if isinstance(msg, dict) else {}
+
+
 def claude_main_models(objs: list[dict]) -> set[str]:
     """The models of the main agent's own assistant messages."""
     return {
-        (o.get("message") or {}).get("model", "")
+        message_of(o).get("model", "")
         for o in objs
         if o.get("type") == "assistant" and not o.get("parent_tool_use_id")
     } - {""}
@@ -80,7 +88,7 @@ def claude_subagent_launches(objs: list[dict]) -> list[SubagentLaunch]:
     launches: dict[str, SubagentLaunch] = {}
     order: list[str] = []
     for o in objs:
-        msg = o.get("message") or {}
+        msg = message_of(o)
         parent = o.get("parent_tool_use_id")
         if o.get("type") == "assistant" and not parent:
             for block in msg.get("content") or []:
@@ -344,7 +352,7 @@ def claude_messages(objs: list[dict]) -> list[Message]:
     for o in objs:
         if o.get("type") != "assistant":
             continue
-        content = (o.get("message") or {}).get("content") or []
+        content = message_of(o).get("content") or []
         blocks = [b for b in content if isinstance(b, dict)]
         goto = None
         for b in blocks:
@@ -403,7 +411,7 @@ def claude_launch_root(objs: list[dict]) -> dict[str, str]:
         parent = o.get("parent_tool_use_id")
         if o.get("type") != "assistant" or not parent:
             continue
-        for b in (o.get("message") or {}).get("content") or []:
+        for b in message_of(o).get("content") or []:
             if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") in SUBAGENT_TOOLS and b.get("id"):
                 parent_of[b["id"]] = parent
 
@@ -475,7 +483,7 @@ def claude_children(objs: list[dict]) -> tuple[list[Child], list[Unknown]]:
     launches: dict[str, tuple[dict, dict]] = {}  # id -> (tool_use block, enclosing object)
     results: dict[str, tuple[dict, dict]] = {}  # id -> (tool_result block, enclosing object)
     for o in objs:
-        for block in (o.get("message") or {}).get("content") or []:
+        for block in message_of(o).get("content") or []:
             if not isinstance(block, dict):
                 continue
             if o.get("type") == "assistant" and block.get("type") == "tool_use" and block.get("name") in SUBAGENT_TOOLS:
@@ -498,7 +506,7 @@ def claude_children(objs: list[dict]) -> tuple[list[Child], list[Unknown]]:
     for o, m in zip((o for o in objs if o.get("type") == "assistant"), claude_messages(objs)):
         if m.parent:
             messages.setdefault(m.parent, []).append(m)
-            if (o.get("message") or {}).get("model"):
+            if message_of(o).get("model"):
                 models.setdefault(m.parent, set()).add(o["message"]["model"])
 
     # Without any task_started event the log cannot tell a started child from
@@ -621,7 +629,7 @@ def claude_wakeups(objs: list[dict]) -> list[Wakeup]:
     for o in objs:
         if o.get("type") != "assistant" or o.get("parent_tool_use_id"):
             continue
-        for block in (o.get("message") or {}).get("content") or []:
+        for block in message_of(o).get("content") or []:
             if not isinstance(block, dict) or block.get("type") != "tool_use":
                 continue
             name, inp = block.get("name"), block.get("input") or {}

@@ -853,6 +853,16 @@ def test_claude_children_one_per_started_child_in_launch_order():
     ]
 
 
+def test_claude_children_and_wakeups_skip_a_message_that_is_plain_text():
+    # Some objects carry their message as a string, not a dict; reading one
+    # must not stop the children or the wake-ups from being read.
+    text = [{"type": "user", "message": "a notice"}, {"type": "assistant", "message": "a notice"}]
+    children, unknowns = claude_children(text + claude_children_log())
+    assert (children, unknowns) == claude_children(claude_children_log())
+    assert claude_wakeups(text) == []
+    assert claude_main_models(text) == set()
+
+
 def test_claude_children_leave_out_refused_launches_and_shell_tasks():
     ids = set(children_by_id(claude_children_log()))
     assert "toolu_R" not in ids  # refused: an error result and no task_started

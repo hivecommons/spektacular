@@ -69,6 +69,8 @@ Hand the reviewer exactly these, and nothing else:
 
 Give it nothing from your own conversation: no summary of what you did, no account of your reasoning, and no claim that the work is complete or that any criterion is met. The reviewer judges the work from the files, not from you.
 
+Then wait for the reviewer to return. Do not sleep, poll its output or schedule a wake-up while it runs: your agent tells you when it finishes, and its reply is what you record next.
+
 ### Step 4: Record the verdicts
 
 Write the reviewer's reply **unchanged** to `{{goal_tmp_dir}}/reply.json` with your own file tool. Never edit, reorder, complete or summarise it. Then record it:

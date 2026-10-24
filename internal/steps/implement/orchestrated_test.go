@@ -41,12 +41,12 @@ func TestOrchestratedUpdateChangelogLoopsWithoutAsking(t *testing.T) {
 	require.NotContains(t, out, "refresh `.spektacular/working-context.md`")
 }
 
-// The standalone run keeps its between-task question and carries none of the
-// orchestrated wording.
-func TestStandaloneUpdateChangelogStillAsksBetweenTasks(t *testing.T) {
+// The standalone run loops on by default too, but pauses between tasks when
+// the user asked it to, and carries none of the orchestrated wording.
+func TestStandaloneUpdateChangelogPausesOnlyOnRequest(t *testing.T) {
 	out := renderStep(t, updateChangelog())
-	require.Contains(t, out, "By default, ask the user whether to continue with the next task or pause here.")
-	require.Contains(t, out, `If the user has previously said "run without asking"`)
+	require.Contains(t, out, "By default, do not ask whether to continue: loop on to the next task automatically.")
+	require.Contains(t, out, "Pause here only if the user asked you to")
 	require.NotContains(t, out, "orchestrat")
 	require.NotContains(t, out, "QUESTION:")
 	require.Contains(t, out, "refresh `.spektacular/working-context.md`")

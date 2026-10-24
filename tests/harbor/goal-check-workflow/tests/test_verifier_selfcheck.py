@@ -179,8 +179,8 @@ def test_cheaper_reviewer_from_a_claude_transcript():
     assert gc.rule_cheaper_reviewer([], {"claude-sonnet-4-6"})
 
 
-# The goal check, and the test and verify steps its retry runs again, each
-# start a child agent. A small Claude run is built under tmp_path: the
+# Each goal check, including the one its retry runs again, starts a child
+# agent; the test and verify steps the retry runs in between need none. A small Claude run is built under tmp_path: the
 # implement lane of Spektacular's session log and a stream-json transcript
 # whose children are launched half a minute into a step, and it is read back
 # with delegation.read_run exactly as the verifier reads the real one.
@@ -255,16 +255,8 @@ def test_required_children_with_a_child_in_each_required_step(tmp_path):
     assert gc.rule_required_children(run) == []
 
 
-def test_required_children_test_done_inline_on_the_retry(tmp_path):
-    assert gc.rule_required_children(claude_run(tmp_path, without={"toolu_test"})) == [
-        f"missing_child implement:{gc.PLAN}:test: the test step completed without a child agent started in it"
-    ]
-
-
-def test_required_children_verify_done_inline_on_the_retry(tmp_path):
-    assert gc.rule_required_children(claude_run(tmp_path, without={"toolu_verify"})) == [
-        f"missing_child implement:{gc.PLAN}:verify: the verify step completed without a child agent started in it"
-    ]
+def test_required_children_test_and_verify_done_inline_on_the_retry(tmp_path):
+    assert gc.rule_required_children(claude_run(tmp_path, without={"toolu_test", "toolu_verify"})) == []
 
 
 def test_required_children_goal_check_done_inline(tmp_path):

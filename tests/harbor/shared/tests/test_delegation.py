@@ -278,10 +278,10 @@ def test_required_step_with_a_child_launched_in_it_passes(tmp_path, entry):
 
 
 def test_a_child_launched_in_another_step_does_not_satisfy_a_required_one(tmp_path):
-    # the test step's child is launched in the implement step before it
-    objs = transcript(child("toolu_early", m(2, 30), "Write the tests."), *step_children("implement", IMPLEMENT_STEPS, skip={"test"}))
+    # the goal check's reviewer is launched in the verify step before it
+    objs = transcript(child("toolu_early", m(4, 30), "Check the goal."), *step_children("implement", IMPLEMENT_STEPS, skip={"check_goal"}))
     run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, IMPLEMENT_STEPS))], objs)
-    assert missing_required(run.placed, run.windows) == [missing("implement", "test")]
+    assert missing_required(run.placed, run.windows) == [missing("implement", "check_goal")]
 
 
 def test_a_nested_child_satisfies_a_required_step(tmp_path):
@@ -292,34 +292,32 @@ def test_a_nested_child_satisfies_a_required_step(tmp_path):
     )
     run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, IMPLEMENT_STEPS))], objs)
     assert {p.child.id: p.child.parent for p in run.placed if p.child.parent} == {
-        "toolu_test": "toolu_W",
-        "toolu_verify": "toolu_W",
         "toolu_check_goal": "toolu_W",
     }
     assert missing_required(run.placed, run.windows) == []
 
 
 def test_the_step_a_lane_ended_on_is_not_judged(tmp_path):
-    steps = ["read_plan", "analyze", "implement", "test"]  # cut off in test
+    steps = ["read_plan", "analyze", "implement", "test", "verify", "check_goal"]  # cut off in check_goal
     run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, steps))], transcript())
     assert missing_required(run.placed, run.windows) == []
 
 
 def test_the_same_step_once_moved_on_from_is_judged(tmp_path):
-    steps = ["read_plan", "analyze", "implement", "test", "verify"]
-    objs = transcript(child("toolu_verify", m(4, 30), "Verify.", ended=m(4, 50)))
+    steps = ["read_plan", "analyze", "implement", "test", "verify", "check_goal", "update_plan"]
+    objs = transcript(child("toolu_late", m(6, 30), "Do it.", ended=m(6, 50)))
     run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, steps))], objs)
-    assert missing_required(run.placed, run.windows) == [missing("implement", "test")]
+    assert missing_required(run.placed, run.windows) == [missing("implement", "check_goal")]
 
 
-RETRIED = ["read_plan", "implement", "test", "verify", "implement", "test", "verify", "check_goal", "finished"]
+RETRIED = ["read_plan", "implement", "test", "verify", "check_goal", "implement", "test", "verify", "check_goal", "update_plan", "finished"]
 
 
 @pytest.mark.parametrize(
     "childless, expected",
     [
-        (5, missing("implement", "test", attempt=2)),  # the second test run
-        (2, missing("implement", "test")),  # the first: no attempt number
+        (8, missing("implement", "check_goal", attempt=2)),  # the second goal check
+        (4, missing("implement", "check_goal")),  # the first: no attempt number
     ],
 )
 def test_a_retried_step_is_judged_per_attempt(tmp_path, childless, expected):
@@ -332,43 +330,39 @@ def test_a_retried_step_is_judged_per_attempt(tmp_path, childless, expected):
 
 
 def resumed_lane():
-    """An implement lane whose test step a second child resumed at 10:04:
-    two windows at test, 10:02-10:03 and 10:04-10:05."""
+    """An implement lane whose check_goal step a second child resumed at
+    10:04: two windows at check_goal, 10:02-10:03 and 10:04-10:05."""
     kind = "implement"
     return [
         record(m(0), new(kind, NAME), None, state(kind, NAME, "read_plan")),
-        record(m(1), goto(kind, NAME, "implement"), state(kind, NAME, "read_plan"), state(kind, NAME, "implement")),
-        record(m(2), goto(kind, NAME, "test"), state(kind, NAME, "implement"), state(kind, NAME, "test")),
-        record(m(3), [kind, "file", "read", NAME], state(kind, NAME, "test"), state(kind, NAME, "test")),
-        record(m(4), new(kind, NAME), state(kind, NAME, "test"), None, exit_code=1, response='{"error":"workflow_in_progress"}'),
-        record(m(5), goto(kind, NAME, "verify"), state(kind, NAME, "test"), state(kind, NAME, "verify")),
-        record(m(6), goto(kind, NAME, "check_goal"), state(kind, NAME, "verify"), state(kind, NAME, "check_goal")),
-        record(m(7), goto(kind, NAME, "finished"), state(kind, NAME, "check_goal"), state(kind, NAME, "finished")),
+        record(m(1), goto(kind, NAME, "verify"), state(kind, NAME, "read_plan"), state(kind, NAME, "verify")),
+        record(m(2), goto(kind, NAME, "check_goal"), state(kind, NAME, "verify"), state(kind, NAME, "check_goal")),
+        record(m(3), [kind, "file", "read", NAME], state(kind, NAME, "check_goal"), state(kind, NAME, "check_goal")),
+        record(m(4), new(kind, NAME), state(kind, NAME, "check_goal"), None, exit_code=1, response='{"error":"workflow_in_progress"}'),
+        record(m(5), goto(kind, NAME, "update_plan"), state(kind, NAME, "check_goal"), state(kind, NAME, "update_plan")),
+        record(m(6), goto(kind, NAME, "update_changelog"), state(kind, NAME, "update_plan"), state(kind, NAME, "update_changelog")),
+        record(m(7), goto(kind, NAME, "finished"), state(kind, NAME, "update_changelog"), state(kind, NAME, "finished")),
     ]
-
-
-def resumed_others():
-    return [child("toolu_verify", m(5, 30), "Verify.", ended=m(5, 50)), child("toolu_goal", m(6, 30), "Check the goal.", ended=m(6, 50))]
 
 
 @pytest.mark.parametrize("launched", [m(4, 30), m(2, 30)], ids=["resumed-window", "first-window"])
 def test_a_child_in_either_window_of_a_resumed_step_satisfies_it(tmp_path, launched):
-    objs = transcript(child("toolu_test", launched, "Write the tests.", ended=m(4, 50)), *resumed_others())
+    objs = transcript(child("toolu_goal", launched, "Check the goal.", ended=m(4, 50)))
     run = run_of(tmp_path, [("implement", NAME, resumed_lane())], objs)
-    assert lane_steps(run)[("implement", NAME)] == ["read_plan", "implement", "test", "test", "verify", "check_goal", "finished"]
+    assert lane_steps(run)[("implement", NAME)] == ["read_plan", "verify", "check_goal", "check_goal", "update_plan", "update_changelog", "finished"]
     assert missing_required(run.placed, run.windows) == []
 
 
 def test_a_resumed_step_without_a_child_fails_once(tmp_path):
-    run = run_of(tmp_path, [("implement", NAME, resumed_lane())], transcript(*resumed_others()))
-    assert missing_required(run.placed, run.windows) == [missing("implement", "test")]
+    run = run_of(tmp_path, [("implement", NAME, resumed_lane())], transcript())
+    assert missing_required(run.placed, run.windows) == [missing("implement", "check_goal")]
 
 
 # --- suggested steps (criterion 2) -----------------------------------------------
 
 
 def test_suggested_and_required_steps_do_not_overlap():
-    assert SUGGESTED == {("plan", "discovery"), ("implement", "analyze"), ("implement", "update_changelog")}
+    assert SUGGESTED == {("plan", "discovery"), ("implement", "analyze"), ("implement", "test"), ("implement", "update_changelog")}
     assert SUGGESTED.isdisjoint(REQUIRED)
 
 
@@ -804,8 +798,6 @@ def test_both_epic_reference_runs_pass_the_other_rules(name):
 GATE = "does not complete this step"
 TEMPLATE_OF = {
     ("spec", "verification"): ("spec/08-verification.md", GATE),
-    ("implement", "test"): ("implement/04-test.md", GATE),
-    ("implement", "verify"): ("implement/05-verify.md", GATE),
     ("implement", "check_goal"): ("implement/05b-check_goal.md", "never as yourself"),
 }
 

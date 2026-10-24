@@ -40,9 +40,9 @@ func TestOrchestratedStepsNameTheLaneNotesFile(t *testing.T) {
 		if ri.workflow != "plan" && ri.workflow != "implement" {
 			continue
 		}
-		if ri.nextStep == "" {
+		if !ri.carriesFooter() {
 			require.NotContainsf(t, ri.body, "**Before you advance:**",
-				"%s is terminal and must carry no working-context footer", ri.templatePath)
+				"%s is terminal or footerless and must carry no working-context footer", ri.templatePath)
 			continue
 		}
 		footer := contractLaneFooter(ri.workflow)
@@ -82,7 +82,7 @@ func TestEveryOrchestratedStepCarriesTheHandBackSection(t *testing.T) {
 			"orchestrated %s must carry the hand-back section exactly once", ri.templatePath)
 		require.Containsf(t, ri.body, "first line is exactly `QUESTION: demo-feature`", ri.templatePath)
 		require.Containsf(t, ri.body, "first line is exactly `FAILED: demo-feature`", ri.templatePath)
-		if ri.nextStep != "" {
+		if ri.carriesFooter() {
 			require.Lessf(t, strings.Index(ri.body, orchestratedSection), strings.Index(ri.body, "**Before you advance:**"),
 				"orchestrated %s must put the hand-back section before the footer", ri.templatePath)
 		}

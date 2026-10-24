@@ -6,7 +6,7 @@ The plan documents are owned by spektacular. **Never read or edit plan.md with t
 
 ### Step 1: Ensure the `{{changelog_section_name}}` section exists
 
-Read plan.md with `{{config.command}} plan file read {{plan_name}} plan`. If the `{{changelog_section_name}}` heading is absent, this is the first `update_changelog` invocation for this plan — append a new `{{changelog_section_name}}` section **after** the existing `## Out of Scope` section (or at the very end of the file if `## Out of Scope` is missing).
+Start from plan.md as you wrote it back in `update_plan`; read it with `{{config.command}} plan file read {{plan_name}} plan` only if that content is not in your context (after a resume or a context compaction). If the `{{changelog_section_name}}` heading is absent, this is the first `update_changelog` invocation for this plan — append a new `{{changelog_section_name}}` section **after** the existing `## Out of Scope` section (or at the very end of the file if `## Out of Scope` is missing).
 
 If the `{{changelog_section_name}}` heading is present, append new entries under the existing section, after any entries already there.
 
@@ -47,13 +47,13 @@ This run started past dependencies that were not implemented yet: the user chose
 {{/dependency_override}}
 
 {{/has_dependency_override}}
-For the exact format and more examples, launch a sub-agent with:
+If you need the exact format and more examples, read the skill below, once per session rather than once per task. Do not launch a sub-agent for it:
 
 ```
 {{config.command}} skill update-changelog
 ```
 
-Apply the entry by reading plan.md with `{{config.command}} plan file read {{plan_name}} plan`, adding the entry, staging the updated document with the `Write` tool at the scratch path `.spektacular/tmp/{{plan_name}}/plan_update.md`, then committing it and removing the scratch file:
+Apply the entry by adding it to that plan.md content, staging the updated document with the `Write` tool at the scratch path `.spektacular/tmp/{{plan_name}}/plan_update.md`, then committing it and removing the scratch file:
 
 ```
 {{config.command}} plan file write {{plan_name}} plan --from .spektacular/tmp/{{plan_name}}/plan_update.md
@@ -65,9 +65,7 @@ rm .spektacular/tmp/{{plan_name}}/plan_update.md
 {{^orchestrated}}
 Re-read the `**Discoveries**` entry you just wrote and weigh each item for durability — does it hold beyond this one change? Durable means something a future plan or implementation would pay to re-discover: an undocumented coupling, a surprising contract, a convention inferred from behavior rather than written down anywhere, a wrong default that had to be corrected. Only items that are both durable and non-obvious beyond the current change qualify — most tasks produce none, and when nothing qualifies, say nothing about knowledge capture and continue straight to Step 3.
 
-When a discovery does clear that bar, offer — in the same message as the Step 3 continue-or-pause conversation — to save it to the project knowledge base. Name what you would capture and why it is worth keeping, phrased as the general lesson rather than the specific edit. Capture happens only on the user's explicit acceptance: hand an accepted item to the `spek-knowledge` skill, whose own propose-then-confirm flow owns tier and store selection, category routing, and the write (the raw `{{config.command}} knowledge` commands sit beneath it). Never invoke `{{config.command}} knowledge write` without that explicit acceptance — silence or deflection is not acceptance.
-
-If the user declines, the item is not offered again for the remainder of the conversation — a decline is final for that discovery. If the user defers ("not now", "later"), you may raise the offer again later in the conversation. Either way, the `**Discoveries**` entry itself stays exactly as written; the offer is additive on top of it.
+When a discovery does clear that bar, do not offer it now, and do not stop the run for it. Add it, phrased as the general lesson rather than the specific edit, to a `## Knowledge candidates` list in `{{working_context_path}}`. The run's `finished` step offers every candidate to the user at once. The `**Discoveries**` entry itself stays exactly as written; the candidate is additive on top of it.
 
 {{/orchestrated}}
 {{#orchestrated}}
@@ -98,13 +96,13 @@ Other tasks in the plan are still open, so the feature-level wrap-up (test plan,
 {{^task}}
 ### Step 3: Check for remaining unchecked tasks
 
-Re-read plan.md with `{{config.command}} plan file read {{plan_name}} plan` and count the unchecked `#### - [ ] Task:` headings under `## Milestones & Tasks` (`#### - [ ] Phase` headings under `## Milestones & Phases` in a plan written before tasks).{{#goal_check}} Do not count any task or phase that `{{config.command}} implement goal show {{plan_name}}` reports as skipped.{{/goal_check}}
+In the plan.md you just wrote, count the unchecked `#### - [ ] Task:` headings under `## Milestones & Tasks` (`#### - [ ] Phase` headings under `## Milestones & Phases` in a plan written before tasks).{{#goal_check}} Do not count any task or phase that `{{config.command}} implement goal show {{plan_name}}` reports as skipped.{{/goal_check}}
 
 **If unchecked tasks remain**:
 
 {{^orchestrated}}
-- By default, ask the user whether to continue with the next task or pause here. Example prompt: "Task `<title>` is complete. The next task is `<next title>`. Continue, or stop here for review?"
-- If the user has previously said "run without asking" (or equivalent autonomous mode), skip the prompt and loop automatically.
+- By default, do not ask whether to continue: loop on to the next task automatically. A one-line note of the task just completed and the next one is enough.
+- Pause here only if the user asked you to: to stop after this task, after a given task or milestone, or between tasks for review. Then report the task completed and the next one, and wait for the user before looping.
 {{/orchestrated}}
 {{#orchestrated}}
 - This run is orchestrated: do not ask whether to continue. Loop on to the next task automatically.

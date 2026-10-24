@@ -190,13 +190,18 @@ func TestImplementLane_NamedStartResumesSameSpecInSharedSlot(t *testing.T) {
 }
 
 // Criterion 3: a lane run's instructions never hand back to an orchestrator,
-// and its notes footer names the lane's notes file.
+// and its notes footer, on the steps that carry one, names the lane's notes
+// file.
 func TestImplementLane_InstructionsStayInteractiveWithLaneNotes(t *testing.T) {
 	implementLaneProject(t)
 
+	// The read_plan and update_changelog steps carry the notes footer; the
+	// steps of the task loop between them do not.
 	outputs := []string{runOK(t, "implement", "new", "--data", `{"name":"alpha"}`)}
+	footer := []bool{true}
 	for _, s := range []string{"analyze", "implement", "test", "verify", "check_goal", "update_plan", "update_changelog"} {
 		outputs = append(outputs, runOK(t, "implement", "goto", "--data", `{"step":"`+s+`","name":"alpha"}`))
+		footer = append(footer, s == "update_changelog")
 		if s == "check_goal" {
 			passGoalCheck(t, "alpha")
 		}
@@ -206,7 +211,11 @@ func TestImplementLane_InstructionsStayInteractiveWithLaneNotes(t *testing.T) {
 		require.NotContainsf(t, instruction, "QUESTION:", "output %d must not hand back to an orchestrator", i)
 		require.NotContainsf(t, instruction, "DONE:", "output %d must not hand back to an orchestrator", i)
 		require.NotContainsf(t, instruction, "This run is orchestrated", "output %d", i)
-		require.Containsf(t, instruction, "refresh `.spektacular/workflows/implement-alpha.md`", "output %d", i)
+		if footer[i] {
+			require.Containsf(t, instruction, "refresh `.spektacular/workflows/implement-alpha.md`", "output %d", i)
+		} else {
+			require.NotContainsf(t, instruction, "**Before you advance:**", "output %d", i)
+		}
 		require.NotContainsf(t, instruction, ".spektacular/working-context.md", "output %d", i)
 	}
 }
