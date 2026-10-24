@@ -2,6 +2,8 @@
 
 Write tests for the code you just implemented. This step runs in a **sub-agent** so the test-authoring context doesn't pollute the main implementation context. Do not write tests in the main context.
 
+**If your agent can start sub-agents, launch one before any test is written.** Writing the tests in your own context does not complete this step.
+
 ### Step 1: Load the current task
 
 Do not rely on an earlier step's output still being in your context. Read the task from the plan itself:

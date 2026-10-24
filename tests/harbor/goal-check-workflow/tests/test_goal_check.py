@@ -234,6 +234,15 @@ def rule_cheaper_reviewer(launches: list, main_models: set[str]) -> list[str]:
     return out
 
 
+def rule_required_children(run) -> list[str]:
+    """The goal check, and the test and verify steps its unmet retry runs
+    again, each started a child agent: doing them inline does not complete
+    them. `run` is a delegation.Run."""
+    from delegation import missing_required
+
+    return [str(f) for f in missing_required(run.placed, run.windows)]
+
+
 # ---------------------------------------------------------------------------
 # The run's data.
 # ---------------------------------------------------------------------------
@@ -335,6 +344,14 @@ def test_reviewer_left_the_work_unchanged(item):
 
 def test_reviewer_got_only_goal_results_and_pointers():
     assert rule_reviewer_input(launches_or_skip()) == []
+
+
+def test_required_steps_each_started_a_child():
+    import delegation as dl
+
+    if not dl.is_claude():
+        pytest.skip("only a Claude transcript shows where a child agent was started")
+    assert rule_required_children(dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, DEBUG_DIR)) == []
 
 
 def test_reviewer_was_a_separate_helper_on_a_cheaper_model():

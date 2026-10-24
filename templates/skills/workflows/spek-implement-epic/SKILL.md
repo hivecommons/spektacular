@@ -49,13 +49,15 @@ Repeat until nothing is left to start or merge and no child is running:
    {{command}} epic worktree --data '{"spec":"<spec>"}'
    ```
 
-   Then start a child to **start** it.
+   Then start a child to **start** it. Its prompt names each worktree path the command reported (Step 4).
 5. Specs that are `done` are skipped; specs that are `blocked` wait for the specs in their `waiting_on`, which must be implemented **and merged** first.
 6. Report progress (Step 7), then wait for a child to hand back and handle it (Step 6). Then go round again.
 
 Use your agent's own way of running sub-agents in the background, so independent specs are implemented in overlapping time. Start every ready spec; there is no limit on how many run at once.
 
 **In a headless session, keep every child inside your turn.** A session is headless when no one replies between your turns: you were started non-interactively, or your prompt says so. There, a sub-agent still running in the background after you end your turn may be stopped before it finishes; headless Claude Code stops one after ten minutes. So instead of starting children in the background, start the ready specs as foreground sub-agents in a single message, so they still run in overlapping time, and handle every hand-back (Step 6) before you end the turn.
+
+**Never set a timed wake-up while children run.** Do not use a scheduled wake-up, a timer, a recurring job or a command that sleeps to check on your children: each child's hand-back, or its completion notice, is what wakes you. A wake-up still pending once the work is done keeps the session running with nothing left to do.
 
 A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not. A child that ended without a hand-back is no longer running (Step 6).
 
@@ -64,6 +66,7 @@ A child that handed back a `QUESTION:` and is waiting for its answer still count
 Give each child exactly what it needs, because it inherits nothing from you:
 
 - the spec name, and the project root to run every `{{command}}` command from. The implement workflow's own instructions name where each repo's code lives in the spec's worktrees; it never runs `{{command}}` from inside a worktree and never touches a worktree's `.spektacular` directory;
+- the spec's code locations: the worktree path of every repo that `{{command}} epic worktree --data '{"spec":"<spec>"}'` reports for the spec, and that the child works on code only there. Running it again for a spec whose worktrees already exist reports the same paths, so a resumed child is given them too;
 - to **start** or **resume**: run `{{command}} implement new --data '{"name":"<spec>","orchestrated":true}'`. If it returns a resume report for the spec's lane, read back what the report names (the plan documents and the lane's notes), then run the `goto` it gives, which carries `\"name\":\"<spec>\"`;
 - "Follow the `spek-implement` skill. This run is orchestrated: tasks run one after another without asking between them, every `goto` carries `\"name\":\"<spec>\"`, and you never ask the user anything yourself.";
 - "Never resolve a merge or git conflict yourself, and never merge, rebase or switch branches: your worktree's branch is merged by the orchestrator.";

@@ -45,6 +45,8 @@ Use your agent's own way of running sub-agents in the background, so independent
 
 **In a headless session, keep every child inside your turn.** A session is headless when no one replies between your turns: you were started non-interactively, or your prompt says so. There, a sub-agent still running in the background after you end your turn may be stopped before it finishes; headless Claude Code stops one after ten minutes. So instead of starting children in the background, start the ready specs as foreground sub-agents in a single message, so they still run in overlapping time, and handle every hand-back (Step 4) before you end the turn.
 
+**Never set a timed wake-up while children run.** Do not use a scheduled wake-up, a timer, a recurring job or a command that sleeps to check on your children: each child's hand-back, or its completion notice, is what wakes you. A wake-up still pending once the work is done keeps the session running with nothing left to do.
+
 A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not. A child that ended without a hand-back is no longer running (Step 4).
 
 # Step 3: The child prompt

@@ -466,3 +466,26 @@ func TestPlanEpicSkillResumesAChildCutOffWithoutAHandBack(t *testing.T) {
 		"`session.maxTurns` in `~/.bob/settings/settings.json`",
 	)
 }
+
+// The orchestrator never schedules its own wake-up while children run: a
+// pending timer or recurring job keeps the session alive after the work is
+// done. The rule sits in the loop, after the headless paragraph, which is
+// left word for word as it was.
+func TestPlanEpicSkillNeverSetsATimedWakeUpWhileChildrenRun(t *testing.T) {
+	loop := flat(section(t, installedPlanEpicSkill(t), "# Step 2: The loop"))
+
+	rule := "**Never set a timed wake-up while children run.**"
+	requirePhrases(t, "The loop", loop,
+		rule,
+		"Do not use a scheduled wake-up, a timer, a recurring job or a command that sleeps to check on your children",
+		"each child's hand-back, or its completion notice, is what wakes you.",
+		"A wake-up still pending once the work is done keeps the session running with nothing left to do.",
+	)
+
+	headless := "**In a headless session, keep every child inside your turn.** A session is headless when no one replies between your turns: you were started non-interactively, or your prompt says so. There, a sub-agent still running in the background after you end your turn may be stopped before it finishes; headless Claude Code stops one after ten minutes. So instead of starting children in the background, start the ready specs as foreground sub-agents in a single message, so they still run in overlapping time, and handle every hand-back (Step 4) before you end the turn."
+	require.Contains(t, loop, headless, "the headless paragraph must be unchanged")
+
+	running := "A child that handed back a `QUESTION:` and is waiting for its answer still counts as running."
+	require.Less(t, strings.Index(loop, headless), strings.Index(loop, rule), "the rule follows the headless paragraph")
+	require.Less(t, strings.Index(loop, rule), strings.Index(loop, running), "the rule comes before the running-child paragraph")
+}

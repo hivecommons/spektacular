@@ -82,6 +82,11 @@ SUITES = {
         "$(GOAL_CHECK_BUILD)/tests",
         "$(SCENARIO)",
     ),
+    "background-child": (
+        "_harbor-test-background-child",
+        "tests/harbor/.build/background-child-$(AGENT)/tests",
+        "",
+    ),
 }
 
 # Make variables a recipe above names its build directory through.
