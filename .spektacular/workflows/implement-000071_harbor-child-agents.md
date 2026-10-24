@@ -63,7 +63,24 @@
 ## Task 7 (changelog writes) — implemented
 - `sessionlog.changelog_writes_by_repo(events, name=None)` (+ `_positional`, `_VALUE_FLAGS`); implement verifier's three changelog tests read `SessionLog(DEBUG_DIR, kinds=("implement",)).all_events()`; `*_WRITE_SUBSTR` removed; trim `measured()` includes it. s55-implement → {None:1, auth:1, docs:1}.
 
+- Tasks 7, 8 DONE. Milestone 2 committed (worktree f3eb8a6; main 304efb3).
+
+## Task 9 (delegation wording) — implemented
+- Marker phrase for the oracle tie (task 11): "does not complete this step", added to spec 08-verification, implement 04-test and 05-verify. check_goal's marker is its existing "never as yourself".
+
+- Task 9 DONE.
+
+## Task 10 (epic skills) — implemented
+- No-wake-up paragraph ("**Never set a timed wake-up while children run.**") placed before "A child that handed back a `QUESTION:`…" in both epic SKILL.md; implement-epic child prompt gains the code-locations item (`epic worktree` reports the paths; idempotent via worktree.Manager.Ensure reuse), loop gains "Its prompt names each worktree path the command reported (Step 4)." Existing pin needs exact "Then start a child to **start** it." Avoid words starting "ask" (allowlist tests).
+
+- Task 10 DONE.
+
+## Task 11 (delegation.py) — implemented
+- Oracle REQUIRED/SUGGESTED/PER_SPEC_CHILD; `Failure(rule, subject, detail)`; `is_claude`, `read_run(transcript, debug_dir) -> Run(placed, session, windows, turns, wakeups, end)`, `worktree_paths(session)`; rules `missing_required` (completed step-runs only; consecutive same-step windows = one step; "(attempt N)" for repeats), `missing_spec_children`, `epic_context_gaps` (epic runs only — split from the plan's single `context_gaps` because a one-lane run's main-agent children aren't per-spec children), `review_context_gaps`, `wakeups_while_children_run` (top-level children only).
+- Reference results: s55-epic → 1 wake-up; m70-epic → 0; s55-ie → 18 missing test/verify (+check_goal attempt) children, 4 missing worktree paths, 1 sleep; m70-ie → 18 missing children; goal-check both 0; m70 spec 0; s55 spec (job `s55-claude-spec-151314`; `s55-claude-spec` is a broken run stuck at `new`) → missing verification child.
+
 ## User decisions
+- 2026-10-24: spec-review context check accepts close phrasings: "only what is written" or "exactly as written" (m70 reviewer said "Judge it exactly as written"). Applied the same spirit to "orchestrated": accept `"orchestrated":true` or the skill's own words "run is orchestrated" (m70 implement-epic orchestrator ran `implement new` itself and said "This run is orchestrated").
 - 2026-10-24: PENDING SPEC, start only AFTER this implement run completes (user's instruction): spec name `knowledge-access-index-and-prune` (no epic). Run `spek-new`; `spec new` will raise uncommitted_changes → ask the user again. The user's request: agents write knowledge without asking; a JSON access index in the knowledge base, updated only by the `spektacular knowledge` tool, recording when entries are found in search and when they're retrieved for a plan; then all entries update automatically; a `knowledge prune` command, pass 1 using the access index + entry created date to prune invalid entries, pass 2 reads each entry, checks correctness, corrects or deletes.
 - 2026-10-24: "Run without asking" — loop through tasks without pausing between them; still stop for genuine questions/mismatches.
 - 2026-10-24: wake-up reader counts ANY main-agent Bash that runs `sleep` (foreground or background) as a timer — the s55 implement-epic `sleep 240` poll was foreground, contrary to the plan's assumption. ScheduleWakeup and CronCreate as planned.

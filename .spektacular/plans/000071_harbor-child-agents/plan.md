@@ -508,7 +508,7 @@ Codex and Bob runs are recorded but never failed by these rules.
 - The self-check tying the oracle to the templates passes.
 - The Go test suite passes with the new template phrases pinned.
 
-#### - [ ] Task: Make required delegation explicit in the step instructions
+#### - [x] Task: Make required delegation explicit in the step instructions
 **Id:** 5460da84-b00f-46a3-95f7-84cf803efe6b
 **Repo:** spektacular
 **Depends on:** none
@@ -519,11 +519,11 @@ Strengthen the spec workflow's independent review step and the implement workflo
 *Technical detail:* [context.md#task-make-required-delegation-explicit-in-the-step-instructions](./context.md#task-make-required-delegation-explicit-in-the-step-instructions)
 
 **Acceptance criteria**:
-- [ ] The spec review, test and verify steps each say plainly that an agent with a sub-agent tool must delegate the step and that doing it inline does not complete it.
-- [ ] What each step tells the agent to hand its child is unchanged.
-- [ ] The template-contract tests pin the new wording and pass.
+- [x] The spec review, test and verify steps each say plainly that an agent with a sub-agent tool must delegate the step and that doing it inline does not complete it.
+- [x] What each step tells the agent to hand its child is unchanged.
+- [x] The template-contract tests pin the new wording and pass.
 
-#### - [ ] Task: Add worktree paths and the no-wake-up rule to the epic skills
+#### - [x] Task: Add worktree paths and the no-wake-up rule to the epic skills
 **Id:** 00c54dac-455c-43ba-b358-a3190d71b018
 **Repo:** spektacular
 **Depends on:** none
@@ -534,11 +534,11 @@ Change both epic skills, in their template source, so the orchestrator never sch
 *Technical detail:* [context.md#task-add-worktree-paths-and-the-no-wake-up-rule-to-the-epic-skills](./context.md#task-add-worktree-paths-and-the-no-wake-up-rule-to-the-epic-skills)
 
 **Acceptance criteria**:
-- [ ] Both epic skills tell the orchestrator never to schedule a timed wake-up, timer or recurring job while waiting on children.
-- [ ] The implement-epic skill requires each child's prompt to name the spec's worktree paths.
-- [ ] The headless paragraph is unchanged, and the skill tests pin the new rules and pass.
+- [x] Both epic skills tell the orchestrator never to schedule a timed wake-up, timer or recurring job while waiting on children.
+- [x] The implement-epic skill requires each child's prompt to name the spec's worktree paths.
+- [x] The headless paragraph is unchanged, and the skill tests pin the new rules and pass.
 
-#### - [ ] Task: Add the delegation rules and their oracle
+#### - [x] Task: Add the delegation rules and their oracle
 **Id:** 128992a9-5756-4425-8353-1bfcf04b33fb
 **Repo:** spektacular
 **Depends on:**
@@ -552,13 +552,13 @@ Add a shared module of pure delegation rules with a hand-kept oracle of required
 *Technical detail:* [context.md#task-add-the-delegation-rules-and-their-oracle](./context.md#task-add-the-delegation-rules-and-their-oracle)
 
 **Acceptance criteria**:
-- [ ] For each required step, a run without a child in it fails naming that step, and the same run with the child passes.
-- [ ] A run whose suggested steps used no child passes every rule.
-- [ ] Each missing context item fails naming the child and the item: spec, project root, orchestrated run, worktree paths, resume instruction, staged spec and review-only-what-is-written.
-- [ ] The 5.5 epic-planning reference run fails the wake-up rule, naming the scheduled wake-up, and the 4.6 run passes it.
-- [ ] Removing a step from the oracle, or its delegation wording from its template, fails the self-check that ties them.
+- [x] For each required step, a run without a child in it fails naming that step, and the same run with the child passes.
+- [x] A run whose suggested steps used no child passes every rule.
+- [x] Each missing context item fails naming the child and the item: spec, project root, orchestrated run, worktree paths, resume instruction, staged spec and review-only-what-is-written.
+- [x] The 5.5 epic-planning reference run fails the wake-up rule, naming the scheduled wake-up, and the 4.6 run passes it.
+- [x] Removing a step from the oracle, or its delegation wording from its template, fails the self-check that ties them.
 
-#### - [ ] Task: Enforce delegation in the spec and goal-check suites
+#### - [x] Task: Enforce delegation in the spec and goal-check suites
 **Id:** 5128aaa7-c8ef-4b10-b3ce-1552d15d1d85
 **Repo:** spektacular
 **Depends on:**
@@ -570,11 +570,11 @@ Have the spec suite fail a Claude run whose independent review was done without 
 *Technical detail:* [context.md#task-enforce-delegation-in-the-spec-and-goal-check-suites](./context.md#task-enforce-delegation-in-the-spec-and-goal-check-suites)
 
 **Acceptance criteria**:
-- [ ] A Claude spec run that reviews inline fails, naming the review step, and one with a correctly briefed review child passes.
-- [ ] A Claude goal-check run missing a child at the goal check, or at test or verify on the retry, fails, naming the step.
-- [ ] Codex and Bob runs of both suites are not failed by these rules.
+- [x] A Claude spec run that reviews inline fails, naming the review step, and one with a correctly briefed review child passes.
+- [x] A Claude goal-check run missing a child at the goal check, or at test or verify on the retry, fails, naming the step.
+- [x] Codex and Bob runs of both suites are not failed by these rules.
 
-#### - [ ] Task: Enforce delegation and wake-up rules in the epic suites
+#### - [x] Task: Enforce delegation and wake-up rules in the epic suites
 **Id:** 8483e836-8b57-490b-b33f-91d1fa3e4700
 **Repo:** spektacular
 **Depends on:**
@@ -587,11 +587,11 @@ Give the epic planning and implementing verifiers Claude-only rule checks. Every
 *Technical detail:* [context.md#task-enforce-delegation-and-wake-up-rules-in-the-epic-suites](./context.md#task-enforce-delegation-and-wake-up-rules-in-the-epic-suites)
 
 **Acceptance criteria**:
-- [ ] A Claude epic run with a spec planned or implemented without its own child fails, naming the spec.
-- [ ] A Claude epic run whose child context omits any required item fails, naming the child and what was missing.
-- [ ] A Claude implement-epic run whose test, verify or goal-check step in any spec's lane had no child fails, naming the spec and step.
-- [ ] A Claude epic run whose orchestrator schedules a wake-up, timer or recurring job while children run fails, naming the call.
-- [ ] Codex and Bob epic runs are checked exactly as before.
+- [x] A Claude epic run with a spec planned or implemented without its own child fails, naming the spec.
+- [x] A Claude epic run whose child context omits any required item fails, naming the child and what was missing.
+- [x] A Claude implement-epic run whose test, verify or goal-check step in any spec's lane had no child fails, naming the spec and step.
+- [x] A Claude epic run whose orchestrator schedules a wake-up, timer or recurring job while children run fails, naming the call.
+- [x] Codex and Bob epic runs are checked exactly as before.
 
 ### Milestone 4: The ten-minute background limit is settled, and the epic suites run children as a real session does
 
@@ -869,3 +869,113 @@ Placement is a shared function, so the verifiers can place children exactly as t
 - `tests/harbor/shared/tests/test_suite_wiring.py`
 
 **Discoveries**: The standing-rules suite's task has no "never end your turn waiting for a reply" line. It tells the agent to write the question into its answer and stop for that request, which fits a suite that checks the agent offers rather than decides.
+
+### 2026-10-24 — Task: Make required delegation explicit in the step instructions
+
+**What was done**: The spec `verification` step and the implement `test` and `verify` steps now each say, in one bold rule, that an agent that can start sub-agents must delegate the step. Doing it in the agent's own context "does not complete this step". What each step hands its child, and the spec review's fallback for agents without a sub-agent tool, are unchanged. Go template-contract tests pin the new sentences and the unchanged hand-offs.
+
+**Deviations**: The test and verify steps had no explicit fallback for agents without a sub-agent tool. The new rule is conditional ("If your agent can start sub-agents"), so those agents are unaffected.
+
+**Files changed**:
+- `templates/steps/spec/08-verification.md`
+- `templates/steps/implement/04-test.md`
+- `templates/steps/implement/05-verify.md`
+- `internal/steps/spec/steps_test.go`
+- `internal/steps/implement/steps_test.go`
+
+**Discoveries**: All three use the marker phrase "does not complete this step", and no other template uses it. The delegation oracle's template tie can scan for it, with `check_goal`'s existing "never as yourself" as that step's marker.
+
+### 2026-10-24 — Task: Add worktree paths and the no-wake-up rule to the epic skills
+
+**What was done**:
+- Both epic skills gain a rule beside their child-running loop: never set a scheduled wake-up, timer, recurring job or sleeping command while children run, because each child's hand-back or completion notice is what wakes the orchestrator.
+- `spek-implement-epic` gains a child-prompt item: the spec's code locations, the worktree path of every repo `epic worktree` reports for the spec, and that the child works on code only there. The loop says each start prompt names those paths.
+- The headless paragraph is untouched. Go skill tests pin the new rules and the headless paragraph verbatim.
+
+**Deviations**:
+- The loop's pinned sentence "Then start a child to **start** it." is kept whole, with the worktree note added as a sentence of its own.
+- The child-prompt item covers resumed children too: `epic worktree` reuses a spec's existing worktrees (`worktree.Manager.Ensure`), so running it again reports the same paths.
+
+**Files changed**:
+- `templates/skills/workflows/spek-plan-epic/SKILL.md`
+- `templates/skills/workflows/spek-implement-epic/SKILL.md`
+- `templates/plan_epic_skill_test.go`
+- `templates/implement_epic_skill_test.go`
+
+**Discoveries**:
+- The new tests pin the headless paragraph verbatim, so the headless-guidance task in Milestone 4 must update those pins along with the paragraph.
+- New skill text avoids any word starting with "ask", which keeps the skills' "ask" allowlist tests unchanged.
+
+### 2026-10-24 — Task: Add the delegation rules and their oracle
+
+**What was done**: Added `tests/harbor/shared/delegation.py`. It holds:
+- **The oracle:** a hand-kept list of required and suggested delegations, per-spec children for the epic kinds, and each required child's mandatory context.
+- **The rules:** pure functions that return named `Failure`s:
+  - `missing_required`: a required step completed with no child started in it, at any depth;
+  - `missing_spec_children`;
+  - `epic_context_gaps`: spec, project root, orchestrated, worktree paths, resume;
+  - `review_context_gaps`: staged spec, review only what is written;
+  - `wakeups_while_children_run`.
+- **Helpers for the verifiers:** `read_run` and `worktree_paths`.
+
+A self-check ties the oracle to the step templates' "does not complete this step" and "never as yourself" wording.
+
+**Deviations**:
+- `context_gaps` is split into `epic_context_gaps` and `review_context_gaps`, plus `missing_spec_children`. In a one-lane run every child sits on the single lane, so the per-spec context rules apply only where an epic orchestrator starts them.
+- `missing_required` judges only completed steps: a step the lane moved on from, with consecutive same-step windows (a resume) counting as one, and a retried step named "(attempt N)".
+- User decision, 2026-10-24: the review brief passes on "only what is written" or "exactly as written". In the same spirit, "orchestrated" passes on `"orchestrated":true` or the skill's own words "run is orchestrated".
+- The module has one reader, `read_run`, so the four suites read and place children identically, through the recorder's placement.
+
+**Files changed**:
+- `tests/harbor/shared/delegation.py`
+- `tests/harbor/shared/tests/test_delegation.py`
+
+**Discoveries**: On the 2026-10-23 runs the rules reproduce the research findings:
+- s55 epic planning fails only the wake-up rule (`ScheduleWakeup delaySeconds=1200`); m70 passes.
+- Both implement-epic runs skipped every `test` and `verify` child.
+- s55's epic children were never given their worktree paths, and its orchestrator polled with a foreground `sleep 240`.
+- The s55 spec run (job `s55-claude-spec-151314`; `s55-claude-spec` stopped at `new`) skipped its review child. m70's review passes.
+- Both goal-check runs pass.
+
+### 2026-10-24 — Task: Enforce delegation in the spec and goal-check suites
+
+**What was done**:
+- The spec suite's `TestVerificationStep.test_review_was_a_briefed_child` fails a Claude run whose review step completed without a child, or whose reviewer was not given the staged spec and told to review only what is written.
+- The goal-check suite's `rule_required_children` and `test_required_steps_each_started_a_child` fail a Claude run whose goal check, or the test and verify steps of its retry, completed without a child.
+- Both skip for any agent but Claude (`delegation.is_claude`).
+
+**Deviations**: None.
+
+**Files changed**:
+- `tests/harbor/spec-workflow/tests/test_spec_workflow.py`
+- `tests/harbor/goal-check-workflow/tests/test_goal_check.py`
+- `tests/harbor/goal-check-workflow/tests/test_verifier_selfcheck.py`
+
+**Discoveries**: Run in a container-shaped harness on the 2026-10-23 runs:
+- the s55 spec run fails, naming `spec:…:verification`;
+- m70's spec run passes;
+- both goal-check runs pass.
+
+### 2026-10-24 — Task: Enforce delegation and wake-up rules in the epic suites
+
+**What was done**: The epic and implement-epic verifiers gain a Claude-only `TestChildren` class, behind a session `children_run` fixture that skips for other agents. It checks that:
+- every spec had its own child;
+- each child was given its spec, the project root, that its run is orchestrated, its worktree paths (implementing) and, for a continued lane, the instruction to resume;
+- no wake-up, timer or sleep was set while children ran;
+- for implementing, each spec lane's test, verify and goal-check steps had a child.
+
+Every other check is unchanged, so Codex and Bob runs are judged as before. The knowledge entry `architecture/testing-architecture.md` was updated, through `spek-knowledge` with the user's confirmation, for the Claude-only child checks and the delegation oracle.
+
+**Deviations**: None in scope. This task's code was written while the previous task's tests ran, then taken through the workflow's steps.
+
+**Files changed**:
+- `tests/harbor/epic-workflow/tests/test_epic_workflow.py`
+- `tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py`
+- `tests/harbor/shared/tests/test_epic_children.py`
+
+**Discoveries**:
+- On the 2026-10-23 runs:
+  - m70 epic planning passes every child check, and s55 fails only its 1200 s wake-up.
+  - s55 implement-epic fails on missing worktree paths, its `sleep 240` poll and skipped test/verify children.
+  - m70 implement-epic fails only on the skipped test/verify children.
+- A harbor run started inside the worktree leaves a root-owned `tests/harbor/jobs/<job>/…/agent/sessions` that `go test ./...` cannot walk. Code and tracked packages pass, but the directory must be cleared before `go test ./...` runs clean.
