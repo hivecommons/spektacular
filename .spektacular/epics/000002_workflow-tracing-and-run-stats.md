@@ -15,10 +15,14 @@ specs:
     - name: 000076_harbor-on-built-in-logs
       depends_on:
         - 000075_run-stats-command
+    - name: 000077_html-log-viewer
+      depends_on:
+        - 000075_run-stats-command
 sources:
     - uri: docs/workflow-performance-investigation.md
       retrieved_date: "2026-10-24"
 ---
+
 
 
 
