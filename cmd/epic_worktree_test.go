@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/hivecommons/spektacular/internal/autocommit"
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/testutil/gittest"
@@ -290,6 +292,37 @@ func TestEpicMerge_CleanMergeReportsMergedAndRemoved(t *testing.T) {
 	_, ok, err := worktree.ReadRecord(f.proj, "alpha")
 	require.NoError(t, err)
 	require.False(t, ok, "the worktree record outlived the merge")
+}
+
+// A merge commits in the same main checkouts as a finishing lane, so it is
+// taken under the project commit lock: while another holds the lock it waits,
+// and when the lock is not released in time it fails naming the lock, with
+// nothing merged and the spec's worktrees left in place.
+func TestEpicMerge_TakesTheCommitLock(t *testing.T) {
+	f := worktreeProject(t, true)
+	runEpicWorktreeCmd(t)
+	wtWriteFile(t, f.wt("testproj"), "main.txt", "main v2\n")
+	wtCommitAll(t, f.wt("testproj"), "project work")
+	projHead := gittest.RunGit(t, f.proj, "rev-parse", "HEAD")
+	siteHead := gittest.RunGit(t, f.site, "rev-parse", "HEAD")
+
+	prev := autocommit.LockTimeout
+	autocommit.LockTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { autocommit.LockTimeout = prev })
+	release, err := autocommit.AcquireLock(filepath.Join(f.proj, ".spektacular"))
+	require.NoError(t, err)
+
+	stdout, code := runEpic(t, "merge", "--data", `{"spec":"alpha"}`)
+	require.Equal(t, 1, code)
+	require.Contains(t, stdout, "timed out waiting for the commit lock")
+	require.Equal(t, projHead, gittest.RunGit(t, f.proj, "rev-parse", "HEAD"))
+	require.Equal(t, siteHead, gittest.RunGit(t, f.site, "rev-parse", "HEAD"))
+	require.DirExists(t, f.wt("testproj"))
+
+	release()
+	stdout, code = runEpic(t, "merge", "--data", `{"spec":"alpha"}`)
+	require.Equalf(t, 0, code, "epic merge failed once the lock was free: %s", stdout)
+	require.NoDirExists(t, f.wt("testproj"))
 }
 
 // Criterion 5, through the command: a conflict in the sibling alone is

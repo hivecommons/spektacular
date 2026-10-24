@@ -1,8 +1,12 @@
 package autocommit
 
 import (
+	"bufio"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -80,39 +84,112 @@ func TestAcquireLock_TimeoutReportsTheHolder(t *testing.T) {
 	setLockTimeout(t, 200*time.Millisecond)
 	dataDir := t.TempDir()
 	path := lockPath(dataDir)
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte("pid 4242 at 2026-10-04T10:00:00Z\n"), 0o644))
+	held, err := AcquireLock(dataDir)
+	require.NoError(t, err)
+	t.Cleanup(held)
+	record := string(readLock(t, path))
+	holder := strings.TrimSuffix(record, "\n")
+	require.Regexp(t, fmt.Sprintf(`^pid %d at \S+$`, os.Getpid()), holder)
 
 	release, err := AcquireLock(dataDir)
 	require.Nil(t, release)
 	var lockErr *LockError
 	require.ErrorAs(t, err, &lockErr)
 	require.Equal(t, path, lockErr.Path)
-	require.Equal(t, "pid 4242 at 2026-10-04T10:00:00Z", lockErr.Holder)
+	require.Equal(t, holder, lockErr.Holder)
 	require.Equal(t,
-		"timed out waiting for the commit lock "+path+" (held by pid 4242 at 2026-10-04T10:00:00Z)",
+		"timed out waiting for the commit lock "+path+" (held by "+holder+")",
 		err.Error())
 
-	require.Equal(t, "pid 4242 at 2026-10-04T10:00:00Z\n", string(readLock(t, path)))
+	require.Equal(t, record, string(readLock(t, path)))
 }
 
-// A lock older than LockStale was left by a process that died holding it: it
-// is broken and taken over at once, not waited out.
-func TestAcquireLock_BreaksAStaleLock(t *testing.T) {
-	setLockTimeout(t, 200*time.Millisecond)
+// A lock file that no live process holds is free, whatever it records: what
+// a holder that died wrote there is replaced, not waited out.
+func TestAcquireLock_TakesAnUnheldLockFileAtOnce(t *testing.T) {
+	setLockTimeout(t, 0)
 	dataDir := t.TempDir()
 	path := lockPath(dataDir)
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte("pid 4242 at 2026-10-04T10:00:00Z\n"), 0o644))
-	old := time.Now().Add(-LockStale - time.Minute)
-	require.NoError(t, os.Chtimes(path, old, old))
 
 	release, err := AcquireLock(dataDir)
 	require.NoError(t, err)
-	require.NotContains(t, string(readLock(t, path)), "pid 4242", "the stale holder's lock is replaced")
+	require.NotContains(t, string(readLock(t, path)), "pid 4242", "the dead holder's record is replaced")
 
 	release()
 	require.NoFileExists(t, path)
+}
+
+// A holder that keeps the lock for a long time keeps it: how old the lock
+// file is says nothing about whether its holder is alive.
+func TestAcquireLock_NeverBreaksALiveHolder(t *testing.T) {
+	setLockTimeout(t, 200*time.Millisecond)
+	dataDir := t.TempDir()
+	path := lockPath(dataDir)
+	held, err := AcquireLock(dataDir)
+	require.NoError(t, err)
+	t.Cleanup(held)
+	old := time.Now().Add(-24 * time.Hour)
+	require.NoError(t, os.Chtimes(path, old, old))
+
+	release, err := AcquireLock(dataDir)
+	require.Nil(t, release)
+	var lockErr *LockError
+	require.ErrorAs(t, err, &lockErr)
+}
+
+// lockHolderEnv names the data directory a re-executed test binary takes the
+// lock under; see TestAcquireLock_HelperHoldsTheLock.
+const lockHolderEnv = "SPEKTACULAR_TEST_LOCK_HOLDER_DIR"
+
+// Not a test: run as a child process by TestAcquireLock_KilledHolderReleasesIt,
+// it takes the lock, says so, and holds it until it is killed.
+func TestAcquireLock_HelperHoldsTheLock(t *testing.T) {
+	dataDir := os.Getenv(lockHolderEnv)
+	if dataDir == "" {
+		t.Skip("helper process for TestAcquireLock_KilledHolderReleasesIt")
+	}
+	release, err := AcquireLock(dataDir)
+	if err != nil {
+		fmt.Println("error:", err)
+		os.Exit(1)
+	}
+	fmt.Println("locked")
+	// Sleeping, not select{}, which the runtime would report as a deadlock;
+	// release is kept reachable so its open lock file is never collected.
+	time.Sleep(time.Hour)
+	release()
+}
+
+// A process killed while holding the lock leaves it free: the next
+// AcquireLock gets it at once, without waiting for anything to expire.
+func TestAcquireLock_KilledHolderReleasesIt(t *testing.T) {
+	dataDir := t.TempDir()
+	child := exec.Command(os.Args[0], "-test.run=^TestAcquireLock_HelperHoldsTheLock$")
+	child.Env = append(os.Environ(), lockHolderEnv+"="+dataDir)
+	out, err := child.StdoutPipe()
+	require.NoError(t, err)
+	require.NoError(t, child.Start())
+	t.Cleanup(func() { _ = child.Process.Kill(); _ = child.Wait() })
+	line, err := bufio.NewReader(out).ReadString('\n')
+	require.NoError(t, err)
+	require.Equal(t, "locked\n", line)
+
+	setLockTimeout(t, 200*time.Millisecond)
+	release, err := AcquireLock(dataDir)
+	require.Nil(t, release)
+	var lockErr *LockError
+	require.ErrorAs(t, err, &lockErr, "the child holds the lock while it lives")
+	require.Contains(t, lockErr.Holder, fmt.Sprintf("pid %d at ", child.Process.Pid))
+
+	require.NoError(t, child.Process.Kill())
+	_ = child.Wait()
+
+	setLockTimeout(t, 0)
+	release, err = AcquireLock(dataDir)
+	require.NoError(t, err, "a killed holder's lock is free at once")
+	release()
 }
 
 // A lock released by its holder can be taken again straight away.

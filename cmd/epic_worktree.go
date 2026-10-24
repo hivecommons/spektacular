@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/hivecommons/spektacular/internal/autocommit"
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/repo"
@@ -167,9 +169,18 @@ var worktreeMergeOutputSchema = &schemaObj{
 
 // writeMergeResult merges spec back through the worktree manager and writes
 // the result, or refuses with the conflicts; shared by epic merge and
-// implement merge so the two can never report a merge differently.
+// implement merge so the two can never report a merge differently. The merge
+// is taken under the project commit lock: it commits in the same main
+// checkouts as a finishing lane, and two merges at once would both pass the
+// merge-in-progress check, then contend for git's index, the loser's abort
+// undoing the winner's merge.
 func writeMergeResult(cmd *cobra.Command, m worktree.Manager, spec string) error {
+	release, err := autocommit.AcquireLock(filepath.Join(m.ProjectRoot, ".spektacular"))
+	if err != nil {
+		return err
+	}
 	res, err := m.Merge(spec)
+	release()
 	if err != nil {
 		return err
 	}

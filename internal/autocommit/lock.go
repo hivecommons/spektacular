@@ -1,7 +1,6 @@
 package autocommit
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,14 +11,19 @@ import (
 // .spektacular directory. Orchestrated plans run side by side in one working
 // copy, and each makes its own path-scoped commit when it finishes; the lock
 // serialises those commits so two never contend for git's index.
+//
+// The lock is an operating-system lock on the file (flock on Unix,
+// LockFileEx on Windows), not the file's existence. The operating system
+// drops it when its holder exits, however it exits, so a holder that is
+// killed never leaves the lock behind, and a holder that is slow is never
+// mistaken for a dead one. While the lock is held the file records who holds
+// it; a released lock's file is removed.
 const LockFile = "workflows/.commit.lock"
 
 // Lock timing. A commit is small, so a waiter gives up after LockTimeout
-// rather than hang; a lock older than LockStale was left by a process that
-// died holding it, and is broken.
+// rather than hang.
 var (
 	LockTimeout = 30 * time.Second
-	LockStale   = 10 * time.Minute
 	lockBackoff = 50 * time.Millisecond
 )
 
@@ -37,7 +41,7 @@ func (e *LockError) Error() string {
 
 // AcquireLock takes the commit lock under dataDir (the project's .spektacular
 // directory), waiting up to LockTimeout. It returns a release function that
-// removes the lock. A lock older than LockStale is broken and taken over.
+// drops the lock and removes the lock file.
 func AcquireLock(dataDir string) (release func(), err error) {
 	path := filepath.Join(dataDir, LockFile)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -46,17 +50,25 @@ func AcquireLock(dataDir string) (release func(), err error) {
 	deadline := time.Now().Add(LockTimeout)
 	delay := lockBackoff
 	for {
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-		if err == nil {
-			_, _ = fmt.Fprintf(f, "pid %d at %s\n", os.Getpid(), time.Now().UTC().Format(time.RFC3339))
-			_ = f.Close()
-			return func() { _ = os.Remove(path) }, nil
-		}
-		if !errors.Is(err, os.ErrExist) {
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+		if err != nil {
 			return nil, err
 		}
-		if info, statErr := os.Stat(path); statErr == nil && time.Since(info.ModTime()) > LockStale {
-			_ = os.Remove(path)
+		ok, err := tryLock(f)
+		if err != nil {
+			_ = f.Close()
+			return nil, err
+		}
+		if ok && isLockFile(f, path) {
+			// A holder that died left its record behind; replace it with ours.
+			_ = f.Truncate(0)
+			_, _ = f.WriteAt(fmt.Appendf(nil, "pid %d at %s\n", os.Getpid(), time.Now().UTC().Format(time.RFC3339)), 0)
+			return func() { releaseLock(f, path) }, nil
+		}
+		_ = f.Close()
+		if ok {
+			// The holder removed the file between our open and our lock, so
+			// what we locked is no longer the lock file: try again at once.
 			continue
 		}
 		if time.Now().After(deadline) {
@@ -68,6 +80,16 @@ func AcquireLock(dataDir string) (release func(), err error) {
 			delay *= 2
 		}
 	}
+}
+
+// isLockFile reports whether f is still the file at path.
+func isLockFile(f *os.File, path string) bool {
+	held, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	current, err := os.Stat(path)
+	return err == nil && os.SameFile(held, current)
 }
 
 func trimNewline(b []byte) []byte {
