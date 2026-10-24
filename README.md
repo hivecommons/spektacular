@@ -419,8 +419,47 @@ tests/harbor/jobs/<timestamp>/
     ├── agent/                     # Agent output log
     ├── verifier/
     │   ├── test-stdout.txt        # pytest output
+    │   ├── junit.xml              # pytest result for each check
+    │   ├── reward.json            # score out of 1, and per check group
     │   └── reward.txt             # 1 = pass, 0 = fail
     └── trial.log                  # Full trial log
+```
+
+#### Scoring, cost and pass rate
+
+A run is scored out of 1 by the fraction of checks that passed, not only pass or
+fail. When a suite is run through the Makefile, its verifier also writes
+`reward.json`, which harbor reports in place of `reward.txt`:
+
+| Reward | Meaning |
+|---|---|
+| `reward` | fraction of checks that passed |
+| `all_passed` | 1 when every check passed (the old pass/fail reward) |
+| `checks_passed`, `checks_total` | the counts behind `reward`; skipped checks are left out |
+| `group/<name>` | fraction passed within one test class, e.g. `group/one_question_per_exchange` |
+
+Agent runs fail at random, so one run does not say how often a suite passes.
+`HARBOR_ATTEMPTS` runs a suite several times in one job:
+
+```bash
+make harbor-test-spec HARBOR_ATTEMPTS=5
+```
+
+After each run the Makefile prints a summary of the job: runs, pass rate, pass^k
+(the chance that k runs in a row all pass), mean score, and mean cost, turns,
+wall time and tokens per run, read from the agent's own log (Claude's
+`claude-code.txt` result event; token counts only for Codex, which reports no
+cost). Summarise any jobs, several at once, with:
+
+```bash
+make harbor-report                                   # every job under tests/harbor/jobs
+python3 tests/harbor/scoring/report.py --k 2 --json tests/harbor/jobs/<timestamp>
+```
+
+The scoring scripts' own tests run without a container or agent:
+
+```bash
+make harbor-scoring-test
 ```
 
 #### Available test tasks

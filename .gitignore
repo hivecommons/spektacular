@@ -50,6 +50,7 @@ vendor/
 # Harbor test results
 tests/harbor/jobs/
 tests/harbor/*/environment/spektacular
+tests/harbor/*/tests/write_reward.py
 tests/harbor/.build/
 jobs/
 

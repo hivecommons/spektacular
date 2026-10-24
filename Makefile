@@ -3,8 +3,15 @@ VERSION := dev
 
 HARBOR_AUTH := CLAUDE_CODE_OAUTH_TOKEN=$$(python3 -c "import json; print(json.load(open('$$HOME/.claude/.credentials.json'))['claudeAiOauth']['accessToken'])")
 HARBOR_MODEL := claude-sonnet-4-6
+# Runs of each suite per harbor job. Agent runs fail at random, so one run does
+# not say how often a suite passes: e.g. `make harbor-test-spec HARBOR_ATTEMPTS=5`,
+# then read the pass rate and pass^k from the report printed after the run.
+HARBOR_ATTEMPTS ?= 1
+HARBOR_SCORER := tests/harbor/scoring/write_reward.py
+# Summarises the newest job under tests/harbor/jobs.
+HARBOR_REPORT := -python3 tests/harbor/scoring/report.py $$(ls -td tests/harbor/jobs/*/ | head -1)
 
-.PHONY: build test lint clean install install-local cross harbor-install harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo
+.PHONY: build test lint clean install install-local cross harbor-install harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-report harbor-scoring-test
 
 build:
 	go build -ldflags "-X github.com/hivecommons/spektacular/cmd.version=$(VERSION)" -o ./bin/$(BINARY) .
@@ -68,13 +75,17 @@ _harbor-test-spec:
 	cp tests/harbor/spec-workflow/solution/solve.sh tests/harbor/.build/spec-workflow-$(AGENT)/solution/solve.sh
 	cp tests/harbor/spec-workflow/tests/test.sh tests/harbor/.build/spec-workflow-$(AGENT)/tests/test.sh
 	cp tests/harbor/spec-workflow/tests/test_spec_workflow.py tests/harbor/.build/spec-workflow-$(AGENT)/tests/test_spec_workflow.py
+	cp $(HARBOR_SCORER) tests/harbor/.build/spec-workflow-$(AGENT)/tests/write_reward.py
 	sed -e 's|{{agent}}|$(AGENT)|g' -e 's|{{spek_new}}|$(SPEK_NEW)|g' \
 		tests/harbor/spec-workflow/instruction.md \
 		> tests/harbor/.build/spec-workflow-$(AGENT)/instruction.md
-	$(HARBOR_AUTH) harbor run -p tests/harbor/.build/spec-workflow-$(AGENT) -a $(HARBOR_AGENT) -m $(HARBOR_MODEL) -o tests/harbor/jobs
+	$(HARBOR_AUTH) harbor run -p tests/harbor/.build/spec-workflow-$(AGENT) -a $(HARBOR_AGENT) -m $(HARBOR_MODEL) -k $(HARBOR_ATTEMPTS) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/spec-workflow-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
+	@echo ""
+	@echo "=== Score, cost and pass rate ==="
+	$(HARBOR_REPORT)
 
 harbor-test-repo: harbor-test-repo-one-at-a-time
 
@@ -100,27 +111,49 @@ _harbor-test-repo:
 	cp tests/harbor/repo-workflow/solution/solve.sh tests/harbor/.build/repo-workflow-$(SCENARIO)/solution/solve.sh
 	cp tests/harbor/repo-workflow/tests/test.sh tests/harbor/.build/repo-workflow-$(SCENARIO)/tests/test.sh
 	cp tests/harbor/repo-workflow/tests/test_repo_workflow.py tests/harbor/.build/repo-workflow-$(SCENARIO)/tests/test_repo_workflow.py
+	cp $(HARBOR_SCORER) tests/harbor/.build/repo-workflow-$(SCENARIO)/tests/write_reward.py
 	SCENARIO_BODY=$$(cat tests/harbor/repo-workflow/scenario-$(SCENARIO).md); \
 	awk -v scenario="$$SCENARIO_BODY" -v agent="$(AGENT)" -v skill="$(SKILL)" \
 		'{ gsub(/\{\{agent\}\}/, agent); gsub(/\{\{skill_invocation\}\}/, skill); \
 		   if ($$0 == "{{scenario}}") print scenario; else print }' \
 		tests/harbor/repo-workflow/instruction.md \
 		> tests/harbor/.build/repo-workflow-$(SCENARIO)/instruction.md
-	SPEK_SCENARIO=$(SCENARIO) $(HARBOR_AUTH) harbor run -p tests/harbor/.build/repo-workflow-$(SCENARIO) -a $(HARBOR_AGENT) -m $(HARBOR_MODEL) -o tests/harbor/jobs
+	SPEK_SCENARIO=$(SCENARIO) $(HARBOR_AUTH) harbor run -p tests/harbor/.build/repo-workflow-$(SCENARIO) -a $(HARBOR_AGENT) -m $(HARBOR_MODEL) -k $(HARBOR_ATTEMPTS) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/repo-workflow-$(SCENARIO)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
+	@echo ""
+	@echo "=== Score, cost and pass rate ==="
+	$(HARBOR_REPORT)
 
 harbor-test-plan:
 	GOOS=linux GOARCH=amd64 go build -o tests/harbor/plan-workflow/environment/spektacular .
-	$(HARBOR_AUTH) harbor run -p tests/harbor/plan-workflow -a claude-code -m $(HARBOR_MODEL) -o tests/harbor/jobs
+	cp $(HARBOR_SCORER) tests/harbor/plan-workflow/tests/write_reward.py
+	$(HARBOR_AUTH) harbor run -p tests/harbor/plan-workflow -a claude-code -m $(HARBOR_MODEL) -k $(HARBOR_ATTEMPTS) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/plan-workflow__*/verifier/test-stdout.txt 2>/dev/null | head -1)
+	@echo ""
+	@echo "=== Score, cost and pass rate ==="
+	$(HARBOR_REPORT)
 
 harbor-test-implement:
 	GOOS=linux GOARCH=amd64 go build -o tests/harbor/implement-workflow/environment/spektacular .
-	$(HARBOR_AUTH) harbor run -p tests/harbor/implement-workflow -a claude-code -m $(HARBOR_MODEL) -o tests/harbor/jobs
+	cp $(HARBOR_SCORER) tests/harbor/implement-workflow/tests/write_reward.py
+	$(HARBOR_AUTH) harbor run -p tests/harbor/implement-workflow -a claude-code -m $(HARBOR_MODEL) -k $(HARBOR_ATTEMPTS) -o tests/harbor/jobs
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/implement-workflow__*/verifier/test-stdout.txt 2>/dev/null | head -1)
+	@echo ""
+	@echo "=== Score, cost and pass rate ==="
+	$(HARBOR_REPORT)
+
+# Score, pass rate, pass^k, cost, turns, time and tokens for harbor jobs.
+# JOBS is one or more job directories, or a directory above them.
+JOBS ?= tests/harbor/jobs
+harbor-report:
+	python3 tests/harbor/scoring/report.py $(JOBS)
+
+# The scoring scripts' own tests; no container or agent needed.
+harbor-scoring-test:
+	python3 -m pytest tests/harbor/scoring -q
