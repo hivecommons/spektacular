@@ -154,10 +154,11 @@ Implementing, testing or verifying can show that the spec itself, or a design it
 
 # When an orchestrator starts this skill
 
-The `spek-implement-epic` skill implements a whole epic by starting one agent per spec, each running this skill for one spec. If you were started that way, your prompt says so, and five things change:
+The `spek-implement-epic` skill implements a whole epic by starting one agent per spec, each running this skill for one spec. If you were started that way, your prompt says so, and six things change:
 
 - Start with `{{command}} implement new --data '{"name":"<spec_name>","orchestrated":true}'`, from the project root you were given. The run keeps its own progress record and notes in a lane and skips the uncommitted-changes question. Running the same command again resumes the lane.
 - Every `goto` carries `"name":"<spec_name>"`, exactly as the instructions print it.
 - Never ask the user anything yourself, and never ask whether to continue between tasks: tasks run one after another. Hand each genuine question back to your orchestrator as a final message whose first line is `QUESTION: <spec_name>`, and wait for its answer.
 - You never write the spec's text or a design document, and never run `{{command}} spec amend`. Propose any amendment in your `QUESTION:` hand-back, naming the document, section, conflict and proposed change, and continue once your orchestrator says it is applied.
+- Every hand-back goes back the way your agent returns a child's result. If you run as a subtask with a tool that ends it, such as IBM Bob's `end_subtask`, call that tool with the hand-back as its summary: a final message alone never reaches your orchestrator, and the run hangs.
 - End the run with `DONE: <spec_name>` and the completion summary, or with `FAILED: <spec_name>` and the reason.

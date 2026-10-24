@@ -55,6 +55,8 @@ Repeat until nothing is left to start or merge and no child is running:
 
 Use your agent's own way of running sub-agents in the background, so independent specs are implemented in overlapping time. Start every ready spec; there is no limit on how many run at once.
 
+If your agent runs only one child at a time (IBM Bob, for one, runs a single subtask at a time and pauses you while it runs), start the ready specs one after another instead. Nothing else in the loop changes.
+
 A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not.
 
 # Step 4: The child prompt
@@ -76,6 +78,8 @@ A child ends every turn that stops its work with a final message whose **first l
 - `DONE: <spec>`, followed by the completion summary the implement workflow's finished step reports, and any durable discovery worth saving to the knowledge base.
 - `QUESTION: <spec>`, followed by the question, the options, and the default it recommends. It then waits for your answer and carries on from the same step.
 - `FAILED: <spec>`, followed by the step it reached and the reason it cannot go on.
+
+The hand-back is the child's result, so it travels the way its agent returns a child's result to you. A child your agent runs as a subtask with a tool that ends it, such as IBM Bob's `end_subtask`, hands back by calling that tool with the whole hand-back as its summary. A subtask that only ends its turn with a message never returns to you, and the run hangs waiting for it, so the child prompt must say this.
 
 ## What counts as a genuine open question
 
@@ -100,6 +104,7 @@ Any other refusal from `epic worktree` or `epic merge` is handled the same way: 
 - **An amendment the user approves** — when a `QUESTION:` proposes amending the spec or a design, apply it yourself only after the user's explicit approval, from the project root and never in a worktree. For the spec, read it with `{{command}} spec file read <spec>`, change only the sections the user approved, stage the full result under `.spektacular/tmp/<spec>/`, and run `{{command}} spec amend --data '{"name":"<spec>","reason":"<why>","run":"epic <epic> implement run, task <task>"}' --from <staged file>`. For a design, revise it with `{{command}} design author`, or store the new version the user supplies with `{{command}} design write` for a design they wrote, then record it with `{{command}} spec amend` and a `"design":{"source":"<name>","path":"<path>"}` field. Note the amendment in `.spektacular/working-context.md`, then answer the child naming what changed, so it re-reads the amended text and re-verifies its task. If the user rejects the amendment, answer the child with their decision.
 - **The user declines to answer now** — enter stopping mode.
 - **`FAILED:`** — enter stopping mode.
+- **No hand-back line** — a child whose result does not open with `DONE:`, `QUESTION:` or `FAILED:` stopped without handing back, for example at its agent's turn or cost limit. It is no longer running, and nothing more will come from it: never wait on it. Re-read `status` and act on what it reports for that spec, which resumes an interrupted spec from its lane.
 
 **Stopping mode:** start no new child, let the children already running finish (and merge each one that finishes cleanly, since specs depending on it may already be waiting), then go to the final report. A child waiting on a question the user declined to answer is not resumed: its work stays in progress in its worktree, and repeating the request picks it up. Name the spec that stopped the run and why.
 

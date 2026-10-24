@@ -43,6 +43,8 @@ Repeat until nothing is left to start and no child is running:
 
 Use your agent's own way of running sub-agents in the background, so independent specs are planned in overlapping time. Start every ready spec; there is no limit on how many run at once.
 
+If your agent runs only one child at a time (IBM Bob, for one, runs a single subtask at a time and pauses you while it runs), start the ready specs one after another instead. Nothing else in the loop changes.
+
 A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not.
 
 # Step 3: The child prompt
@@ -65,6 +67,8 @@ A child ends every turn that stops its work with a final message whose **first l
 - `QUESTION: <spec>`, followed by the question, the options, and the default it recommends. It then waits for your answer and carries on from the same step.
 - `FAILED: <spec>`, followed by the step it reached and the reason it cannot go on.
 
+The hand-back is the child's result, so it travels the way its agent returns a child's result to you. A child your agent runs as a subtask with a tool that ends it, such as IBM Bob's `end_subtask`, hands back by calling that tool with the whole hand-back as its summary. A subtask that only ends its turn with a message never returns to you, and the run hangs waiting for it, so the child prompt must say this.
+
 ## What counts as a genuine open question
 
 Only a stop the plan workflow itself defines earns a question: a design reference that does not resolve, a disagreement with a referenced design, a plan choice that would contradict a decision the user recorded for that spec (in the spec, a design it references, or its interview notes where they still exist) or a knowledge entry, or a drafting decision with no reasonable default that only the user can settle. A contradiction of a recorded decision or a knowledge entry is never parked as a drafting assumption, a task for a person or a note for the review. While one child waits on its question, every other child keeps planning. Everything else the child decides itself, records as a drafting assumption, and leaves for the review at the end of planning. A child never asks for approval of a section, and never asks the user to sign off its plan.
@@ -75,6 +79,7 @@ Only a stop the plan workflow itself defines earns a question: a design referenc
 - **`QUESTION:`** — put the question to the user. Present it as ordinary text first, naming the spec, the options and the recommended default, then ask. While the user considers it, the other children keep going. Send the user's answer back to the same child, so it continues where it stopped. If your agent cannot continue a stopped child, start a fresh child on the same spec with the answer included in its prompt; it resumes the plan from its lane with the `goto` above.
 - **The user declines to answer now** ("not now", "I'll think about it") — enter stopping mode.
 - **`FAILED:`** — enter stopping mode.
+- **No hand-back line** — a child whose result does not open with `DONE:`, `QUESTION:` or `FAILED:` stopped without handing back, for example at its agent's turn or cost limit. It is no longer running, and nothing more will come from it: never wait on it. Re-read `status` and act on what it reports for that spec, which resumes an interrupted spec from its lane.
 
 **Stopping mode:** start no new child, let the children already running finish, then go to the final report. A child waiting on a question the user declined to answer is not resumed: its plan stays in progress in its lane, and repeating the request picks it up. Name the spec that stopped the run and why. Before the final report, still run Step 6 when its conditions hold.
 

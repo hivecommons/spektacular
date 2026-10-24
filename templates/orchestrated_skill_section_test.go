@@ -21,6 +21,11 @@ type orchestratedSkillCase struct {
 	phrases []string
 }
 
+// handBackDeliveryPhrase tells a child how its hand-back reaches the
+// orchestrator. A Bob subtask returns to its parent only through end_subtask,
+// so a child that just ends its turn with a message hangs the epic run (#92).
+const handBackDeliveryPhrase = "If you run as a subtask with a tool that ends it, such as IBM Bob's `end_subtask`, call that tool with the hand-back as its summary: a final message alone never reaches your orchestrator, and the run hangs."
+
 var orchestratedSkillCases = []orchestratedSkillCase{
 	{
 		path: "skills/workflows/spek-plan/SKILL.md",
@@ -34,6 +39,8 @@ var orchestratedSkillCases = []orchestratedSkillCase{
 			"a final message whose first line is `QUESTION: <spec_name>`",
 			"There is no sign-off walkthrough: the walkthrough step has you prepare a summary instead.",
 			"that summary lists the project-wide rules the plan relies on or decides, such as how the changelog is kept, so the orchestrator can spot plans that disagree, and the manual checks the test plan will carry.",
+			"five things change",
+			handBackDeliveryPhrase,
 			"End the run with `DONE: <spec_name>` and that summary, or with `FAILED: <spec_name>` and the reason.",
 		},
 	},
@@ -47,7 +54,8 @@ var orchestratedSkillCases = []orchestratedSkillCase{
 			"Every `goto` carries `\"name\":\"<spec_name>\"`",
 			"never ask whether to continue between tasks: tasks run one after another.",
 			"a final message whose first line is `QUESTION: <spec_name>`",
-			"five things change",
+			"six things change",
+			handBackDeliveryPhrase,
 			"You never write the spec's text or a design document, and never run `{{command}} spec amend`.",
 			"Propose any amendment in your `QUESTION:` hand-back, naming the document, section, conflict and proposed change, and continue once your orchestrator says it is applied.",
 			"End the run with `DONE: <spec_name>` and the completion summary, or with `FAILED: <spec_name>` and the reason.",

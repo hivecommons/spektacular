@@ -433,3 +433,32 @@ func TestPlanEpicSkillCountsContradictionsAsGenuineQuestions(t *testing.T) {
 		"While the user considers it, the other children keep going.",
 	)
 }
+
+// A child's hand-back must travel the way its agent returns a child's result:
+// a Bob subtask returns to its parent only through end_subtask, so a child that
+// just ends its turn with a message hangs the run (#92). The orchestrator runs
+// children one at a time when its agent cannot run them side by side, and never
+// waits on a child that returned without a hand-back line.
+func TestPlanEpicSkillHandsBackThroughTheAgentsResultChannel(t *testing.T) {
+	skill := installedPlanEpicSkill(t)
+
+	contract := flat(section(t, skill, "## The hand-back contract"))
+	requirePhrases(t, "The hand-back contract", contract,
+		"The hand-back is the child's result, so it travels the way its agent returns a child's result to you.",
+		"A child your agent runs as a subtask with a tool that ends it, such as IBM Bob's `end_subtask`, hands back by calling that tool with the whole hand-back as its summary.",
+		"A subtask that only ends its turn with a message never returns to you, and the run hangs waiting for it, so the child prompt must say this.",
+	)
+
+	loop := flat(section(t, skill, "# Step 2: The loop"))
+	requirePhrases(t, "The loop", loop,
+		"If your agent runs only one child at a time",
+		"start the ready specs one after another instead. Nothing else in the loop changes.",
+	)
+
+	handling := flat(section(t, skill, "# Step 4: Handling a hand-back"))
+	requirePhrases(t, "Handling a hand-back", handling,
+		"**No hand-back line** — a child whose result does not open with `DONE:`, `QUESTION:` or `FAILED:` stopped without handing back",
+		"It is no longer running, and nothing more will come from it: never wait on it.",
+		"Re-read `status` and act on what it reports for that spec",
+	)
+}

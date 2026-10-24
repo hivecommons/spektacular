@@ -17,7 +17,7 @@ Report to the user:
 This is the terminal state of this implement run. Do **not** emit a `goto` command — no further steps exist.
 {{#orchestrated}}
 
-This run is orchestrated, so report to your orchestrator rather than the user: end your run with a final message whose first line is exactly `DONE: {{plan_name}}`, followed by the report above and any durable discovery worth saving to the knowledge base.
+This run is orchestrated, so report to your orchestrator rather than the user: end your run with a final message whose first line is exactly `DONE: {{plan_name}}`, followed by the report above and any durable discovery worth saving to the knowledge base. Hand it back as **Running under an orchestrator** below describes, or the orchestrator never sees it.
 {{/orchestrated}}
 {{/task_run}}
 {{^task_run}}
@@ -55,6 +55,6 @@ The merge is all or nothing: every repo the spec touched is merged, or none is. 
 This is the terminal state of the implement workflow. Do **not** emit a `goto` command — no further steps exist.
 {{#orchestrated}}
 
-This run is orchestrated, so report to your orchestrator rather than the user: end your run with a final message whose first line is exactly `DONE: {{plan_name}}`, followed by the report above and any durable discovery worth saving to the knowledge base.
+This run is orchestrated, so report to your orchestrator rather than the user: end your run with a final message whose first line is exactly `DONE: {{plan_name}}`, followed by the report above and any durable discovery worth saving to the knowledge base. Hand it back as **Running under an orchestrator** below describes, or the orchestrator never sees it.
 {{/orchestrated}}
 {{/task_run}}

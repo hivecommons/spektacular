@@ -89,6 +89,31 @@ func TestEveryOrchestratedStepCarriesTheHandBackSection(t *testing.T) {
 	}
 }
 
+// Every orchestrated plan and implement step, the finished steps included,
+// tells the child to hand back through its agent's way of returning a child's
+// result. A Bob subtask returns to its parent only through end_subtask, so a
+// child that just ends its turn with a message hangs the epic run (#92).
+func TestEveryOrchestratedStepNamesTheHandBackChannel(t *testing.T) {
+	const delivery = "If your agent runs you as a subtask with a tool that ends it and hands its result back, such as IBM Bob's `end_subtask`, call that tool with the whole hand-back as its summary."
+	finished := 0
+	for _, ri := range renderAllStepInstructionsWith(t, "spektacular", "", true) {
+		if ri.workflow != "plan" && ri.workflow != "implement" {
+			continue
+		}
+		section := ri.body[strings.Index(ri.body, orchestratedSection):]
+		require.Containsf(t, section, delivery,
+			"orchestrated %s must say how a hand-back reaches the orchestrator", ri.templatePath)
+		require.Containsf(t, section, "A subtask that only ends its turn with a message never returns to the orchestrator",
+			"orchestrated %s must say why a plain final message is not enough", ri.templatePath)
+		if strings.Contains(ri.body, "first line is exactly `DONE: demo-feature`") {
+			require.Containsf(t, ri.body, "Hand it back as **Running under an orchestrator** below describes, or the orchestrator never sees it.",
+				"orchestrated %s must point its DONE hand-back at the delivery rule", ri.templatePath)
+			finished++
+		}
+	}
+	require.NotZero(t, finished, "no orchestrated finished step was rendered")
+}
+
 // A standalone run is untouched by orchestration: no step of any workflow, in
 // any auto_commit mode, carries the hand-back section or its markers.
 func TestStandaloneStepsCarryNoOrchestratorHandBack(t *testing.T) {

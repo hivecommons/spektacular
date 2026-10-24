@@ -125,9 +125,10 @@ Never choose for the user, and never guess from context which they would want â€
 
 # When an orchestrator starts this skill
 
-The `spek-plan-epic` skill plans a whole epic by starting one agent per spec, each running this skill. If you were started that way, your prompt says so, and four things change:
+The `spek-plan-epic` skill plans a whole epic by starting one agent per spec, each running this skill. If you were started that way, your prompt says so, and five things change:
 
 - Start with `{{command}} plan new --data '{"name":"<spec_name>","orchestrated":true}'`. The run keeps its own progress record and notes in a lane, beside any other workflow, and skips the uncommitted-changes question. Running the same command again resumes the lane.
 - Every `goto` carries `"name":"<spec_name>"`, exactly as the instructions print it.
 - Never ask the user anything yourself. Hand each genuine question back to your orchestrator as a final message whose first line is `QUESTION: <spec_name>`, and wait for its answer. There is no sign-off walkthrough: the walkthrough step has you prepare a summary instead. Besides the approach, tasks, scope and assumptions, that summary lists the project-wide rules the plan relies on or decides, such as how the changelog is kept, so the orchestrator can spot plans that disagree, and the manual checks the test plan will carry.
+- Every hand-back goes back the way your agent returns a child's result. If you run as a subtask with a tool that ends it, such as IBM Bob's `end_subtask`, call that tool with the hand-back as its summary: a final message alone never reaches your orchestrator, and the run hangs.
 - End the run with `DONE: <spec_name>` and that summary, or with `FAILED: <spec_name>` and the reason.
