@@ -26,6 +26,8 @@ Stage the assembled spec to the scratch path `.spektacular/tmp/spec_template.md`
 
 **Do not review the spec yourself.** You wrote every section during the interview, so you know what each one was *meant* to say — which means leaks read as fine to you and you cannot reliably audit your own text. The plan workflow downstream receives only this assembled file, with none of the conversation context. So verify it the same way it will actually be consumed: hand it to a reviewer that has never seen the interview.
 
+**If your agent can start sub-agents, this review is done only by one.** Reviewing the staged file in your own context does not complete this step, however carefully you do it.
+
 Spawn a subagent with a **fresh context** (use your Task/Agent tool). Give it exactly two things and nothing else:
 
 - the path to the staged spec, `.spektacular/tmp/spec_template.md`, to read; and

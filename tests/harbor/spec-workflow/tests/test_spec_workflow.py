@@ -10,6 +10,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 PROJECT_DIR = Path("/app")
 SPEK_DIR = PROJECT_DIR / ".spektacular"
 STATE_FILE = SPEK_DIR / "state.json"
@@ -568,6 +570,19 @@ class TestVerificationStep:
         assert "spec goto verification" in calls, (
             f"Agent did not call 'spektacular spec goto' for verification. Calls: {calls}"
         )
+
+    def test_review_was_a_briefed_child(self):
+        """The independent review ran in a child agent given the staged spec
+        and told to review only what is written there: reviewing inline does
+        not complete the step. Claude only, since only its transcript shows
+        where a child was started."""
+        import delegation as dl
+
+        if not dl.is_claude():
+            pytest.skip("only a Claude transcript shows where a child agent was started")
+        run = dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, SPEK_DIR / "debug")
+        failures = dl.missing_required(run.placed, run.windows) + dl.review_context_gaps(run.placed)
+        assert not failures, "\n".join(str(f) for f in failures)
 
 
 class TestSplitStep:

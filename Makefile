@@ -38,7 +38,7 @@ printf '{"suite": "%s", "scenario": %s, "agent": "%s", "spektacular_version": "%
 	> $(1)/build.json
 endef
 
-.PHONY: build test lint clean install install-local cross harbor-install harbor-report harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-test-epic harbor-test-epic-claude harbor-test-epic-codex harbor-test-epic-bob _harbor-test-epic harbor-test-plan-claude harbor-test-plan-codex harbor-test-plan-bob _harbor-test-plan harbor-test-implement-epic harbor-test-implement-epic-claude harbor-test-implement-epic-codex harbor-test-implement-epic-bob harbor-test-implement-epic-bob-unlimited _harbor-test-implement-epic harbor-test-standing-rules harbor-test-standing-rules-claude harbor-test-standing-rules-codex harbor-test-standing-rules-bob _harbor-test-standing-rules harbor-test-goal-check harbor-test-goal-check-claude harbor-test-goal-check-codex harbor-test-goal-check-bob _harbor-test-goal-check
+.PHONY: build test lint clean install install-local cross harbor-install harbor-report harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-test-epic harbor-test-epic-claude harbor-test-epic-codex harbor-test-epic-bob _harbor-test-epic harbor-test-plan-claude harbor-test-plan-codex harbor-test-plan-bob _harbor-test-plan harbor-test-implement-epic harbor-test-implement-epic-claude harbor-test-implement-epic-codex harbor-test-implement-epic-bob harbor-test-implement-epic-bob-unlimited _harbor-test-implement-epic harbor-test-standing-rules harbor-test-standing-rules-claude harbor-test-standing-rules-codex harbor-test-standing-rules-bob _harbor-test-standing-rules harbor-test-goal-check harbor-test-goal-check-claude harbor-test-goal-check-codex harbor-test-goal-check-bob _harbor-test-goal-check harbor-test-background-child _harbor-test-background-child
 
 build:
 	go build -ldflags "-X github.com/hivecommons/spektacular/cmd.version=$(VERSION)" -o ./bin/$(BINARY) .
@@ -290,6 +290,33 @@ _harbor-test-standing-rules:
 	@echo ""
 	@echo "=== Test Results ==="
 	@cat $$(ls -td tests/harbor/jobs/*/standing-rules-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
+
+# The background-child probe: one background child that sleeps for fifteen
+# minutes, to learn whether a headless Claude run lets it outlive ten minutes
+# and whether its completion notice starts a new turn. Renders
+# tests/harbor/background-child into
+# tests/harbor/.build/background-child-$(AGENT). Its verifier reports the
+# outcome either way. Claude only: other agents' logs cannot show it.
+harbor-test-background-child:
+	$(MAKE) _harbor-test-background-child AGENT=claude
+
+# Callers must set AGENT.
+_harbor-test-background-child:
+	@test -n "$(AGENT)" || (echo "AGENT is required" && exit 1)
+	@test -n "$(HARBOR_ARGS_$(AGENT))" || (echo "no harbor arguments for AGENT=$(AGENT)" && exit 1)
+	@rm -rf tests/harbor/.build/background-child-$(AGENT)
+	@mkdir -p tests/harbor/.build/background-child-$(AGENT)/tests
+	cp -r tests/harbor/background-child/environment tests/harbor/background-child/task.toml \
+		tests/harbor/background-child/instruction.md tests/harbor/.build/background-child-$(AGENT)/
+	cp tests/harbor/background-child/tests/test.sh tests/harbor/background-child/tests/test_background_child.py \
+		tests/harbor/.build/background-child-$(AGENT)/tests/
+	cp tests/harbor/shared/*.py tests/harbor/.build/background-child-$(AGENT)/tests/
+	$(call write_build_info,tests/harbor/.build/background-child-$(AGENT)/tests,background-child,)
+	@if [ -f $(AGENT_ARTIFACTS) ]; then cat $(AGENT_ARTIFACTS) >> tests/harbor/.build/background-child-$(AGENT)/task.toml; fi
+	$(HARBOR_AUTH_$(AGENT)) harbor run $(HARBOR_RUN_FLAGS) -p tests/harbor/.build/background-child-$(AGENT) $(HARBOR_ARGS_$(AGENT)) -o tests/harbor/jobs
+	@echo ""
+	@echo "=== Test Results ==="
+	@cat $$(ls -td tests/harbor/jobs/*/background-child-$(AGENT)__*/verifier/test-stdout.txt 2>/dev/null | head -1)
 
 harbor-test-implement-epic: harbor-test-implement-epic-claude
 

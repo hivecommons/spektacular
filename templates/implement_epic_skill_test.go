@@ -458,3 +458,75 @@ func TestImplementEpicSkillTreatsGoalCheckStopsAsGenuineQuestions(t *testing.T) 
 	require.Contains(t, out, "If the goal check stops your task, because its attempts ran out or it judged a criterion impossible, hand it back as a `QUESTION:`")
 	require.Contains(t, out, "Never merge a spec while its goal-check question is open: `epic merge` refuses it (`goal_check_open`)")
 }
+
+// The orchestrator never schedules its own wake-up while children run: a
+// pending timer or recurring job keeps the session alive after the work is
+// done. The rule sits in the loop, after the headless paragraph, which is
+// pinned word for word.
+func TestImplementEpicSkillNeverSetsATimedWakeUpWhileChildrenRun(t *testing.T) {
+	loop := flat(section(t, installedImplementEpicSkill(t), "# Step 3: The loop"))
+
+	rule := "**Never set a timed wake-up while children run.**"
+	requirePhrases(t, "The loop", loop,
+		rule,
+		"Do not use a scheduled wake-up, a timer, a recurring job or a command that sleeps to check on your children",
+		"each child's hand-back, or its completion notice, is what wakes you.",
+		"A wake-up still pending once the work is done keeps the session running with nothing left to do.",
+	)
+
+	headless := "**In a headless session, keep every child inside your turn.** A session is headless when no one replies between your turns: you were started non-interactively, or your prompt says so. Being told that no one will answer is not on its own a reason to hold children in your turn; the reason is what a headless session does to a background child once your turn ends. Headless Claude Code stopped one about ten minutes after the main agent ended its turn, and its completion notice never woke the session (recorded on 2026-10-24 with Claude Code 2.1.310 by the background-child harbor probe). So instead of starting children in the background, start the ready specs as foreground sub-agents in a single message, so they still run in overlapping time, and handle every hand-back (Step 6) before you end the turn."
+	require.Contains(t, loop, headless, "the headless paragraph must read as recorded from the probe")
+
+	running := "A child that handed back a `QUESTION:` and is waiting for its answer still counts as running."
+	require.Less(t, strings.Index(loop, headless), strings.Index(loop, rule), "the rule follows the headless paragraph")
+	require.Less(t, strings.Index(loop, rule), strings.Index(loop, running), "the rule comes before the running-child paragraph")
+}
+
+// Each child is told where its spec's code lives: the worktree paths that
+// `epic worktree` reports, which it reports again unchanged on a resume.
+func TestImplementEpicSkillNamesTheSpecsWorktreePathsInEveryChildPrompt(t *testing.T) {
+	skill := installedImplementEpicSkill(t)
+
+	child := flat(section(t, skill, "# Step 4: The child prompt"))
+	requirePhrases(t, "The child prompt", child,
+		"the spec's code locations: the worktree path of every repo that `"+installedCommand+` epic worktree --data '{"spec":"<spec>"}'`+"` reports for the spec",
+		"and that the child works on code only there.",
+		"Running it again for a spec whose worktrees already exist reports the same paths, so a resumed child is given them too;",
+	)
+	require.Less(t, strings.Index(child, "- the spec name, and the project root"), strings.Index(child, "- the spec's code locations:"),
+		"the code locations follow the spec name")
+	require.Less(t, strings.Index(child, "- the spec's code locations:"), strings.Index(child, "- to **start** or **resume**:"),
+		"the code locations come before the start-or-resume instruction")
+
+	loop := flat(section(t, skill, "# Step 3: The loop"))
+	requirePhrases(t, "The loop", loop,
+		"Then start a child to **start** it. Its prompt names each worktree path the command reported (Step 4).",
+	)
+}
+
+// The headless paragraph states what the background-child harbor probe
+// recorded: headless Claude Code stopped a background child about ten
+// minutes after the main agent ended its turn, and no completion notice woke
+// the session. That outcome, not being told no one answers, is the reason
+// children stay in the foreground. The old, unrecorded claim is retired.
+func TestImplementEpicSkillGroundsTheHeadlessRuleInTheProbeOutcome(t *testing.T) {
+	skill := installedImplementEpicSkill(t)
+	loop := flat(section(t, skill, "# Step 3: The loop"))
+
+	requirePhrases(t, "The loop", loop,
+		"**In a headless session, keep every child inside your turn.**",
+		"Being told that no one will answer is not on its own a reason to hold children in your turn",
+		"the reason is what a headless session does to a background child once your turn ends.",
+		"Headless Claude Code stopped one about ten minutes after the main agent ended its turn",
+		"its completion notice never woke the session",
+		"recorded on 2026-10-24 with Claude Code 2.1.310 by the background-child harbor probe",
+		"So instead of starting children in the background, start the ready specs as foreground sub-agents in a single message",
+	)
+
+	for _, old := range []string{
+		"headless Claude Code stops one after ten minutes",
+		"may be stopped before it finishes",
+	} {
+		require.NotContainsf(t, skill, old, "the retired headless wording %q must be gone", old)
+	}
+}

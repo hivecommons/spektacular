@@ -7,7 +7,9 @@ export depending on commands.
 Every assertion reads the project's state through the spektacular CLI, the
 git repository, the finished app's behaviour, or the CLI's own debug session
 log. None depends on which agent drove the run, so the same verifier serves
-Claude, Codex and Bob without parsing a transcript.
+Claude, Codex and Bob without parsing a transcript, except the Claude-only
+child checks (TestChildren), which read the transcript and skip for other
+agents.
 """
 
 from __future__ import annotations
@@ -279,6 +281,65 @@ class TestOrchestration:
     def test_no_merge_refused(self, log):
         refused = [" ".join(e.command) for e in log.shared if e.is_verb("epic", "merge") and not e.ok]
         assert not refused, f"`epic merge` was refused: {refused}"
+
+
+# ---------------------------------------------------------------------------
+# Child agents, Claude only: only its transcript shows where a child agent
+# was started and what it was told, so these checks skip for other agents.
+# Every other check reads only CLI state and the session log, and serves
+# every agent.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def children_run():
+    import delegation as dl
+
+    if not dl.is_claude():
+        pytest.skip("only a Claude transcript shows where a child agent was started")
+    return dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, DEBUG_DIR)
+
+
+def failed(failures: list) -> str:
+    return "\n".join(str(f) for f in failures)
+
+
+class TestChildren:
+    def test_every_spec_has_its_own_child(self, children_run):
+        import delegation as dl
+
+        failures = dl.missing_spec_children(children_run.placed, list(children_run.windows))
+        assert not failures, failed(failures)
+
+    def test_children_are_given_their_context(self, children_run):
+        import delegation as dl
+
+        failures = dl.epic_context_gaps(children_run.placed, children_run.session.lanes, worktrees=dl.worktree_paths(children_run.session))
+        assert not failures, failed(failures)
+
+    def test_no_wakeup_while_children_run(self, children_run):
+        import delegation as dl
+
+        failures = dl.wakeups_while_children_run(children_run.wakeups, children_run.placed, children_run.end)
+        assert not failures, failed(failures)
+
+    def test_children_run_as_the_probe_settled(self, children_run):
+        """Headless Claude Code stops a background child once the turn ends
+        (the background-child probe's recorded outcome), so each spec's child
+        runs in the foreground and no turn ends while one is running."""
+        import delegation as dl
+
+        failures = dl.epic_children_run_as_settled(children_run.placed, children_run.turns, list(children_run.windows))
+        assert not failures, failed(failures)
+
+    def test_required_steps_each_started_a_child(self, children_run):
+        """In every spec's lane, each test, verify and goal-check step ran in a
+        child agent of the spec's own child: doing it inline does not
+        complete it."""
+        import delegation as dl
+
+        failures = dl.missing_required(children_run.placed, children_run.windows)
+        assert not failures, failed(failures)
 
 
 # ---------------------------------------------------------------------------

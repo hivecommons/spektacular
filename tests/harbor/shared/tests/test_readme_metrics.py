@@ -33,8 +33,30 @@ TOTALS_KEYS = [
     "output_tokens",
     "cache_read_tokens",
     "cache_write_tokens",
+    "idle_s",
 ]
-SUBAGENTS_KEYS = ["started", "completed", "failed", "stopped", "durations_s"]
+SUBAGENTS_KEYS = ["started", "completed", "failed", "stopped", "durations_s", "children"]
+STEP_KEYS = ["step", "started_at", "duration_s", "output", "children"]
+CHILD_KEYS = [
+    "id",
+    "parent",
+    "kind",
+    "description",
+    "background",
+    "spec",
+    "step",
+    "launched_at",
+    "ended_at",
+    "duration_s",
+    "ending",
+    "hand_back",
+    "models",
+    "output",
+    "prompt",
+    "prompt_chars",
+]
+CHILD_ENDINGS = ["completed", "failed", "stopped", "no_hand_back"]
+SCHEMA_VERSION = "2"
 CHECKS_KEYS = ["passed", "total", "score"]
 
 
@@ -123,6 +145,48 @@ def test_field_table_names_every_check_key():
     assert not missing, f"the result row does not name checks' {missing}"
 
 
+def test_schema_version_row_says_current_version():
+    row = field_rows()["schema_version"]
+    assert re.search(rf"currently `{SCHEMA_VERSION}`", row), f"the schema_version row does not say `{SCHEMA_VERSION}`"
+
+
+def test_field_table_names_every_step_key():
+    row = field_rows()["steps"]
+    missing = [k for k in STEP_KEYS if not mentions(row, k)]
+    assert not missing, f"the steps row does not name each step's {missing}"
+
+
+def test_field_table_names_every_child_key():
+    row = field_rows()["subagents"]
+    missing = [k for k in CHILD_KEYS if not mentions(row, k)]
+    assert not missing, f"the subagents row does not name each child's {missing}"
+
+
+@pytest.mark.parametrize("ending", CHILD_ENDINGS)
+def test_field_table_names_every_child_ending(ending):
+    assert mentions(field_rows()["subagents"], ending), f"the subagents row does not name the ending {ending}"
+
+
+def test_bob_row_says_which_child_fields_it_records():
+    row = table_rows(section("Run metrics"), "Agent")["Bob"]
+    missing = [k for k in ["kind", "description", "prompt"] if not mentions(row, k)]
+    assert not missing, f"the Bob row does not name the child fields it keeps: {missing}"
+    assert "every other child field is unknown" in row
+
+
+def test_codex_row_says_children_are_unknown():
+    row = table_rows(section("Run metrics"), "Agent")["Codex"]
+    assert mentions(row, "children"), "the Codex row does not name children"
+    assert mentions(row, "null"), "the Codex row does not say children is null"
+
+
+def test_metrics_section_states_idle_threshold():
+    body = section("Run metrics")
+    assert mentions(body, "idle_s") or "Idle time" in body
+    assert "IDLE_SHARE" in body, "Run metrics does not name the IDLE_SHARE threshold"
+    assert "quarter" in body, "Run metrics does not say the threshold is a quarter of the wall time"
+
+
 @pytest.mark.parametrize("agent", ["Bob", "Codex"])
 def test_unknowns_table_has_row_for_agent(agent):
     rows = table_rows(section("Run metrics"), "Agent")
@@ -139,6 +203,30 @@ def test_comparing_runs_shows(needle):
     commands = re.findall(r"```bash\n(.*?)```", body, re.S)
     assert commands, "Comparing runs has no command block"
     assert any(needle in block for block in commands), f"{needle} not in a command"
+
+
+def test_comparing_runs_shows_prompts_with_run():
+    body = section("Comparing runs")
+    commands = re.findall(r"```bash\n(.*?)```", body, re.S)
+    lines = [line for block in commands for line in block.splitlines() if "--prompts" in line]
+    assert lines, "--prompts not in a command"
+    assert any(re.search(r"ARGS='--run \S+ --prompts'", line) for line in lines), "--prompts not shown with --run"
+
+
+def test_comparing_runs_says_prompts_needs_run():
+    body = section("Comparing runs")
+    assert "`--prompts`" in body and "usage error" in body
+
+
+def test_comparing_runs_describes_idle_mark():
+    body = section("Comparing runs")
+    assert "`◀ idle`" in body, "Comparing runs does not show the idle mark"
+    assert "quarter" in body, "Comparing runs does not say when a run is marked idle"
+
+
+def test_comparing_runs_describes_child_table():
+    body = section("Comparing runs")
+    assert "child agents" in body and "nested" in body
 
 
 def test_comparison_command_passes_both_sets_in_one_args():

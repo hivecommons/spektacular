@@ -177,3 +177,116 @@ def test_cheaper_reviewer_from_a_claude_transcript():
     lost = transcript(returned=False)
     assert gc.rule_cheaper_reviewer(claude_subagent_launches(lost), claude_main_models(lost))
     assert gc.rule_cheaper_reviewer([], {"claude-sonnet-4-6"})
+
+
+# The goal check, and the test and verify steps its retry runs again, each
+# start a child agent. A small Claude run is built under tmp_path: the
+# implement lane of Spektacular's session log and a stream-json transcript
+# whose children are launched half a minute into a step, and it is read back
+# with delegation.read_run exactly as the verifier reads the real one.
+
+import json  # noqa: E402
+
+import delegation  # noqa: E402
+
+RETRY_STEPS = ["check_goal", "implement", "test", "verify", "check_goal", "update_plan"]
+CHILD_AT = {0: "toolu_goal1", 2: "toolu_test", 3: "toolu_verify", 4: "toolu_goal2"}
+
+
+def lane_record(minute, command, before, after):
+    state = lambda step: step and {"kind": "implement", "name": gc.PLAN, "current_step": step}  # noqa: E731
+    return {
+        "seq": minute + 1,
+        "timestamp": f"2026-10-23T12:{minute:02d}:00.000000000Z",
+        "command": command,
+        "duration_ms": 10,
+        "exit_code": 0,
+        "state_before": state(before),
+        "state_after": state(after),
+    }
+
+
+def lane_records():
+    records = [lane_record(0, ["implement", "new", "--data", json.dumps({"name": gc.PLAN})], None, RETRY_STEPS[0])]
+    for i, (before, after) in enumerate(zip(RETRY_STEPS, RETRY_STEPS[1:]), start=1):
+        records.append(lane_record(i, ["implement", "goto", "--data", json.dumps({"step": after, "name": gc.PLAN})], before, after))
+    return records
+
+
+def launched(minute, tid):
+    return [
+        {
+            "type": "assistant",
+            "timestamp": f"2026-10-23T12:{minute:02d}:30Z",
+            "parent_tool_use_id": None,
+            "message": {"model": "claude-sonnet-4-6", "role": "assistant", "content": [
+                {"type": "tool_use", "id": tid, "name": "Agent", "input": {"subagent_type": "general-purpose", "prompt": "Do the step.", "description": tid}},
+            ]},
+        },
+        {"type": "system", "subtype": "task_started", "tool_use_id": tid, "task_id": f"task_{tid}",
+         "task_type": "local_agent", "is_backgrounded": True, "spawn_depth": 1},
+    ]
+
+
+def claude_run(tmp_path, without=()):
+    debug = tmp_path / "debug"
+    debug.mkdir(parents=True)
+    lines = lane_records()
+    (debug / f"20261023T120000.000000000Z_claude_implement_{gc.PLAN}.jsonl").write_text("".join(json.dumps(o) + "\n" for o in lines))
+    objs = [{"type": "system", "subtype": "init", "model": "claude-sonnet-4-6"}]
+    for minute, tid in CHILD_AT.items():
+        if tid not in without:
+            objs += launched(minute, tid)
+    objs.append({"type": "result", "subtype": "success", "num_turns": 1})
+    path = tmp_path / "claude-code.txt"
+    path.write_text("".join(json.dumps(o) + "\n" for o in objs))
+    return delegation.read_run(path, debug)
+
+
+def test_required_children_with_a_child_in_each_required_step(tmp_path):
+    run = claude_run(tmp_path)
+    assert [w.step for w in run.windows[("implement", gc.PLAN)]] == RETRY_STEPS
+    assert {p.child.id: p.step for p in run.placed} == {
+        "toolu_goal1": "check_goal",
+        "toolu_test": "test",
+        "toolu_verify": "verify",
+        "toolu_goal2": "check_goal",
+    }
+    assert gc.rule_required_children(run) == []
+
+
+def test_required_children_test_done_inline_on_the_retry(tmp_path):
+    assert gc.rule_required_children(claude_run(tmp_path, without={"toolu_test"})) == [
+        f"missing_child implement:{gc.PLAN}:test: the test step completed without a child agent started in it"
+    ]
+
+
+def test_required_children_verify_done_inline_on_the_retry(tmp_path):
+    assert gc.rule_required_children(claude_run(tmp_path, without={"toolu_verify"})) == [
+        f"missing_child implement:{gc.PLAN}:verify: the verify step completed without a child agent started in it"
+    ]
+
+
+def test_required_children_goal_check_done_inline(tmp_path):
+    assert gc.rule_required_children(claude_run(tmp_path, without={"toolu_goal1"})) == [
+        f"missing_child implement:{gc.PLAN}:check_goal: the check_goal step completed without a child agent started in it"
+    ]
+    # The second goal check, on the retry, is judged as its own attempt.
+    assert gc.rule_required_children(claude_run(tmp_path / "second", without={"toolu_goal2"})) == [
+        f"missing_child implement:{gc.PLAN}:check_goal (attempt 2): the check_goal step completed without a child agent started in it"
+    ]
+
+
+def test_codex_and_bob_runs_are_not_judged(tmp_path):
+    # test_required_steps_each_started_a_child, and the spec suite's review
+    # test, skip unless delegation.is_claude() holds.
+    t = tmp_path / "claude-code.txt"
+    t.write_text('{"type":"system"}\n')
+    for agent in ("codex", "bob"):
+        build = tmp_path / f"{agent}.json"
+        build.write_text(json.dumps({"agent": agent}))
+        assert delegation.is_claude(build, t) is False
+    claude = tmp_path / "claude.json"
+    claude.write_text(json.dumps({"agent": "claude"}))
+    assert delegation.is_claude(claude, t) is True
+    assert delegation.is_claude(claude, tmp_path / "missing.txt") is False

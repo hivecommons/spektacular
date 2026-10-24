@@ -1,0 +1,1 @@
+stopped 602 s 2026-10-24 claude-code 2.1.310: headless (claude --print) background child killed ~600 s after the main agent ended its turn; no completion notice started a new turn

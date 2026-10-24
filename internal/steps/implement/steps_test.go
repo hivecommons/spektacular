@@ -340,6 +340,24 @@ func TestVerifyStepReferencesVerifyImplementation(t *testing.T) {
 	require.Contains(t, strings.ToLower(out), "pass/fail")
 }
 
+func TestTestStepRequiresSubAgentDelegation(t *testing.T) {
+	out := renderStep(t, testStep())
+	require.Contains(t, out, "**If your agent can start sub-agents, launch one before any test is written.**")
+	require.Contains(t, out, "Writing the tests in your own context does not complete this step.")
+	// The hand-off to the child is unchanged.
+	require.Contains(t, out, "Pass the current task's acceptance criteria and its section of the plan's `context.md` to the sub-agent.")
+	require.Contains(t, out, "skill follow-test-patterns")
+}
+
+func TestVerifyStepRequiresSubAgentDelegation(t *testing.T) {
+	out := renderStep(t, verify())
+	require.Contains(t, out, "**If your agent can start sub-agents, the verification commands run in one.**")
+	require.Contains(t, out, "Running them in your own context does not complete this step.")
+	// The hand-off to the child is unchanged.
+	require.Contains(t, out, "skill verify-implementation")
+	require.Contains(t, out, "pass/fail")
+}
+
 // The implement, test and verify steps each load the current phase from the
 // plan store themselves rather than trusting an earlier step's output to
 // still be in the agent's context (it may have been compacted or resumed).

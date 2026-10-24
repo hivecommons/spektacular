@@ -20,6 +20,15 @@ workflow's first step needs that context:
 spektacular spec file read 20260101000000-user-auth
 ```
 
+## You are running non-interactively
+
+There is no human at the other end of this session, and nothing will answer
+between your turns. You are playing both roles: you drive the workflow **and**
+you supply any answer it asks for, from the specification and the instructions below. Make a reasonable decision on
+anything they do not cover and keep going. **Never end your turn waiting for a
+reply**: nothing will answer, and the run will stall at that step. Only stop
+once the workflow itself reports it has finished.
+
 ## Task
 
 Drive the full plan workflow against the `20260101000000-user-auth` specification by using
@@ -85,10 +94,11 @@ cp -r /app/.spektacular /logs/artifacts/spektacular
 - `research.md`'s `## Drafting assumptions` section is populated with the
   judgement calls made while drafting — each entry states the decision,
   the rationale, and the rejected alternatives
-- The plan documents stay `status: in-progress` while the walkthrough is
-  open and are marked `status: completed` only after the `finished` step
+- The plan documents stay `document_status: draft` while the walkthrough is
+  open and are marked `document_status: final` only after the `finished` step
 - `plan.md`, `context.md`, `research.md` exist under `.spektacular/plans/20260101000000-user-auth/`
 - Each section of each artefact has meaningful, non-placeholder text
 - Each plan document is committed through `spektacular plan file write` — never written or edited directly with built-in file tools
 - The agent retrieved every template-referenced skill during the step that referenced it
-- The agent spawned at least one sub-agent during the `discovery` step
+- Whether the `discovery` step started a sub-agent is recorded in the run's
+  metrics, not required: the step only suggests one

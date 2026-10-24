@@ -6,7 +6,8 @@ storage and help independent, commands depending on storage.
 Every assertion here reads either the project's state through the
 spektacular CLI or the CLI's own debug session log. Neither depends on which
 agent drove the run, so the same verifier serves Claude, Codex and Bob
-without parsing a transcript. The plan-workflow suite already proves a single
+without parsing a transcript, except the Claude-only child checks
+(TestChildren), which read the transcript and skip for other agents. The plan-workflow suite already proves a single
 plan workflow's transcript-level rules (skill retrieval, CLI-only writes);
 this suite proves the orchestration around it.
 """
@@ -161,6 +162,56 @@ class TestOrchestration:
     def test_epic_order_run(self, log, epic):
         runs = [e for e in log.shared if e.is_verb("epic", "order") and epic in e.command and e.ok]
         assert runs, "`spektacular epic order <epic>` was never run after planning"
+
+
+# ---------------------------------------------------------------------------
+# Child agents, Claude only: only its transcript shows where a child agent
+# was started and what it was told, so these checks skip for other agents.
+# Every other check reads only CLI state and the session log, and serves
+# every agent.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def children_run():
+    import delegation as dl
+
+    if not dl.is_claude():
+        pytest.skip("only a Claude transcript shows where a child agent was started")
+    return dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, DEBUG_DIR)
+
+
+def failed(failures: list) -> str:
+    return "\n".join(str(f) for f in failures)
+
+
+class TestChildren:
+    def test_every_spec_has_its_own_child(self, children_run):
+        import delegation as dl
+
+        failures = dl.missing_spec_children(children_run.placed, list(children_run.windows))
+        assert not failures, failed(failures)
+
+    def test_children_are_given_their_context(self, children_run):
+        import delegation as dl
+
+        failures = dl.epic_context_gaps(children_run.placed, children_run.session.lanes)
+        assert not failures, failed(failures)
+
+    def test_no_wakeup_while_children_run(self, children_run):
+        import delegation as dl
+
+        failures = dl.wakeups_while_children_run(children_run.wakeups, children_run.placed, children_run.end)
+        assert not failures, failed(failures)
+
+    def test_children_run_as_the_probe_settled(self, children_run):
+        """Headless Claude Code stops a background child once the turn ends
+        (the background-child probe's recorded outcome), so each spec's child
+        runs in the foreground and no turn ends while one is running."""
+        import delegation as dl
+
+        failures = dl.epic_children_run_as_settled(children_run.placed, children_run.turns, list(children_run.windows))
+        assert not failures, failed(failures)
 
 
 # ---------------------------------------------------------------------------

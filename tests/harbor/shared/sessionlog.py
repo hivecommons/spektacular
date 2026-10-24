@@ -228,6 +228,66 @@ class Lane:
         return out
 
 
+# Rules over what ran, read from the CLI's own log rather than from how an
+# agent typed the command, so piping, chaining, loops and line continuations
+# all count the same.
+
+
+def plan_steps_entered(events: list[Event]) -> list[str]:
+    """The step each successful `plan new` or `plan goto` left the plan
+    workflow at, in the order they ran."""
+    return [
+        e.step_after
+        for e in sorted(events, key=lambda e: e.at)
+        if e.ok and (e.is_verb("plan", "new") or e.is_verb("plan", "goto")) and e.step_after
+    ]
+
+
+
+def changelog_writes_by_repo(events: list[Event], name: str | None = None) -> dict[str | None, int]:
+    """How many successful `changelog file write <name>` calls ran for each
+    repo: the value of `--repo` (or `--repo=`), or None for the project's own
+    record. A write of another name, or one that only asked for help, is not
+    counted."""
+    counts: dict[str | None, int] = {}
+    for e in events:
+        if not (e.ok and e.is_verb("changelog", "file", "write")):
+            continue
+        args = e.command[3:]
+        if "--help" in args or "-h" in args:
+            continue  # it printed the usage and wrote nothing
+        target = _positional(args)
+        if target is None or (name is not None and target != name):
+            continue
+        repo = None
+        for i, a in enumerate(args):
+            if a == "--repo" and i + 1 < len(args):
+                repo = args[i + 1]
+            elif a.startswith("--repo="):
+                repo = a.removeprefix("--repo=")
+        counts[repo] = counts.get(repo, 0) + 1
+    return counts
+
+
+_VALUE_FLAGS = ("--repo", "--from", "--data", "-d")
+
+
+def _positional(args: list[str]) -> str | None:
+    """The first argument that is neither a flag nor a flag's value."""
+    skip = False
+    for a in args:
+        if skip:
+            skip = False
+            continue
+        if a in _VALUE_FLAGS:
+            skip = True
+            continue
+        if a.startswith("-"):
+            continue
+        return a
+    return None
+
+
 class SessionLog:
     def __init__(self, debug_dir: Path, kinds: tuple[str, ...] = LANE_KINDS):
         """Reads every log file under debug_dir. Files of the given workflow

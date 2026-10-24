@@ -2,6 +2,8 @@
 
 Run the verification commands for the current task and report the result. This step runs in a **sub-agent** so the full command output stays out of the main context.
 
+**If your agent can start sub-agents, the verification commands run in one.** Running them in your own context does not complete this step.
+
 ### Step 1: Load the current task
 
 Do not rely on an earlier step's output still being in your context. Read the task from the plan itself:
