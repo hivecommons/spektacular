@@ -1,0 +1,23 @@
+{
+  "kind": "implement",
+  "current_step": "analyze",
+  "completed_steps": [
+    "new",
+    "read_plan",
+    "analyze",
+    "implement",
+    "test",
+    "verify",
+    "update_plan",
+    "update_changelog"
+  ],
+  "created_at": "2026-10-24T08:24:33.857389424Z",
+  "updated_at": "2026-10-24T09:57:44.028955951Z",
+  "data": {
+    "committed_milestones": [
+      1
+    ],
+    "lane": true,
+    "name": "000071_harbor-child-agents"
+  }
+}

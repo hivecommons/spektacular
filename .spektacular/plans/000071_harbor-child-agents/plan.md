@@ -349,7 +349,7 @@ The self-checks then run the real rules against real runs, offline. Adding a fut
 
 The Go test suite and the existing verifier self-checks still pass. The README documents the new fields and report option.
 
-#### - [ ] Task: Read every child agent from each agent log
+#### - [x] Task: Read every child agent from each agent log
 **Id:** 0daf6e29-e43b-4906-acbb-4b2b98293f28
 **Repo:** spektacular
 **Depends on:** none
@@ -360,14 +360,14 @@ Teach the shared transcript helpers to read each child agent a run started, at a
 *Technical detail:* [context.md#task-read-every-child-agent-from-each-agent-log](./context.md#task-read-every-child-agent-from-each-agent-log)
 
 **Acceptance criteria**:
-- [ ] A Claude log with top-level and nested children yields one entry per child actually started, each naming the child that started it, with refused launches and background shell tasks left out.
-- [ ] Each child's context is exactly the prompt it was launched with, and its duration is the agent's own reported run time.
-- [ ] A background child is not treated as finished when its launch call returns, and a failed child with no reported duration reads unknown rather than zero.
-- [ ] Bob children carry kind, description and prompt, with every other detail unknown and a reason. Codex reports no child list, with a reason.
-- [ ] Turn ends, notice-driven wake-ups and scheduled wake-ups or background sleeps are read with their times.
-- [ ] The existing readers and their self-checks are unchanged and still pass.
+- [x] A Claude log with top-level and nested children yields one entry per child actually started, each naming the child that started it, with refused launches and background shell tasks left out.
+- [x] Each child's context is exactly the prompt it was launched with, and its duration is the agent's own reported run time.
+- [x] A background child is not treated as finished when its launch call returns, and a failed child with no reported duration reads unknown rather than zero.
+- [x] Bob children carry kind, description and prompt, with every other detail unknown and a reason. Codex reports no child list, with a reason.
+- [x] Turn ends, notice-driven wake-ups and scheduled wake-ups or background sleeps are read with their times.
+- [x] The existing readers and their self-checks are unchanged and still pass.
 
-#### - [ ] Task: Record children step counts and idle time
+#### - [x] Task: Record children step counts and idle time
 **Id:** 2491f7f6-e3ba-406e-a0c1-7c482e54d6c0
 **Repo:** spektacular
 **Depends on:**
@@ -379,14 +379,14 @@ Extend the run metrics record, now schema version 2, with the child list. Each c
 *Technical detail:* [context.md#task-record-children-step-counts-and-idle-time](./context.md#task-record-children-step-counts-and-idle-time)
 
 **Acceptance criteria**:
-- [ ] A Claude record lists every child with all the spec's details, each placed in its spec and step, and a child started outside any workflow step shows no step.
-- [ ] In a multi-spec run, nested children are recorded against the spec their parent worked on, and a goal-check reviewer is recorded against the goal-check step.
-- [ ] Every step entry shows how many children it started, including zero.
-- [ ] The record holds the run's idle time, and a run with too little activity to measure reads unknown.
-- [ ] Codex and Bob records mark every child detail they cannot show as unknown with a reason, and no unknown is written as zero.
-- [ ] A broken child or idle section still yields a record, with the reward untouched.
+- [x] A Claude record lists every child with all the spec's details, each placed in its spec and step, and a child started outside any workflow step shows no step.
+- [x] In a multi-spec run, nested children are recorded against the spec their parent worked on, and a goal-check reviewer is recorded against the goal-check step.
+- [x] Every step entry shows how many children it started, including zero.
+- [x] The record holds the run's idle time, and a run with too little activity to measure reads unknown.
+- [x] Codex and Bob records mark every child detail they cannot show as unknown with a reason, and no unknown is written as zero.
+- [x] A broken child or idle section still yields a record, with the reward untouched.
 
-#### - [ ] Task: Check in the trimmed 2026-10-23 reference runs
+#### - [x] Task: Check in the trimmed 2026-10-23 reference runs
 **Id:** 93011438-9b56-4123-8d47-510248854341
 **Repo:** spektacular
 **Depends on:**
@@ -398,12 +398,12 @@ Add a small, repeatable trimming script and use it to check in the four referenc
 *Technical detail:* [context.md#task-check-in-the-trimmed-2026-10-23-reference-runs](./context.md#task-check-in-the-trimmed-2026-10-23-reference-runs)
 
 **Acceptance criteria**:
-- [ ] The four reference runs are checked in, compact and free of conversation text, and the script that produced them can regenerate them.
-- [ ] On the 5.5 epic-planning run, the record's child count equals the transcript's own, every recorded context is identical to its launch prompt and its size equals that prompt's length.
-- [ ] The 5.5 epic-planning run records at least 15 minutes idle; the 4.6 epic-planning run records less than a quarter of its wall time.
-- [ ] Trimming a run never changes a value the checks compute from it.
+- [x] The four reference runs are checked in, compact and free of conversation text, and the script that produced them can regenerate them.
+- [x] On the 5.5 epic-planning run, the record's child count equals the transcript's own, every recorded context is identical to its launch prompt and its size equals that prompt's length.
+- [x] The 5.5 epic-planning run records at least 15 minutes idle; the 4.6 epic-planning run records less than a quarter of its wall time.
+- [x] Trimming a run never changes a value the checks compute from it.
 
-#### - [ ] Task: Show children and contexts in the report
+#### - [x] Task: Show children and contexts in the report
 **Id:** 7aacc18a-0c33-49c1-99f1-3a4a97b49780
 **Repo:** spektacular
 **Depends on:**
@@ -415,12 +415,12 @@ Extend the local report so a maintainer can see, for any collected run, which ch
 *Technical detail:* [context.md#task-show-children-and-contexts-in-the-report](./context.md#task-show-children-and-contexts-in-the-report)
 
 **Acceptance criteria**:
-- [ ] One run's view prints one row per child with kind, spec, step, background or foreground, duration, ending and context size, and the run's idle time.
-- [ ] Asking for contexts prints every child's full context, and asking for them without naming a run is a clear usage error.
-- [ ] A run idle for more than a quarter of its wall time is flagged, and one at or below a quarter is not.
-- [ ] Unknown child details print as unknown, and older records without child detail say it was not recorded.
+- [x] One run's view prints one row per child with kind, spec, step, background or foreground, duration, ending and context size, and the run's idle time.
+- [x] Asking for contexts prints every child's full context, and asking for them without naming a run is a clear usage error.
+- [x] A run idle for more than a quarter of its wall time is flagged, and one at or below a quarter is not.
+- [x] Unknown child details print as unknown, and older records without child detail say it was not recorded.
 
-#### - [ ] Task: Document the new record fields and report option
+#### - [x] Task: Document the new record fields and report option
 **Id:** 8abad8a2-3b2f-477c-ad4c-9e27ec7bc863
 **Repo:** spektacular
 **Depends on:**
@@ -433,8 +433,8 @@ Update the README's run-metrics reference for schema version 2. That means the c
 *Technical detail:* [context.md#task-document-the-new-record-fields-and-report-option](./context.md#task-document-the-new-record-fields-and-report-option)
 
 **Acceptance criteria**:
-- [ ] The README names every new field, says what it means and which agents leave it unknown, and shows how to print a run's children and their contexts.
-- [ ] The README self-check passes against the version-2 record.
+- [x] The README names every new field, says what it means and which agents leave it unknown, and shows how to print a run's children and their contexts.
+- [x] The README self-check passes against the version-2 record.
 
 ### Milestone 2: Verifier checks judge what ran, not how a command was typed
 
@@ -691,3 +691,122 @@ Add the background-children rule to both epic suites' Claude checks. Per-spec ch
 - **The implement suite gains no delegation checks.** Its seeded state starts past the test, verify and goal-check steps, so they never run there. Those steps are checked in the goal-check and implement-epic suites instead.
 - **Making the plan, epic and implement-epic verifiers fully pure-rule with self-checks** is not attempted. Only the rules this plan adds or changes are pure functions with self-checks.
 - **The other spawn-style step instructions** (plan discovery, implement analysis, changelog formatting, the spec split review) keep their current wording. They are suggested delegations, recorded but not enforced, except the split review, which no suite exercises.
+
+## Changelog
+
+### 2026-10-24 — Task: Read every child agent from each agent log
+
+**What was done**: Added `Child`, `Turn` and `Wakeup` records and four pure readers to the shared transcript module. `claude_children` joins each `Agent`/`Task` call, at any depth, with its `task_started`, `task_updated` and `task_notification` events and its own streamed messages. `claude_turns` reads each turn's end and what woke it. `claude_wakeups` reads the main agent's scheduled wake-ups, cron jobs and sleeping shell commands. `atif_children` gives Bob children with kind, description and prompt, and Codex an unknown list. The existing launch readers are untouched.
+
+**Deviations**:
+- The wake-up reader counts any main-agent shell command that runs `sleep`, foreground or background, not only background ones. The user decided this on 2026-10-24, because the s55 implement-epic `sleep 240` poll the plan cites ran in the foreground.
+- `command_lifecycle` is a top-level `type` in Claude's log, not a `system` subtype, so the turn reader matches it that way.
+- Two fallbacks the plan did not spell out:
+  - When a log has no `task_started` events at all, every launch the agent did not refuse counts as a child, with background state unknown.
+  - A child with no notification but a foreground launch result takes its ending and first hand-back line from that result, with the hand-back frame and indent stripped.
+
+**Files changed**:
+- `tests/harbor/shared/transcripts.py`
+- `tests/harbor/shared/tests/test_transcripts_summary.py`
+
+**Discoveries**:
+- In Claude's stream-json, no `system` or `result` object carries a `timestamp`. Only assistant and user objects do.
+- `task_updated` holds only `task_id` and `patch`, so it joins by task id; `task_notification.summary` is the bare, unframed hand-back.
+- Children started by children (spawn depth 2) stream no messages, so their models and output are per-child unknowns.
+- A launch with no `run_in_background` key can still run in the background. `task_started.is_backgrounded` is the only reliable source.
+- The 2026-10-23 reference runs contain no failed or killed child, so the failure paths are proven only on synthetic input.
+
+### 2026-10-24 — Task: Record children step counts and idle time
+
+**What was done**: The run metrics record is now schema version 2. It carries:
+- `subagents.children`: every child agent, placed in its spec and workflow step;
+- `children`: a count on every step entry;
+- `totals.idle_s`: the longest gap in the run's activity.
+
+Placement is a shared function, so the verifiers can place children exactly as the record does. Each new section has its own never-fail guard.
+
+**Deviations**:
+- `place_children` returns the unknowns it finds as well as the placed children, so its gaps reach the record.
+- Turns and wake-ups are not stored on `AgentLog`. Nothing in the record uses them, so the verifiers will call the transcript readers directly.
+- `Child` gained an `order` field (not in the record), so Bob's children can be placed by message order in a one-lane run.
+- Bob runs read idle time from Bob's own shell logs. A run whose agent log carries no times at all records idle as unknown, because the session log alone would count model time as idle.
+
+**Files changed**:
+- `tests/harbor/shared/metrics.py`
+- `tests/harbor/shared/transcripts.py`
+- `tests/harbor/shared/tests/test_metrics.py`
+- `tests/harbor/shared/tests/test_transcripts_summary.py`
+
+**Discoveries**:
+- On the reference runs, s55 epic planning records 942 s idle of 1249 s and m70 records 88 s of 993 s, both as the plan expected. Goal reviewers and the test and verify children land in `check_goal`, `test` and `verify`. Every epic orchestrator's children land on their spec with no step.
+- A child with no launch time in a multi-lane run must read as step unknown, not "outside any step". The test task found this, and it is fixed and pinned.
+- `test_readme_metrics.py` still pins version-1 keys and passes only because it reads README text. The README task must update it.
+
+### 2026-10-24 — Task: Check in the trimmed 2026-10-23 reference runs
+
+**What was done**:
+- Added `trim_reference.py`, which turns a collected harbor trial into a compact reference run. It blanks message text to the same number of `x`, keeps only each child's first hand-back line, and cuts session-log responses to their error code and step.
+- The script recomputes the metrics record on both copies and writes nothing if any value differs.
+- Checked in the four reference runs: m70 and s55 epic planning, s55 plan, and s55 implement.
+- Self-checks prove the child-record and idle acceptance criteria on them offline.
+
+**Deviations**:
+- Sizes:
+  - The fixtures are about 2.3 MB on disk, because the blanks keep every character count the recorder reads.
+  - Compressed, they total about 150 KB, against 11.7 MB for the raw trials.
+- The recomputation compares the whole record (minus run identity and check score), not just the named values. The walkthrough and changelog session-log rules join it when Milestone 2 adds them.
+- Each child's hand-back keeps only its first line, and `task_progress` notes are blanked. Wake-up inputs are kept in full, as planned.
+- The plan's s55 child durations (109.6/107.6/137.0 s) were wrong. The notifications report 109.605/111.142/145.246 s, and those are pinned.
+
+**Files changed**:
+- `tests/harbor/shared/tests/trim_reference.py`
+- `tests/harbor/shared/tests/test_reference_runs.py`
+- `tests/harbor/shared/tests/data/m70-epic/` (README, build.json, claude-code.txt, debug/)
+- `tests/harbor/shared/tests/data/s55-epic/`
+- `tests/harbor/shared/tests/data/s55-plan/`
+- `tests/harbor/shared/tests/data/s55-implement/`
+
+**Discoveries**:
+- The session log's resume detection reads the response's `code` (`workflow_in_progress`), so a trimmed response must keep it.
+- When blanking a hand-back, newlines must stay newlines, or its first line runs on into the blank. The script's own recomputation caught this.
+- Regenerating from the raw trials gives byte-identical fixtures, and so does re-trimming the fixtures.
+
+### 2026-10-24 — Task: Show children and contexts in the report
+
+**What was done**:
+- The run table gains an `idle m` column, and a `◀ idle` mark on any run idle for more than `IDLE_SHARE` (a quarter) of its wall time.
+- One run's view gains an `Idle:` line and a children table. The table has one row per child, nested ones indented with `└`, showing kind, spec, step, bg/fg, seconds, ending and context size.
+- `--run <trial> --prompts` prints each child's full context. `--prompts` without `--run` is a usage error with exit status 2.
+
+**Deviations**:
+- None in scope.
+- The children section has wording for each case:
+  - an empty list prints `Children: none`;
+  - an unknown list prints `Children: unknown (see below)`, and `--prompts` says the contexts are unknown rather than "none recorded";
+  - a version-1 record prints `Children: not recorded (schema 1)`.
+
+**Files changed**:
+- `tests/harbor/shared/report.py`
+- `tests/harbor/shared/tests/test_report.py`
+
+**Discoveries**:
+- On the reference records, s55 epic planning shows `Idle: 942.2 s of 1249.4 s (75%) ◀ idle` and m70 shows 9% with no mark, as the spec's acceptance criterion expects.
+
+### 2026-10-24 — Task: Document the new record fields and report option
+
+**What was done**: The README's run-metrics reference now covers schema version 2:
+- every new field in `totals`, `steps` and `subagents.children`, with what it means and the `ending` values;
+- how children are placed, and how idle time is measured and flagged (`IDLE_SHARE`);
+- which child fields Bob, Codex and the oracle leave unknown;
+- the report's idle column, children table and `--run … --prompts`;
+- the checked-in reference runs and `trim_reference.py`.
+
+`test_readme_metrics.py` pins all of it against hand-written version-2 keys.
+
+**Deviations**: The probe target is not documented here. Its task, in Milestone 4, adds it.
+
+**Files changed**:
+- `README.md`
+- `tests/harbor/shared/tests/test_readme_metrics.py`
+
+**Discoveries**: None.
