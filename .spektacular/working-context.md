@@ -1,5 +1,32 @@
 # Working context: 000071_harbor-child-agents
 
+## Plan workflow (started 2026-10-24)
+
+- Planning spec 000071_harbor-child-agents (final). User chose it via /spek-plan after asking
+  which spec/plan was latest. Spec-era notes below are carried forward as background.
+- Spec's success metrics to carry into Testing Approach: 100% children recorded with context
+  across nine Claude suites; full Claude batch passes with no skipped required delegation and
+  no idle flag; epic-planning idle < 25% of wall; zero walkthrough/changelog-check misreads;
+  report alone answers "which children, what were they told".
+- Target repo: spektacular only (docs website is a non-goal). No design refs.
+- User answers at discovery (2026-10-24):
+  - Both models skip implement test/verify children (only goal reviewers spawned in
+    implement-epic on 4.6 and 5.5): STRENGTHEN the step instructions (test, verify, and spec
+    verification) AND enforce.
+  - Epic implementing child prompt: ADD to spek-implement-epic that the prompt names the spec's
+    worktree paths (from `epic worktree`), and check for them.
+- Learnings: Agent tool_use input is the prompt source (task_started.prompt sometimes absent;
+  background Bash also emits task_started). task_updated.end_time is the only child end time;
+  task_notification.usage.duration_ms is the agent's own duration. Child msgs stream inline with
+  parent_tool_use_id. Session log answers walkthrough + changelog checks. Implement suite is
+  seeded past test/verify/check_goal; goal-check unmet retry and implement-epic run them.
+  Plan suite's discovery spawn check must become record-only (constraint).
+- User answer at tasks (2026-10-24): epic verifiers get Claude-only transcript checks; update
+  knowledge entry architecture/testing-architecture.md via spek-knowledge in the implement run.
+- Progress: all three plan documents committed to the store (2026-10-24); working dir removed. Walkthrough done; user approved the plan 2026-10-24. Next: implement workflow.
+- Architecture chosen (Option A): shared Child reader -> recorder + new shared delegation.py
+  rules; session-log based walkthrough/changelog checks; schema 2; probe-gated headless wording.
+
 ## Problem and motivation
 
 Builds on 000070_harbor-run-metrics (metrics.json per harbor run, `make harbor-report`).
