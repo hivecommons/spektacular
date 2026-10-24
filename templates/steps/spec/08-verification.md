@@ -74,6 +74,10 @@ Return your findings as the flat list described above, and nothing else.
 
 ### 3. Triage the findings (you, with full context)
 
+{{#unattended}}
+**This run is unattended, so you triage alone and ask nothing.** Keep or drop each finding as described below, then apply every fix you keep yourself instead of proposing it, and record each applied fix in `.spektacular/work/{{spec_name}}/assumptions.md` (the section and what changed). A finding that needs a decision only the user can make, such as whether a candidate constraint is really binding, goes to `.spektacular/work/{{spec_name}}/open_questions.md` instead of being applied. Then go straight to step 4.
+
+{{/unattended}}
 Now you — who *did* run the interview — filter the reviewer's findings. The subagent flags everything that reads wrong to a stranger; your job is to decide which flags are real:
 
 - **Real leak, misplacement, duplication, or genuinely-missing constraint the user has not deliberately chosen** → keep it, and propose the fix to the user.
@@ -96,6 +100,26 @@ Iterate steps 2–4 until the user is happy and the spec is correct, complete, a
 
 Once the user is happy, commit the staged spec to the spec store.
 
+{{#unattended}}
+**This run is unattended: commit once the review comes back clean, and add the review notes first.** Append a final `## Review Notes` section to `.spektacular/tmp/spec_template.md`, after `## Non-Goals`, so whoever reviews the spec knows where to look:
+
+```markdown
+## Review Notes
+
+This spec was drafted unattended and has not been reviewed. Resolve each item below with the user, then remove this section before signing the spec off.
+
+### Assumptions
+
+<every entry from .spektacular/work/{{spec_name}}/assumptions.md, or "No drafting assumptions were recorded.">
+
+### Open Questions
+
+<every bullet from .spektacular/work/{{spec_name}}/open_questions.md, or "None.">
+```
+
+The workflow's finished step marks the stored spec unreviewed, and the plan workflow refuses to start from it until it is signed off.
+
+{{/unattended}}
 **Never edit the spec file with the `Write` or `Edit` tools.** `{{config.command}} spec file write` is the only supported way to write the spec — it routes the write through Spektacular into the configured spec directory.
 
 The approved content is already staged at `.spektacular/tmp/spec_template.md` from the steps above. Point `spec file write` at it with `--from`, then remove the scratch file:

@@ -424,6 +424,12 @@ func newStoreFileCmd(k storeFileKind) *cobra.Command {
 							if !parsed.ClosedDate.IsZero() {
 								item["closed_date"] = parsed.ClosedDate.Format("2006-01-02")
 							}
+							// Only an unattended spec awaiting its review
+							// carries the key, so every other listing is
+							// unchanged.
+							if parsed.Unreviewed {
+								item["unreviewed"] = true
+							}
 						}
 					}
 				}

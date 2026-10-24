@@ -44,6 +44,10 @@ type UpdateOptions struct {
 	// ordinary spec write passes so the record survives a body rewrite. Only
 	// spec amend passes it.
 	Amendments *[]Amendment
+	// Unreviewed sets or clears the spec's unreviewed marker, with the same
+	// nil-means-no-change rule as Epic, so a body-only rewrite during the
+	// review keeps it. Only the spec workflow's finished step passes it.
+	Unreviewed *bool
 }
 
 // Merge computes the on-disk bytes for a write by combining an existing store
@@ -66,6 +70,10 @@ type UpdateOptions struct {
 //   - A spec's epic, sources and amendments are preserved across a body-only
 //     rewrite, and replaced only when opts.Epic, opts.Sources or
 //     opts.Amendments is non-nil.
+//   - A spec's unreviewed marker is preserved across a body-only rewrite and
+//     replaced only when opts.Unreviewed is non-nil. A document whose
+//     resulting status is final never carries it: signing a spec off is its
+//     review.
 //   - Malformed existing frontmatter propagates as an error rather than being
 //     silently replaced.
 func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) {
@@ -108,6 +116,9 @@ func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) 
 		}
 		if opts.Amendments != nil {
 			result.Amendments = *opts.Amendments
+		}
+		if opts.Unreviewed != nil {
+			result.Unreviewed = *opts.Unreviewed
 		}
 		result.CreatedDate = today
 		result.DocumentStatus = StatusDraft
@@ -155,6 +166,10 @@ func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) 
 		if opts.Amendments != nil {
 			result.Amendments = *opts.Amendments
 		}
+		result.Unreviewed = current.Unreviewed
+		if opts.Unreviewed != nil {
+			result.Unreviewed = *opts.Unreviewed
+		}
 		if opts.Project != "" {
 			result.Project = opts.Project
 		}
@@ -180,6 +195,10 @@ func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) 
 				result.ClosedDate = time.Time{}
 			}
 		}
+	}
+
+	if result.DocumentStatus == StatusFinal {
+		result.Unreviewed = false
 	}
 
 	return Render(result, newBody)

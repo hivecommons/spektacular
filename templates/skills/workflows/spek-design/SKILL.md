@@ -91,6 +91,16 @@ Then:
    there is nothing to reference it from yet, and that is a complete outcome rather than a
    half-finished one.
 
+**When the user hands the design off.** If the user asks you to write the design from what has
+been discussed and review it later ("write it up, I'll read it afterwards"), that instruction is
+their agreement to write it, so do not interview and do not stop to present the draft. Write it
+from the conversation, ending with a `## Review notes` section that lists every assumption you made
+and every point still open, and author it with `--document-status draft` (steps 2 to 5 above).
+Then tell the user once where it is, and summarise those review notes. When they have reviewed it,
+revise it as in the revise branch, without the review notes, and pass `--document-status final`.
+A spec run the user handed off never authors a design itself: its offer is carried to the review
+instead.
+
 # Intent: bring in
 
 Triggered when the user already has the design written and wants it stored. There is no interview:

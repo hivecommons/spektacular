@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/steps/plan"
+	"github.com/hivecommons/spektacular/internal/steps/spec"
 	"github.com/hivecommons/spektacular/internal/store"
 	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/spf13/cobra"
@@ -122,6 +125,9 @@ func runPlanNew(cmd *cobra.Command, _ []string) error {
 		if err := refuseLaneInProgress(dataDir, cfg.Command, "plan", input.Name); err != nil {
 			return err
 		}
+	}
+	if err := refuseUnreviewedSpec(cfg, store.NewSourceStore(root, "project"), input.Name); err != nil {
+		return err
 	}
 
 	// The uncommitted-changes gate runs once the name is validated, so its
@@ -258,4 +264,23 @@ func init() {
 	planGotoCmd.Flags().String("file", "", "Read a file at <path> (relative to cwd) and store its contents under the filename's basename (without extension)")
 
 	planCmd.AddCommand(planNewCmd, planGotoCmd, planStepsCmd)
+}
+
+// refuseUnreviewedSpec refuses to plan a spec an unattended run wrote that the
+// user has not yet reviewed, so no plan is built on a spec nobody has read. A
+// spec that cannot be read is left for the plan workflow to report.
+func refuseUnreviewedSpec(cfg config.Config, st store.Store, name string) error {
+	raw, err := st.Read(spec.SpecFilePath(cfg.Spec.Config.Directory, name))
+	if err != nil {
+		return nil
+	}
+	fm, _, err := metadata.Split(raw)
+	if err != nil || fm == nil || !fm.Unreviewed {
+		return nil
+	}
+	return output.NewError("spec_unreviewed",
+		fmt.Sprintf("spec %q was drafted unattended and has not been reviewed yet", name)).
+		WithResource(name).
+		WithNextAction(fmt.Sprintf("review the spec with the user first (`%s spec file read %s`): resolve each item under its `## Review Notes` section, remove that section, write the spec back with `%s spec file write`, and sign it off with `%s spec file set-document-status %s --document-status final`; then run plan new again",
+			cfg.Command, name, cfg.Command, cfg.Command, name))
 }

@@ -282,8 +282,18 @@ func finished() workflow.StepCallback {
 			if unwritten {
 				extra = map[string]any{"spec_unwritten": true}
 			} else {
-				if err := metadata.Close(st, SpecFilePath(cfg.SpecDir, stepkit.GetString(data, "name")), metadata.StatusFinal); err != nil && !errors.Is(err, store.ErrNotFound) {
-					return "", err
+				path := SpecFilePath(cfg.SpecDir, stepkit.GetString(data, "name"))
+				// An unattended run's spec was never confirmed by the user,
+				// so it stays a draft marked unreviewed until they sign it
+				// off; every other run's spec is final.
+				var closeErr error
+				if isUnattended(data) {
+					closeErr = markUnreviewed(st, path)
+				} else {
+					closeErr = metadata.Close(st, path, metadata.StatusFinal)
+				}
+				if closeErr != nil && !errors.Is(closeErr, store.ErrNotFound) {
+					return "", closeErr
 				}
 				// A spec in an epic gets the chaining offer: the template
 				// is told the epic and the sources it was started from, so
@@ -296,6 +306,33 @@ func finished() workflow.StepCallback {
 		}
 		return "", writeStep("finished", "", "steps/spec/09-finished.md", data, out, st, cfg, extra)
 	}
+}
+
+// isUnattended reports whether the user handed this spec run off to be
+// drafted without them, to review once at the end.
+func isUnattended(data workflow.Data) bool {
+	v, _ := data.Get("unattended")
+	b, _ := v.(bool)
+	return b
+}
+
+// markUnreviewed rewrites the stored spec's frontmatter to carry the
+// unreviewed marker, leaving its body and document status untouched.
+func markUnreviewed(st store.Store, path string) error {
+	existing, err := st.Read(path)
+	if err != nil {
+		return err
+	}
+	body := existing
+	if _, split, splitErr := metadata.Split(existing); splitErr == nil {
+		body = split
+	}
+	unreviewed := true
+	merged, err := metadata.Merge(existing, body, metadata.UpdateOptions{Unreviewed: &unreviewed})
+	if err != nil {
+		return err
+	}
+	return st.Write(path, merged)
 }
 
 // specStillScaffold reads the spec file back through the store and reports

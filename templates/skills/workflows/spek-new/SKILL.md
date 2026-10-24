@@ -113,6 +113,8 @@ Add `"sources"` and `"epic"` to the same `--data` when they apply (see the secti
 {{command}} spec new --data '{"name": "<spec_name>", "sources": [{"uri": "<stable link>"}], "epic": "<epic name>"}'
 ```
 
+**Did the user hand the spec off?** When the user asks you to write the spec from what has been discussed and review it afterwards, rather than confirm each section ("write it, I'll review later", "draft the whole epic and I'll look at it at the end"), add `"unattended": true` to the same `--data`. Each step then drafts its section without stopping, records the assumptions it makes and carries undecided points as open questions; the finished spec is stored as a draft marked unreviewed, and you give the user one summary at the end. Only the user's words hand a spec off: never choose unattended yourself, and ask when you are unsure. Without it, the workflow confirms each section with the user as usual.
+
 **If the epic is complete** (`code: epic_complete`), every spec in it is already implemented. Tell the user, and ask whether to add the spec anyway; adding it reopens the epic until the new spec is implemented. Only if they agree, re-run the same command with `"confirm_completed_epic": true` added to `--data`. Never add it without asking.
 
 The CLI may normalize and prefix the requested name. Always use the returned `spec_name` and `spec_path` as the source of truth for follow-up workflows.
@@ -175,6 +177,8 @@ When the user accepts an epic for a source with child items:
 
 3. When that spec finishes, the workflow offers the next child that has no spec yet. The user can stop at any point and continue later.
 
+   If the user handed the epic off, add `"unattended": true` to the first `spec new`. Each spec then starts the next child's spec itself, unattended too, and the user gets one summary covering every spec once no child is left.
+
 **A child item that appears later.** When the user brings up a new child item for a source whose epic already exists, or you see one while revisiting the source, offer to start a spec for it in that epic with the same `spec new` command.
 
 ## Splitting a spec that is already written
@@ -184,6 +188,23 @@ The user can ask for a split at any time, on any spec, including one already wri
 {{> partials/split-check}}
 
 {{> partials/split-flow}}
+
+## Reviewing a spec drafted unattended
+
+A spec an unattended run wrote is a draft marked unreviewed: `{{command}} spec file list` reports it with `"unreviewed": true`, and `{{command}} plan new` refuses it (`code: spec_unreviewed`). When the user is ready to review it:
+
+1. Read it with `{{command}} spec file read <name>` and present it in full. Its `## Review Notes` section lists the assumptions the run made and the questions it left open.
+2. Go through every assumption and open question with the user, and through any section they want to change. Record their answers in the section each one affects.
+3. Stage the revised spec under `.spektacular/tmp/` with the `## Review Notes` section removed, write it back with `{{command}} spec file write <name> --from <staged file>`, and remove the scratch file.
+4. Sign it off only once the user says it is right:
+
+   ```
+   {{command}} spec file set-document-status <name> --document-status final
+   ```
+
+   Signing off clears the unreviewed mark, and the spec can then be planned.
+
+For an epic, review its specs one after another in the order `{{command}} epic read <epic>` lists them.
 
 ## Resuming an in-progress workflow
 

@@ -30,4 +30,12 @@ If the user accepts, start the spec workflow:
 
 Then drive its existing steps — the "ask the user..." prompts in `templates/steps/spec/*.md` are unchanged and still apply — but answer each one from the conversation you already had instead of asking cold. For every step where the discussion already established an answer (e.g. the overview step's "describe this feature in 2-3 sentences"), propose a draft based on what was said and ask the user to confirm or refine it, rather than posing the question as if from scratch. Only ask a step's question directly when the conversation genuinely didn't cover it. The user's confirmation or correction is still the final word — never silently record your own draft as accepted without it.
 
+**When the user hands the spec off.** Sometimes the user does not want to confirm each section: they say something like "write it from what we discussed, I'll review it later", "go ahead and draft it", or "do the whole epic and I'll look at it at the end". However they word it, that is a hand-off for this one run, and it is the only exception to confirming each draft. Start the workflow unattended:
+
+```
+{{command}} spec new --data '{"name":"...","unattended":true}'
+```
+
+Each step then tells you to draft its section without stopping, record every assumption you make, and carry anything undecided as an open question for the review. The finished spec is stored as a draft marked unreviewed, the plan workflow will not start from it until the user signs it off, and you give the user one summary at the end. Never start an unattended run because you judge the conversation complete enough: only the user's words hand a spec off, and when you are unsure whether they did, ask.
+
 This behavior is scoped to the current, single conversation: it does not persist across sessions, and it does not apply outside a Spektacular-initialized repository.

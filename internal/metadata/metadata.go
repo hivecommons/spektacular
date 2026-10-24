@@ -98,6 +98,11 @@ type Metadata struct {
 	// them. Like Designs, they are modelled here so the closed schema carries
 	// them forward through every ordinary write, including reconcile_spec.
 	Amendments []Amendment
+	// Unreviewed marks a spec an unattended spec run wrote without the user
+	// confirming any section. Only that run's finished step sets it, and
+	// signing the spec off as final clears it. Plan new refuses a spec that
+	// carries it, so no plan is built on a spec nobody has read.
+	Unreviewed bool
 }
 
 // Amendment is one change recorded on a spec during an implement run: the
@@ -145,6 +150,7 @@ type yamlShape struct {
 	Epic           string         `yaml:"epic,omitempty"`
 	Sources        []SourceRef    `yaml:"sources,omitempty"`
 	Amendments     []Amendment    `yaml:"amendments,omitempty"`
+	Unreviewed     bool           `yaml:"unreviewed,omitempty"`
 }
 
 // yamlInShape is the decode-side twin of yamlShape. It holds document_status
@@ -169,6 +175,10 @@ type yamlInShape struct {
 	Sources yaml.Node `yaml:"sources"`
 	// Amendments is a raw node for the same reason Designs is.
 	Amendments yaml.Node `yaml:"amendments"`
+	// Unreviewed is a raw node for the same reason DocumentStatus is: only
+	// a literal true marks the spec unreviewed, and anything else reads as
+	// reviewed rather than failing the parse.
+	Unreviewed yaml.Node `yaml:"unreviewed"`
 }
 
 // MarshalYAML implements yaml.Marshaler.
@@ -185,6 +195,7 @@ func (m Metadata) MarshalYAML() (interface{}, error) {
 		Epic:           m.Epic,
 		Sources:        m.Sources,
 		Amendments:     m.Amendments,
+		Unreviewed:     m.Unreviewed,
 	}
 	if !m.ClosedDate.IsZero() {
 		out.ClosedDate = m.ClosedDate.Format(dateFormat)
@@ -229,6 +240,7 @@ func (m *Metadata) UnmarshalYAML(node *yaml.Node) error {
 	m.Epic = in.Epic
 	m.Sources = decodeSourceRefs(in.Sources)
 	m.Amendments = decodeAmendments(in.Amendments)
+	m.Unreviewed = decodeUnreviewed(in.Unreviewed)
 	return nil
 }
 
@@ -305,6 +317,20 @@ func decodeAmendments(node yaml.Node) []Amendment {
 		out = append(out, a)
 	}
 	return out
+}
+
+// decodeUnreviewed reads the unreviewed marker leniently: only a scalar that
+// YAML reads as true marks the spec unreviewed. An absent, malformed or
+// non-boolean value reads as reviewed instead of making the spec unreadable.
+func decodeUnreviewed(node yaml.Node) bool {
+	if node.Kind != yaml.ScalarNode {
+		return false
+	}
+	var v bool
+	if err := node.Decode(&v); err != nil {
+		return false
+	}
+	return v
 }
 
 // decodeSpecNames reads the specs list leniently, on the same bargain

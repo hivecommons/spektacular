@@ -63,6 +63,11 @@ const workingContextFooterPath = "partials/working-context-footer.md"
 // stops back to the orchestrator that started it rather than ask the user.
 const orchestratedPartialPath = "partials/orchestrated-stop.md"
 
+// unattendedPartialPath is the shared fragment WriteStepResult appends to
+// every step of an unattended spec workflow, telling the agent to draft each
+// section without stopping and record what it assumed for the review.
+const unattendedPartialPath = "partials/unattended.md"
+
 // gitCommitPartialPath is the shared fragment WriteStepResult appends to the
 // steps that lead into an automatic git commit.
 const gitCommitPartialPath = "partials/git-commit-message.md"
@@ -111,6 +116,10 @@ func WriteStepResult(
 	// its own, but it is not orchestrated: it never hands back.
 	lane, _ := data.Get("lane")
 	isLane, _ := lane.(bool)
+	// An unattended run drafts every section without the user and leaves
+	// the result for one review at the end.
+	unattended, _ := data.Get("unattended")
+	isUnattended, _ := unattended.(bool)
 	workingContextPath := workingcontext.RelPath
 	if isOrchestrated || isLane {
 		workingContextPath = workflow.LaneNotesRel(cfg.Kind, instanceName)
@@ -118,6 +127,7 @@ func WriteStepResult(
 
 	vars := map[string]any{
 		"orchestrated":         isOrchestrated,
+		"unattended":           isUnattended,
 		"working_context_path": workingContextPath,
 		"step":                 req.StepName,
 		"title":                StepTitle(req.StepName),
@@ -136,6 +146,13 @@ func WriteStepResult(
 	}
 	if isOrchestrated {
 		partial, err := RenderTemplate(orchestratedPartialPath, vars)
+		if err != nil {
+			return err
+		}
+		instruction = strings.TrimRight(instruction, "\n") + "\n\n---\n\n" + partial
+	}
+	if isUnattended {
+		partial, err := RenderTemplate(unattendedPartialPath, vars)
 		if err != nil {
 			return err
 		}

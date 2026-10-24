@@ -152,6 +152,7 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 						Description: "what directly seeded the spec; each needs a uri, and the CLI stamps retrieved_date with today"},
 					"epic":                   {Type: "string", Description: "an existing epic the spec joins from the start; omit for a standalone spec"},
 					"confirm_completed_epic": {Type: "boolean", Description: "true only after the user agrees to add the spec to an epic whose specs are all implemented"},
+					"unattended":             {Type: "boolean", Description: "true when the user hands the spec off to be drafted without them and reviewed once at the end; the finished spec stays a draft marked unreviewed until they sign it off"},
 				},
 				Required: []string{"name"},
 			},
@@ -207,6 +208,7 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 		} `json:"sources"`
 		Epic                 string `json:"epic"`
 		ConfirmCompletedEpic bool   `json:"confirm_completed_epic"`
+		Unattended           bool   `json:"unattended"`
 	}
 	if err := json.Unmarshal([]byte(dataStr), &input); err != nil {
 		return fmt.Errorf("parsing --data: %w", err)
@@ -306,6 +308,9 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 	}
 	if joinEpic != "" {
 		wf.SetData("epic", joinEpic)
+	}
+	if input.Unattended {
+		wf.SetData("unattended", true)
 	}
 
 	if err := wf.Next(); err != nil {

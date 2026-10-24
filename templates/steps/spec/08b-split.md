@@ -10,6 +10,10 @@ This spec already belongs to the epic `{{epic_name}}`. If it is split, the new s
 
 {{> partials/split-check}}
 
+{{#unattended}}
+**This run is unattended, so do not split.** Run the check, but never take the flow below without the user. When the check finds a split worth offering, add it to the stored spec's `### Open Questions` under `## Review Notes` instead: read the spec with `{{config.command}} spec file read {{spec_name}}`, stage it under `.spektacular/tmp/` with the proposed specs and why as one bullet appended there, write it back with `{{config.command}} spec file write {{spec_name}} --from <staged file>`, and remove the scratch file. Then advance.
+
+{{/unattended}}
 **If the user agrees to a split,** follow the flow below. If there is no offer to make, or the user declines, skip straight to advancing.
 
 {{> partials/split-flow}}

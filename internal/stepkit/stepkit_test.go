@@ -258,3 +258,34 @@ func TestMissingPartialFailsRender(t *testing.T) {
 	_, err := mustache.RenderPartials("before {{> partials/nope}} after", p, nil)
 	require.Error(t, err)
 }
+
+// An unattended run gets the hand-off partial after the step body and before
+// the working-context footer, which stays last.
+func TestWriteStepResultAppendsUnattendedPartial(t *testing.T) {
+	writer := &captureWriter{}
+	err := WriteStepResult(
+		StepRequest{
+			StepName:     "overview",
+			NextStep:     "requirements",
+			TemplatePath: "steps/spec/01-overview.md",
+			Strategy:     fakeStrategy{},
+			Extra:        map[string]any{"spec_name": "widget"},
+		},
+		&testData{values: map[string]any{"name": "widget", "unattended": true}},
+		writer, nil, workflow.Config{Command: "spektacular"},
+		buildFakeResult,
+	)
+	require.NoError(t, err)
+	got := writer.result.(fakeResult).Instruction
+
+	partial := strings.Index(got, "## Running unattended")
+	require.Greater(t, partial, strings.Index(got, "## Step overview"), "the partial must follow the step body")
+	require.True(t, strings.HasSuffix(got, "\n\n---\n\n"+workingContextFooter), "the footer must stay last")
+	require.Contains(t, got, ".spektacular/work/widget/assumptions.md")
+}
+
+func TestWriteStepResultOmitsUnattendedPartialByDefault(t *testing.T) {
+	got := renderStepInstruction(t, "overview", "requirements", "steps/spec/01-overview.md")
+
+	require.NotContains(t, got, "## Running unattended")
+}

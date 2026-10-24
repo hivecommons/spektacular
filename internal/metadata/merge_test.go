@@ -523,3 +523,72 @@ func TestMerge_DocumentStatusTransitionCarriesAmendments(t *testing.T) {
 		"closed_date must still be stamped on the transition, got %s", meta.ClosedDate)
 	require.True(t, meta.CreatedDate.Equal(time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)))
 }
+
+// draftUnreviewed is a spec an unattended run wrote and marked unreviewed.
+const draftUnreviewed = "---\n" +
+	"created_date: 2026-07-01\n" +
+	"document_status: draft\n" +
+	"unreviewed: true\n" +
+	"---\n\n" +
+	"# Existing body\n"
+
+func boolPtr(b bool) *bool { return &b }
+
+// TestMerge_BodyOnlyRewritePreservesUnreviewed is the review case: the user
+// and the agent rewrite the spec body while reviewing it, and the marker must
+// survive until the spec is signed off.
+func TestMerge_BodyOnlyRewritePreservesUnreviewed(t *testing.T) {
+	got, err := Merge([]byte(draftUnreviewed), []byte("# Updated body\n"), UpdateOptions{Today: fixedToday()})
+	require.NoError(t, err)
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	require.True(t, meta.Unreviewed, "a nil opts.Unreviewed must preserve the stored marker")
+	require.Equal(t, StatusDraft, meta.DocumentStatus)
+}
+
+// TestMerge_NonNilUnreviewedSetsAndClearsMarker asserts a non-nil
+// opts.Unreviewed replaces the stored value in both directions.
+func TestMerge_NonNilUnreviewedSetsAndClearsMarker(t *testing.T) {
+	set, err := Merge([]byte(draftWithEpicAndSources), []byte("# Body\n"), UpdateOptions{Today: fixedToday(), Unreviewed: boolPtr(true)})
+	require.NoError(t, err)
+	require.Contains(t, string(set), "unreviewed: true\n")
+	meta, _, err := Split(set)
+	require.NoError(t, err)
+	require.True(t, meta.Unreviewed)
+	require.Equal(t, testEpic, meta.Epic, "setting the marker must not disturb other fields")
+
+	cleared, err := Merge(set, []byte("# Body\n"), UpdateOptions{Today: fixedToday(), Unreviewed: boolPtr(false)})
+	require.NoError(t, err)
+	require.NotContains(t, string(cleared), "unreviewed", "a cleared marker must leave no key behind")
+}
+
+// TestMerge_FinalClearsUnreviewed asserts signing a spec off as final is its
+// review: the marker is dropped on the same write that closes it.
+func TestMerge_FinalClearsUnreviewed(t *testing.T) {
+	got, err := Merge([]byte(draftUnreviewed), []byte("# Existing body\n"), UpdateOptions{
+		Today:          fixedToday(),
+		DocumentStatus: documentStatusPtr(StatusFinal),
+	})
+	require.NoError(t, err)
+	require.NotContains(t, string(got), "unreviewed")
+
+	meta, _, err := Split(got)
+	require.NoError(t, err)
+	require.False(t, meta.Unreviewed)
+	require.Equal(t, StatusFinal, meta.DocumentStatus)
+	require.True(t, meta.ClosedDate.Equal(fixedToday()))
+}
+
+// TestSplit_MalformedUnreviewedReadsAsReviewed asserts a hand-edited marker
+// that is not a boolean never makes the spec unreadable.
+func TestSplit_MalformedUnreviewedReadsAsReviewed(t *testing.T) {
+	for _, value := range []string{"maybe", "[true]", "{a: b}", "false"} {
+		raw := "---\ncreated_date: 2026-07-01\ndocument_status: draft\nunreviewed: " + value + "\n---\n\n# Body\n"
+		meta, _, err := Split([]byte(raw))
+		require.NoError(t, err, value)
+		require.NotNil(t, meta, value)
+		require.False(t, meta.Unreviewed, value)
+	}
+}

@@ -93,6 +93,8 @@ spektacular implement new --data '{"name":"<spec-name>"}'
 
 Spek names are normalised and prefixed by the CLI, so use the returned `spec_name` and `spec_path` for follow-up commands rather than the name you passed.
 
+When a spec comes out of a long design conversation, you can hand it off instead of confirming each section: tell the agent to write it from what you discussed and that you will review it later. The agent then starts the workflow with `"unattended": true`, drafts every section without stopping, and records the assumptions it made and the questions it left open in a `## Review Notes` section at the end of the spec. The spec is stored as a draft marked `unreviewed`, and `plan new` refuses it until you have reviewed it and signed it off with `spektacular spec file set-document-status <name> --document-status final`. Inside an epic the hand-off carries on to each remaining item, and you review every spec it wrote in one pass afterwards.
+
 Speks are plain markdown with a small set of structured sections (overview, requirements, constraints, acceptance criteria, and so on), and `spec new` scaffolds the template for you. For the full walkthrough and spek format, see the [getting-started tutorial](https://spektacular.dev/tutorials/getting-started) and the [how-it-works documentation](https://spektacular.dev/how-it-works/).
 
 ## Supported agents
