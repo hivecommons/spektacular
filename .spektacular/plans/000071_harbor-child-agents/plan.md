@@ -606,7 +606,7 @@ Either way, telling the agent no one answers stops forcing foreground children o
 - The epic skills' headless paragraph matches that outcome, pinned by the Go test suite.
 - The epic suites' background (or foreground) rule passes its self-check on synthetic runs.
 
-#### - [ ] Task: Add the background-child probe task
+#### - [x] Task: Add the background-child probe task
 **Id:** dd40f19a-5513-44de-86c1-a40a0fa1133f
 **Repo:** spektacular
 **Depends on:**
@@ -618,10 +618,10 @@ Add a minimal harbor task, with a make target, that has headless Claude Code sta
 *Technical detail:* [context.md#task-add-the-background-child-probe-task](./context.md#task-add-the-background-child-probe-task)
 
 **Acceptance criteria**:
-- [ ] The probe can be run with one make target, like every other suite, and its wiring passes the suite-wiring self-check.
-- [ ] Its verifier reports the child's ending and duration, and whether a completion notice started a new turn, without depending on which way the outcome goes.
+- [x] The probe can be run with one make target, like every other suite, and its wiring passes the suite-wiring self-check.
+- [x] Its verifier reports the child's ending and duration, and whether a completion notice started a new turn, without depending on which way the outcome goes.
 
-#### - [ ] Task: Run the probe and record the ten-minute outcome
+#### - [x] Task: Run the probe and record the ten-minute outcome
 **Id:** 37a9fe91-7e9c-4ae0-b1f3-bb392fde38b1
 **Repo:** spektacular
 **Depends on:**
@@ -634,10 +634,10 @@ Run the probe once against Claude, trim the run with the reference-data script a
 *Technical detail:* [context.md#task-run-the-probe-and-record-the-ten-minute-outcome](./context.md#task-run-the-probe-and-record-the-ten-minute-outcome)
 
 **Acceptance criteria**:
-- [ ] A recorded probe run is checked in with a background child that ran for more than ten minutes in a headless session.
-- [ ] Its outcome, completed or stopped, and the child's duration are written down where the skill-wording task reads them.
+- [x] A recorded probe run is checked in with a background child that ran for more than ten minutes in a headless session.
+- [x] Its outcome, completed or stopped, and the child's duration are written down where the skill-wording task reads them.
 
-#### - [ ] Task: Rewrite the epic headless guidance to the probe outcome
+#### - [x] Task: Rewrite the epic headless guidance to the probe outcome
 **Id:** 5d07bd37-e6cf-45fd-b9f6-cf8bab8fd57b
 **Repo:** spektacular
 **Depends on:**
@@ -654,11 +654,11 @@ Either way, the skills state the outcome, and being told no one answers no longe
 *Technical detail:* [context.md#task-rewrite-the-epic-headless-guidance-to-the-probe-outcome](./context.md#task-rewrite-the-epic-headless-guidance-to-the-probe-outcome)
 
 **Acceptance criteria**:
-- [ ] Both epic skills state the probe's outcome and keep children in the foreground only if the probe's child was stopped.
-- [ ] Neither skill treats being told no one answers as, by itself, a reason to hold children in the foreground.
-- [ ] The skill tests pin the new wording, retire the old phrases and pass.
+- [x] Both epic skills state the probe's outcome and keep children in the foreground only if the probe's child was stopped.
+- [x] Neither skill treats being told no one answers as, by itself, a reason to hold children in the foreground.
+- [x] The skill tests pin the new wording, retire the old phrases and pass.
 
-#### - [ ] Task: Check that the epic suites run children as a real session does
+#### - [x] Task: Check that the epic suites run children as a real session does
 **Id:** cc98f1eb-1d8e-4bfe-91ec-b795d769dd54
 **Repo:** spektacular
 **Depends on:**
@@ -671,9 +671,9 @@ Add the background-children rule to both epic suites' Claude checks. Per-spec ch
 *Technical detail:* [context.md#task-check-that-the-epic-suites-run-children-as-a-real-session-does](./context.md#task-check-that-the-epic-suites-run-children-as-a-real-session-does)
 
 **Acceptance criteria**:
-- [ ] A Claude epic run whose per-spec children ran in the foreground fails, and one with background children and a notice-driven turn passes, or the reverse if the probe found children stopped.
-- [ ] Both epic suites' tasks still say the session is headless and no one answers between turns.
-- [ ] Codex and Bob epic runs are not judged by this rule.
+- [x] A Claude epic run whose per-spec children ran in the foreground fails, and one with background children and a notice-driven turn passes, or the reverse if the probe found children stopped.
+- [x] Both epic suites' tasks still say the session is headless and no one answers between turns.
+- [x] Codex and Bob epic runs are not judged by this rule.
 
 ## Open Questions
 
@@ -979,3 +979,90 @@ Every other check is unchanged, so Codex and Bob runs are judged as before. The 
   - s55 implement-epic fails on missing worktree paths, its `sleep 240` poll and skipped test/verify children.
   - m70 implement-epic fails only on the skipped test/verify children.
 - A harbor run started inside the worktree leaves a root-owned `tests/harbor/jobs/<job>/…/agent/sessions` that `go test ./...` cannot walk. Code and tracked packages pass, but the directory must be cleared before `go test ./...` runs clean.
+
+### 2026-10-24 — Task: Add the background-child probe task
+
+**What was done**:
+- Added the `tests/harbor/background-child/` harbor task: headless Claude Code starts one background child that sleeps 300 s three times, then ends its turn.
+- Its Claude-guarded verifier asserts one background child that either ran past 600 s or was stopped, never which. It prints and writes `PROBE OUTCOME: <ending> after <duration> s; notice-woken turn: <bool>`.
+- `make harbor-test-background-child` runs it, and the suite-wiring self-check covers it.
+
+**Deviations**:
+- To save wall-clock time, a background agent built the task in parallel with the Milestone 3 tasks.
+- The auto-commit swept its files into the Milestone 3 commit (`e4cfebe`).
+- The child sleeps with `python3 -c 'import time; time.sleep(300)'`, because Claude Code 2.1.310 refuses a standalone `sleep 300` Bash call.
+- For a stopped child, which reports no run time, the outcome line falls back to the launch-to-end span.
+
+**Files changed**:
+- `tests/harbor/background-child/` (instruction.md, task.toml, environment/Dockerfile, tests/test.sh, tests/test_background_child.py)
+- `Makefile`
+- `tests/harbor/shared/tests/test_suite_wiring.py`
+
+**Discoveries**:
+- Claude Code blocks a standalone `sleep N` Bash call ("use Monitor with an until-loop").
+- A harbor run started in the worktree leaves root-owned `agent/sessions` under the gitignored `tests/harbor/jobs/`, which stops `go test ./...` from walking the tree.
+
+### 2026-10-24 — Task: Run the probe and record the ten-minute outcome
+
+**What was done**:
+- Ran `make harbor-test-background-child` against Claude: Claude Code 2.1.310, claude-sonnet-5-5, reward 1.
+- **Outcome: stopped.** The background child was killed 602 s after launch, about 600 s after the main agent ended its only turn, partway through its second sleep. No completion notice started a new turn, and the orchestrator set no wake-up.
+- The run is trimmed and checked in as `tests/harbor/shared/tests/data/probe-background-child/`.
+- An `OUTCOME` line in that directory records "stopped 602 s 2026-10-24 claude-code 2.1.310".
+- Self-checks pin the child, the turn and the outcome.
+
+**Deviations**:
+- The first run (job `2026-10-24__11-33-25`) settled nothing: the harness refused a plain `sleep 300`, so the child finished in 5 s. The probe was fixed and run again.
+- The stopped child reports no duration. The recorded 602 s is its launch-to-kill span.
+- Reader fixes found through the probe:
+  - `claude_turns` pairs results with the stretches between mid-stream `system/init` events, because a result can be written late, after the next turn's messages. A turn ends at the main agent's own last message, not a child's.
+  - A stopped child has no hand-back; its notice only repeats its description.
+- `trim_reference.py` writes a `debug/` directory only when the source run has one. The probe never called Spektacular.
+
+**Files changed**:
+- `tests/harbor/shared/transcripts.py`
+- `tests/harbor/shared/tests/trim_reference.py`
+- `tests/harbor/shared/tests/data/probe-background-child/` (README, build.json, claude-code.txt, OUTCOME)
+- `tests/harbor/shared/tests/test_reference_runs.py`
+- `tests/harbor/shared/tests/test_transcripts_summary.py`
+
+**Discoveries**:
+- Headless Claude Code (`claude --print`) stops a background sub-agent about ten minutes after the main agent ends its turn.
+- Shorter background children do complete and wake the orchestrator with a notice: s55 epic planning, and probe run 1.
+- Claude can write a turn's `result` event after the next turn's messages, so turn boundaries come from `system/init`.
+
+### 2026-10-24 — Task: Rewrite the epic headless guidance to the probe outcome
+
+**What was done**: The probe's outcome was "stopped", so both epic skills keep the foreground workaround. The unverified "headless Claude Code stops one after ten minutes" is replaced with the recorded outcome: on 2026-10-24, Claude Code 2.1.310 stopped a background child about ten minutes after the main agent ended its turn, and its completion notice never woke the session. The paragraph also says that being told no one will answer is not on its own a reason to hold children in the turn; the reason is what a headless session does to a background child. Go skill tests pin the new paragraph, the outcome and the reason, and assert the retired phrases are absent.
+
+**Deviations**:
+- The fresh-child-in-the-foreground sentence is kept unchanged, as the "stopped" branch calls for.
+- The README gained a note on the `harbor-test-background-child` probe and its recorded outcome, which the plan's documentation component called for.
+
+**Files changed**:
+- `templates/skills/workflows/spek-plan-epic/SKILL.md`
+- `templates/skills/workflows/spek-implement-epic/SKILL.md`
+- `templates/plan_epic_skill_test.go`
+- `templates/implement_epic_skill_test.go`
+- `README.md`
+
+**Discoveries**: None.
+
+### 2026-10-24 — Task: Check that the epic suites run children as a real session does
+
+**What was done**: The probe found background children stopped, so `delegation.PROBE_OUTCOME = "stopped"` selects `epic_children_foreground_together`. Each spec's child must run in the foreground, and no orchestrator turn may end while one is running. The background rule, `epic_children_backgrounded`, is kept for a future outcome: background children, a turn ending while they run, and a turn woken by a completion notice. Both epic verifiers' `TestChildren` gain `test_children_run_as_the_probe_settled`. The epic tasks keep their headless and no-one-answers wording, and need no extra sentence for the stopped outcome.
+
+**Deviations**:
+- The plan's "launched from the same assistant message" is not checked. The log cannot show it: m70's parallel foreground launches are logged 6 s apart.
+- The foreground rule checks what the skill's workaround guarantees instead: foreground children, every hand-back handled before the turn ends.
+
+**Files changed**:
+- `tests/harbor/shared/delegation.py`
+- `tests/harbor/epic-workflow/tests/test_epic_workflow.py`
+- `tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py`
+- `tests/harbor/shared/tests/test_delegation.py`
+- `tests/harbor/shared/tests/test_epic_children.py`
+
+**Discoveries**:
+- On the reference runs, the m70 epic runs (foreground) pass. The s55 epic runs (background storage and help children, turn ended at 13:36:39) fail, naming those children.
+- `go list ./...` cannot run while root-owned harbor output sits under the worktree's gitignored `tests/harbor/jobs/`. It must be removed with root before a plain `go test ./...` works there.
