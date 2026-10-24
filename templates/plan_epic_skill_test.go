@@ -470,7 +470,7 @@ func TestPlanEpicSkillResumesAChildCutOffWithoutAHandBack(t *testing.T) {
 // The orchestrator never schedules its own wake-up while children run: a
 // pending timer or recurring job keeps the session alive after the work is
 // done. The rule sits in the loop, after the headless paragraph, which is
-// left word for word as it was.
+// pinned word for word.
 func TestPlanEpicSkillNeverSetsATimedWakeUpWhileChildrenRun(t *testing.T) {
 	loop := flat(section(t, installedPlanEpicSkill(t), "# Step 2: The loop"))
 
@@ -482,10 +482,37 @@ func TestPlanEpicSkillNeverSetsATimedWakeUpWhileChildrenRun(t *testing.T) {
 		"A wake-up still pending once the work is done keeps the session running with nothing left to do.",
 	)
 
-	headless := "**In a headless session, keep every child inside your turn.** A session is headless when no one replies between your turns: you were started non-interactively, or your prompt says so. There, a sub-agent still running in the background after you end your turn may be stopped before it finishes; headless Claude Code stops one after ten minutes. So instead of starting children in the background, start the ready specs as foreground sub-agents in a single message, so they still run in overlapping time, and handle every hand-back (Step 4) before you end the turn."
-	require.Contains(t, loop, headless, "the headless paragraph must be unchanged")
+	headless := "**In a headless session, keep every child inside your turn.** A session is headless when no one replies between your turns: you were started non-interactively, or your prompt says so. Being told that no one will answer is not on its own a reason to hold children in your turn; the reason is what a headless session does to a background child once your turn ends. Headless Claude Code stopped one about ten minutes after the main agent ended its turn, and its completion notice never woke the session (recorded on 2026-10-24 with Claude Code 2.1.310 by the background-child harbor probe). So instead of starting children in the background, start the ready specs as foreground sub-agents in a single message, so they still run in overlapping time, and handle every hand-back (Step 4) before you end the turn."
+	require.Contains(t, loop, headless, "the headless paragraph must read as recorded from the probe")
 
 	running := "A child that handed back a `QUESTION:` and is waiting for its answer still counts as running."
 	require.Less(t, strings.Index(loop, headless), strings.Index(loop, rule), "the rule follows the headless paragraph")
 	require.Less(t, strings.Index(loop, rule), strings.Index(loop, running), "the rule comes before the running-child paragraph")
+}
+
+// The headless paragraph states what the background-child harbor probe
+// recorded: headless Claude Code stopped a background child about ten
+// minutes after the main agent ended its turn, and no completion notice woke
+// the session. That outcome, not being told no one answers, is the reason
+// children stay in the foreground. The old, unrecorded claim is retired.
+func TestPlanEpicSkillGroundsTheHeadlessRuleInTheProbeOutcome(t *testing.T) {
+	skill := installedPlanEpicSkill(t)
+	loop := flat(section(t, skill, "# Step 2: The loop"))
+
+	requirePhrases(t, "The loop", loop,
+		"**In a headless session, keep every child inside your turn.**",
+		"Being told that no one will answer is not on its own a reason to hold children in your turn",
+		"the reason is what a headless session does to a background child once your turn ends.",
+		"Headless Claude Code stopped one about ten minutes after the main agent ended its turn",
+		"its completion notice never woke the session",
+		"recorded on 2026-10-24 with Claude Code 2.1.310 by the background-child harbor probe",
+		"So instead of starting children in the background, start the ready specs as foreground sub-agents in a single message",
+	)
+
+	for _, old := range []string{
+		"headless Claude Code stops one after ten minutes",
+		"may be stopped before it finishes",
+	} {
+		require.NotContainsf(t, skill, old, "the retired headless wording %q must be gone", old)
+	}
 }

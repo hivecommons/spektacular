@@ -845,7 +845,6 @@ def test_claude_children_one_per_started_child_in_launch_order():
         child_unknown("toolu_N", "output", NO_MESSAGES),
         child_unknown("toolu_N", "description", NO_DESCRIPTION),
         child_unknown("toolu_K", "duration_s", NO_DURATION),
-        child_unknown("toolu_K", "hand_back", EMPTY_HAND_BACK),
         child_unknown("toolu_K", "models", NO_MESSAGES),
         child_unknown("toolu_K", "output", NO_MESSAGES),
         child_unknown("toolu_X", "duration_s", NO_DURATION_FAILED),
@@ -957,7 +956,6 @@ def test_claude_children_without_task_started_count_every_unrefused_launch():
         child_unknown("toolu_A", "description", NO_DESCRIPTION),
         child_unknown("toolu_B", "ended_at", NO_END),
         child_unknown("toolu_B", "duration_s", NO_DURATION),
-        child_unknown("toolu_B", "hand_back", EMPTY_HAND_BACK),
         child_unknown("toolu_B", "models", NO_MESSAGES),
         child_unknown("toolu_B", "output", NO_MESSAGES),
         child_unknown("toolu_B", "description", NO_DESCRIPTION),
@@ -1057,6 +1055,36 @@ def test_claude_turns_read_their_end_and_what_woke_them():
         Turn(ended_at=at(10, 5, 10), woken_by="wakeup"),
         Turn(ended_at=at(10, 6, 30), woken_by=None),
         Turn(ended_at=at(10, 7, 0), woken_by="task-notification"),
+    ]
+
+
+def late_results_log(wakeup=False):
+    """Two turns split by a mid-stream init, with both results written at the
+    end. A child's message streams in turn 1 after the main agent's last."""
+    return [
+        init(),
+        user_prompt("10:00:00", "go"),
+        assistant("10:00:05", agent_launch("toolu_A", "general-purpose", "work", background=True)),
+        assistant("10:00:30", {"type": "text", "text": "working"}, parent="toolu_A"),
+        *([{"type": "command_lifecycle", "wakeup_source": "scheduled_wakeup"}] if wakeup else []),
+        init(),
+        assistant("10:01:05", {"type": "text", "text": "noted"}),
+        turn_result(),
+        turn_result(origin=None if wakeup else "task-notification"),
+    ]
+
+
+def test_claude_turns_pair_late_results_with_the_stretches_between_inits():
+    assert claude_turns(late_results_log()) == [
+        Turn(ended_at=at(10, 0, 5), woken_by="start"),
+        Turn(ended_at=at(10, 1, 5), woken_by="task-notification"),
+    ]
+
+
+def test_claude_turns_late_results_a_wakeup_before_the_init_wakes_the_next_turn():
+    assert claude_turns(late_results_log(wakeup=True)) == [
+        Turn(ended_at=at(10, 0, 5), woken_by="start"),
+        Turn(ended_at=at(10, 1, 5), woken_by="wakeup"),
     ]
 
 

@@ -199,7 +199,8 @@ def trim(src: Path, out: Path, source_note: str) -> None:
     agent_dir, debug_dir = layout(src)
     out.mkdir(parents=True)
     write_jsonl(out / "claude-code.txt", trim_transcript(tx.read_jsonl(agent_dir / "claude-code.txt")))
-    (out / "debug").mkdir()
+    if debug_dir.is_dir():  # a run that never called spektacular has none
+        (out / "debug").mkdir()
     for path in sorted(debug_dir.glob("*.jsonl")):
         write_jsonl(out / "debug" / path.name, [trim_event(e) for e in tx.read_jsonl(path)])
     (out / "build.json").write_text(json.dumps(build_info(src), indent=2) + "\n")

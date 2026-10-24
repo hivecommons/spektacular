@@ -1,0 +1,5 @@
+{
+  "suite": "background-child",
+  "agent": "claude",
+  "model": "claude-sonnet-5-5"
+}

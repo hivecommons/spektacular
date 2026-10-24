@@ -36,6 +36,9 @@ from delegation import (  # noqa: E402
     REQUIRED,
     SUGGESTED,
     Failure,
+    epic_children_backgrounded,
+    epic_children_foreground_together,
+    epic_children_run_as_settled,
     epic_context_gaps,
     is_claude,
     missing_required,
@@ -174,17 +177,18 @@ def tool_use(tid, name, inp):
     return {"type": "tool_use", "id": tid, "name": name, "input": inp}
 
 
-def child(tid, launched, prompt, *, ended=None, parent=None):
+def child(tid, launched, prompt, *, ended=None, parent=None, background=None):
     """A child the main agent (or the child `parent`) started at `launched`,
     as Claude logs it: the Agent call, task_started, and, when it ended, its
-    task_updated and task_notification. System objects carry no timestamp."""
+    task_updated and task_notification. System objects carry no timestamp.
+    A top-level child runs in the background unless `background` says not."""
     started = {
         "type": "system",
         "subtype": "task_started",
         "tool_use_id": tid,
         "task_id": f"task_{tid}",
         "task_type": "local_agent",
-        "is_backgrounded": parent is None,
+        "is_backgrounded": parent is None if background is None else background,
         "spawn_depth": 1 if parent is None else 2,
     }
     if parent is not None:
@@ -646,6 +650,102 @@ def test_a_wakeup_with_no_child_running_passes(tmp_path):
     assert wakeups_while_children_run(run.wakeups, run.placed, run.end) == []
 
 
+# --- how epic children run, as the background-child probe settled ------------------
+
+PLAN_LANES = [("plan", NAME), ("plan", NAME_B)]
+
+
+def epic_children_run(tmp_path, *, background):
+    """Two plan lanes, each worked by a top-level child launched at 10:00:00
+    and 10:00:05 that ends at 10:05:00. Run in the foreground, the
+    orchestrator holds both in its one turn and ends it at 10:05:10. Run in
+    the background, it ends its first turn at 10:00:10 while they run, and a
+    completion notice wakes a second turn that ends at 10:05:10."""
+    children_ = [
+        child("toolu_A", "10:00:00", orchestrated_prompt(NAME), ended=m(5), background=background),
+        child("toolu_B", "10:00:05", orchestrated_prompt(NAME_B), ended=m(5), background=background),
+    ]
+    if background:
+        objs = transcript(*children_, assistant("10:00:10", {"type": "text", "text": "Both specs are running."}))
+        objs += [
+            {"type": "system", "subtype": "init", "model": SONNET},
+            assistant("10:05:10", {"type": "text", "text": "Both specs are done."}),
+            {"type": "result", "subtype": "success", "num_turns": 1, "origin": {"kind": "task-notification"}},
+        ]
+    else:
+        objs = transcript(*children_, assistant("10:05:10", {"type": "text", "text": "Both specs are done."}))
+    lanes = [(kind, name, walk(kind, name, PLAN_STEPS)) for kind, name in PLAN_LANES]
+    tmp_path.mkdir(exist_ok=True)
+    return run_of(tmp_path, lanes, objs)
+
+
+def test_the_epic_children_runs_read_back_as_built(tmp_path):
+    fg = epic_children_run(tmp_path / "fg", background=False)
+    bg = epic_children_run(tmp_path / "bg", background=True)
+    assert [(p.child.id, p.spec, p.child.background) for p in fg.placed] == [("toolu_A", NAME, False), ("toolu_B", NAME_B, False)]
+    assert [(p.child.id, p.spec, p.child.background) for p in bg.placed] == [("toolu_A", NAME, True), ("toolu_B", NAME_B, True)]
+    at = lambda clock: datetime.fromisoformat(f"2026-10-23T{clock}+00:00")  # noqa: E731
+    assert [(t.ended_at, t.woken_by) for t in fg.turns] == [(at("10:05:10"), "start")]
+    assert [(t.ended_at, t.woken_by) for t in bg.turns] == [(at("10:00:10"), "start"), (at("10:05:10"), "task-notification")]
+
+
+def test_foreground_children_held_inside_the_turn_pass_the_foreground_rule(tmp_path):
+    run = epic_children_run(tmp_path, background=False)
+    assert epic_children_foreground_together(run.placed, run.turns, PLAN_LANES) == []
+
+
+def test_background_children_fail_the_foreground_rule_naming_each_child(tmp_path):
+    run = epic_children_run(tmp_path, background=True)
+    turn_end = "a turn ended at 2026-10-23T10:00:10+00:00 while it was running"
+    assert epic_children_foreground_together(run.placed, run.turns, PLAN_LANES) == [
+        Failure("child_in_background", f"child toolu_A ({NAME})", "it was started in the background"),
+        Failure("turn_ended_while_child_ran", f"child toolu_A ({NAME})", turn_end),
+        Failure("child_in_background", f"child toolu_B ({NAME_B})", "it was started in the background"),
+        Failure("turn_ended_while_child_ran", f"child toolu_B ({NAME_B})", turn_end),
+    ]
+
+
+def test_background_children_woken_by_their_notice_pass_the_background_rule(tmp_path):
+    run = epic_children_run(tmp_path, background=True)
+    assert epic_children_backgrounded(run.placed, run.turns, PLAN_LANES) == []
+
+
+def test_foreground_children_fail_the_background_rule(tmp_path):
+    run = epic_children_run(tmp_path, background=False)
+    assert epic_children_backgrounded(run.placed, run.turns, PLAN_LANES) == [
+        Failure("child_in_foreground", f"child toolu_A ({NAME})", "it was started in the foreground"),
+        Failure("child_in_foreground", f"child toolu_B ({NAME_B})", "it was started in the foreground"),
+        Failure("no_turn_ended_while_children_ran", "orchestrator", "no turn ended while a child was running"),
+        Failure("no_notice_woken_turn", "orchestrator", "no turn was started by a child's completion notice"),
+    ]
+
+
+def test_spec_lanes_are_not_judged_by_either_epic_children_rule(tmp_path):
+    run = epic_children_run(tmp_path, background=True)
+    assert epic_children_foreground_together(run.placed, run.turns, [("spec", NAME)]) == []
+    assert epic_children_backgrounded(run.placed, run.turns, [("spec", NAME)]) == []
+
+
+def test_the_settled_rule_follows_the_probe_outcome(tmp_path, monkeypatch):
+    fg = epic_children_run(tmp_path / "fg", background=False)
+    bg = epic_children_run(tmp_path / "bg", background=True)
+    monkeypatch.setattr(delegation, "PROBE_OUTCOME", "stopped")
+    assert epic_children_run_as_settled(fg.placed, fg.turns, PLAN_LANES) == []
+    assert {f.rule for f in epic_children_run_as_settled(bg.placed, bg.turns, PLAN_LANES)} == {"child_in_background", "turn_ended_while_child_ran"}
+    monkeypatch.setattr(delegation, "PROBE_OUTCOME", "completed")
+    assert epic_children_run_as_settled(bg.placed, bg.turns, PLAN_LANES) == []
+    assert {f.rule for f in epic_children_run_as_settled(fg.placed, fg.turns, PLAN_LANES)} == {
+        "child_in_foreground",
+        "no_turn_ended_while_children_ran",
+        "no_notice_woken_turn",
+    }
+
+
+def test_the_probe_outcome_matches_the_recorded_probe():
+    line = (DATA / "probe-background-child" / "OUTCOME").read_text()
+    assert line.split()[0].rstrip(":") == delegation.PROBE_OUTCOME == "stopped"
+
+
 # --- the reference runs (criterion 4) ---------------------------------------------
 
 
@@ -662,6 +762,26 @@ def test_the_55_epic_run_fails_the_wakeup_rule_naming_the_scheduled_wakeup():
 def test_the_46_epic_run_passes_the_wakeup_rule():
     run = reference("m70-epic")
     assert wakeups_while_children_run(run.wakeups, run.placed, run.end) == []
+
+
+def test_the_46_epic_run_passes_the_settled_children_rule():
+    run = reference("m70-epic")
+    assert epic_children_run_as_settled(run.placed, run.turns, list(run.windows)) == []
+
+
+def test_the_55_epic_run_fails_the_settled_children_rule_naming_its_background_children():
+    run = reference("s55-epic")
+    failures = epic_children_run_as_settled(run.placed, run.turns, list(run.windows))
+    storage = "child toolu_01LsCrL1DDkTZGc6kMPVwn5D (20260101000001-storage)"
+    help_ = "child toolu_01Fcx3c9hqXdQYxakexacWST (20260101000003-help)"
+    assert [(f.rule, f.subject) for f in failures] == [
+        ("child_in_background", storage),
+        ("turn_ended_while_child_ran", storage),
+        ("child_in_background", help_),
+        ("turn_ended_while_child_ran", help_),
+    ]
+    # the commands child ran in the foreground and is not named
+    assert not any("20260101000002-commands" in f.subject for f in failures)
 
 
 @pytest.mark.parametrize("name", ["s55-epic", "m70-epic"])

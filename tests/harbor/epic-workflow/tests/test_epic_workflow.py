@@ -204,6 +204,15 @@ class TestChildren:
         failures = dl.wakeups_while_children_run(children_run.wakeups, children_run.placed, children_run.end)
         assert not failures, failed(failures)
 
+    def test_children_run_as_the_probe_settled(self, children_run):
+        """Headless Claude Code stops a background child once the turn ends
+        (the background-child probe's recorded outcome), so each spec's child
+        runs in the foreground and no turn ends while one is running."""
+        import delegation as dl
+
+        failures = dl.epic_children_run_as_settled(children_run.placed, children_run.turns, list(children_run.windows))
+        assert not failures, failed(failures)
+
 
 # ---------------------------------------------------------------------------
 # The planning summary.

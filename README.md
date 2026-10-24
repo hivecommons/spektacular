@@ -445,7 +445,16 @@ make harbor-test-implement-epic-bob-unlimited  # the same, with Bob's turn limit
 make harbor-test-standing-rules            # standing rules in AGENTS.md, in a project initialised before the session (claude)
 make harbor-test-standing-rules-codex      # the same, with codex
 make harbor-test-standing-rules-bob        # the same, with IBM Bob
+make harbor-test-background-child          # probe: does headless Claude Code keep a background child past ten minutes?
 ```
+
+`harbor-test-background-child` is a probe, not a workflow suite. Headless Claude Code starts one
+background child that runs for fifteen minutes and ends its turn, and the verifier prints
+`PROBE OUTCOME: <ending> after <seconds> s; notice-woken turn: <bool>` without asserting which way
+it went. Its recorded run (2026-10-24, Claude Code 2.1.310: the child was stopped about ten minutes
+after the main agent ended its turn) is checked in under
+`tests/harbor/shared/tests/data/probe-background-child/`, and the epic skills' headless guidance
+follows it. Re-run it when Claude Code changes, and update that guidance if the outcome does.
 
 Bob has no Harbor agent of its own. `harbor-test-epic-bob` runs it through
 `tests/harbor/agents/bob_agent.py`, which extends Harbor's generic ACP agent: it installs Bob from

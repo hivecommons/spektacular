@@ -49,7 +49,11 @@ def outcome_line(children: list[tx.Child], turns: list[tx.Turn]) -> str:
     if len(children) != 1:
         return f"PROBE OUTCOME: {len(children)} children started; notice-woken turn: {woken}"
     child = children[0]
-    return f"PROBE OUTCOME: {child.ending} after {child.duration_s} s; notice-woken turn: {woken}"
+    duration = child.duration_s
+    if duration is None and child.launched_at and child.ended_at:
+        # A stopped child reports no run time; its launch and end still bound it.
+        duration = round((child.ended_at - child.launched_at).total_seconds(), 3)
+    return f"PROBE OUTCOME: {child.ending} after {duration} s; notice-woken turn: {woken}"
 
 
 def test_report_outcome(objs, children, turns):

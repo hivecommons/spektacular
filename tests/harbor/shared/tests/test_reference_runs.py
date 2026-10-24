@@ -19,6 +19,7 @@ locally with
 import json
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,7 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
 
 import metrics  # noqa: E402
+import transcripts  # noqa: E402
 import trim_reference  # noqa: E402
 
 DATA = HERE / "data"
@@ -276,6 +278,66 @@ def test_trimming_never_changes_a_measured_value(name, tmp_path, scratch):
     out = tmp_path / name
     assert trim_reference.main([str(DATA / name), name, "--out", str(out)]) == 0
     assert trim_reference.measured(out, out / "debug") == trim_reference.measured(DATA / name, DATA / name / "debug")
+
+
+# The ten-minute probe: one background child in a headless session, stopped
+# when the session closed about 600 s after the main agent ended its turn.
+# It never called spektacular, so it has no debug/.
+
+PROBE = "probe-background-child"
+PROBE_CHILD = "toolu_01Sqm7X3YSdf3jFnjDYNJhVv"
+PROBE_LAUNCHED = datetime(2026, 10, 24, 10, 38, 47, 522000, tzinfo=timezone.utc)
+PROBE_STOPPED = datetime(2026, 10, 24, 10, 48, 49, 532000, tzinfo=timezone.utc)  # task_updated end_time
+PROBE_MAIN_LAST = datetime(2026, 10, 24, 10, 38, 49, 380000, tzinfo=timezone.utc)
+PROBE_OUTCOME = (
+    "stopped 602 s 2026-10-24 claude-code 2.1.310: headless (claude --print) background child killed"
+    " ~600 s after the main agent ended its turn; no completion notice started a new turn\n"
+)
+
+
+def test_probe_has_its_parts_and_no_debug():
+    run = DATA / PROBE
+    assert sorted(p.name for p in run.iterdir()) == ["OUTCOME", "README", "build.json", "claude-code.txt"]
+    assert json.loads((run / "build.json").read_text()) == {"suite": "background-child", "agent": "claude", "model": "claude-sonnet-5-5"}
+    assert (run / "README").read_text().startswith(f"{PROBE}: trimmed from harbor job ")
+
+
+def test_probe_child_ran_in_the_background_past_ten_minutes_and_was_stopped():
+    children, _ = transcripts.claude_children(transcript(DATA / PROBE))
+    assert len(children) == 1
+    child = children[0]
+    assert child.id == PROBE_CHILD
+    assert child.background is True
+    assert child.ending == "stopped"
+    assert child.hand_back is None
+    assert child.duration_s is None
+    assert child.launched_at == PROBE_LAUNCHED
+    assert child.ended_at == PROBE_STOPPED
+    assert (child.ended_at - child.launched_at).total_seconds() == 602.01
+    assert (child.ended_at - PROBE_MAIN_LAST).total_seconds() > 600
+
+
+def test_probe_has_one_turn_ending_at_the_main_agents_last_message_and_no_wakeups():
+    objs = transcript(DATA / PROBE)
+    assert transcripts.claude_turns(objs) == [transcripts.Turn(ended_at=PROBE_MAIN_LAST, woken_by="start")]
+    assert transcripts.claude_wakeups(objs) == []
+
+
+def test_probe_outcome_names_the_ending_duration_date_and_version():
+    text = (DATA / PROBE / "OUTCOME").read_text()
+    assert text == PROBE_OUTCOME
+    assert text.partition(":")[0].split() == ["stopped", "602", "s", "2026-10-24", "claude-code", "2.1.310"]
+    init = transcript(DATA / PROBE)[0]
+    assert init["subtype"] == "init" and init["claude_code_version"] == "2.1.310"
+
+
+def test_trimming_the_probe_again_gives_the_same_bytes_and_values(tmp_path, scratch):
+    out = tmp_path / PROBE
+    assert trim_reference.main([str(DATA / PROBE), PROBE, "--out", str(out)]) == 0
+    assert not (out / "debug").exists()
+    assert tree(out) == {k: v for k, v in tree(DATA / PROBE).items() if k != "OUTCOME"}
+    assert trim_reference.measured(out, out / "debug") == trim_reference.measured(DATA / PROBE, DATA / PROBE / "debug")
+    assert list(scratch.iterdir()) == []
 
 
 def test_trim_refuses_an_existing_output(tmp_path, scratch):

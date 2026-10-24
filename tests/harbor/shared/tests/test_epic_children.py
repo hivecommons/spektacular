@@ -46,7 +46,17 @@ SPECS = [A, B]
 LANE_STEPS = ["test", "verify", "check_goal", "update_plan"]
 SONNET = "claude-sonnet-4-6"
 HAIKU = "claude-haiku-4-5"
-RULES = ("missing_child ", "missing_spec_child ", "context_gap ", "wakeup_while_children_run ")
+RULES = (
+    "missing_child ",
+    "missing_spec_child ",
+    "context_gap ",
+    "wakeup_while_children_run ",
+    "child_in_background ",
+    "turn_ended_while_child_ran ",
+    "child_in_foreground ",
+    "no_turn_ended_while_children_ran ",
+    "no_notice_woken_turn ",
+)
 
 
 def worktree(spec):
@@ -54,11 +64,14 @@ def worktree(spec):
 
 
 def verdict(test, run) -> list[str]:
-    """The failure lines a TestChildren method reports on `run`; [] when it passes."""
+    """The failure lines a TestChildren method reports on `run`; [] when it
+    passes. pytest's assertion rewriting indents each continuation line of
+    a multi-line message, so lines are read without their leading space."""
     try:
         test(run)
     except AssertionError as e:
-        lines = [line for line in str(e).splitlines() if line.startswith(RULES)]
+        lines = [line.lstrip(" ~") for line in str(e).splitlines()]
+        lines = [line for line in lines if line.startswith(RULES)]
         assert lines, f"failed without naming a rule: {e}"
         return lines
     return []
@@ -129,16 +142,17 @@ def tool_use(tid, name, inp):
     return {"type": "tool_use", "id": tid, "name": name, "input": inp}
 
 
-def child(tid, launched, prompt, ended, parent=None):
+def child(tid, launched, prompt, ended, parent=None, background=False):
     """A child the main agent (or the child `parent`) started at `launched`
-    and that ended at `ended`, as Claude logs it."""
+    and that ended at `ended`, as Claude logs it, in the background when
+    `background`."""
     started = {
         "type": "system",
         "subtype": "task_started",
         "tool_use_id": tid,
         "task_id": f"task_{tid}",
         "task_type": "local_agent",
-        "is_backgrounded": parent is None,
+        "is_backgrounded": background,
         "spawn_depth": 1 if parent is None else 2,
     }
     if parent is not None:
@@ -174,11 +188,14 @@ def spec_prompt(spec, worktrees):
     )
 
 
-def implement_epic_run(tmp_path, *, skip_spec=None, skip_step=None, short_prompt=None, extra=()) -> delegation.Run:
+def implement_epic_run(tmp_path, *, skip_spec=None, skip_step=None, short_prompt=None, extra=(), background=False) -> delegation.Run:
     """Two implement lanes walked side by side from 10:00, each worked by a
     top-level child of its own launched before the lanes start, which starts
     a child half a minute into each test, verify and check_goal step. The
-    orchestrator asked for each spec's worktree first.
+    orchestrator asked for each spec's worktree first. The spec children run
+    in the foreground and end at 10:05, and the orchestrator's one turn ends
+    at 10:05:30 after them; with `background`, they run in the background and
+    the turn ends at 09:59:10, once both are launched.
 
     skip_spec: the spec no top-level child works. skip_step: (spec, step)
     whose nested child is never started. short_prompt: the spec whose child
@@ -195,10 +212,12 @@ def implement_epic_run(tmp_path, *, skip_spec=None, skip_step=None, short_prompt
             continue
         parent = f"toolu_{n}"
         worktrees = [] if spec == short_prompt else [worktree(spec)]
-        objs += child(parent, f"09:59:{n}0", spec_prompt(spec, worktrees), ended=m(5))
+        objs += child(parent, f"09:59:{n}0", spec_prompt(spec, worktrees), ended=m(5), background=background)
         for i, step in enumerate(LANE_STEPS):
             if ("implement", step) in delegation.REQUIRED and (spec, step) != skip_step:
                 objs += child(f"{parent}_{step}", m(i, 30), f"Do the {step} step.", ended=m(i, 50), parent=parent)
+    if not background:
+        objs.append(assistant(m(5, 30), {"type": "text", "text": "Both specs are implemented."}))
     objs += list(extra)
     objs.append({"type": "result", "subtype": "success", "num_turns": 1})
 
@@ -214,7 +233,12 @@ def reference(name):
     return delegation.read_run(DATA / name / "claude-code.txt", DATA / name / "debug")
 
 
-EPIC_TESTS = ["test_every_spec_has_its_own_child", "test_children_are_given_their_context", "test_no_wakeup_while_children_run"]
+EPIC_TESTS = [
+    "test_every_spec_has_its_own_child",
+    "test_children_are_given_their_context",
+    "test_no_wakeup_while_children_run",
+    "test_children_run_as_the_probe_settled",
+]
 
 
 @pytest.mark.parametrize("test", EPIC_TESTS)
@@ -230,6 +254,18 @@ def test_the_55_epic_run_gives_every_spec_its_child_and_context(test):
 def test_the_55_epic_run_fails_naming_its_scheduled_wakeup():
     assert verdict(epic_verifier.TestChildren().test_no_wakeup_while_children_run, reference("s55-epic")) == [
         "wakeup_while_children_run ScheduleWakeup delaySeconds=1200: set at 2026-10-23T13:36:38.091000+00:00 while a child was running"
+    ]
+
+
+def test_the_55_epic_run_fails_naming_its_background_children():
+    storage = "child toolu_01LsCrL1DDkTZGc6kMPVwn5D (20260101000001-storage)"
+    help_ = "child toolu_01Fcx3c9hqXdQYxakexacWST (20260101000003-help)"
+    turn_end = "a turn ended at 2026-10-23T13:36:39.179000+00:00 while it was running"
+    assert verdict(epic_verifier.TestChildren().test_children_run_as_the_probe_settled, reference("s55-epic")) == [
+        f"child_in_background {storage}: it was started in the background",
+        f"turn_ended_while_child_ran {storage}: {turn_end}",
+        f"child_in_background {help_}: it was started in the background",
+        f"turn_ended_while_child_ran {help_}: {turn_end}",
     ]
 
 
@@ -294,6 +330,29 @@ def test_a_wakeup_while_children_run_fails_naming_the_call(tmp_path, verifier, c
     assert verdict(VERIFIERS[verifier].TestChildren().test_no_wakeup_while_children_run, run) == [
         f"wakeup_while_children_run {subject}: set at 2026-10-23T10:01:00+00:00 while a child was running"
     ]
+
+
+@pytest.mark.parametrize("verifier", sorted(VERIFIERS))
+def test_background_spec_children_fail_naming_each_child(tmp_path, verifier):
+    run = implement_epic_run(tmp_path, background=True)
+    turn_end = "a turn ended at 2026-10-23T09:59:10+00:00 while it was running"
+    assert verdict(VERIFIERS[verifier].TestChildren().test_children_run_as_the_probe_settled, run) == [
+        f"child_in_background child toolu_0 ({A}): it was started in the background",
+        f"turn_ended_while_child_ran child toolu_0 ({A}): {turn_end}",
+        f"child_in_background child toolu_1 ({B}): it was started in the background",
+        f"turn_ended_while_child_ran child toolu_1 ({B}): {turn_end}",
+    ]
+
+
+# --- both epic tasks still say the session is headless ------------------------------
+
+HEADLESS = ("This session is headless: no one replies between your turns", "Never end your turn waiting for a reply")
+
+
+@pytest.mark.parametrize("suite", ["epic-workflow", "implement-epic-workflow"])
+@pytest.mark.parametrize("words", HEADLESS)
+def test_the_epic_task_says_the_session_is_headless(suite, words):
+    assert words in (HARBOR / suite / "instruction.md").read_text()
 
 
 # --- other agents are checked as before (criterion 5) -----------------------------

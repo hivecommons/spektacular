@@ -532,7 +532,8 @@ def claude_children(objs: list[dict]) -> tuple[list[Child], list[Unknown]]:
             ending = CHILD_ENDINGS.get(note.get("status"), note.get("status"))
             usage = note.get("usage") if isinstance(note.get("usage"), dict) else {}
             duration = usage["duration_ms"] / 1000 if isinstance(usage.get("duration_ms"), (int, float)) else None
-            hand_back = _first_line(note.get("summary"))
+            # A stopped child hands nothing back: its notice repeats its description.
+            hand_back = _first_line(note.get("summary")) if ending != "stopped" else None
         elif res is not None and not (res[1].get("tool_use_result") or {}).get("isAsync"):
             # A foreground child's report came back as its launch's result.
             status = (res[1].get("tool_use_result") or {}).get("status")
@@ -563,7 +564,7 @@ def claude_children(objs: list[dict]) -> tuple[list[Child], list[Unknown]]:
             ("ended_at", child.ended_at is None, "claude logged no end time for the child"),
             ("duration_s", child.duration_s is None,
              "claude reported no duration for a failed child" if ending == "failed" else "claude reported no duration for the child"),
-            ("hand_back", child.hand_back is None and ending != "no_hand_back", "the child's hand-back was empty"),
+            ("hand_back", child.hand_back is None and ending not in ("no_hand_back", "stopped"), "the child's hand-back was empty"),
             ("models", own is None, "claude streamed none of the child's messages"),
             ("output", own is None, "claude streamed none of the child's messages"),
             ("prompt", child.prompt is None, "the launch named no prompt"),
@@ -574,25 +575,42 @@ def claude_children(objs: list[dict]) -> tuple[list[Child], list[Unknown]]:
 
 
 def claude_turns(objs: list[dict]) -> list[Turn]:
-    """One Turn per `result` event. A turn opened by a child's completion
-    notice carries `origin.kind` "task-notification"; one opened by a timed
-    wake-up follows a `command_lifecycle` with a `wakeup_source`. A result has
-    no timestamp, so a turn ends at the last timestamped object before it."""
+    """One Turn per `result` event, in order. Each turn after the first opens
+    with a `system/init`; a result can be written late, after the next turn's
+    messages, so a turn is the stretch between inits, paired in order with
+    its result. Without one init per result, a turn ends at its result.
+
+    A turn opened by a child's completion notice carries `origin.kind`
+    "task-notification" on its result; one opened by a timed wake-up follows a
+    `command_lifecycle` with a `wakeup_source`. Results and inits carry no
+    timestamp, so a turn ends at the main agent's last timestamped message
+    in it: a child's messages may stream on after the main agent stopped."""
+    results = [o for o in objs if o.get("type") == "result"]
+    inits = [i for i, o in enumerate(objs) if o.get("type") == "system" and o.get("subtype") == "init"][1:]
+    if len(inits) + 1 == len(results):
+        bounds = [0, *inits, len(objs)]
+    else:
+        bounds = [0, *(i + 1 for i, o in enumerate(objs) if o.get("type") == "result")]
+        bounds = bounds[: len(results) + 1]
+    def segment_of(i: int) -> int:
+        return next(k for k, b in enumerate(bounds[1:]) if i < b)
+
+    # A wake-up wakes the turn holding the main agent's next message after it.
+    main = [i for i, o in enumerate(objs) if o.get("timestamp") and not o.get("parent_tool_use_id")]
+    woken_by_wakeup = {
+        segment_of(next(j for j in main if j > i))
+        for i, o in enumerate(objs)
+        if o.get("type") == "command_lifecycle" and o.get("wakeup_source") and any(j > i for j in main) and i < bounds[-1]
+    }
     turns: list[Turn] = []
-    last: datetime | None = None
-    woken: str | None = "start"
-    for o in objs:
-        at_ = parse_timestamp(o.get("timestamp"))
-        if at_ is not None:
-            last = at_
-        if o.get("type") == "command_lifecycle" and o.get("wakeup_source"):
-            woken = "wakeup"
-        origin = o.get("origin") if isinstance(o.get("origin"), dict) else {}
-        if origin.get("kind") == "task-notification":
+    for k, (a, b) in enumerate(zip(bounds, bounds[1:])):
+        segment = objs[a:b]
+        times = [parse_timestamp(o.get("timestamp")) for o in segment if not o.get("parent_tool_use_id")]
+        woken = "start" if k == 0 else "wakeup" if k in woken_by_wakeup else None
+        origins = [results[k].get("origin")] + [o.get("origin") for o in segment if o.get("type") != "result"]
+        if any(isinstance(g, dict) and g.get("kind") == "task-notification" for g in origins):
             woken = "task-notification"
-        if o.get("type") == "result":
-            turns.append(Turn(ended_at=last, woken_by=woken))
-            woken = None
+        turns.append(Turn(ended_at=max((t for t in times if t), default=None), woken_by=woken))
     return turns
 
 

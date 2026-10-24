@@ -244,3 +244,58 @@ def wakeups_while_children_run(wakeups: list[Wakeup], placed: list[PlacedChild],
         for w in wakeups
         if w.at is not None and any(running(p, w.at, run_end) for p in top)
     ]
+
+
+# How an epic orchestrator runs its per-spec children, settled by the
+# background-child probe (tests/data/probe-background-child/OUTCOME): headless
+# Claude Code stopped a background child about ten minutes after the main
+# agent ended its turn, so the epic skills keep children in the foreground.
+PROBE_OUTCOME = "stopped"
+
+
+def turn_ended_while_running(p: PlacedChild, turns: list[tx.Turn]) -> tx.Turn | None:
+    """The first turn that ended while the child was still running."""
+    start, end = p.child.launched_at, p.child.ended_at
+    return next((t for t in turns if t.ended_at and start and start <= t.ended_at and (end is None or t.ended_at < end)), None)
+
+
+def epic_children_foreground_together(placed: list[PlacedChild], turns: list[tx.Turn], lanes: list[tuple[str, str]]) -> list[Failure]:
+    """The workaround for a session that stops background children: each
+    spec's own child runs in the foreground, and the orchestrator handles it
+    before its turn ends, so no turn ends while one is running."""
+    out = []
+    for lane in lanes:
+        if lane[0] not in PER_SPEC_CHILD:
+            continue
+        for p in spec_children(placed, lane):
+            if p.child.background:
+                out.append(Failure("child_in_background", f"child {p.child.id} ({lane[1]})", "it was started in the background"))
+            turn = turn_ended_while_running(p, turns)
+            if turn is not None:
+                out.append(
+                    Failure("turn_ended_while_child_ran", f"child {p.child.id} ({lane[1]})", f"a turn ended at {turn.ended_at.isoformat()} while it was running")
+                )
+    return out
+
+
+def epic_children_backgrounded(placed: list[PlacedChild], turns: list[tx.Turn], lanes: list[tuple[str, str]]) -> list[Failure]:
+    """A real session's way, for a session that keeps background children:
+    each spec's own child runs in the background, a turn ends while one runs,
+    and a child's completion notice starts a new turn."""
+    children = [p for lane in lanes if lane[0] in PER_SPEC_CHILD for p in spec_children(placed, lane)]
+    out = [
+        Failure("child_in_foreground", f"child {p.child.id} ({p.spec})", "it was started in the foreground")
+        for p in children
+        if p.child.background is not True
+    ]
+    if children and not any(turn_ended_while_running(p, turns) for p in children):
+        out.append(Failure("no_turn_ended_while_children_ran", "orchestrator", "no turn ended while a child was running"))
+    if children and not any(t.woken_by == "task-notification" for t in turns):
+        out.append(Failure("no_notice_woken_turn", "orchestrator", "no turn was started by a child's completion notice"))
+    return out
+
+
+def epic_children_run_as_settled(placed: list[PlacedChild], turns: list[tx.Turn], lanes: list[tuple[str, str]]) -> list[Failure]:
+    """The epic children rule the probe's recorded outcome calls for."""
+    rule = epic_children_foreground_together if PROBE_OUTCOME == "stopped" else epic_children_backgrounded
+    return rule(placed, turns, lanes)
