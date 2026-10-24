@@ -15,11 +15,11 @@
     "split",
     "finished"
   ],
-  "created_at": "2026-10-24T19:58:58.228281888Z",
-  "updated_at": "2026-10-24T20:02:31.386199738Z",
+  "created_at": "2026-10-24T20:02:38.524248915Z",
+  "updated_at": "2026-10-24T20:05:04.167346831Z",
   "data": {
     "epic": "000002_workflow-tracing-and-run-stats",
-    "name": "000074_trace-spans-for-agent-work",
+    "name": "000075_run-stats-command",
     "sources": [
       {
         "retrieved_date": "2026-10-24",

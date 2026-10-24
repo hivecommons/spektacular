@@ -9,10 +9,14 @@ specs:
     - name: 000074_trace-spans-for-agent-work
       depends_on:
         - 000073_log-mode-and-logger-providers
+    - name: 000075_run-stats-command
+      depends_on:
+        - 000074_trace-spans-for-agent-work
 sources:
     - uri: docs/workflow-performance-investigation.md
       retrieved_date: "2026-10-24"
 ---
+
 
 
 # Workflow tracing and run stats
