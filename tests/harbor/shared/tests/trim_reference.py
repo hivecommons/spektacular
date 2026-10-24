@@ -39,6 +39,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 import metrics  # noqa: E402
+import sessionlog  # noqa: E402
 import transcripts as tx  # noqa: E402
 
 DATA = HERE / "data"
@@ -207,13 +208,19 @@ def trim(src: Path, out: Path, source_note: str) -> None:
 
 
 def measured(agent_dir: Path, debug_dir: Path) -> dict:
-    """The record values a reference run proves: everything but the run's
-    identity and its check score, which come from files the trim leaves out."""
+    """The values a reference run proves: the metrics record but the run's
+    identity and its check score, which come from files the trim leaves out,
+    and the session-log rules the verifiers judge what ran by."""
     none = Path("/nonexistent")
     record = metrics.build_record(
         metrics.Paths(build_info=none, agent_dir=agent_dir, debug_dir=debug_dir, bob_logs=none, junit=none, reward=none)
     )
-    return {k: v for k, v in record.items() if k not in ("run", "result")}
+    events = sessionlog.SessionLog(debug_dir, kinds=metrics.WORKFLOW_KINDS).all_events()
+    return {
+        **{k: v for k, v in record.items() if k not in ("run", "result")},
+        "plan_steps_entered": sessionlog.plan_steps_entered(events),
+        "changelog_writes_by_repo": sessionlog.changelog_writes_by_repo(events),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:

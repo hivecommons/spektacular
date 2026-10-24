@@ -8,10 +8,12 @@ layers of assertions:
      any artefact.
   2. Plan CLI invocation — for every step, the agent invoked the matching
      `plan new` / `plan goto` Bash call during that step's window.
-  3. Skill retrieval and sub-agent spawning — for every (step, skill) pair
-     in EXPECTED_SKILLS_PER_STEP, the agent retrieved that skill during
-     that step's window; for every step in EXPECTED_SPAWN_STEPS, the agent
-     spawned at least one sub-agent during that step's window.
+  3. Skill retrieval — for every (step, skill) pair in
+     EXPECTED_SKILLS_PER_STEP, the agent retrieved that skill during that
+     step's window. Whether discovery started a sub-agent is recorded, not
+     checked: its template only suggests one, and a suggested sub-agent
+     never fails a run. The run's metrics record counts the children each
+     step started.
   4. Artefact content and instruction `next_step` validity — plan.md,
      context.md, research.md exist with substantive on-topic content, and
      every rendered instruction's next_step directive references a valid
@@ -25,8 +27,7 @@ layers of assertions:
      ## Conventions section reflects the seeded convention's distinctive
      token (SEEDED_CONVENTION_TOKEN).
 
-All expectation maps (step order, skills per step, sub-agent spawn steps,
-expected plan sections, and the convention oracles CONVENTIONS_READ_COMMAND /
+All expectation maps (step order, skills per step, expected plan sections, and the convention oracles CONVENTIONS_READ_COMMAND /
 SEEDED_CONVENTION_TOKEN) are hand-maintained in this module — they are the
 independent behavioural oracle. Do NOT derive them from `spektacular plan
 steps`, from the `templates/steps/plan/*.md` files, or from the seeded
@@ -47,12 +48,15 @@ from pathlib import Path
 
 import pytest
 
+from sessionlog import SessionLog, plan_steps_entered
+
 # ---------------------------------------------------------------------------
 # Paths and constants
 # ---------------------------------------------------------------------------
 
 PROJECT_DIR = Path("/app")
 SPEK_DIR = PROJECT_DIR / ".spektacular"
+DEBUG_DIR = SPEK_DIR / "debug"
 AGENT_LOG_DIR = Path("/logs/agent")
 TRANSCRIPT = AGENT_LOG_DIR / "claude-code.txt"
 # Agents run through harbor's ACP agent, such as Bob, leave no Claude
@@ -102,10 +106,6 @@ EXPECTED_SKILLS_PER_STEP = {
         }
     ),
 }
-
-# Hand-maintained set of steps whose templates direct the agent to spawn
-# sub-agents. Independent oracle — update when template language changes.
-EXPECTED_SPAWN_STEPS = frozenset({"discovery"})
 
 MIN_SECTION_LENGTH = 100
 
@@ -602,10 +602,6 @@ def _skill_params() -> list:
     )
 
 
-def _spawn_params() -> list:
-    return sorted(EXPECTED_SPAWN_STEPS)
-
-
 def _calls_cache() -> list:
     if "calls" not in _CACHE:
         _CACHE["calls"] = extract_tool_calls()
@@ -925,31 +921,6 @@ class TestSkillRetrieval:
         assert retrieved, (
             f"Step '{step}' did not retrieve skill '{skill}' — checked "
             f"{len(window_calls)} tool calls in the step's window"
-        )
-
-
-# ---------------------------------------------------------------------------
-# Template-driven sub-agent spawn tests
-# ---------------------------------------------------------------------------
-
-
-class TestSubAgentSpawning:
-    """Steps whose templates expect sub-agent spawning actually spawn one."""
-
-    @pytest.mark.parametrize("step", _spawn_params())
-    def test_subagent_spawned_in_step(self, step):
-        windows = _windows_cache()
-        calls = _calls_cache()
-        window = windows.get(step)
-        assert window is not None, (
-            f"Step '{step}' was never entered — cannot verify sub-agent spawning"
-        )
-        window_calls = calls[window.start : window.end]
-        spawned = any(c.type in ("Task", "Agent") for c in window_calls)
-        assert spawned, (
-            f"Step '{step}' expected sub-agent spawning but found no "
-            f"Task/Agent tool_use in its window "
-            f"({len(window_calls)} tool calls)"
         )
 
 
@@ -1392,47 +1363,21 @@ class TestInstructionNextStepValidity:
         )
 
     def test_walkthrough_rendered_before_finished(self):
-        """The `finished` instruction must only be rendered after a
-        `walkthrough` instruction.
+        """The workflow must enter `walkthrough` before `finished`.
 
-        Transcript-level guard for the mandatory plan-walkthrough review:
-        the ordered sequence of `step` values from successful plan
-        new/goto results must contain "walkthrough", and its first
-        occurrence must precede the first occurrence of "finished". The
-        step names here are hand-maintained oracle values, not derived
-        from the state machine.
+        Guard for the mandatory plan-walkthrough review, judged from what
+        ran: the session log's successful plan new/goto commands and the
+        step each left the workflow at. However the agent wrote a command
+        (piped, chained, in a loop), the CLI logged the call it received.
+        The step names are hand-maintained oracle values, not derived from
+        the state machine.
         """
-        calls = _calls_cache()
-        results = _results_cache()
-        rendered_steps = []
-        for call in calls:
-            if call.type != "Bash":
-                continue
-            cmd = _bash_command(call)
-            if not (_is_plan_new_call(cmd) or _is_plan_goto_call(cmd)):
-                continue
-            result_text = results.get(call.tool_use_id, "")
-            if not result_text:
-                continue
-            payload = _step_payload(result_text)
-            if payload is None:
-                # Error paths and wrapped harness output carry no step
-                # response. Skip.
-                continue
-            step = payload.get("step") if isinstance(payload, dict) else None
-            if step:
-                rendered_steps.append(step)
-        assert "walkthrough" in rendered_steps, (
-            "No walkthrough instruction was rendered "
-            f"(rendered steps: {rendered_steps})"
-        )
-        assert "finished" in rendered_steps, (
-            "No finished instruction was rendered "
-            f"(rendered steps: {rendered_steps})"
-        )
-        assert rendered_steps.index("walkthrough") < rendered_steps.index(
-            "finished"
-        ), (
-            "The finished instruction was rendered before any walkthrough "
-            f"instruction (rendered steps: {rendered_steps})"
+        session = SessionLog(DEBUG_DIR, kinds=("plan",))
+        events = [e for lane in session.lanes.values() for e in lane.events]
+        assert events, f"no plan workflow commands in the session log under {DEBUG_DIR}"
+        entered = plan_steps_entered(events)
+        assert "walkthrough" in entered, f"The workflow never entered walkthrough (steps entered: {entered})"
+        assert "finished" in entered, f"The workflow never entered finished (steps entered: {entered})"
+        assert entered.index("walkthrough") < entered.index("finished"), (
+            f"The workflow entered finished before walkthrough (steps entered: {entered})"
         )

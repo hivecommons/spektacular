@@ -33,6 +33,15 @@ state, or repo footprints:
 spektacular init claude
 ```
 
+## You are running non-interactively
+
+There is no human at the other end of this session, and nothing will answer
+between your turns. You are playing both roles: you drive the workflow **and**
+you supply any answer it asks for, from the plan, the spec and the instructions below. Make a reasonable decision on
+anything they do not cover and keep going. **Never end your turn waiting for a
+reply**: nothing will answer, and the run will stall at that step. Only stop
+once the workflow itself reports it has finished.
+
 ## Task
 
 Drive the workflow from its current position (`test_plan`, completed)

@@ -282,3 +282,62 @@ def test_image_installs_python3(suite):
     assert installs, "no apt-get install in the Dockerfile"
     packages = " ".join(line.split("apt-get install", 1)[1].split("&&")[0] for line in installs)
     assert "python3" in packages.split()
+
+
+# Acceptance 5: every suite's task tells the agent the session is headless and
+# no one answers between its turns, and the plan suite's status wording
+# matches the document status its verifier checks.
+
+# Every suite shares these: the heading of its non-interactive section and two
+# phrases its body must carry. Hand-written, never read from an instruction.
+NON_INTERACTIVE_HEADING = "## You are running non-interactively"
+NO_HUMAN = "no human at the other end"
+NOTHING_ANSWERS = "nothing will answer"
+
+# The plan verifier checks `document_status` with values draft and final.
+PLAN_STATUS_WORDING = ("`document_status: draft`", "`document_status: final`")
+STALE_PLAN_STATUS_WORDING = ("status: in-progress", "status: completed")
+
+INSTRUCTION_SUITES = sorted(
+    p.name for p in HARBOR.iterdir() if (p / "instruction.md").is_file()
+)
+
+
+def instruction(suite):
+    return (HARBOR / suite / "instruction.md").read_text()
+
+
+def section(text, heading):
+    """The lines under `heading` up to the next `## ` heading, or None."""
+    lines = text.splitlines()
+    if heading not in lines:
+        return None
+    body = []
+    for line in lines[lines.index(heading) + 1:]:
+        if line.startswith("## "):
+            break
+        body.append(line)
+    return "\n".join(body)
+
+
+def test_every_suite_has_an_instruction():
+    expected = set(SUITES) | {"goal-check-workflow", "implement-epic-workflow"}
+    assert expected <= set(INSTRUCTION_SUITES)
+
+
+@pytest.mark.parametrize("suite", INSTRUCTION_SUITES)
+def test_instruction_says_no_one_answers(suite):
+    body = section(instruction(suite), NON_INTERACTIVE_HEADING)
+    assert body is not None, f"{suite} has no {NON_INTERACTIVE_HEADING!r} section"
+    # Phrases may wrap across lines, and may open a sentence.
+    flat = " ".join(body.split()).lower()
+    assert NO_HUMAN in flat
+    assert NOTHING_ANSWERS in flat
+
+
+def test_plan_instruction_uses_the_verified_document_status():
+    text = " ".join(instruction("plan-workflow").split())
+    for wording in PLAN_STATUS_WORDING:
+        assert wording in text, wording
+    for wording in STALE_PLAN_STATUS_WORDING:
+        assert wording not in text, wording

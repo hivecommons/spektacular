@@ -28,6 +28,8 @@ from pathlib import Path
 
 import pytest
 
+from sessionlog import SessionLog, changelog_writes_by_repo
+
 
 # ---------------------------------------------------------------------------
 # Paths and constants — hand-maintained behavioural oracle
@@ -42,6 +44,7 @@ DOCS_REPO_SPEK_DIR = PROJECT_DIR / "repos" / "docs" / ".spektacular"
 EXTERNAL_REPO_SOURCE = Path("/opt/docs-repo")
 
 TRANSCRIPT = Path("/logs/agent/claude-code.txt")
+DEBUG_DIR = PROJECT_SPEK_DIR / "debug"
 
 # Constants pinned from the environment: project name from config.yaml,
 # plan name from state.json's data.name, member names from config.yaml's
@@ -93,15 +96,6 @@ EXTERNAL_REPO_CHANGELOG_PATH = (
     DOCS_REPO_SPEK_DIR / "changelog" / PROJECT_NAME / f"{PLAN_NAME}.md"
 )
 
-# CLI substrings that must appear in Bash tool_use inputs. Substrings, not
-# exact matches, so `--from ...` argument tail is free to vary.
-PROJECT_WRITE_SUBSTR = f"changelog file write {PLAN_NAME} --from"
-COLOCATED_WRITE_SUBSTR = (
-    f"changelog file write {PLAN_NAME} --repo {COLOCATED_REPO_NAME}"
-)
-EXTERNAL_WRITE_SUBSTR = (
-    f"changelog file write {PLAN_NAME} --repo {EXTERNAL_REPO_NAME}"
-)
 
 # The finished template renders these substrings — used to prove the
 # workflow rendered the finished step at least once.
@@ -305,7 +299,9 @@ def test_project_changelog_frontmatter_document_status_final():
 # ---------------------------------------------------------------------------
 # Layer 4: the agent used the CLI, not built-in file tools, to commit the
 # changelog records. Write/Edit on `.spektacular/changelog/**` = hard fail —
-# scratch staging at `.spektacular/tmp/changelog_*.md` is fine.
+# scratch staging at `.spektacular/tmp/changelog_*.md` is fine. Each record's
+# CLI write is judged from the session log, which holds the call the CLI
+# received however the agent wrote it.
 # ---------------------------------------------------------------------------
 
 
@@ -329,44 +325,36 @@ def test_no_builtin_file_tool_wrote_a_changelog_record(tool_calls):
     )
 
 
-def test_project_level_changelog_was_committed_via_cli(tool_calls):
-    for c in tool_calls:
-        if c.type != "Bash":
-            continue
-        cmd = str(c.input.get("command", ""))
-        if PROJECT_WRITE_SUBSTR in cmd and "--repo" not in cmd:
-            return
-    pytest.fail(
-        f"no Bash call ran `{PROJECT_WRITE_SUBSTR}` (without --repo). "
-        "The project-level changelog record MUST be committed through the CLI"
+def changelog_writes() -> dict:
+    """Successful `changelog file write <plan>` calls by repo, from the CLI's
+    session log: what ran, however the command was written (in a loop, with
+    flags reordered or continued over lines)."""
+    return changelog_writes_by_repo(SessionLog(DEBUG_DIR, kinds=("implement",)).all_events(), PLAN_NAME)
+
+
+def test_project_level_changelog_was_committed_via_cli():
+    writes = changelog_writes()
+    assert writes.get(None), (
+        f"no successful `changelog file write {PLAN_NAME}` without --repo in the session log "
+        f"(writes by repo: {writes}). The project-level changelog record MUST be committed through the CLI"
     )
 
 
-def test_colocated_repo_changelog_was_committed_via_cli(tool_calls):
-    for c in tool_calls:
-        if c.type != "Bash":
-            continue
-        cmd = str(c.input.get("command", ""))
-        if COLOCATED_WRITE_SUBSTR in cmd:
-            return
-    pytest.fail(
-        f"no Bash call ran `{COLOCATED_WRITE_SUBSTR}`. "
-        f"The colocated `{COLOCATED_REPO_NAME}` repo's per-repo record MUST be "
-        f"committed through the CLI with --repo {COLOCATED_REPO_NAME}"
+def test_colocated_repo_changelog_was_committed_via_cli():
+    writes = changelog_writes()
+    assert writes.get(COLOCATED_REPO_NAME), (
+        f"no successful `changelog file write {PLAN_NAME} --repo {COLOCATED_REPO_NAME}` in the session log "
+        f"(writes by repo: {writes}). The colocated `{COLOCATED_REPO_NAME}` repo's per-repo record MUST be "
+        "committed through the CLI"
     )
 
 
-def test_external_repo_changelog_was_committed_via_cli(tool_calls):
-    for c in tool_calls:
-        if c.type != "Bash":
-            continue
-        cmd = str(c.input.get("command", ""))
-        if EXTERNAL_WRITE_SUBSTR in cmd:
-            return
-    pytest.fail(
-        f"no Bash call ran `{EXTERNAL_WRITE_SUBSTR}`. "
-        f"The external `{EXTERNAL_REPO_NAME}` repo's per-repo record MUST be "
-        f"committed through the CLI with --repo {EXTERNAL_REPO_NAME}"
+def test_external_repo_changelog_was_committed_via_cli():
+    writes = changelog_writes()
+    assert writes.get(EXTERNAL_REPO_NAME), (
+        f"no successful `changelog file write {PLAN_NAME} --repo {EXTERNAL_REPO_NAME}` in the session log "
+        f"(writes by repo: {writes}). The external `{EXTERNAL_REPO_NAME}` repo's per-repo record MUST be "
+        "committed through the CLI"
     )
 
 
