@@ -1,104 +1,44 @@
-# Working context: 000071_harbor-child-agents
+# Working context — spec 000072_knowledge-access-index-and-prune
 
-## Plan workflow (started 2026-10-24)
+## Where this came from
+Raised by the user on 2026-10-24, mid-way through implementing 000071_harbor-child-agents. The trigger: the agent kept stopping to ask "want me to save this to the knowledge base?" (the Knowledge-Worthy Discovery Recognition rule in AGENTS.md, `templates/agents/knowledge-trigger.md`, plus the implement workflow's update_changelog Step 2b offer). The user deferred the spec until that implement run finished (it has; merged 3e6e62e).
 
-- Planning spec 000071_harbor-child-agents (final). User chose it via /spek-plan after asking
-  which spec/plan was latest. Spec-era notes below are carried forward as background.
-- Spec's success metrics to carry into Testing Approach: 100% children recorded with context
-  across nine Claude suites; full Claude batch passes with no skipped required delegation and
-  no idle flag; epic-planning idle < 25% of wall; zero walkthrough/changelog-check misreads;
-  report alone answers "which children, what were they told".
-- Target repo: spektacular only (docs website is a non-goal). No design refs.
-- User answers at discovery (2026-10-24):
-  - Both models skip implement test/verify children (only goal reviewers spawned in
-    implement-epic on 4.6 and 5.5): STRENGTHEN the step instructions (test, verify, and spec
-    verification) AND enforce.
-  - Epic implementing child prompt: ADD to spek-implement-epic that the prompt names the spec's
-    worktree paths (from `epic worktree`), and check for them.
-- Learnings: Agent tool_use input is the prompt source (task_started.prompt sometimes absent;
-  background Bash also emits task_started). task_updated.end_time is the only child end time;
-  task_notification.usage.duration_ms is the agent's own duration. Child msgs stream inline with
-  parent_tool_use_id. Session log answers walkthrough + changelog checks. Implement suite is
-  seeded past test/verify/check_goal; goal-check unmet retry and implement-epic run them.
-  Plan suite's discovery spawn check must become record-only (constraint).
-- User answer at tasks (2026-10-24): epic verifiers get Claude-only transcript checks; update
-  knowledge entry architecture/testing-architecture.md via spek-knowledge in the implement run.
-- Progress: all three plan documents committed to the store (2026-10-24); working dir removed. Walkthrough done; user approved the plan 2026-10-24. Next: implement workflow.
-- Architecture chosen (Option A): shared Child reader -> recorder + new shared delegation.py
-  rules; session-log based walkthrough/changelog checks; schema 2; probe-gated headless wording.
+## The user's words (verbatim)
+"We need to make a change, you ask me if you should update your knowledge base, we need to write a spec where you just write your knowledge base, but we are going to keep metrics on when these are used. Both discovered in search and actually retrieved to include in a plan. This should be a json based index that is located in the knowledge base. The index should only ever be update by the spektacular knowledge tool. Then all knowledge base entries are updated automatically. We also introduce a knowledge prune command that uses the access index the date knowledge was created to determine what knowledge is still valid. Invalid entries will be pruned. The second pass of prune is to check the correctness of knowledge, each existing entry is read and checked for correctness. If invalid it is corrected or deleted."
 
-## Problem and motivation
+## Requirements as understood so far (to confirm in the interview)
+- Agents write knowledge entries without asking the user first (replaces the propose-then-confirm offer).
+- A JSON access index, stored inside the knowledge base, records usage metrics per entry:
+  - when an entry is discovered (returned by `knowledge search`);
+  - when it is actually retrieved for inclusion in a plan (read and used).
+- Only the `spektacular knowledge` CLI ever writes the index (agents never edit it).
+- "Then all knowledge base entries are updated automatically" — meaning to clarify (likely: writes happen automatically / the index is maintained automatically on every CLI access).
+- New `spektacular knowledge prune` command, two passes:
+  1. Validity by usage and age: uses the access index and each entry's creation date to decide which entries are still valid; invalid ones are pruned.
+  2. Correctness: each remaining entry is read and checked for correctness; an incorrect one is corrected or deleted.
 
-Builds on 000070_harbor-run-metrics (metrics.json per harbor run, `make harbor-report`).
-The 2026-10-23 batches compared claude-sonnet-4-6 (jobs `tests/harbor/jobs/m70-claude-*`)
-with claude-sonnet-5-5 (`s55-claude-*`; Makefile default is now sonnet-5-5).
+## Relevant current state (facts, for drafting)
+- CLI: `spektacular knowledge` has search, read, list, write, delete, tags, categories, sources, always-applied, conventions. No index or prune today.
+- The `spek-knowledge` skill (lookup / contribute / update / audit / maintenance) enforces propose-then-confirm for every write and delete; its maintenance intent already classifies entries current / stale / incorrect / unverifiable, with per-entry confirmation.
+- Binding knowledge rule (AGENTS.md "Historical Artifacts"): a knowledge entry that disagrees with the code states the target; the code is what is wrong. An entry is stale only if its subject no longer exists. Prune's correctness pass must respect this or the spec must consciously change it.
+- Stores: project tier and repo tiers (e.g. repo `spektacular`), multiple stores; entries are Markdown with YAML frontmatter (tags).
 
-- **Epic suite idle time.** On 5.5 the plan-epic orchestrator started its first two children
-  in the background, ended its turn, and called `ScheduleWakeup` (1200 s, "fallback while
-  children plan"). The children's task-notifications woke it and it finished at 13:41, but the
-  pending wakeup kept `claude -p` alive until 13:57 (wall 20.8 min for ~4.6 min of work). 4.6
-  kept children in the foreground and never used the tool.
-- **Why the suites don't test the real path.** `tests/harbor/epic-workflow/instruction.md:53`
-  and `implement-epic-workflow/instruction.md:54` say "This session is headless", which triggers
-  the epic skills' headless rule (`templates/skills/workflows/spek-plan-epic/SKILL.md:46`,
-  `spek-implement-epic/SKILL.md:58`): start children as foreground sub-agents and handle every
-  hand-back inside one turn, because "headless Claude Code stops [a background sub-agent] after
-  ten minutes". Interactive users get background children plus completion notices — the path
-  where the stray wakeup appears. The 5.5 run shows background children + task-notification
-  wake-ups do work under `claude -p` (`origin.kind: task-notification`). The ten-minute claim
-  is unverified.
-- **Skipped delegation.** On 5.5 the spec run's `verification` step spawned no sub-agent
-  (4.6 delegated it, 136 s). It still passed 48/48: nothing checks that delegated steps use a
-  child agent.
-- **Metrics only count children.** `subagents` in metrics.json holds started/completed/failed/
-  stopped and durations. Launch prompts are already parsed (`SubagentLaunch` in
-  `tests/harbor/shared/transcripts.py`) but not recorded.
+## Open questions to raise in the interview
+- Where exactly the index lives with multiple stores (one per store vs one per project) and how it is kept out of search results / git noise.
+- What counts as "retrieved to include in a plan" (a `knowledge read`? a read during a plan workflow step?).
+- Prune pass 1 thresholds: never discovered/retrieved within N days of creation? configurable?
+- Prune pass 2: run by the CLI alone or by an agent skill (correctness needs judgement); dry run / report before deleting?
+- Whether auto-write keeps any user visibility (e.g. a note of what was written).
 
-## User's words
+## Interview answers (user, 2026-10-24)
+- Retrieved = any `knowledge read` (+ always-applied/conventions loads), noting active workflow/spec.
+- Prune pass 1: older than configurable age (default ~90 d) since creation AND never retrieved.
+- Pass 2 keeps the binding knowledge rule (correct if wrong; delete if subject gone; report, never delete, an unmet target).
+- Pass 2 runner: CLI drives, agent judges (step-like instructions), skill wraps.
+- Prune is automatic with a report; `--dry-run` reports only.
+- "Updated automatically" = agent writes need no approval; user sees a note.
+- Docs website repo docs are in scope.
 
-- "we actually want the tests to use child agents just like the real process. Otherwise we
-  can't test this. The metrics should show the child agents created and the context passed to
-  them so we can keep track of this."
-- Chose all three test changes: background children in epic suites; require child agents where
-  workflows use them; check the context passed to children.
-- "We need to inform that the session is headless so that it does not block on waiting for a
-  question. You might need to validate the test there to check" — keep telling the agent it is
-  headless (so it never waits on a question), but headless must not force foreground children;
-  validate the headless wording/test.
-
-## Proposed metrics shape (shown to the user, not yet confirmed as final)
-
-`subagents.children[]`: id, parent, type, description, background, lane, launched_at, ended_at,
-duration_s, status (completed/failed/stopped/no hand-back), hand_back (first line), models,
-output_chars, prompt (full), prompt_chars. Report: `--run` prints a children table; `--prompts`
-prints each child's full launch prompt. Bob/Codex record unknowns.
-
-## Related findings (context, maybe out of scope)
-
-- Verifier false negatives on 5.5 from command style: plan `walkthrough` check (gotos piped
-  through `python3 -c` / chained with `&&`), implement per-repo changelog check (writes in a
-  shell loop with `$a`).
-- Real 5.5 differences: goal-check agent fixed the README before the reviewer; repo
-  one-at-a-time recorded values without proposing them.
-- 401s: HARBOR_AUTH passes the short-lived OAuth token, rotated mid-batch; `claude setup-token`
-  would avoid it.
-- Ideas already floated: `idle_s` metric; a check that no ScheduleWakeup/CronCreate is used;
-  denying those tools in the container only as a backstop.
-
-## Decisions
-
-- Spec name harbor-child-agents (000071), standalone (not in epic 000001).
-- Pre-existing changes (Makefile/README model bump, lane_for fix + tests) committed first.
-
-## Interview answers (2026-10-23)
-
-- Enforcement: required delegations fail (spec verification, implement test/verify/check_goal,
-  epic children); suggested ones (plan discovery, analyze, update_changelog) recorded only.
-- Headless: verify the 10-minute background-child claim first, then fix the epic skills.
-- Extra scope: no-wakeup check + idle_s metric; fix the two verifier false negatives.
-  Not chosen: long-lived auth token, website docs.
-- Agents: Claude enforced; Bob/Codex recorded with unknowns.
-
-- User (overview step): "just finish the spec, I will review the whole thing" — draft every section without per-section confirmation; user reviews the assembled spec at verification.
-- Spec committed to the store after the user approved the full draft (reviewer findings applied; finding 14 compatibility constraint skipped as untraceable; reference runs kept as checked-in test data in Technical Approach).
-- Split offered (child metrics / delegation checks / verifier fixes); user declined: keep one spec.
+## Drafting (user said "just write the whole spec and commit it, I will check it later")
+- All sections drafted without per-section confirmation, per the user's instruction.
+- Fresh-eyes review findings applied without confirmation (same instruction): JSON index inside the knowledge base moved to Constraints (user-mandated); added constraints that prune's own reads don't count as retrievals and that entries aren't pruned for non-use until tracked for the full threshold (else the first prune would delete every pre-existing entry); report covers every entry with a verdict and evidence; preview AC made checkable; added ACs for parallel counting, pre-existing entries, prune's reads.
