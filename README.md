@@ -509,12 +509,12 @@ reason. It is never written as zero.
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | The record's shape, currently `1` |
+| `schema_version` | The record's shape, currently `2`. Version 2 added each child agent, the per-step child count and the idle time; the report still reads version-1 records |
 | `run` | `suite`, `scenario`, `agent`, `model`, `spektacular_version` (`git describe`), `commit`, and `dirty` (the tree had uncommitted changes when the suite was built) |
 | `result` | `reward` as written to `reward.txt`. `checks` holds `passed`, `total` and `score` (passed over total, skipped tests excluded). `groups` gives the same per group, under its `name`: the test class, or the test module for suites written as plain functions |
-| `totals` | `wall_time_s`, `model_time_s` (time spent in model calls, summed across sub-agents, so it can exceed the wall time), `turns`, `cost_usd`, `input_tokens` (uncached), `output_tokens`, `cache_read_tokens`, `cache_write_tokens` |
-| `steps` | `unit` (`characters`), then one entry in `workflows` per spec, plan or implement workflow the run drove: its `kind` and `name`, and in `steps` each step it entered, in order, with its `step` name, `started_at`, `duration_s` and `output`, the characters the agent wrote there (text, thinking and tool-call input). `workflows` is `null` when the run left no session log. A Claude run that drove several workflows at once also has `orchestrator_output`, the characters written outside every workflow |
-| `subagents` | `started`, `completed`, `failed` and `stopped`, and `durations_s` for each sub-agent that reported one |
+| `totals` | `wall_time_s`, `model_time_s` (time spent in model calls, summed across sub-agents, so it can exceed the wall time), `turns`, `cost_usd`, `input_tokens` (uncached), `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, and `idle_s`, the longest stretch with no activity from the agent, its children or Spektacular |
+| `steps` | `unit` (`characters`), then one entry in `workflows` per spec, plan or implement workflow the run drove: its `kind` and `name`, and in `steps` each step it entered, in order, with its `step` name, `started_at`, `duration_s`, `output`, the characters the agent wrote there (text, thinking and tool-call input), and `children`, how many child agents were started in it, nested ones included. `workflows` is `null` when the run left no session log. A Claude run that drove several workflows at once also has `orchestrator_output`, the characters written outside every workflow |
+| `subagents` | `started`, `completed`, `failed` and `stopped`, and `durations_s` for each sub-agent that reported one, kept for version-1 readers. `children` lists every child agent the run started, nested ones included, each with: `id` (its launching call), `parent` (the child that started it, `null` for the main agent), `kind`, `description`, `background` (as it actually ran), `spec`, `step` (`null` when it was started outside any workflow step, such as an epic orchestrator's own children, unless `unknown` lists it), `launched_at`, `ended_at`, `duration_s` (the agent's own report of its run time), `ending` (`completed`, `failed`, `stopped` or `no_hand_back`), `hand_back` (the first line it handed back), `models`, `output` (characters of its own messages), `prompt` (the full context it was given) and `prompt_chars` |
 | `unknown` | One `{field, reason}` per measure the record could not fill |
 
 Step durations come from Spektacular's own session log, so they mean the same for every agent. A
@@ -524,6 +524,17 @@ resumes a workflow opens a fresh window, so the hand-off is not counted. The age
 the workflow starts falls outside every step, so one workflow's steps add up to less than the wall
 time. Workflows driven at once run in parallel, so steps summed across them can exceed it.
 
+Idle time is measured from every timestamped message, main agent and children alike, every
+child's start and end, and every Spektacular command's start and end, so time an agent spends
+thinking between commands is not counted as idle. The report flags a run idle for more than a
+quarter of its wall time; the threshold is `IDLE_SHARE` at the top of `report.py`.
+
+A child is placed in the spec its own launch prompt names first, else in the spec of the child
+that started it, and in the step whose window holds its launch time. A step whose instructions
+only suggest a child, such as plan discovery, shows whether it used one through its `children`
+count. In a Claude run, a child started by another child streams none of its own messages, so its
+`models` and `output` are unknown.
+
 Claude's totals come from the `result` summary at the end of its transcript, with tokens summed over
 every model it used. When background sub-agents split a Claude run into several summaries, turns are
 summed, cost, tokens and model time come from the last summary, and wall time is the span from the
@@ -531,9 +542,9 @@ transcript's first message to its last. The other agents report less:
 
 | Agent | Unknown in its record |
 |---|---|
-| Bob | Tokens, cost, model time, model, and every sub-agent measure but `started`. Its wall time comes from Bob's own shell logs, and its characters are placed by its `goto` calls |
-| Codex | Every sub-agent measure, model time and cache writes. Cost too, unless Harbor can price the model. When Harbor left no `trajectory.json` and the record falls back to Codex's own rollout, cost and every step's `output` are unknown as well |
-| Oracle (no agent) | Every agent total, the model, every sub-agent measure and every step's `output`. Wall time comes from the session log |
+| Bob | Tokens, cost, model time, model, and every sub-agent measure but `started`. Each child carries only its `kind`, `description` and `prompt` (and so `prompt_chars`); every other child field is unknown. Its wall time and idle time come from Bob's own shell logs, and its characters and children are placed by its `goto` calls, so in a run that drove several workflows at once each child's `step`, and every step's `children`, are unknown |
+| Codex | Every sub-agent measure, `children` included (`null`), model time and cache writes. Cost too, unless Harbor can price the model. When Harbor left no `trajectory.json` and the record falls back to Codex's own rollout, cost and every step's `output` are unknown as well |
+| Oracle (no agent) | Every agent total, the idle time, the model, every sub-agent measure, `children` included, and every step's `output` and `children`. Wall time comes from the session log |
 
 A Bob or Codex run that drove several workflows at once has its per-step `output` unknown, because
 their logs cannot split it between workflows.
@@ -552,14 +563,20 @@ record, such as runs from before the recorder, are skipped. `make harbor-report`
 make harbor-report                                     # one row per run, grouped by suite
 make harbor-report ARGS='tests/harbor/jobs/fix2-*'     # only some jobs (directories or globs)
 make harbor-report ARGS='--run plan-workflow-claude__<id>'    # one run's step breakdown, by a trial name from the table
+make harbor-report ARGS='--run epic-workflow-claude__<id> --prompts'   # ... and every child agent's full context
 make harbor-report ARGS="--baseline 'tests/harbor/jobs/before-*' --candidate 'tests/harbor/jobs/after-*'"
 ```
 
-The table shows each run's agent and model, wall time in minutes, turns, output and cache-read
-tokens, cost, check score and pass or fail. `--run` takes a trial directory, a trial name, or a prefix that names one
+The table shows each run's agent and model, wall time and idle time in minutes, turns, output and cache-read
+tokens, cost, check score and pass or fail, and marks a run idle for more than a quarter of its
+wall time `◀ idle`. `--run` takes a trial directory, a trial name, or a prefix that names one
 trial. It lists every step with its duration, its share of the run and the characters written,
-then the sub-agents and every unknown measure with its reason. A step taking more than a third of
-the run's wall time is marked `◀ dominant`.
+then the sub-agents, the idle time, a table of the child agents (one row per child, nested ones
+indented under the child that started them, with kind, spec, step, background or foreground,
+seconds, ending and context size), and every unknown measure with its reason. A step taking more
+than a third of the run's wall time is marked `◀ dominant`. Add `--prompts` to `--run` to print
+each child's full context after it; without `--run` it is a usage error. A version-1 record says
+its children were not recorded.
 
 `--baseline` and `--candidate` each take job directories or globs: the runs before a change and the
 runs after it. For each suite (and scenario) present in both, it prints the median of wall time,
@@ -588,8 +605,11 @@ python3 -m pytest tests/harbor/repo-workflow/tests/test_verifier_selfcheck.py
 
 The shared helpers have self-checks of their own, also without a container: the log readers, the
 step windows, the recorder (including every way an input can be missing or broken), the report,
-and the wiring of the recorder into every suite. They live in `tests/harbor/shared/tests/`, which
-the make targets never copy into an image:
+and the wiring of the recorder into every suite. Some run on real runs: trimmed copies of
+collected trials, checked in under `tests/harbor/shared/tests/data/`, with every message's text
+blanked to the same length. `python3 tests/harbor/shared/tests/trim_reference.py <trial dir> <name>`
+adds one, and writes nothing if trimming would change a value the recorder computes. They live in
+`tests/harbor/shared/tests/`, which the make targets never copy into an image:
 
 ```bash
 uvx --with pytest pytest --import-mode=importlib tests/harbor/shared/tests

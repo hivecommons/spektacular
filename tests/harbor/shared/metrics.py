@@ -8,7 +8,8 @@ written, and ignores how it exits. It reads:
   agent, suite, scenario, Spektacular version and commit;
 - the agent's own log under /logs/agent: Claude's stream-json, the ATIF
   trajectory harbor writes for Bob and Codex, or Codex's rollout;
-- Spektacular's session log under /app/.spektacular/debug, for the steps;
+- Spektacular's session log under /app/.spektacular/debug, for the steps
+  and for placing each child agent in the spec and step it was started in;
 - pytest's JUnit XML and the reward, for the check score;
 
 and writes /logs/verifier/metrics.json, in the same shape for every agent
@@ -36,14 +37,15 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import transcripts as tx  # noqa: E402
 from sessionlog import Lane, SessionLog, StepWindow  # noqa: E402
-from transcripts import Message, Subagents, SubagentLaunch, Totals, Unknown  # noqa: E402
+from transcripts import Child, Message, Subagents, SubagentLaunch, Totals, Unknown  # noqa: E402
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 WORKFLOW_KINDS = ("spec", "plan", "implement")
 
 BUILD_INFO = Path("/tests/build.json")
@@ -56,6 +58,10 @@ OUT = Path("/logs/verifier/metrics.json")
 
 RUN_FIELDS = ("suite", "agent", "spektacular_version", "commit", "dirty")
 SUBAGENT_FIELDS = ("started", "completed", "failed", "stopped", "durations_s")
+CHILD_FIELDS = (
+    "id", "parent", "kind", "description", "background", "spec", "step", "launched_at", "ended_at",
+    "duration_s", "ending", "hand_back", "models", "output", "prompt", "prompt_chars",
+)
 
 
 def utc(at: datetime) -> datetime:
@@ -108,6 +114,12 @@ class AgentLog:
     messages: list[Message] | None  # None when the format's messages are not read
     launch_root: dict[str, str] = field(default_factory=dict)
     launches: list[SubagentLaunch] = field(default_factory=list)
+    # Reads the child agents when called, so a reader failure costs only them.
+    read_children: Callable[[], tuple[list[Child] | None, list[Unknown]]] = lambda: (None, [])
+
+
+def no_children(reason: str) -> Callable[[], tuple[None, list[Unknown]]]:
+    return lambda: (None, [Unknown("subagents.children", reason)])
 
 
 def missing_log(reason: str) -> AgentLog:
@@ -115,7 +127,7 @@ def missing_log(reason: str) -> AgentLog:
     totals.unknowns = [Unknown(f"totals.{name}", reason) for name in tx.TOTAL_FIELDS]
     totals.unknowns.append(Unknown("run.model", reason))
     subagents = Subagents(unknowns=[Unknown(f"subagents.{name}", reason) for name in SUBAGENT_FIELDS])
-    return AgentLog(agent=None, totals=totals, subagents=subagents, messages=None)
+    return AgentLog(agent=None, totals=totals, subagents=subagents, messages=None, read_children=no_children(reason))
 
 
 def has_rollout(agent_dir: Path) -> bool:
@@ -149,6 +161,7 @@ def read_agent_log(agent_dir: Path, build_agent: str | None) -> tuple[AgentLog, 
             messages=tx.claude_messages(objs),
             launch_root=tx.claude_launch_root(objs),
             launches=tx.claude_subagent_launches(objs),
+            read_children=lambda: tx.claude_children(objs),
         )
     elif reader == "atif":
         try:
@@ -163,6 +176,7 @@ def read_agent_log(agent_dir: Path, build_agent: str | None) -> tuple[AgentLog, 
                 totals=tx.atif_summary(traj),
                 subagents=tx.atif_subagents(traj),
                 messages=tx.atif_messages(traj),
+                read_children=lambda: tx.atif_children(traj),
             )
         elif log is None:
             reader = "codex-rollout"
@@ -172,6 +186,7 @@ def read_agent_log(agent_dir: Path, build_agent: str | None) -> tuple[AgentLog, 
             totals=tx.codex_rollout_summary(agent_dir / "sessions"),
             subagents=Subagents(unknowns=[Unknown(f"subagents.{n}", "codex reports no sub-agents") for n in SUBAGENT_FIELDS]),
             messages=None,
+            read_children=no_children("codex reports no sub-agents"),
         )
     if log is None:
         log = missing_log("no agent log (oracle or missing)")
@@ -331,13 +346,215 @@ def step_breakdown(
     return {"unit": "characters", "workflows": workflows, **extra}, unknowns
 
 
-def read_steps(debug_dir: Path, log: AgentLog) -> tuple[dict, list[Unknown]]:
+def read_session(debug_dir: Path) -> tuple[SessionLog | None, list[Unknown]]:
     session = SessionLog(debug_dir, kinds=WORKFLOW_KINDS)
     if session.empty:
         reason = "no session log" if not Path(debug_dir).is_dir() else "the session log is empty"
-        return {"unit": "characters", "workflows": None}, [Unknown("steps", reason)]
-    lanes = sorted((l for l in session.lanes.values() if l.events), key=lambda l: l.events[0].at)
-    return step_breakdown(lanes, log.messages, log.launch_root, log.launches, log.agent)
+        return None, [Unknown("steps", reason)]
+    return session, []
+
+
+def session_lanes(session: SessionLog) -> list[Lane]:
+    return sorted((l for l in session.lanes.values() if l.events), key=lambda l: l.events[0].at)
+
+
+def lane_windows(session: SessionLog | None) -> dict[tuple[str, str], list[StepWindow]] | None:
+    """Each lane's step windows, keyed by (kind, name); None without a session log."""
+    if session is None:
+        return None
+    return {(lane.kind, lane.name): lane.step_windows() for lane in session_lanes(session)}
+
+
+def read_steps(session: SessionLog | None, log: AgentLog) -> tuple[dict, list[Unknown]]:
+    if session is None:  # read_session already said why
+        return {"unit": "characters", "workflows": None}, []
+    return step_breakdown(session_lanes(session), log.messages, log.launch_root, log.launches, log.agent)
+
+
+# Child agents: placed in a spec and a step, and counted per step.
+
+
+@dataclass
+class PlacedChild:
+    """A child agent with the lane, step window, spec and step it was started in."""
+
+    child: Child
+    lane: tuple[str, str] | None
+    window: int | None  # index into the lane's step windows
+    spec: str | None
+    step: str | None  # None: started outside any workflow step, unless listed unknown
+
+
+def _gap(field_name: str, ids: list[str], every: int, reason: str) -> list[Unknown]:
+    """One agent-wide Unknown when a gap holds for every child, else one per child."""
+    if not ids:
+        return []
+    if len(ids) == every:
+        return [Unknown(f"subagents.children.{field_name}", reason)]
+    return [Unknown(f"subagents.children[{i}].{field_name}", reason) for i in ids]
+
+
+def place_children(
+    children: list[Child],
+    windows_by_lane: dict[tuple[str, str], list[StepWindow]] | None,
+    messages: list[Message] | None = None,
+) -> tuple[list[PlacedChild], list[Unknown]]:
+    """Places each child in the spec and workflow step it was started in.
+
+    Its spec is the single lane's in a one-lane run; otherwise the spec its own
+    prompt names first, else its top-level ancestor's. Its step is the window
+    of that lane holding its launch time. A child with no launch time (Bob) is
+    placed by the order of the agent's messages and gotos, as the step
+    breakdown places their output, which only a one-lane run allows.
+    """
+    if windows_by_lane is None:
+        reason = "no session log to place children in"
+        unknowns = [Unknown("subagents.children.spec", reason), Unknown("subagents.children.step", reason)] if children else []
+        return [PlacedChild(c, None, None, None, None) for c in children], unknowns
+
+    by_id = {c.id: c for c in children}
+    names = list(dict.fromkeys(name for _, name in windows_by_lane))
+
+    def ancestor(c: Child) -> Child:
+        seen = {c.id}
+        while c.parent in by_id and c.parent not in seen:
+            c = by_id[c.parent]
+            seen.add(c.id)
+        return c
+
+    def spec_of(c: Child) -> str | None:
+        if len(names) == 1:
+            return names[0]
+        return lane_for(c.prompt or "", names) or (lane_for(ancestor(c).prompt or "", names) if c.parent else None)
+
+    # For a log without times: the window the agent stood in at each message.
+    window_at_order: dict[int, int] = {}
+    if len(windows_by_lane) == 1 and messages:
+        (ws,) = windows_by_lane.values()
+        i = 0
+        for m in sorted(messages, key=lambda m: m.order):
+            window_at_order[m.order] = i
+            if m.goto_step:
+                ahead = [j for j in range(i + 1, len(ws)) if ws[j].step == m.goto_step]
+                if ahead:
+                    i = ahead[0]
+
+    placed, unplaced = [], []
+    for c in children:
+        spec = spec_of(c)
+        keys = [k for k in windows_by_lane if k[1] == spec]
+        window = None
+        if c.launched_at is not None:
+            key = next((k for k in keys if window_of(windows_by_lane[k], c.launched_at) is not None), keys[0] if keys else None)
+            window = window_of(windows_by_lane[key], c.launched_at) if key else None
+        else:
+            key = keys[0] if keys else None
+            if key and window_at_order and c.order in window_at_order and windows_by_lane[key]:
+                window = window_at_order[c.order]
+            elif any(windows_by_lane.values()):
+                # Without a time it may have been started in any lane's step.
+                unplaced.append(c.id)
+        step = windows_by_lane[key][window].step if key and window is not None else None
+        placed.append(PlacedChild(c, key, window, spec, step))
+    return placed, _gap("step", unplaced, len(children), "the child has no launch time to place it in a step")
+
+
+def step_child_counts(
+    placed: list[PlacedChild], windows_by_lane: dict[tuple[str, str], list[StepWindow]]
+) -> dict[tuple[tuple[str, str], int], int]:
+    """How many children, at any depth, were started in each lane's step window."""
+    counts = {(key, i): 0 for key, ws in windows_by_lane.items() for i in range(len(ws))}
+    for p in placed:
+        if p.lane is not None and p.window is not None:
+            counts[(p.lane, p.window)] += 1
+    return counts
+
+
+def child_record(p: PlacedChild) -> dict:
+    c = p.child
+    return {
+        "id": c.id,
+        "parent": c.parent,
+        "kind": c.kind,
+        "description": c.description,
+        "background": c.background,
+        "spec": p.spec,
+        "step": p.step,
+        "launched_at": iso(c.launched_at) if c.launched_at else None,
+        "ended_at": iso(c.ended_at) if c.ended_at else None,
+        "duration_s": round(c.duration_s, 3) if c.duration_s is not None else None,
+        "ending": c.ending,
+        "hand_back": c.hand_back,
+        "models": sorted(c.models) if c.models is not None else None,
+        "output": c.output,
+        "prompt": c.prompt,
+        "prompt_chars": len(c.prompt) if c.prompt is not None else None,
+    }
+
+
+def read_children(log: AgentLog, session: SessionLog | None) -> tuple[tuple[list[dict] | None, list[PlacedChild] | None], list[Unknown]]:
+    """The record's child list, placed in specs and steps, and the placement itself."""
+    children, unknowns = log.read_children()
+    if children is None:
+        return (None, None), unknowns
+    placed, gaps = place_children(children, lane_windows(session), log.messages)
+    unknowns = unknowns + gaps
+    # A prompt the log could not show leaves its size unknown too.
+    unknowns += [Unknown(u.field.removesuffix(".prompt") + ".prompt_chars", u.reason) for u in unknowns if u.field.endswith(".prompt")]
+    return ([child_record(p) for p in placed], placed), unknowns
+
+
+def count_step_children(
+    steps: dict, session: SessionLog | None, placed: list[PlacedChild] | None, unknowns: list[Unknown]
+) -> tuple[None, list[Unknown]]:
+    """Writes each step entry's `children`: how many children it started, or
+    None when the children, or where they were started, are unknown."""
+    workflows = steps.get("workflows")
+    if not workflows:
+        return None, []
+    windows = lane_windows(session) or {}
+    unplaced = any(u.field in ("subagents.children", "subagents.children.step") or (u.field.startswith("subagents.children[") and u.field.endswith("].step")) for u in unknowns)
+    counts = step_child_counts(placed, windows) if placed is not None and not unplaced else None
+    for wf in workflows:
+        for i, entry in enumerate(wf["steps"]):
+            entry["children"] = counts.get(((wf["kind"], wf["name"]), i)) if counts is not None else None
+    if counts is None:
+        return None, [Unknown("steps.children", "the run's children, or the steps they were started in, are unknown")]
+    return None, []
+
+
+# Idle time: the longest stretch with no activity.
+
+
+def idle_seconds(instants: list[datetime]) -> float | None:
+    """The longest gap between consecutive instants; None with fewer than two."""
+    times = sorted(utc(t) for t in instants)
+    if len(times) < 2:
+        return None
+    return max((b - a).total_seconds() for a, b in zip(times, times[1:]))
+
+
+def read_idle(
+    log: AgentLog, placed: list[PlacedChild] | None, session: SessionLog | None, bob_logs: Path
+) -> tuple[float | None, list[Unknown]]:
+    """Idle time from every timestamped message, child start and end, and
+    Spektacular command start and end. The session log alone would count the
+    agent's time thinking between commands as idle, so a run whose agent log
+    carries no times has its idle time unknown, unless Bob's own shell logs
+    supply them."""
+    instants = [m.at for m in log.messages or [] if m.at is not None]
+    if not instants:
+        instants = bob_log_times(bob_logs)
+    if not instants:
+        return None, [Unknown("totals.idle_s", f"{log.agent or 'the agent'}'s log carries no activity times")]
+    for p in placed or []:
+        instants += [t for t in (p.child.launched_at, p.child.ended_at) if t is not None]
+    for e in session.all_events() if session is not None else []:
+        instants += [e.at, e.end]
+    idle = idle_seconds(instants)
+    if idle is None:
+        return None, [Unknown("totals.idle_s", "too little activity to measure")]
+    return round(idle, 3), []
 
 
 # Wall-time fallback for agents whose log carries no time.
@@ -345,9 +562,15 @@ def read_steps(debug_dir: Path, log: AgentLog) -> tuple[dict, list[Unknown]]:
 
 def bob_log_span_s(log_dir: Path) -> float | None:
     """First to last `ts` across Bob's own shell logs."""
-    times = []
+    times = bob_log_times(log_dir)
+    return (max(times) - min(times)).total_seconds() if len(times) > 1 else None
+
+
+def bob_log_times(log_dir: Path) -> list[datetime]:
+    """Every `ts` in Bob's own shell logs."""
+    times: list[datetime] = []
     if not Path(log_dir).is_dir():
-        return None
+        return times
     for path in Path(log_dir).rglob("*.log"):
         try:
             lines = path.read_text(errors="replace").splitlines()
@@ -361,7 +584,7 @@ def bob_log_span_s(log_dir: Path) -> float | None:
             at = tx.parse_timestamp(ts)
             if at:
                 times.append(at)
-    return (max(times) - min(times)).total_seconds() if len(times) > 1 else None
+    return times
 
 
 def session_span_s(debug_dir: Path) -> float | None:
@@ -424,7 +647,12 @@ def build_record(paths: Paths) -> dict:
     unknowns.extend(log.subagents.unknowns)
     (checks, groups) = gather("result.checks", lambda: read_checks(paths.junit), ({"passed": None, "total": None, "score": None}, None))
     reward = gather("result.reward", lambda: read_reward(paths.reward), None)
-    steps = gather("steps", lambda: read_steps(paths.debug_dir, log), {"unit": "characters", "workflows": None})
+    session = gather("steps", lambda: read_session(paths.debug_dir), None)
+    steps = gather("steps", lambda: read_steps(session, log), {"unit": "characters", "workflows": None})
+    children, placed = gather("subagents.children", lambda: read_children(log, session), (None, None))
+    child_unknowns = [u for u in unknowns if u.field.startswith("subagents.children")]
+    gather("steps.children", lambda: count_step_children(steps, session, placed, child_unknowns), None)
+    idle = gather("totals.idle_s", lambda: read_idle(log, placed, session, paths.bob_logs), None)
 
     totals = log.totals
     return {
@@ -439,9 +667,9 @@ def build_record(paths: Paths) -> dict:
             "dirty": run.get("dirty"),
         },
         "result": {"reward": reward, "checks": checks, "groups": groups},
-        "totals": {name: getattr(totals, name) for name in tx.TOTAL_FIELDS},
+        "totals": {**{name: getattr(totals, name) for name in tx.TOTAL_FIELDS}, "idle_s": idle},
         "steps": steps,
-        "subagents": {name: getattr(log.subagents, name) for name in SUBAGENT_FIELDS},
+        "subagents": {**{name: getattr(log.subagents, name) for name in SUBAGENT_FIELDS}, "children": children},
         "unknown": [{"field": u.field, "reason": u.reason} for u in unknowns],
     }
 

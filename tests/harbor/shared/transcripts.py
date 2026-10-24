@@ -11,6 +11,8 @@ They also read each agent's own summary of a run, for the metrics record:
 Claude's `result` events, the ATIF trajectory harbor writes for ACP agents
 and Codex, and Codex's native rollout as a fallback. Whatever a log does not
 supply comes back as None with an Unknown naming the reason, never as zero.
+The same goes for the child agents a run started, at any depth, and for the
+main agent's turns and the timed wake-ups it set itself.
 
 The functions here are pure over the parsed records, so a verifier's
 self-check can exercise them on synthetic input. Copied into each suite's
@@ -23,7 +25,7 @@ import json
 import re
 import shlex
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 AGENT_LOG_DIR = Path("/logs/agent")
@@ -178,6 +180,45 @@ class Subagents:
     stopped: int | None = None
     durations_s: list[float] | None = None
     unknowns: list[Unknown] = field(default_factory=list)
+
+
+@dataclass
+class Child:
+    """One child agent a run started, at any depth, before it is placed in a
+    spec and step. None is a detail the log could not supply."""
+
+    id: str  # the launching tool call's id
+    parent: str | None  # the id of the child that started it; None for the main agent
+    kind: str | None
+    description: str | None
+    background: bool | None  # as actually run, not as requested
+    launched_at: datetime | None
+    ended_at: datetime | None
+    duration_s: float | None  # the agent's own report of the child's run time
+    ending: str | None  # completed | failed | stopped | no_hand_back
+    hand_back: str | None  # the first non-empty line of what it handed back
+    models: list[str] | None
+    output: int | None  # characters of its own messages
+    prompt: str | None
+    order: int | None = None  # its launching step's index, for a log without times (ATIF)
+
+
+@dataclass
+class Turn:
+    """One turn of the main agent: when it ended, and what started it."""
+
+    ended_at: datetime | None
+    woken_by: str | None  # "start" | "task-notification" | "wakeup"; None when the log does not say
+
+
+@dataclass
+class Wakeup:
+    """A timed wake-up the main agent set itself: a scheduled wake-up, a
+    recurring job, or a shell command that sleeps."""
+
+    at: datetime | None
+    tool: str
+    detail: str
 
 
 def parse_timestamp(value: str | None) -> datetime | None:
@@ -376,6 +417,208 @@ def claude_launch_root(objs: list[dict]) -> dict[str, str]:
     return {p: root(p) for p in {o.get("parent_tool_use_id") for o in objs} if p}
 
 
+# Child agents, turns and wake-ups, for the metrics record and the delegation
+# rules. Claude's system events carry no timestamp: a child's launch time is
+# its launching message's, and its end is `task_updated`'s epoch-ms end time.
+
+CHILD_ENDINGS = {"completed": "completed", "failed": "failed", "killed": "stopped", "stopped": "stopped"}
+HAND_BACK_FRAME = re.compile(r"\A\[Subagent hand-back\].*?The report follows:\n", re.S)
+SLEEP_COMMAND = re.compile(r"(?:^|[;&|(\s])sleep\s")
+
+
+def _system(objs: list[dict], subtype: str) -> list[dict]:
+    return [o for o in objs if o.get("type") == "system" and o.get("subtype") == subtype]
+
+
+def _epoch_ms(value) -> datetime | None:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    return datetime.fromtimestamp(value / 1000, tz=timezone.utc)
+
+
+def _first_line(text) -> str | None:
+    if not isinstance(text, str):
+        return None
+    return next((line.strip() for line in text.splitlines() if line.strip()), None)
+
+
+def _result_text(block: dict) -> str:
+    content = block.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(p.get("text") or "" for p in content if isinstance(p, dict))
+    return ""
+
+
+def _unframed(text: str) -> str:
+    """A foreground child's report without the harness's hand-back frame and
+    the two-space indent it puts on every line."""
+    body = HAND_BACK_FRAME.sub("", text, count=1)
+    if body == text:
+        return text
+    return "\n".join(line.removeprefix("  ") for line in body.splitlines())
+
+
+def claude_children(objs: list[dict]) -> tuple[list[Child], list[Unknown]]:
+    """Every child agent the run started, nested ones included, in launch order.
+
+    A child is its launching Agent (or Task) call, whose input gives its
+    context. `task_started`, matched by the call's id, makes it a child that
+    actually started and gives its real background state; `task_updated`,
+    matched by task id, its end; `task_notification` its ending, its own
+    run time and its hand-back. A launch the agent refused never starts, and
+    a background shell task is not a child, so neither is counted. Children
+    started by children stream no messages of their own, which leaves their
+    models and output unknown.
+    """
+    launches: dict[str, tuple[dict, dict]] = {}  # id -> (tool_use block, enclosing object)
+    results: dict[str, tuple[dict, dict]] = {}  # id -> (tool_result block, enclosing object)
+    for o in objs:
+        for block in (o.get("message") or {}).get("content") or []:
+            if not isinstance(block, dict):
+                continue
+            if o.get("type") == "assistant" and block.get("type") == "tool_use" and block.get("name") in SUBAGENT_TOOLS:
+                launches.setdefault(block.get("id", ""), (block, o))
+            if o.get("type") == "user" and block.get("type") == "tool_result" and block.get("tool_use_id") in launches:
+                results.setdefault(block["tool_use_id"], (block, o))
+
+    started_events = _system(objs, "task_started")
+    started = {
+        s.get("tool_use_id"): s
+        for s in started_events
+        if s.get("tool_use_id") and s.get("task_type", "local_agent") == "local_agent"
+    }
+    updated = {u.get("task_id"): u.get("patch") or {} for u in _system(objs, "task_updated") if u.get("task_id")}
+    notes = {n.get("tool_use_id"): n for n in _system(objs, "task_notification") if n.get("tool_use_id")}
+    launch_of_task = {s.get("task_id"): tid for tid, s in started.items() if s.get("task_id")}
+
+    messages: dict[str, list[Message]] = {}
+    models: dict[str, set[str]] = {}
+    for o, m in zip((o for o in objs if o.get("type") == "assistant"), claude_messages(objs)):
+        if m.parent:
+            messages.setdefault(m.parent, []).append(m)
+            if (o.get("message") or {}).get("model"):
+                models.setdefault(m.parent, set()).add(o["message"]["model"])
+
+    # Without any task_started event the log cannot tell a started child from
+    # a refused launch, so every launch the agent did not refuse counts.
+    def did_start(tid: str) -> bool:
+        if started_events:
+            return tid in started
+        res = results.get(tid)
+        return not (res and res[0].get("is_error"))
+
+    children: list[Child] = []
+    unknowns: list[Unknown] = []
+    if launches and not started_events:
+        unknowns.append(Unknown("subagents.children.background", "claude logged no task_started events"))
+    for tid, (block, o) in launches.items():
+        if not tid or not did_start(tid):
+            continue
+        inp = block.get("input") or {}
+        start = started.get(tid, {})
+        note = notes.get(tid)
+        res = results.get(tid)
+
+        parent = o.get("parent_tool_use_id") or launch_of_task.get(start.get("parent_task_id")) or None
+        background = start.get("is_backgrounded")
+        if not isinstance(background, bool):
+            background = inp.get("run_in_background") if isinstance(inp.get("run_in_background"), bool) else None
+        patch = updated.get(start.get("task_id"), {})
+
+        ending, duration, hand_back = "no_hand_back", None, None
+        if note is not None:
+            ending = CHILD_ENDINGS.get(note.get("status"), note.get("status"))
+            usage = note.get("usage") if isinstance(note.get("usage"), dict) else {}
+            duration = usage["duration_ms"] / 1000 if isinstance(usage.get("duration_ms"), (int, float)) else None
+            hand_back = _first_line(note.get("summary"))
+        elif res is not None and not (res[1].get("tool_use_result") or {}).get("isAsync"):
+            # A foreground child's report came back as its launch's result.
+            status = (res[1].get("tool_use_result") or {}).get("status")
+            ending = "failed" if res[0].get("is_error") else CHILD_ENDINGS.get(status, "completed")
+            hand_back = _first_line(_unframed(_result_text(res[0])))
+
+        own = messages.get(tid)
+        child = Child(
+            id=tid,
+            parent=parent if parent in launches else None,
+            kind=inp.get("subagent_type") or start.get("subagent_type") or "general-purpose",
+            description=inp.get("description") or start.get("description"),
+            background=background,
+            launched_at=parse_timestamp(o.get("timestamp")),
+            ended_at=_epoch_ms(patch.get("end_time")),
+            duration_s=duration,
+            ending=ending,
+            hand_back=hand_back,
+            models=sorted(models.get(tid, set())) if own else None,
+            output=sum(m.chars for m in own) if own else None,
+            prompt=inp.get("prompt") or start.get("prompt"),
+        )
+        children.append(child)
+
+        gaps = [
+            ("background", child.background is None and bool(started_events),
+             "claude logged neither the child's background state nor a request for one"),
+            ("ended_at", child.ended_at is None, "claude logged no end time for the child"),
+            ("duration_s", child.duration_s is None,
+             "claude reported no duration for a failed child" if ending == "failed" else "claude reported no duration for the child"),
+            ("hand_back", child.hand_back is None and ending != "no_hand_back", "the child's hand-back was empty"),
+            ("models", own is None, "claude streamed none of the child's messages"),
+            ("output", own is None, "claude streamed none of the child's messages"),
+            ("prompt", child.prompt is None, "the launch named no prompt"),
+            ("description", child.description is None, "the launch named no description"),
+        ]
+        unknowns.extend(Unknown(f"subagents.children[{tid}].{name}", reason) for name, missing, reason in gaps if missing)
+    return children, unknowns
+
+
+def claude_turns(objs: list[dict]) -> list[Turn]:
+    """One Turn per `result` event. A turn opened by a child's completion
+    notice carries `origin.kind` "task-notification"; one opened by a timed
+    wake-up follows a `command_lifecycle` with a `wakeup_source`. A result has
+    no timestamp, so a turn ends at the last timestamped object before it."""
+    turns: list[Turn] = []
+    last: datetime | None = None
+    woken: str | None = "start"
+    for o in objs:
+        at_ = parse_timestamp(o.get("timestamp"))
+        if at_ is not None:
+            last = at_
+        if o.get("type") == "command_lifecycle" and o.get("wakeup_source"):
+            woken = "wakeup"
+        origin = o.get("origin") if isinstance(o.get("origin"), dict) else {}
+        if origin.get("kind") == "task-notification":
+            woken = "task-notification"
+        if o.get("type") == "result":
+            turns.append(Turn(ended_at=last, woken_by=woken))
+            woken = None
+    return turns
+
+
+def claude_wakeups(objs: list[dict]) -> list[Wakeup]:
+    """Every timed wake-up the main agent set: a ScheduleWakeup, a CronCreate,
+    or a shell command that sleeps, in the foreground or the background."""
+    out = []
+    for o in objs:
+        if o.get("type") != "assistant" or o.get("parent_tool_use_id"):
+            continue
+        for block in (o.get("message") or {}).get("content") or []:
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            name, inp = block.get("name"), block.get("input") or {}
+            if name == "ScheduleWakeup":
+                detail = f"delaySeconds={inp.get('delaySeconds')}"
+            elif name == "CronCreate":
+                detail = str(inp.get("cron") or inp.get("schedule") or json.dumps(inp))[:80]
+            elif name == "Bash" and SLEEP_COMMAND.search(inp.get("command") or ""):
+                detail = inp["command"][:80]
+            else:
+                continue
+            out.append(Wakeup(at=parse_timestamp(o.get("timestamp")), tool=name, detail=detail))
+    return out
+
+
 def atif_agent_name(traj: dict) -> str:
     return ((traj.get("agent") or {}).get("name") or "agent").lower()
 
@@ -453,6 +696,52 @@ def atif_subagents(traj: dict) -> Subagents:
     for f in ("completed", "failed", "stopped", "durations_s"):
         out.unknowns.append(Unknown(f"subagents.{f}", f"{name} reports no sub-agent outcomes"))
     return out
+
+
+# What an ACP trajectory's `Running subagent` call cannot tell, by child field.
+ACP_CHILD_GAPS = {
+    "parent": "sub-agent parent",
+    "background": "sub-agent background state",
+    "launched_at": "sub-agent start time",
+    "ended_at": "sub-agent end time",
+    "duration_s": "sub-agent duration",
+    "ending": "sub-agent outcome",
+    "hand_back": "sub-agent hand-back",
+    "models": "sub-agent models",
+    "output": "sub-agent output",
+}
+
+
+def atif_children(traj: dict) -> tuple[list[Child] | None, list[Unknown]]:
+    """Child agents from an ATIF trajectory. An ACP agent's `Running subagent:
+    <description>` call names its kind (`arguments.name`) and full prompt
+    (`arguments.description`, which the call's title truncates), and nothing
+    else. Codex leaves no sub-agent signal, so its list is unknown."""
+    name = atif_agent_name(traj)
+    if name == "codex":
+        return None, [Unknown("subagents.children", "codex reports no sub-agents")]
+    children: list[Child] = []
+    unknowns: list[Unknown] = []
+    for order, step in enumerate(s for s in traj.get("steps") or [] if isinstance(s, dict)):
+        for tc in step.get("tool_calls") or []:
+            title = tc.get("function_name", "") or ""
+            if not title.startswith("Running subagent"):
+                continue
+            args = tc.get("arguments") if isinstance(tc.get("arguments"), dict) else {}
+            tid = tc.get("tool_call_id", "") or ""
+            child = Child(
+                id=tid, parent=None, kind=args.get("name") or None,
+                description=title.removeprefix("Running subagent").lstrip(": ") or None,
+                background=None, launched_at=None, ended_at=None, duration_s=None, ending=None,
+                hand_back=None, models=None, output=None, prompt=args.get("description") or None, order=order,
+            )
+            children.append(child)
+            for f, missing in (("kind", child.kind), ("description", child.description), ("prompt", child.prompt)):
+                if missing is None:
+                    unknowns.append(Unknown(f"subagents.children[{tid}].{f}", f"the {name} sub-agent call named no {f}"))
+    if children:
+        unknowns[:0] = [Unknown(f"subagents.children.{f}", f"{name} logs no {what}") for f, what in ACP_CHILD_GAPS.items()]
+    return children, unknowns
 
 
 def codex_rollout_summary(sessions_dir: Path = CODEX_SESSIONS) -> Totals:

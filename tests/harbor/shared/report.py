@@ -9,7 +9,8 @@ agent/. Trials without a record, such as runs from before the recorder,
 are skipped.
 
     python3 report.py [jobs or trial dirs or globs ...]   # one row per run, by suite
-    python3 report.py --run <trial dir or trial name>     # one run's step breakdown
+    python3 report.py --run <trial dir or trial name>     # one run's step breakdown and children
+    python3 report.py --run <trial> --prompts             # ... and each child's full context
     python3 report.py --baseline <dirs or globs> --candidate <dirs or globs>
                                                           # per-suite medians, before and after
 
@@ -30,6 +31,7 @@ from pathlib import Path
 # The thresholds the report flags at. Tune them here: the records store
 # measurements only, so a change needs no suite re-run.
 DOMINANT_STEP_SHARE = 1 / 3  # a step taking more than this share of its run's wall time
+IDLE_SHARE = 0.25  # a run idle for more than this share of its wall time
 REGRESSION_RATIO = 2.0  # a candidate median at least this multiple of the baseline's
 SCORE_DROP = 0.1  # a check-score median falling by at least this much
 
@@ -185,7 +187,8 @@ def group_title(group: tuple[str, str | None]) -> str:
 
 # The run table.
 
-TABLE_HEADERS = ["trial", "agent", "model", "wall m", "turns", "out tok", "cache-read tok", "cost $", "checks", "result"]
+TABLE_HEADERS = ["trial", "agent", "model", "wall m", "idle m", "turns", "out tok", "cache-read tok", "cost $", "checks", "result"]
+IDLE_MARK = "  ◀ idle"
 
 
 def table(runs: list[Run]) -> str:
@@ -195,15 +198,17 @@ def table(runs: list[Run]) -> str:
     out = []
     for group in sorted(groups, key=lambda g: (g[0], g[1] or "")):
         out.append(group_title(group))
-        rows = []
+        rows, marks = [], []
         for run in groups[group]:
             meta = run.record.get("run") or {}
+            marks.append(IDLE_MARK if is_idle(run) else "")
             rows.append(
                 [
                     run.trial,
                     meta.get("agent") or UNKNOWN,
                     meta.get("model") or UNKNOWN,
                     minutes(run.total("wall_time_s")),
+                    minutes(run.total("idle_s")),
                     number(run.total("turns")),
                     number(run.total("output_tokens")),
                     number(run.total("cache_read_tokens")),
@@ -212,7 +217,8 @@ def table(runs: list[Run]) -> str:
                     result_text(run.reward),
                 ]
             )
-        out.extend(render(TABLE_HEADERS, rows, right={3, 4, 5, 6, 7}))
+        lines = render(TABLE_HEADERS, rows, right={3, 4, 5, 6, 7, 8})
+        out.extend(line + mark for line, mark in zip(lines, ["", "", *marks]))
         out.append("")
     return "\n".join(out)
 
@@ -266,6 +272,106 @@ def dominant_steps(run: Run) -> list[tuple[str, str, float]]:
     return out
 
 
+def idle_share(run: Run) -> float | None:
+    """The run's idle time as a share of its wall time, when both are known."""
+    idle, wall = run.total("idle_s"), run_wall_time(run)
+    return idle / wall if idle is not None and wall else None
+
+
+def is_idle(run: Run) -> bool:
+    share = idle_share(run)
+    return share is not None and share > IDLE_SHARE
+
+
+# Child agents, from a version-2 record.
+
+CHILD_HEADERS = ["child", "kind", "spec", "step", "bg", "seconds", "ending", "context"]
+
+
+def children(run: Run) -> list[dict] | None:
+    return (run.record.get("subagents") or {}).get("children")
+
+
+def has_children_key(run: Run) -> bool:
+    return "children" in (run.record.get("subagents") or {})
+
+
+def unknown_child_fields(run: Run) -> set[str]:
+    return {u.get("field") for u in run.record.get("unknown") or [] if str(u.get("field", "")).startswith("subagents.children")}
+
+
+def child_value(child: dict, name: str, unknown: set[str]) -> object:
+    """A child's field, or UNKNOWN where the record lists it unknown."""
+    value = child.get(name)
+    if value is None and {f"subagents.children.{name}", f"subagents.children[{child.get('id')}].{name}"} & unknown:
+        return UNKNOWN
+    return value
+
+
+def child_depth(child: dict, by_id: dict[str, dict]) -> int:
+    depth, seen = 0, set()
+    while child.get("parent") in by_id and child["parent"] not in seen:
+        seen.add(child["parent"])
+        child = by_id[child["parent"]]
+        depth += 1
+    return depth
+
+
+def short_id(child_id: str | None) -> str:
+    return (child_id or UNKNOWN)[-8:]
+
+
+def children_table(run: Run) -> list[str]:
+    if not has_children_key(run):
+        return ["Children: not recorded (schema 1)"]
+    kids = children(run)
+    if kids is None:
+        return ["Children: unknown (see below)"]
+    if not kids:
+        return ["Children: none"]
+    unknown = unknown_child_fields(run)
+    by_id = {c.get("id"): c for c in kids}
+    rows = []
+    for c in kids:
+        depth = child_depth(c, by_id)
+        step, spec, bg = (child_value(c, n, unknown) for n in ("step", "spec", "background"))
+        rows.append(
+            [
+                ("  " * (depth - 1) + "└ " if depth else "") + short_id(c.get("id")),
+                child_value(c, "kind", unknown) or UNKNOWN,
+                spec if spec is not None else "-",
+                step if step is not None else "-",
+                UNKNOWN if bg in (None, UNKNOWN) else "bg" if bg else "fg",
+                number(c.get("duration_s"), "{:.1f}"),
+                c.get("ending") or UNKNOWN,
+                number(c.get("prompt_chars")),
+            ]
+        )
+    return ["Children:", *("  " + line for line in render(CHILD_HEADERS, rows, right={5, 7}))]
+
+
+def prompts(run: Run) -> str:
+    """Every child's full context, each under a header naming it."""
+    kids = children(run) or []
+    unknown = unknown_child_fields(run)
+    out = []
+    for c in kids:
+        spec, step = (child_value(c, n, unknown) for n in ("spec", "step"))
+        out.append(
+            f"── {c.get('id')} {child_value(c, 'kind', unknown) or UNKNOWN} "
+            f"{spec if spec is not None else '-'}/{step if step is not None else '-'} ({number(c.get('prompt_chars'))} chars)"
+        )
+        out.append(c.get("prompt") if c.get("prompt") is not None else UNKNOWN)
+        out.append("")
+    if not has_children_key(run):
+        out.append("No child contexts recorded (schema 1).")
+    elif children(run) is None:
+        out.append("Child contexts: unknown (see the breakdown's Unknown list).")
+    elif not kids:
+        out.append("No child contexts recorded.")
+    return "\n".join(out)
+
+
 def breakdown(run: Run) -> str:
     meta = run.record.get("run") or {}
     steps = run.record.get("steps") or {}
@@ -307,6 +413,15 @@ def breakdown(run: Run) -> str:
         f"failed {number(sub.get('failed'))}, stopped {number(sub.get('stopped'))}; durations (s): "
         + (UNKNOWN if durations is None else (", ".join(f"{d:.1f}" for d in durations) or "none"))
     )
+    share = idle_share(run)
+    idle = run.total("idle_s")
+    out.append(
+        f"Idle: {number(idle, '{:.1f}')} s of {number(wall, '{:.1f}')} s"
+        + ("" if share is None else f" ({share:.0%})")
+        + (IDLE_MARK if is_idle(run) else "")
+    )
+    out.append("")
+    out.extend(children_table(run))
     unknowns = run.record.get("unknown") or []
     if unknowns:
         out.append("")
@@ -434,10 +549,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Report the metrics records of collected harbor runs.")
     parser.add_argument("paths", nargs="*", help=f"job or trial directories, or globs (default: {DEFAULT_JOBS})")
     parser.add_argument("--run", metavar="TRIAL", help="show one run's step breakdown: a trial directory or trial name")
+    parser.add_argument("--prompts", action="store_true", help="with --run, also print each child agent's full context")
     parser.add_argument("--baseline", nargs="+", metavar="DIR", help="job directories or globs: the runs before a change")
     parser.add_argument("--candidate", nargs="+", metavar="DIR", help="job directories or globs: the runs after it")
     args = parser.parse_args(argv)
 
+    if args.prompts and not args.run:
+        print("report: --prompts prints one run's child contexts, so it needs --run <trial>", file=sys.stderr)
+        return 2
     if args.baseline or args.candidate:
         if not (args.baseline and args.candidate) or args.run or args.paths:
             print(
@@ -461,7 +580,10 @@ def main(argv: list[str] | None = None) -> int:
     runs = load_runs(paths)
     if args.run:
         try:
-            print(breakdown(find_run(runs, args.run)))
+            run = find_run(runs, args.run)
+            print(breakdown(run))
+            if args.prompts:
+                print(prompts(run))
         except LookupError as exc:
             print(f"report: {exc}", file=sys.stderr)
             return 2
