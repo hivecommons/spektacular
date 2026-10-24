@@ -4,6 +4,8 @@ document_status: draft
 specs:
     - name: 000072_knowledge-access-index-and-prune
       depends_on: []
+    - name: 000073_log-mode-and-logger-providers
+      depends_on: []
 sources:
     - uri: docs/workflow-performance-investigation.md
       retrieved_date: "2026-10-24"
