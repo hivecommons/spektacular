@@ -446,7 +446,7 @@ Update the README's run-metrics reference for schema version 2. That means the c
 - A plan run without a discovery child passes.
 - The Go test suite passes.
 
-#### - [ ] Task: Judge the plan walkthrough from the session log
+#### - [x] Task: Judge the plan walkthrough from the session log
 **Id:** 0f375149-4bad-4631-aaba-8c98cf596ee9
 **Repo:** spektacular
 **Depends on:**
@@ -458,11 +458,11 @@ Make the plan suite's walkthrough-before-finished check count every plan workflo
 *Technical detail:* [context.md#task-judge-the-plan-walkthrough-from-the-session-log](./context.md#task-judge-the-plan-walkthrough-from-the-session-log)
 
 **Acceptance criteria**:
-- [ ] The 5.5 plan reference run, whose late advances were piped and chained, passes the walkthrough-before-finished check.
-- [ ] A run that goes straight from writing the documents to finished still fails it.
-- [ ] A plan run whose discovery used no child agent no longer fails, and its record shows discovery started none.
+- [x] The 5.5 plan reference run, whose late advances were piped and chained, passes the walkthrough-before-finished check.
+- [x] A run that goes straight from writing the documents to finished still fails it.
+- [x] A plan run whose discovery used no child agent no longer fails, and its record shows discovery started none.
 
-#### - [ ] Task: Judge per-repo changelog writes from the session log
+#### - [x] Task: Judge per-repo changelog writes from the session log
 **Id:** 80315b59-a537-4807-ae13-97004ea26857
 **Repo:** spektacular
 **Depends on:**
@@ -474,11 +474,11 @@ Make the implement suite's project and per-repo changelog checks accept every su
 *Technical detail:* [context.md#task-judge-per-repo-changelog-writes-from-the-session-log](./context.md#task-judge-per-repo-changelog-writes-from-the-session-log)
 
 **Acceptance criteria**:
-- [ ] The 5.5 implement reference run, which wrote both repos' records in a shell loop, passes both per-repo changelog checks.
-- [ ] A run that never successfully writes a repo's record still fails that repo's check, and a failed write does not count.
-- [ ] The project-level record check behaves the same way.
+- [x] The 5.5 implement reference run, which wrote both repos' records in a shell loop, passes both per-repo changelog checks.
+- [x] A run that never successfully writes a repo's record still fails that repo's check, and a failed write does not count.
+- [x] The project-level record check behaves the same way.
 
-#### - [ ] Task: Tell the plan and implement agents that no one answers
+#### - [x] Task: Tell the plan and implement agents that no one answers
 **Id:** 55e5ab4f-eef8-4267-bb25-7295b00df4c1
 **Repo:** spektacular
 **Depends on:** none
@@ -489,8 +489,8 @@ Add to the plan and implement suites' tasks the same wording the other suites al
 *Technical detail:* [context.md#task-tell-the-plan-and-implement-agents-that-no-one-answers](./context.md#task-tell-the-plan-and-implement-agents-that-no-one-answers)
 
 **Acceptance criteria**:
-- [ ] Every harbor suite's task tells the agent the session is headless and no one answers between its turns.
-- [ ] The plan suite's stale status wording matches the document status the verifier checks.
+- [x] Every harbor suite's task tells the agent the session is headless and no one answers between its turns.
+- [x] The plan suite's stale status wording matches the document status the verifier checks.
 
 ### Milestone 3: Required delegation and the context children are given are enforced
 
@@ -810,3 +810,62 @@ Placement is a shared function, so the verifiers can place children exactly as t
 - `tests/harbor/shared/tests/test_readme_metrics.py`
 
 **Discoveries**: None.
+
+### 2026-10-24 — Task: Judge the plan walkthrough from the session log
+
+**What was done**:
+- Added `sessionlog.plan_steps_entered`: the step each successful `plan new` or `plan goto` left the workflow at, read from the CLI's own session log.
+- The plan suite's walkthrough-before-finished check now judges that sequence, so piped and chained advances count.
+- The discovery spawn check (`TestSubAgentSpawning`, `EXPECTED_SPAWN_STEPS`) is gone. Discovery only suggests a child, and the metrics record's per-step `children` count now shows whether it used one.
+- Deleted the stray `temp.py`.
+
+**Deviations**:
+- The trim script's self-verification now includes `plan_steps_entered`, as the plan's trim task asked; that rule did not exist when the trim landed.
+- The spawn check was deleted, with the docstring pointing to the record, rather than turned into a record assertion.
+
+**Files changed**:
+- `tests/harbor/shared/sessionlog.py`
+- `tests/harbor/plan-workflow/tests/test_plan_workflow.py`
+- `tests/harbor/plan-workflow/tests/temp.py` (deleted)
+- `tests/harbor/shared/tests/trim_reference.py`
+- `tests/harbor/shared/tests/test_sessionlog_rules.py`
+
+**Discoveries**:
+- `plan file` commands also log a `state_after` with the current step, so a step sequence must be built from `new` and `goto` events only.
+- The s55 plan run's discovery did start one child (an Explore). Its old verifier failure came only from the walkthrough check misreading piped output.
+- The plan verifier imports cleanly outside a container, but its session-scoped preflight fixture calls `pytest.exit` when no transcript exists. Running its tests on reference data needs that preflight stubbed.
+
+### 2026-10-24 — Task: Judge per-repo changelog writes from the session log
+
+**What was done**:
+- Added `sessionlog.changelog_writes_by_repo`, which counts each successful `changelog file write <name>` per `--repo` value (`None` for the project record). It reads the argv the CLI received, so loops, shell variables, reordered flags and line continuations all count. Help requests and other records' writes are left out.
+- The implement suite's project and per-repo changelog checks now judge that count instead of matching command text.
+- The trim script's self-verification includes the rule too.
+
+**Deviations**: The rule takes an optional record name, so a verifier counts only its own plan's writes.
+
+**Files changed**:
+- `tests/harbor/shared/sessionlog.py`
+- `tests/harbor/implement-workflow/tests/test_implement_workflow.py`
+- `tests/harbor/shared/tests/trim_reference.py`
+- `tests/harbor/shared/tests/test_sessionlog_rules.py`
+
+**Discoveries**:
+- The s55 implement transcript wrote its records with shell variables in a loop (`changelog file write $P $a --from $f`). No command text contains the old substring, but the session log holds the resolved argv with exit 0.
+- `changelog file write <name> --help` exits 0. The test task caught that it would count as a write, and it is now excluded.
+
+### 2026-10-24 — Task: Tell the plan and implement agents that no one answers
+
+**What was done**:
+- The plan and implement suites' tasks gained the `## You are running non-interactively` section every other suite carries: no human is at the other end, nothing answers between turns, and the agent must never end its turn waiting for a reply.
+- The plan task's success criteria now name `document_status: draft`/`final`, as its verifier checks, and say the discovery child is recorded, not required.
+- `test_suite_wiring.py` pins the section's shared phrases in every suite with an `instruction.md`, so a new suite cannot leave it out.
+
+**Deviations**: The wiring check pins the phrases every suite already shares: the heading, "no human at the other end" and "nothing will answer". It does not pin "between your turns", which only the epic, plan and implement suites use.
+
+**Files changed**:
+- `tests/harbor/plan-workflow/instruction.md`
+- `tests/harbor/implement-workflow/instruction.md`
+- `tests/harbor/shared/tests/test_suite_wiring.py`
+
+**Discoveries**: The standing-rules suite's task has no "never end your turn waiting for a reply" line. It tells the agent to write the question into its answer and stop for that request, which fits a suite that checks the agent offers rather than decides.

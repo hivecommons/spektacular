@@ -52,6 +52,17 @@
 ## Task 4 (report) — implemented in report.py
 - `IDLE_SHARE`, `idle_share`, `is_idle`, `IDLE_MARK`; table gains `idle m`; breakdown gains `Idle:` line + `children_table` (schema-1: "Children: not recorded (schema 1)"); `--prompts` (needs `--run`, else exit 2) → `prompts(run)`.
 
+- Tasks 4, 5 DONE. Milestone 1 committed (worktree d4346a4; main checkout df4368f).
+
+## Task 6 (plan walkthrough) — implemented
+- `sessionlog.plan_steps_entered(events)`; plan verifier's walkthrough test reads `SessionLog(DEBUG_DIR, kinds=("plan",))`; `TestSubAgentSpawning`/`EXPECTED_SPAWN_STEPS`/`_spawn_params` deleted; `temp.py` git-rm'd; `trim_reference.measured()` includes `plan_steps_entered`.
+- s55-plan fixture: walkthrough before finished ✓; discovery children = 1.
+
+- Task 6 DONE.
+
+## Task 7 (changelog writes) — implemented
+- `sessionlog.changelog_writes_by_repo(events, name=None)` (+ `_positional`, `_VALUE_FLAGS`); implement verifier's three changelog tests read `SessionLog(DEBUG_DIR, kinds=("implement",)).all_events()`; `*_WRITE_SUBSTR` removed; trim `measured()` includes it. s55-implement → {None:1, auth:1, docs:1}.
+
 ## User decisions
 - 2026-10-24: PENDING SPEC, start only AFTER this implement run completes (user's instruction): spec name `knowledge-access-index-and-prune` (no epic). Run `spek-new`; `spec new` will raise uncommitted_changes → ask the user again. The user's request: agents write knowledge without asking; a JSON access index in the knowledge base, updated only by the `spektacular knowledge` tool, recording when entries are found in search and when they're retrieved for a plan; then all entries update automatically; a `knowledge prune` command, pass 1 using the access index + entry created date to prune invalid entries, pass 2 reads each entry, checks correctness, corrects or deletes.
 - 2026-10-24: "Run without asking" — loop through tasks without pausing between them; still stop for genuine questions/mismatches.

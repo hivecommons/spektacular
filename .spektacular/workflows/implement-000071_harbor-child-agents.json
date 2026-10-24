@@ -12,10 +12,11 @@
     "update_changelog"
   ],
   "created_at": "2026-10-24T08:24:33.857389424Z",
-  "updated_at": "2026-10-24T09:57:44.028955951Z",
+  "updated_at": "2026-10-24T10:12:55.943062234Z",
   "data": {
     "committed_milestones": [
-      1
+      1,
+      2
     ],
     "lane": true,
     "name": "000071_harbor-child-agents"
