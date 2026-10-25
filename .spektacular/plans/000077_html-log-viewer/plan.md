@@ -372,7 +372,7 @@ Rendering a page never changes the logs.
 
 **Validation point**: The builder, page-writer and `cmd` tests pass in the full shuffled Go suite. They cover one bar per span at its recorded times, nesting, types, problem flags, details, totals equal to the report, gaps, the default and selected runs, a copied logs directory giving a byte-identical page, no external references, a 2,000-span page under 1 MB, and byte-identical logs after rendering. Opening a page rendered from a fixture run in a browser with networking off shows the waterfall, the totals and a details panel on selection.
 
-#### - [ ] Task: Build the page data from a run
+#### - [x] Task: Build the page data from a run
 **Id:** 9d0f8c1e-ed99-4f76-9d06-ca3b849a600c
 **Repo:** spektacular
 **Depends on:** none
@@ -390,14 +390,14 @@ It is pure and tested in Go, so every rule about what a bar means is pinned befo
 *Technical detail:* [context.md#task-build-the-page-data-from-a-run](./context.md#task-build-the-page-data-from-a-run)
 
 **Acceptance criteria**:
-- [ ] A run gives exactly one row per recorded span and command. Each row starts and ends at the span's recorded times, with unfinished spans ending where they were cut off, and sits under its parent: tasks at the top, steps under their task, commands and helpers under their step.
-- [ ] Each span type gets its own type. A helper stopped with an error and a command that failed are marked failed. Interrupted, abandoned and never-closed spans are each marked as such, and finished work is unmarked.
-- [ ] A helper's row carries its name, type, start, duration, status, end reason and step, and the run carries its agent and workflow. Full command output and state snapshots are never included.
-- [ ] The wall, working, user-wait and helper-wait times equal the run statistics report's figures for the same run.
-- [ ] A run with a 20-minute and a 2-minute pause carries both gaps, each with its step. By the report's rule one is over the default 5-minute threshold, and both are over a 1-minute one.
-- [ ] The data's field names and shape match the plan's Data Structures section, and a fixture run's data is pinned so a change to it is noticed.
+- [x] A run gives exactly one row per recorded span and command. Each row starts and ends at the span's recorded times, with unfinished spans ending where they were cut off, and sits under its parent: tasks at the top, steps under their task, commands and helpers under their step.
+- [x] Each span type gets its own type. A helper stopped with an error and a command that failed are marked failed. Interrupted, abandoned and never-closed spans are each marked as such, and finished work is unmarked.
+- [x] A helper's row carries its name, type, start, duration, status, end reason and step, and the run carries its agent and workflow. Full command output and state snapshots are never included.
+- [x] The wall, working, user-wait and helper-wait times equal the run statistics report's figures for the same run.
+- [x] A run with a 20-minute and a 2-minute pause carries both gaps, each with its step. By the report's rule one is over the default 5-minute threshold, and both are over a 1-minute one.
+- [x] The data's field names and shape match the plan's Data Structures section, and a fixture run's data is pinned so a change to it is noticed.
 
-#### - [ ] Task: Write the run as a self-contained page
+#### - [x] Task: Write the run as a self-contained page
 **Id:** 4b33b999-493b-46d6-b081-f758f3907ce1
 **Repo:** spektacular
 **Depends on:**
@@ -417,14 +417,14 @@ The file needs no server and no network, and a hostile span name cannot break it
 *Technical detail:* [context.md#task-write-the-run-as-a-self-contained-page](./context.md#task-write-the-run-as-a-self-contained-page)
 
 **Acceptance criteria**:
-- [ ] The page is one file with no reference to anything outside it, and the run data inside it reads back exactly as built.
-- [ ] A span whose name contains HTML or a closing script tag appears only as text and cannot change the page.
-- [ ] Writing the same run twice gives identical files, with no generation time and no file paths in them.
-- [ ] The page for a generated run of about 2,000 spans is under 1 MB.
-- [ ] In a browser with networking off, the page shows the totals and a bar for every span, each type looks different, user waits stand out across the timeline, each problem is marked, gaps over the threshold are marked, and selecting a bar shows its details.
-- [ ] Sample pages for the manual checks (every span type with each problem, a 20-minute and a 2-minute pause, and runs of 2,000 and 5,000 spans) can be generated on request from the test suite.
+- [x] The page is one file with no reference to anything outside it, and the run data inside it reads back exactly as built.
+- [x] A span whose name contains HTML or a closing script tag appears only as text and cannot change the page.
+- [x] Writing the same run twice gives identical files, with no generation time and no file paths in them.
+- [x] The page for a generated run of about 2,000 spans is under 1 MB.
+- [x] In a browser with networking off, the page shows the totals and a bar for every span, each type looks different, user waits stand out across the timeline, each problem is marked, gaps over the threshold are marked, and selecting a bar shows its details.
+- [x] Sample pages for the manual checks (every span type with each problem, a 20-minute and a 2-minute pause, and runs of 2,000 and 5,000 spans) can be generated on request from the test suite.
 
-#### - [ ] Task: Render a run from the command line
+#### - [x] Task: Render a run from the command line
 **Id:** d3b05758-9f66-45e6-a5b8-591be850bed5
 **Repo:** spektacular
 **Depends on:**
@@ -437,13 +437,13 @@ Adds `spektacular stats view`. It picks a run exactly as `stats run` does, the l
 *Technical detail:* [context.md#task-render-a-run-from-the-command-line](./context.md#task-render-a-run-from-the-command-line)
 
 **Acceptance criteria**:
-- [ ] With no selection, a page for the most recent run is written to a default file name in the current directory. Selecting by workflow name, run id, kind or agent renders the run `stats run` reports for the same selection.
-- [ ] `--out` writes to the named file, or uses the default file name inside a named directory.
-- [ ] The result names the file, the run, the number of bars and the file size, as a readable line or in the standard JSON envelope, honouring `--fields`.
-- [ ] The page's totals equal `stats run`'s for the same run, and `--gap-threshold` sets the page's default threshold.
-- [ ] A page rendered from a copy of the logs directory, from outside any project, is identical to the page rendered in the project.
-- [ ] Every log file is byte-identical before and after `stats view` in a project with logging on.
-- [ ] An output path inside the logs directory, or one that cannot be written, is refused with a message naming the fix, and nothing is written.
+- [x] With no selection, a page for the most recent run is written to a default file name in the current directory. Selecting by workflow name, run id, kind or agent renders the run `stats run` reports for the same selection.
+- [x] `--out` writes to the named file, or uses the default file name inside a named directory.
+- [x] The result names the file, the run, the number of bars and the file size, as a readable line or in the standard JSON envelope, honouring `--fields`.
+- [x] The page's totals equal `stats run`'s for the same run, and `--gap-threshold` sets the page's default threshold.
+- [x] A page rendered from a copy of the logs directory, from outside any project, is identical to the page rendered in the project.
+- [x] Every log file is byte-identical before and after `stats view` in a project with logging on.
+- [x] An output path inside the logs directory, or one that cannot be written, is refused with a message naming the fix, and nothing is written.
 
 ### Milestone 2: Maintainers can explore large runs on the page
 
@@ -571,3 +571,50 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - **Changing the run statistics package, its JSON output, or the Harbor harness.** The viewer reads 000075's package as it is. Harbor on the built-in logs is spec 000076.
 - **Automated browser tests of the page's drawing and interaction.** CI has no browser or JavaScript engine. These are manual checks in the test plan.
 - **Installing the new binary or touching this repository's own `.spektacular/`** (plans-never-change-the-active-install).
+
+## Changelog
+
+### 2026-10-25 — Task: Build the page data from a run
+
+**What was done**: Added the `internal/runview` package's builder. `Build` turns one `runstats.Run` into the columnar page `Model`: one row per span and command in tree order with depth and parent, offsets and effective-end durations in ms, type and problem indexes, details (name, end reason, status, message, step, task id, span id, command line cut to 2,000 bytes, exit code), every report gap of at least `GapFloor` with its step and edge labels, the five longest step entries, and the four totals copied from `runstats.BuildReport`. A golden file pins the contract.
+
+**Deviations**: `BuildReport` is called with `Options{Gaps: 0}`, which in 000075's implementation already means "every gap", instead of the plan's `math.MaxInt32`. A span type the page does not know is drawn as `work`. A command with no recorded exit code gets 1 when its status is an error and 0 otherwise, as `runstats`' command listing does. Nodes caught in a parent cycle are placed at the top level, so every row still appears once.
+
+**Files changed**:
+- `spektacular: internal/runview/doc.go`
+- `spektacular: internal/runview/model.go`
+- `spektacular: internal/runview/build.go`
+- `spektacular: internal/runview/build_test.go`
+- `spektacular: internal/runview/testdata/model.golden.json` (regenerate with `go test ./internal/runview -run TestModelGolden -update`)
+
+**Discoveries**: A row's step is the span's own `spektacular.step` attribute. The run report falls back to the enclosing step entry for a helper or wait recorded without one (`waitRow`), so the page shows no step for such a span. `trace start` stamps the current step on every agent span (`cmd/trace.go`), so this only affects a span started with no step in progress; left as recorded. `runstats`' `attr`/`intAttr`/`stringsAttr` helpers are unexported, so `runview` keeps small copies.
+
+### 2026-10-25 — Task: Write the run as a self-contained page
+
+**What was done**: Added the embedded page (`assets/page.html`, `viewer.css`, `viewer.js`, embedded by `assets.go`) and `Write`/`Decode` in `write.go`. `Write` splices the stylesheet, the script and the `encoding/json` model into the shell's three markers in one `strings.Replacer` pass, refusing a shell whose markers are missing or repeated and assets that contain `</style` or `</script`. The script draws the visible rows on one sticky canvas inside a scrolling pane (header with identity and the four totals, legend, time axis, label column with problem glyphs, per-type bars, hatched user waits with full-height bands, problem borders, hatched gap bands labelled with their length, selection by click or arrow keys with a details panel filled through `textContent`). Tests cover the round trip, self-containment, hostile names, determinism, markers, the 2,000-span size (210,700 bytes) and the `-sample-dir` sample pages.
+
+**Deviations**: Gap labels are drawn at the foot of the view, over the bars, rather than at the top, where the first row's bar hid them. The details panel also shows a Problem line, and arrow keys move the selection. The test author added `BenchmarkBuildAndWrite2000` beside the size test; Milestone 2 adds the 5,000-span benchmark.
+
+**Files changed**:
+- `spektacular: internal/runview/assets.go`
+- `spektacular: internal/runview/write.go`
+- `spektacular: internal/runview/assets/page.html`
+- `spektacular: internal/runview/assets/viewer.css`
+- `spektacular: internal/runview/assets/viewer.js`
+- `spektacular: internal/runview/write_test.go`
+
+**Discoveries**: The page can be checked without CI changes: `go test ./internal/runview -run TestSamplePages -sample-dir <dir>` writes the sample pages, and local headless Chrome (`google-chrome-stable --headless=new`, driven over the DevTools protocol with networking emulated offline) loads the 5,000-span page and paints it in about 0.3 s, with selection responding in about 30 ms. The self-containment test scans the script and stylesheet too, so they must never contain `src=`, `href=`, `url(`, `@import` or an `http` scheme, even in comments.
+
+### 2026-10-25 — Task: Render a run from the command line
+
+**What was done**: Added `spektacular stats view` (`cmd/stats_view.go`), registered with the other `stats` forms. It selects the run through `statsSelect` and `runstats.ForReport` exactly as `stats run` does, builds and writes the page with `internal/runview`, and writes it to `--out` (a file, or an existing directory given the default `spektacular-run-<id8>.html`; by default the current directory) through a temporary file renamed into place. A target inside the logs directory (symlinks resolved) is refused with `stats_view_out_in_logs`, and a failed write with `stats_view_write_failed`, each with a next action. The result is one readable line or the standard JSON envelope (`log_dir`, `skipped_lines`, `gap_threshold_ms`, `run`, `file`, `rows`, `bytes`), and `--schema` lists it. The group's logging exemption covers it with no new code.
+
+**Deviations**: `cmd/stats_test.go` changed too: the bare `stats` next action and the schema test's list of forms now include `view`. The plan's separate `runStatsView` steps (format, threshold, logs, candidates) reuse 000075's `statsSelect`, which does all four.
+
+**Files changed**:
+- `spektacular: cmd/stats.go`
+- `spektacular: cmd/stats_view.go`
+- `spektacular: cmd/stats_view_test.go`
+- `spektacular: cmd/stats_test.go`
+
+**Discoveries**: Rendered against a copy of this project's own logs, a real 2h55m implement run (365 spans) makes a 60 KB page whose biggest feature is the long idle gaps between tasks, which is exactly what the viewer is for.
