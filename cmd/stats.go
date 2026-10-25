@@ -50,6 +50,29 @@ recently; otherwise the most recent run the selection matches.`,
 	RunE: runStatsRun,
 }
 
+var statsCompareCmd = &cobra.Command{
+	Use:   "compare",
+	Short: "Compare runs side by side, step by step and in total, against the first",
+	Long: `Compare two or more runs side by side, step by step and in total, with each
+run's difference from the first in time and percentage. A step a run never
+entered is absent (null), not zero. With no selection it compares the two
+most recent runs of the latest run's kind, oldest first; with two or more
+--run values, exactly those runs, in that order.`,
+	Args: cobra.NoArgs,
+	RunE: runStatsCompare,
+}
+
+var statsSummaryCmd = &cobra.Command{
+	Use:   "summary",
+	Short: "Summarise many runs: per step and in total, the count, median and 90th percentile",
+	Long: `Summarise a set of runs: for each step and for the totals, the number of runs
+it applies to, the median and the 90th percentile (nearest rank). With no
+selection it summarises every run of the latest run's kind; with --run
+values, exactly those runs.`,
+	Args: cobra.NoArgs,
+	RunE: runStatsSummary,
+}
+
 // statsSource is what every stats result carries beside its figures: the
 // logs directory read and the lines in it that could not be read.
 type statsSource struct {
@@ -65,6 +88,33 @@ type statsListResult struct {
 type statsRunResult struct {
 	statsSource
 	runstats.Report
+}
+
+// statsCompareResult and statsSummaryResult are the JSON of `stats compare`
+// and `stats summary`, a contract read by the Harbor harness (spec 000076)
+// and fixed by the Data Structures section of plan 000075_run-stats-command:
+//
+//	compare: {"log_dir","skipped_lines","gap_threshold_ms",
+//	          "runs":[<run summary>, base first],
+//	          "totals":[{"figure":"wall_ms","values":[..],"delta":[..],"delta_pct":[..]}],
+//	          "steps":[{"step":"discovery","figures":[{"figure":"duration_ms","values":[..],"delta":[..],"delta_pct":[..]}]}]}
+//	summary: the same top-level shape, each figure {"figure","count","median","p90"}
+//
+// Arrays line up with runs; a step a run never entered is null there, with
+// null deltas; delta_pct is null when the base is 0 or null, rounded to one
+// decimal. Total figures, in order: wall_ms, working_ms, user_wait_ms,
+// helper_wait_ms, command_ms, commands, helpers, gap_ms. Step figures, in
+// order: duration_ms, entries, commands, command_ms, helper_wait_ms,
+// user_wait_ms. count is the runs a figure applies to (for a step, the runs
+// that entered it); median and p90 are numbers, null when count is 0.
+type statsCompareResult struct {
+	statsSource
+	runstats.Comparison
+}
+
+type statsSummaryResult struct {
+	statsSource
+	runstats.Summary
 }
 
 // statsSelectionFlags are the flags every stats subcommand's schema lists.
@@ -159,21 +209,9 @@ func runStatsRun(cmd *cobra.Command, _ []string) error {
 			Flags: flags,
 		}, "")
 	}
-	format, err := statsFormat(cmd)
+	format, opts, logs, c, _, err := statsSelect(cmd)
 	if err != nil {
 		return err
-	}
-	opts, err := statsOptions(cmd)
-	if err != nil {
-		return err
-	}
-	logs, err := statsLogs(cmd)
-	if err != nil {
-		return err
-	}
-	c, err := logs.Candidates(statsFilter(cmd))
-	if err != nil {
-		return statsError(err)
 	}
 	run, err := runstats.ForReport(c)
 	if err != nil {
@@ -184,6 +222,98 @@ func runStatsRun(cmd *cobra.Command, _ []string) error {
 		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsRunResult{statsSource: source(logs), Report: rep})
 	}
 	return runstats.RenderReport(cmd.OutOrStdout(), rep, logs.Skipped)
+}
+
+// statsFigureSchema is the schema of a comparison's or a summary's output.
+func statsFigureSchema(figure *schemaProp) *schemaObj {
+	return statsOutput(map[string]*schemaProp{
+		"gap_threshold_ms": {Type: "integer"},
+		"runs":             {Type: "array", Items: statsRunSummarySchema, Description: "the runs, in the order compared (the first is the base)"},
+		"totals":           {Type: "array", Items: figure, Description: "wall_ms, working_ms, user_wait_ms, helper_wait_ms, command_ms, commands, helpers, gap_ms"},
+		"steps": {Type: "array", Description: "one entry per step name", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
+			"step":    {Type: "string"},
+			"figures": {Type: "array", Items: figure, Description: "duration_ms, entries, commands, command_ms, helper_wait_ms, user_wait_ms"},
+		}}},
+	})
+}
+
+func statsFigureFlags() map[string]*schemaProp {
+	flags := statsSelectionFlags()
+	flags["gap-threshold"] = &schemaProp{Type: "string", Description: "a Go duration; gaps longer than it count toward gap_ms (default 5m)"}
+	return flags
+}
+
+func runStatsCompare(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		return output.Write(cmd.OutOrStdout(), commandSchema{
+			Output: statsFigureSchema(&schemaProp{Type: "object", Properties: map[string]*schemaProp{
+				"figure":    {Type: "string"},
+				"values":    {Type: "array", Items: &schemaProp{Type: "integer"}, Description: "one per run; null where it does not apply"},
+				"delta":     {Type: "array", Items: &schemaProp{Type: "integer"}, Description: "each value less the first run's; null where either is null"},
+				"delta_pct": {Type: "array", Items: &schemaProp{Type: "number"}, Description: "delta as a percentage of the first run's value, one decimal; null when that is null or 0"},
+			}}),
+			Flags: statsFigureFlags(),
+		}, "")
+	}
+	format, opts, logs, c, f, err := statsSelect(cmd)
+	if err != nil {
+		return err
+	}
+	runs, err := runstats.ForCompare(c, f)
+	if err != nil {
+		return statsError(err)
+	}
+	cmp := runstats.Compare(runs, opts)
+	if format == statusFormatJSON {
+		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsCompareResult{statsSource: source(logs), Comparison: cmp})
+	}
+	return runstats.RenderComparison(cmd.OutOrStdout(), cmp, logs.Skipped)
+}
+
+func runStatsSummary(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		return output.Write(cmd.OutOrStdout(), commandSchema{
+			Output: statsFigureSchema(&schemaProp{Type: "object", Properties: map[string]*schemaProp{
+				"figure": {Type: "string"},
+				"count":  {Type: "integer", Description: "the runs the figure applies to; for a step, the runs that entered it"},
+				"median": {Type: "number", Description: "null when count is 0"},
+				"p90":    {Type: "number", Description: "nearest rank; null when count is 0"},
+			}}),
+			Flags: statsFigureFlags(),
+		}, "")
+	}
+	format, opts, logs, c, f, err := statsSelect(cmd)
+	if err != nil {
+		return err
+	}
+	runs, err := runstats.ForSummary(c, f)
+	if err != nil {
+		return statsError(err)
+	}
+	sum := runstats.Summarise(runs, opts)
+	if format == statusFormatJSON {
+		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsSummaryResult{statsSource: source(logs), Summary: sum})
+	}
+	return runstats.RenderSummary(cmd.OutOrStdout(), sum, logs.Skipped)
+}
+
+// statsSelect does what every report shares: it validates the format and
+// options, reads the logs, and resolves the selection's candidates.
+func statsSelect(cmd *cobra.Command) (format string, opts runstats.Options, logs *runstats.Logs, c []*runstats.Run, f runstats.Filter, err error) {
+	if format, err = statsFormat(cmd); err != nil {
+		return
+	}
+	if opts, err = statsOptions(cmd); err != nil {
+		return
+	}
+	if logs, err = statsLogs(cmd); err != nil {
+		return
+	}
+	f = statsFilter(cmd)
+	if c, err = logs.Candidates(f); err != nil {
+		err = statsError(err)
+	}
+	return
 }
 
 func source(l *runstats.Logs) statsSource {
@@ -323,7 +453,7 @@ func init() {
 	statsCmd.PersistentFlags().Duration("gap-threshold", 5*time.Minute, "Gaps longer than this count toward the gap total")
 
 	statsRunCmd.Flags().Int("gaps", runstats.DefaultOptions.Gaps, "The most gaps to list, longest first")
-	for _, c := range []*cobra.Command{statsListCmd, statsRunCmd} {
+	for _, c := range []*cobra.Command{statsListCmd, statsRunCmd, statsCompareCmd, statsSummaryCmd} {
 		c.Flags().Bool("schema", false, "Print the input/output schema and exit")
 		statsCmd.AddCommand(c)
 	}

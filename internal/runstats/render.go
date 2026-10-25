@@ -3,6 +3,8 @@ package runstats
 import (
 	"fmt"
 	"io"
+	"math"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -182,4 +184,131 @@ func fmtMS(v int64) string {
 		return fmt.Sprintf("%s%dh%02dm%02ds", sign, h, m, s)
 	}
 	return fmt.Sprintf("%s%dm%02ds", sign, m, s)
+}
+
+// RenderComparison draws a comparison: the runs, each step's duration per
+// run with the difference from the first run, and every total the same way.
+// A step a run never entered shows as "-".
+func RenderComparison(w io.Writer, c Comparison, skipped int) error {
+	if len(c.Runs) == 0 {
+		_, err := io.WriteString(w, "No runs to compare.\n")
+		return err
+	}
+	b := &strings.Builder{}
+	head := "STEP"
+	for _, r := range c.Runs {
+		head += "\t" + runHeading(r)
+	}
+	fmt.Fprintf(b, "Comparing %s against %s\n", count(len(c.Runs), "run"), runHeading(c.Runs[0]))
+	for _, r := range c.Runs {
+		fmt.Fprintf(b, "  %s  %s %s  agent %s  %s  wall %s\n", shortID(r.RunID), r.Kind, r.Name, r.Agent, r.Status, fmtMS(r.WallMS))
+	}
+
+	section(b, "Steps (duration)")
+	if len(c.Steps) == 0 {
+		fmt.Fprintln(b, "none recorded")
+	} else {
+		tw := table(b)
+		fmt.Fprintln(tw, head)
+		for _, s := range c.Steps {
+			fmt.Fprintf(tw, "%s\t%s\n", s.Step, figureCells(s.Figures[0]))
+		}
+		tw.Flush()
+	}
+
+	section(b, "Totals")
+	tw := table(b)
+	fmt.Fprintln(tw, "FIGURE"+strings.TrimPrefix(head, "STEP"))
+	for _, f := range c.Totals {
+		fmt.Fprintf(tw, "%s\t%s\n", f.Figure, figureCells(f))
+	}
+	tw.Flush()
+	skippedLine(b, skipped)
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+// RenderSummary draws a summary: per step and in total, the number of runs,
+// the median and the 90th percentile.
+func RenderSummary(w io.Writer, s Summary, skipped int) error {
+	b := &strings.Builder{}
+	fmt.Fprintf(b, "Runs: %d\n", len(s.Runs))
+	for _, r := range s.Runs {
+		fmt.Fprintf(b, "  %s  %s %s  agent %s  %s  wall %s\n", shortID(r.RunID), r.Kind, r.Name, r.Agent, r.Status, fmtMS(r.WallMS))
+	}
+
+	section(b, "Steps (duration)")
+	if len(s.Steps) == 0 {
+		fmt.Fprintln(b, "none recorded")
+	} else {
+		tw := table(b)
+		fmt.Fprintln(tw, "STEP\tRUNS\tMEDIAN\tP90")
+		for _, st := range s.Steps {
+			d := st.Figures[0]
+			fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n", st.Step, d.Count, statValue(d.Figure, d.Median), statValue(d.Figure, d.P90))
+		}
+		tw.Flush()
+	}
+
+	section(b, "Totals")
+	tw := table(b)
+	fmt.Fprintln(tw, "FIGURE\tRUNS\tMEDIAN\tP90")
+	for _, f := range s.Totals {
+		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n", f.Figure, f.Count, statValue(f.Figure, f.Median), statValue(f.Figure, f.P90))
+	}
+	tw.Flush()
+	skippedLine(b, skipped)
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+// runHeading names a run in a column heading: its short id and start date.
+func runHeading(r RunSummary) string {
+	return shortID(r.RunID) + " " + r.StartedAt.Format("2006-01-02")
+}
+
+// figureCells are a figure's per-run cells: the first run's value, then each
+// later run's value with its difference, as "10m01s (-3m31s, -26.0%)".
+func figureCells(f Figure) string {
+	cells := make([]string, len(f.Values))
+	for i, v := range f.Values {
+		if v == nil {
+			cells[i] = "-"
+			continue
+		}
+		cells[i] = figureValue(f.Figure, *v)
+		if i == 0 || f.Delta[i] == nil {
+			continue
+		}
+		diff := figureValue(f.Figure, *f.Delta[i])
+		if *f.Delta[i] >= 0 {
+			diff = "+" + diff
+		}
+		if f.DeltaPct[i] != nil {
+			diff += fmt.Sprintf(", %+.1f%%", *f.DeltaPct[i])
+		}
+		cells[i] += " (" + diff + ")"
+	}
+	return strings.Join(cells, "\t")
+}
+
+// isDuration reports whether a figure is in milliseconds.
+func isDuration(figure string) bool { return strings.HasSuffix(figure, "_ms") }
+
+func figureValue(figure string, v int64) string {
+	if isDuration(figure) {
+		return fmtMS(v)
+	}
+	return fmt.Sprintf("%d", v)
+}
+
+// statValue prints a median or percentile, which may be fractional.
+func statValue(figure string, v *float64) string {
+	if v == nil {
+		return "-"
+	}
+	if isDuration(figure) {
+		return fmtMS(int64(math.Round(*v)))
+	}
+	return strconv.FormatFloat(*v, 'f', -1, 64)
 }

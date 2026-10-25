@@ -1,0 +1,21 @@
+Comparing 2 runs against aaaa0000 2026-10-25
+  aaaa0000  spec 000001_demo  agent claude  finished  wall 17m01s
+  bbbb0000  spec 000001_demo  agent claude  finished  wall 14m01s
+
+Steps (duration)
+STEP       aaaa0000 2026-10-25  bbbb0000 2026-10-25
+overview   2m00s                2m00s (+0.0s, +0.0%)
+interview  10m00s               12m00s (+2m00s, +20.0%)
+split      5m00s                -
+finished   0.0s                 0.0s (+0.0s)
+
+Totals
+FIGURE          aaaa0000 2026-10-25  bbbb0000 2026-10-25
+wall_ms         17m01s               14m01s (-3m00s, -17.6%)
+working_ms      17m01s               13m01s (-4m00s, -23.5%)
+user_wait_ms    0.0s                 1m00s (+1m00s)
+helper_wait_ms  0.0s                 0.0s (+0.0s)
+command_ms      4.0s                 3.0s (-1.0s, -25.0%)
+commands        4                    3 (-1, -25.0%)
+helpers         0                    0 (+0)
+gap_ms          9m59s                10m59s (+1m00s, +10.0%)
