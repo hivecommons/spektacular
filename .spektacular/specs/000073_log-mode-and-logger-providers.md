@@ -42,39 +42,39 @@ Spektacular will keep a lightweight, always-on record of every command an agent 
 -->
 ## Requirements
 
-- [ ] **Every command is logged by default**
+- [x] **Every command is logged by default**
   The system must record every Spektacular command run inside a project, without the user turning anything on, unless the project's configuration switches logging off. Commands that only report on the project or its logs (status and run statistics) are never recorded, so polling and reporting never add to or trim the logs.
-- [ ] **Each command is recorded once, linkable to its run**
+- [x] **Each command is recorded once, linkable to its run**
   The system must record each command once, with its name, start time, end time, success or error status, and identifiers that link it to the other commands of the same run.
-- [ ] **Records identify the agent, run and step**
+- [x] **Records identify the agent, run and step**
   Each record must carry the agent name, the workflow kind and name, the workflow step the command ran in and, when the command moved the workflow to another step, the step it moved to. When the configuration names no agent, the record carries the agent as `unknown`.
-- [ ] **A run is one trace**
+- [x] **A run is one trace**
   All commands of one workflow run must share one run identifier: the same across an interruption and resume, new when the run is restarted from scratch, and different for each of several workflows running at the same time. A command run outside any workflow gets an identifier of its own.
-- [ ] **Runs started before the upgrade keep working**
+- [x] **Runs started before the upgrade keep working**
   A workflow already in progress when the project upgrades to this version must keep resuming without error; it is given a run identifier on its first command after the upgrade, and keeps it from then on.
-- [ ] **The default level records timing and errors only**
+- [x] **The default level records timing and errors only**
   At the default level, each record must hold the command, its identification, its timing, its exit status and any error message, and must not hold the command's full response or workflow state snapshots.
-- [ ] **A verbose level keeps the full record**
+- [x] **A verbose level keeps the full record**
   Users can choose a verbose level that additionally records each command's full response and the workflow state before and after it, as debug mode records today.
-- [ ] **Logging can be switched off**
+- [x] **Logging can be switched off**
   Users can switch logging off in the project's configuration, after which no command is recorded.
-- [ ] **The logger is chosen in configuration**
+- [x] **The logger is chosen in configuration**
   Users can choose which logger is used in the project's configuration; a file logger is the default. An unknown logger name is reported as a configuration error that names the accepted loggers.
-- [ ] **The log location is configurable**
+- [x] **The log location is configurable**
   Users can set the directory logs are written to; by default logs go to a logs directory inside the project's Spektacular folder.
-- [ ] **Logs stay out of version control**
+- [x] **Logs stay out of version control**
   Projects initialised or migrated by Spektacular must ignore the default logs directory in version control, so logs are never committed by accident.
-- [ ] **Only the most recent runs are kept**
+- [x] **Only the most recent runs are kept**
   The system must keep logs for the most recent workflow runs only and delete older ones automatically; the number kept is set in the project's configuration and defaults to 10. Commands run outside any workflow are grouped into one log per day, and the same number of most recent days is kept, so standalone commands never push out workflow runs.
-- [ ] **Logging never breaks a command**
+- [x] **Logging never breaks a command**
   A failure to write a log, or to delete old logs, must never change a command's output or exit status.
-- [ ] **Debug configuration is migrated**
+- [x] **Debug configuration is migrated**
   Running the project migration must convert an existing debug setting into the new logging configuration, keeping the user's intent: debug on becomes the verbose level, debug off becomes the default level.
-- [ ] **Old debug logs are left alone**
+- [x] **Old debug logs are left alone**
   The system must neither read, move nor delete existing debug log files; removing them is left to the user.
-- [ ] **The test harness keeps its session reporting**
+- [x] **The test harness keeps its session reporting**
   The project's end-to-end test harness must keep reporting the workflow steps and parallel runs it reports today, reading them from the new logs, until a later spec in this epic replaces that reporting.
-- [ ] **The documentation describes logging**
+- [x] **The documentation describes logging**
   User documentation must describe logging (what each level records, where logs go, retention, switching it off, and which commands are never recorded), and the configuration documentation must cover the logging settings and no longer cover debug.
 
 
@@ -110,49 +110,49 @@ Spektacular will keep a lightweight, always-on record of every command an agent 
 -->
 ## Acceptance Criteria
 
-- [ ] **A fresh project logs without setup**
+- [x] **A fresh project logs without setup**
   In a project newly initialised with no logging settings changed, running any Spektacular command leaves a JSON Lines log file in the project's logs directory containing a record of that command.
-- [ ] **Records follow the trace data model**
+- [x] **Records follow the trace data model**
   Every record of a command carries a trace identifier, a span identifier, a name, a start time, an end time and a status.
-- [ ] **Records name the agent, workflow and step**
+- [x] **Records name the agent, workflow and step**
   In a project whose configuration names agent `claude`, a `spec goto` command's record carries the agent `claude`, the workflow kind `spec`, the spec's name, the step it ran in and the step the workflow moved to. With no agent in the configuration, the record carries the agent `unknown`.
-- [ ] **A resumed run keeps its trace**
+- [x] **A resumed run keeps its trace**
   Starting a spec workflow, running two `goto` commands, then running `spec new` without a name (the resume report) and another `goto` produces records that all carry the same trace identifier.
-- [ ] **A restarted run gets a new trace**
+- [x] **A restarted run gets a new trace**
   Running `spec new --force` for the same spec name produces records with a trace identifier different from the earlier run's.
-- [ ] **Concurrent runs keep separate traces**
+- [x] **Concurrent runs keep separate traces**
   Two plan workflows for different specs, run at the same time in the same project (as planning an epic does), produce records whose trace identifiers differ between the two specs and are each constant within one spec.
-- [ ] **A run from before the upgrade resumes**
+- [x] **A run from before the upgrade resumes**
   A spec workflow started with the previous Spektacular version and resumed with this one continues without error, and every record from its commands after the upgrade carries the same trace identifier.
-- [ ] **Commands outside a workflow get their own trace**
+- [x] **Commands outside a workflow get their own trace**
   With no workflow in progress, two consecutive `knowledge search` commands produce two records with different trace identifiers, both in the same log for that day.
-- [ ] **The default level leaves out responses**
+- [x] **The default level leaves out responses**
   At the default level, a record of a command whose output is several kilobytes contains its command, timing, exit status and error message (when it failed), and contains neither the command's output nor any workflow state snapshot.
-- [ ] **A failed command records its error**
+- [x] **A failed command records its error**
   At the default level, running a command that fails (for example `spec goto` with an unknown step) produces a record with an error status, a non-zero exit code and the error message the command returned.
-- [ ] **The verbose level records the full response**
+- [x] **The verbose level records the full response**
   With the verbose level configured, a command's record contains its full output exactly as returned and the workflow state before and after it.
-- [ ] **Logging off records nothing**
+- [x] **Logging off records nothing**
   With logging switched off in the configuration, running several commands creates no log file and adds no record to existing ones.
 - [ ] **Status and reporting are not recorded**
   With logging at the default level, running `status` and any run statistics command adds no record to any log.
-- [ ] **The provider setting selects the logger**
+- [x] **The provider setting selects the logger**
   The configuration accepts the file logger and logs are written by it; an unknown logger name is reported as a configuration error naming the accepted loggers.
-- [ ] **A custom directory is honoured**
+- [x] **A custom directory is honoured**
   With the log directory set to another path, records are written there and nothing is written to the default logs directory.
-- [ ] **Logs are ignored by version control**
+- [x] **Logs are ignored by version control**
   After `init` in a new git repository, and after `migrate` in a project initialised by an earlier version, writing logs leaves `git status` showing no files from the logs directory.
-- [ ] **Only the configured number of runs is kept**
+- [x] **Only the configured number of runs is kept**
   With the default retention, after 12 separate workflow runs the logs directory holds the logs of the 10 most recent runs only; with retention set to 3, it holds the 3 most recent. Running many standalone commands in between removes no workflow run's log.
-- [ ] **A logging failure does not fail the command**
+- [x] **A logging failure does not fail the command**
   With the logs directory made unwritable, and separately with an old log that cannot be deleted when retention trims old runs, a command's output and exit code are identical to a run with logging switched off.
-- [ ] **Migration converts debug settings**
+- [x] **Migration converts debug settings**
   Running `migrate` on a project with debug turned on produces a logging configuration at the verbose level, on a project with debug turned off produces one at the default level, and in both cases the debug setting is gone from the configuration.
-- [ ] **Old debug files are untouched**
+- [x] **Old debug files are untouched**
   After `migrate` and further commands, every file that was in the old debug log directory is still there with identical contents.
 - [ ] **The test harness still reports sessions**
   A Harbor workflow suite run after this change reports the same workflow steps and parallel runs in its results as before, with no reliance on the old debug log directory.
-- [ ] **The docs describe logging**
+- [x] **The docs describe logging**
   The documentation site's debugging page describes the levels and what each records, the logs location, retention, switching logging off and which commands are never recorded, and the configuration reference documents the logging settings and no longer documents a debug setting; the site builds without errors.
 
 
