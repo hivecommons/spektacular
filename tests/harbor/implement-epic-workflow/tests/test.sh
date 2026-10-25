@@ -3,7 +3,7 @@
 # The timeline goes first so it is in the verifier output whatever the tests
 # find. It reads Bob's own logs too when they are present. It only reports,
 # and never fails the run.
-python3 /tests/timeline.py /app/.spektacular/debug /root/.bob/logs || true
+python3 /tests/timeline.py /app/.spektacular/logs /root/.bob/logs || true
 
 pytest /tests/test_implement_epic_workflow.py -v --junitxml=/logs/verifier/junit.xml
 

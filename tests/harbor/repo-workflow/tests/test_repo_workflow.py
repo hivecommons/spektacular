@@ -833,6 +833,9 @@ def registered_repo() -> dict:
     """
     assert CONFIG_FILE.exists(), f"config.yaml missing at {CONFIG_FILE} — init not run"
     text = CONFIG_FILE.read_text()
+    # The image pre-seeds a config holding only log.level; init records the
+    # installed skills.
+    assert "skills_version:" in text, f"config.yaml at {CONFIG_FILE} records no installed skills — init not run"
     project_name = yaml_top_level(text).get("name", "")
     entries = config_repo_entries(text)
     added = [

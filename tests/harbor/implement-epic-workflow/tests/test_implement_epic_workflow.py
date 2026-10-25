@@ -25,7 +25,7 @@ import pytest
 from sessionlog import SessionLog
 
 PROJECT_DIR = Path("/app")
-DEBUG_DIR = PROJECT_DIR / ".spektacular" / "debug"
+DEBUG_DIR = PROJECT_DIR / ".spektacular" / "logs"
 
 STORAGE = "20260201000001-storage"
 FORMAT = "20260201000002-format"
@@ -34,14 +34,32 @@ EXPORT = "20260201000004-export"
 SPECS = [STORAGE, FORMAT, COMMANDS, EXPORT]
 
 
+_logging_off = False
+
+
+def logging_off() -> None:
+    """Switch the project's logging off before the verifier's own first
+    `spektacular` call, so none of its calls appear in the session log it
+    asserts against. The level comes from the project's config alone, so
+    nothing else keeps them out. The log is read from disk, never through
+    the CLI, so this changes nothing the agent's run left behind."""
+    global _logging_off
+    if not _logging_off:
+        from loglevel import set_log_level
+
+        set_log_level(PROJECT_DIR / ".spektacular" / "config.yaml", "off")
+        _logging_off = True
+
+
 def cli(*args: str, parse: bool = True):
-    """Run spektacular from the project root, kept out of the session log."""
+    """Run spektacular from the project root, kept out of the session log
+    (see logging_off)."""
+    logging_off()
     result = subprocess.run(
         ["spektacular", *args],
         cwd=PROJECT_DIR,
         capture_output=True,
         text=True,
-        env={**os.environ, "SPEKTACULAR_SESSION_LOG": "off"},
     )
     if not parse:
         return result
@@ -211,8 +229,8 @@ class TestBehaviour:
 class TestOrchestration:
     def test_session_log_recorded(self, log):
         assert not log.empty, (
-            f"no session log under {DEBUG_DIR}: SPEKTACULAR_SESSION_LOG=on, set in "
-            "the image, did not reach the agent's spektacular calls"
+            f"no session log under {DEBUG_DIR}: the seeded project's log.level: verbose "
+            "did not reach the agent's spektacular calls"
         )
 
     @pytest.mark.parametrize("spec", SPECS)

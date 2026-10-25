@@ -1,23 +1,22 @@
 package cmd
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/hivecommons/spektacular/internal/sessionlog"
+	"github.com/hivecommons/spektacular/internal/tracelog"
 	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/stretchr/testify/require"
 )
 
-// These tests cover how the session log follows orchestrated workflows: a
-// command driving a lane is snapshotted from, and filed under, that lane
-// rather than the shared state.json.
+// These tests cover how the command log follows orchestrated workflows: a
+// command driving a lane is snapshotted from, and filed under, that lane's
+// run rather than the shared state.json's.
 
-// TestSnapshotStatePath covers which state file a command's session record
-// follows, across the argv shapes an agent sends.
+// TestSnapshotStatePath covers which state file a command's record follows,
+// across the argv shapes an agent sends.
 func TestSnapshotStatePath(t *testing.T) {
 	dataDir := laneProject(t)
 	// alpha has a plan lane; beta has none.
@@ -80,8 +79,8 @@ func TestSnapshotStatePath(t *testing.T) {
 }
 
 // runDebugCmd runs args through runRoot with os.Args set to match, since the
-// session log records (and routes by) the real process argv, not the args
-// handed to cobra.
+// command log records (and routes by, and checks the logging exemption of)
+// the real process argv, not the args handed to cobra.
 func runDebugCmd(t *testing.T, args ...string) string {
 	t.Helper()
 	saved := os.Args
@@ -90,80 +89,117 @@ func runDebugCmd(t *testing.T, args ...string) string {
 	return runOK(t, args...)
 }
 
-// sessionEvents reads every event of the sole log file for sessionID.
-func sessionEvents(t *testing.T, dir, sessionID string) []sessionlog.Event {
+// laneLogFile returns the sole log file of the plan run named name, whose
+// file ends in "_<agent>_plan_<name>.jsonl".
+func laneLogFile(t *testing.T, logs, agent, name string) string {
 	t.Helper()
-	suffix := "_" + strings.ReplaceAll(sessionID, ":", "_") + ".jsonl"
+	suffix := "_" + agent + "_plan_" + name + ".jsonl"
 	var path string
-	for _, f := range sessionLogFiles(t, dir) {
+	for _, f := range logFiles(t, logs) {
 		if strings.HasSuffix(f, suffix) {
-			require.Emptyf(t, path, "expected one log file for %s", sessionID)
+			require.Emptyf(t, path, "expected one log file for plan %s", name)
 			path = f
 		}
 	}
-	require.NotEmptyf(t, path, "no log file for %s among %v", sessionID, sessionLogFiles(t, dir))
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	var events []sessionlog.Event
-	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
-		var ev sessionlog.Event
-		require.NoError(t, json.Unmarshal([]byte(line), &ev))
-		events = append(events, ev)
-	}
-	return events
+	require.NotEmptyf(t, path, "no log file for plan %s among %v", name, logFiles(t, logs))
+	return path
 }
 
-// A lane's commands are filed under the lane's own session, beside a
-// standalone workflow in state.json, and the command that finishes the lane
-// (removing its files) is still filed under it.
-func TestSessionLog_LaneCommandsAreFiledUnderTheLane(t *testing.T) {
+// requireOneTrace requires every record to carry traceID.
+func requireOneTrace(t *testing.T, recs []tracelog.Record, traceID string) {
+	t.Helper()
+	require.NotEmpty(t, recs)
+	for i, r := range recs {
+		require.Equalf(t, traceID, r.TraceID, "record %d (%s)", i, r.Name)
+	}
+}
+
+// Two orchestrated plan lanes and one standalone plan workflow run beside
+// each other with interleaved gotos: each lane's records are filed under its
+// own run, in its own <ts>_<agent>_plan_<name>.jsonl, with the lane's
+// constant run id as trace id, distinct from the other lane's and from the
+// standalone run's; the command that finishes a lane (removing its files) is
+// still filed under it.
+func TestLog_LaneCommandsAreFiledUnderTheLane(t *testing.T) {
+	useConfiguredLogLevel(t)
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSpecCommandConfig(t, dir, "debug:\n  enabled: true\n")
+	writeSpecCommandConfig(t, dir, "log:\n  level: verbose\n")
 	resetRootCmd(t)
 	dataDir := filepath.Join(dir, ".spektacular")
+	logs := logsDir(dir)
 
 	runDebugCmd(t, "plan", "new", "--data", `{"name":"solo"}`)
 	runDebugCmd(t, "plan", "new", "--data", `{"name":"alpha","orchestrated":true}`)
+	runDebugCmd(t, "plan", "new", "--data", `{"name":"beta","orchestrated":true}`)
 	runDebugCmd(t, "plan", "goto", "--data", `{"step":"discovery","name":"alpha"}`)
+	runDebugCmd(t, "plan", "goto", "--data", `{"step":"discovery","name":"beta"}`)
+	runDebugCmd(t, "plan", "goto", "--data", `{"step":"architecture","name":"alpha"}`)
+	runDebugCmd(t, "plan", "goto", "--data", `{"step":"architecture","name":"beta"}`)
 
-	solo := sessionEvents(t, dir, "plan:solo")
-	require.Len(t, solo, 1, "the lane's commands must not land in the standalone session")
+	soloRun := sharedState(t, dataDir).RunID
+	alphaRun := laneState(t, dataDir, "plan", "alpha").RunID
+	betaRun := laneState(t, dataDir, "plan", "beta").RunID
+	require.Regexp(t, traceIDPattern, alphaRun)
+	require.Regexp(t, traceIDPattern, betaRun)
+	require.NotEqual(t, alphaRun, betaRun)
+	require.NotEqual(t, soloRun, alphaRun)
+	require.NotEqual(t, soloRun, betaRun)
 
-	alpha := sessionEvents(t, dir, "plan:alpha")
-	require.Len(t, alpha, 2)
+	solo := readRecords(t, laneLogFile(t, logs, "unknown", "solo"))
+	require.Len(t, solo, 1, "the lanes' commands must not land in the standalone run")
+	requireOneTrace(t, solo, soloRun)
+
+	alpha := readRecords(t, laneLogFile(t, logs, "unknown", "alpha"))
+	require.Len(t, alpha, 3)
+	requireOneTrace(t, alpha, alphaRun)
+	beta := readRecords(t, laneLogFile(t, logs, "unknown", "beta"))
+	require.Len(t, beta, 3)
+	requireOneTrace(t, beta, betaRun)
+
 	founding := alpha[0]
-	require.Equal(t, "plan:alpha", founding.SessionID)
-	require.Nil(t, founding.StateBefore)
-	require.NotNil(t, founding.StateAfter)
-	require.Equal(t, "overview", founding.StateAfter.CurrentStep)
-	require.True(t, founding.Advanced)
+	require.Equal(t, "plan new", founding.Name)
+	require.Nil(t, founding.Attributes[tracelog.AttrStateBefore])
+	require.Equal(t, "overview", stateAttr(t, founding, tracelog.AttrStateAfter)["current_step"])
+	require.Equal(t, "overview", founding.Attributes[tracelog.AttrStepTo])
+	require.NotContains(t, founding.Attributes, tracelog.AttrStep)
 
 	step := alpha[1]
-	require.Equal(t, "plan:alpha", step.SessionID)
-	require.Equal(t, "overview", step.StateBefore.CurrentStep)
-	require.Equal(t, "discovery", step.StateAfter.CurrentStep)
-	require.Equal(t, "alpha", step.StateAfter.Name)
-	require.True(t, step.Advanced)
+	require.Equal(t, "plan goto", step.Name)
+	require.Equal(t, "plan", step.Attributes[tracelog.AttrWorkflowKind])
+	require.Equal(t, "alpha", step.Attributes[tracelog.AttrWorkflowName])
+	require.Equal(t, "overview", step.Attributes[tracelog.AttrStep])
+	require.Equal(t, "discovery", step.Attributes[tracelog.AttrStepTo])
+	require.Equal(t, "alpha", stateAttr(t, step, tracelog.AttrStateAfter)["name"])
+	require.Equal(t, alphaRun, stateAttr(t, step, tracelog.AttrStateAfter)["run_id"])
+	require.Equal(t, "beta", beta[1].Attributes[tracelog.AttrWorkflowName])
 
-	// Walk the lane to its end; the finishing goto removes the lane's files.
-	for _, s := range planStepsToWalkthrough[2:] {
+	// Walk alpha to its end; the finishing goto removes the lane's files.
+	for _, s := range planStepsToWalkthrough[3:] {
 		runDebugCmd(t, "plan", "goto", "--data", `{"step":"`+s+`","name":"alpha"}`)
 	}
 	runDebugCmd(t, "plan", "goto", "--data", `{"step":"finished","name":"alpha"}`)
 	require.NoFileExists(t, workflow.LaneStatePath(dataDir, "plan", "alpha"), "a finished lane's files are removed")
 
-	alpha = sessionEvents(t, dir, "plan:alpha")
-	require.Len(t, alpha, 2+len(planStepsToWalkthrough[2:])+1)
+	alpha = readRecords(t, laneLogFile(t, logs, "unknown", "alpha"))
+	require.Len(t, alpha, 3+len(planStepsToWalkthrough[3:])+1)
+	requireOneTrace(t, alpha, alphaRun)
 	last := alpha[len(alpha)-1]
-	require.Equal(t, "plan:alpha", last.SessionID, "the finishing command is filed under the lane it drove")
-	require.NotNil(t, last.StateBefore)
-	require.Equal(t, "walkthrough", last.StateBefore.CurrentStep)
-	require.Nil(t, last.StateAfter)
+	require.Equal(t, "walkthrough", last.Attributes[tracelog.AttrStep], "the finishing command is filed under the lane it drove")
+	require.NotContains(t, last.Attributes, tracelog.AttrStepTo)
+	require.Equal(t, "walkthrough", stateAttr(t, last, tracelog.AttrStateBefore)["current_step"])
+	require.Nil(t, last.Attributes[tracelog.AttrStateAfter])
 
-	require.Len(t, sessionEvents(t, dir, "plan:solo"), 1, "the standalone session is untouched")
-	for _, f := range sessionLogFiles(t, dir) {
-		require.NotContains(t, filepath.Base(f), "no-active-workflow")
+	// beta keeps its own run after alpha finished.
+	runDebugCmd(t, "plan", "goto", "--data", `{"step":"components","name":"beta"}`)
+	beta = readRecords(t, laneLogFile(t, logs, "unknown", "beta"))
+	require.Len(t, beta, 4)
+	requireOneTrace(t, beta, betaRun)
+
+	require.Len(t, readRecords(t, laneLogFile(t, logs, "unknown", "solo")), 1, "the standalone run is untouched")
+	for _, f := range logFiles(t, logs) {
+		require.NotContains(t, filepath.Base(f), "standalone_")
 	}
+	require.Len(t, logFiles(t, logs), 3)
 	require.Equal(t, "overview", sharedState(t, dataDir).CurrentStep)
 }

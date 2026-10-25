@@ -1,11 +1,20 @@
-"""Reads Spektacular's debug session log back into lanes and shared events.
+"""Reads Spektacular's command log back into lanes and shared events.
 
-Every `spektacular` call is one JSON line under `.spektacular/debug/`. A file
-is named `<started>_<agent>_<session>.jsonl`, where the session is
-`<kind>_<name>` for an orchestrated plan or implement lane and
-`no-active-workflow` for everything else. An orchestrated lane's file holds
-its `new` and every `goto`. The orchestrator's `status <epic>` polls, and a
-child's other calls, land in the shared file.
+Every logged `spektacular` call is one JSON line under `.spektacular/logs/`.
+A workflow run's file is named `<started>_<agent>_<kind>_<name>.jsonl`, so an
+orchestrated plan or implement lane has a file of its own holding its `new`
+and every `goto`. Commands run outside any workflow land in one
+`standalone_<YYYYMMDD>.jsonl` per day; any file that is not a lane file is
+read as shared. `status` is never logged.
+
+Two record formats are read, and both become the same `Event`:
+
+- the span record (`trace_id`, `start_time`, `end_time`, `attributes`)
+  written to `.spektacular/logs/`, whose verbose level carries the response
+  and the state before and after;
+- the old debug session record (`timestamp`, `duration_ms`, `command`)
+  written to `.spektacular/debug/`, still read for the checked-in reference
+  runs and the offline tests, until spec 000076 replaces this reader.
 
 The log is written by the CLI, not read from an agent transcript, so
 everything here reads the same whichever agent drove the run.
@@ -101,6 +110,11 @@ def read_events(path: Path) -> list[Event]:
             raw = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if "trace_id" in raw:
+            event = span_event(raw)
+            if event is not None:
+                events.append(event)
+            continue
         events.append(
             Event(
                 at=parse_time(raw["timestamp"]),
@@ -113,6 +127,27 @@ def read_events(path: Path) -> list[Event]:
             )
         )
     return events
+
+
+def span_event(raw: dict) -> Event | None:
+    """The Event an OpenTelemetry-model span record describes, or None when
+    the record has no start time. The response and the state snapshots are
+    present only in records written at the verbose level."""
+    if not raw.get("start_time"):
+        return None
+    attrs = raw.get("attributes") or {}
+    at = parse_time(raw["start_time"])
+    end = parse_time(raw["end_time"]) if raw.get("end_time") else at
+    status_ok = (raw.get("status") or {}).get("code") == "ok"
+    return Event(
+        at=at,
+        command=attrs.get("process.command_args") or [],
+        duration_ms=round((end - at).total_seconds() * 1000),
+        exit_code=attrs.get("process.exit_code", 0 if status_ok else 1),
+        state_before=attrs.get("spektacular.state.before"),
+        state_after=attrs.get("spektacular.state.after"),
+        response=attrs.get("spektacular.response") or "",
+    )
 
 
 RESUME_REFUSAL = "workflow_in_progress"

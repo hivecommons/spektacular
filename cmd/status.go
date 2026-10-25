@@ -26,9 +26,13 @@ const (
 	statusFormatJSON   = "json"
 )
 
+// statusCmd is never logged (the logging-exempt annotation), so an editor,
+// agent-host mod or orchestrator that polls it never adds to or trims the
+// command log (epic 000002 review decision, 2026-10-25).
 var statusCmd = &cobra.Command{
-	Use:   "status [name]",
-	Short: "Report where a piece of work stands, from the epic down to each task",
+	Annotations: map[string]string{logAnnotation: logExempt},
+	Use:         "status [name]",
+	Short:       "Report where a piece of work stands, from the epic down to each task",
 	Long: `Report where a piece of work stands. <name> may be an epic, a spec or a plan:
 a spec in an epic, or its plan, reports the whole epic, with the spec asked for
 named in "requested". With no name, reports every workflow in progress, the
@@ -207,8 +211,10 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if watch {
-		// The frames go straight to the terminal: the debug session log
-		// would otherwise keep every frame of a watch that runs for hours.
+		// The frames go straight to the terminal, never through a verbose
+		// log's tee, which would otherwise keep every frame of a watch that
+		// runs for hours. status is logging-exempt, so in a real process the
+		// tee never wraps it; this keeps the guarantee regardless.
 		term := outputTerminal(cmd)
 		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -264,9 +270,12 @@ func buildStatusReport(cfg config.Config, root, dir string, args []string) (stat
 	return status.BuildCurrent(opts)
 }
 
-// terminalOut is the command's own output writer while the debug session log
-// tees it into a buffer. The tee hides whether output goes to a terminal, so
-// colour is decided from this writer instead.
+// terminalOut is the command's own output writer while the verbose command
+// log tees it into a buffer. The tee hides whether output goes to a
+// terminal, so colour is decided from this writer instead. status is
+// logging-exempt, so in a real process the tee never wraps it and this stays
+// nil; it remains as a defensive path, since a test drives cobra through
+// SetArgs and runRoot's pre-command exemption check reads os.Args.
 var terminalOut io.Writer
 
 // outputTerminal is the writer whose terminal decides whether readable

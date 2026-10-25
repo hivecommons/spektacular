@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prints where an orchestrated epic run spent its time.
 
-Reads Spektacular's debug session log and reports, for each spec's lane,
+Reads Spektacular's session log (.spektacular/logs/) and reports, for each spec's lane,
 when its child started and finished and its slowest step, then the two
 hand-off gaps that separate a slow child from a slow orchestrator:
 
@@ -27,7 +27,7 @@ turn limit (`session.maxTurns`).
 It reports and never fails. Run it inside the container, or locally on a
 job's collected artifacts:
 
-    python3 timeline.py <trial>/artifacts/spektacular/debug [<trial>/artifacts/agent-logs/bob]
+    python3 timeline.py <trial>/artifacts/spektacular/logs [<trial>/artifacts/agent-logs/bob]
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from sessionlog import Event, Lane, SessionLog  # noqa: E402
 
-DEFAULT_DIR = Path("/app/.spektacular/debug")
+DEFAULT_DIR = Path("/app/.spektacular/logs")
 DEFAULT_BOB_LOGS = Path("/root/.bob/logs")
 BOB_TURN_LIMIT = "Reached maxTurns limit"
 
@@ -91,8 +91,8 @@ def report(log: SessionLog, bob_logs: Path | None = None) -> str:
     if log.empty:
         return (
             f"== Epic run timeline ==\nNo session log under {log.debug_dir}: "
-            "SPEKTACULAR_SESSION_LOG=on did not reach the agent, or it ran no "
-            "spektacular command.\n"
+            "the seeded project's log.level: verbose did not reach the agent, "
+            "or it ran no spektacular command.\n"
         )
 
     events = log.all_events()

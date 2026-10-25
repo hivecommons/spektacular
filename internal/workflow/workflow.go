@@ -110,6 +110,7 @@ func New(steps []StepConfig, statePath string, cfg Config, st store.Store, out R
 		now := time.Now().UTC()
 		state = &State{
 			Kind:           cfg.Kind,
+			RunID:          NewRunID(),
 			CurrentStep:    initialState,
 			CompletedSteps: []string{},
 			CreatedAt:      now,

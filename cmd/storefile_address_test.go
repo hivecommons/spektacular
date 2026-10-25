@@ -94,8 +94,19 @@ func addrSnapshot(t *testing.T, roots ...string) map[string]string {
 	snap := map[string]string{}
 	for _, root := range roots {
 		require.NoError(t, filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
+			if err != nil {
 				return err
+			}
+			if isProjectLogPath(p) {
+				// The command log is an expected side effect of every logged
+				// command, not a change the command made.
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if d.IsDir() {
+				return nil
 			}
 			b, err := os.ReadFile(p)
 			snap[p] = string(b)

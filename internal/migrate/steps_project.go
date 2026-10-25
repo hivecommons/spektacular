@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/hivecommons/spektacular/internal/config"
@@ -160,5 +161,55 @@ func runProject3to4(sc *StepContext, doc *yaml.Node) ([]Action, error) {
 	setDefault("epic.provider", str(config.ProviderFile))
 	setDefault("epic.strict_dependencies", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "false"})
 	setDefault("epic.config.directory", str(config.DefaultEpicDir))
+	return actions, nil
+}
+
+// project4to5 replaces the debug section with the log section, keeping the
+// user's intent: debug on becomes the verbose level, debug off or absent the
+// standard level. The other log settings get their defaults, a log key
+// already present is kept, and debug is deleted. It also asks for the logs
+// folder to be ignored in the project's .spektacular/.gitignore. Old debug
+// log files are never read, moved or deleted.
+var project4to5 = Step{
+	Kind:        KindProject,
+	From:        4,
+	Description: "replace debug with the log section and ignore the logs folder",
+	Run:         runProject4to5,
+}
+
+func runProject4to5(sc *StepContext, doc *yaml.Node) ([]Action, error) {
+	root := docRoot(doc)
+	settings := filepath.Join(sc.FileDir, config.ProjectConfigFileName)
+	var actions []Action
+	setDefault := func(key string, value *yaml.Node) {
+		if getNode(root, key) != nil {
+			return
+		}
+		setNode(root, key, value)
+		actions = append(actions, Action{Op: "set", Path: settings, Key: key, To: value.Value})
+	}
+	str := func(v string) *yaml.Node { return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v} }
+
+	enabled, _ := getScalar(root, "debug.enabled")
+	level := config.LogLevelStandard
+	if strings.EqualFold(strings.TrimSpace(enabled), "true") {
+		level = config.LogLevelVerbose
+	}
+	setDefault("log.provider", str(config.ProviderFile))
+	setDefault("log.level", str(level))
+	setDefault("log.retention", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: strconv.Itoa(config.DefaultLogRetention)})
+	setDefault("log.config.directory", str(config.DefaultLogDir))
+
+	if getNode(root, "debug") != nil {
+		deleteKey(root, "debug")
+		// A "set" with no To reports a key removed from the settings.
+		a := Action{Op: "set", Path: settings, Key: "debug"}
+		if enabled != "" {
+			a.Key, a.From = "debug.enabled", enabled
+		}
+		actions = append(actions, a)
+	}
+
+	actions = append(actions, Action{Op: "ignore", Path: filepath.Join(sc.FileDir, ".gitignore"), To: config.DefaultLogDir + "/"})
 	return actions, nil
 }

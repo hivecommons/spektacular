@@ -316,7 +316,8 @@ func (u *upgrader) upgradeFile(path string, kind Kind) (*yaml.Node, *FileReport,
 }
 
 // perform carries out a step's file side effects. Creating a file that
-// already exists and removing one that is already gone are no-ops.
+// already exists, removing one that is already gone, and ignoring a line
+// already ignored are no-ops.
 func perform(acts []Action) error {
 	for _, a := range acts {
 		switch a.Op {
@@ -331,9 +332,34 @@ func perform(acts []Action) error {
 			if err := os.Remove(a.Path); err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("removing %s: %w", a.Path, err)
 			}
+		case "ignore":
+			if err := ensureIgnoreLine(a.Path, a.To); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// ensureIgnoreLine appends line to the .gitignore at path when no line of
+// the file already equals it, creating the file when it is missing. It is
+// idempotent.
+func ensureIgnoreLine(path, line string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+	for _, l := range strings.Split(string(raw), "\n") {
+		if strings.TrimSpace(l) == line {
+			return nil
+		}
+	}
+	out := raw
+	if len(out) > 0 && !bytes.HasSuffix(out, []byte("\n")) {
+		out = append(out, '\n')
+	}
+	out = append(out, []byte(line+"\n")...)
+	return writeAtomic(path, out)
 }
 
 // writeBackup keeps a byte-identical copy of a settings file before its

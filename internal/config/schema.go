@@ -15,8 +15,9 @@ import (
 const (
 	// CurrentProjectSchema is the config.yaml format this build reads and
 	// writes. Format 3 resolves the store folders from the settings file;
-	// format 4 adds the epic store and epic_split_threshold.
-	CurrentProjectSchema = 4
+	// format 4 adds the epic store and epic_split_threshold; format 5
+	// replaces debug with the log section.
+	CurrentProjectSchema = 5
 	// CurrentRepoSchema is the repo.yaml format this build reads and writes.
 	CurrentRepoSchema = 2
 )

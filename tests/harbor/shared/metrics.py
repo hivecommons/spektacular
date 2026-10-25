@@ -8,7 +8,7 @@ written, and ignores how it exits. It reads:
   agent, suite, scenario, Spektacular version and commit;
 - the agent's own log under /logs/agent: Claude's stream-json, the ATIF
   trajectory harbor writes for Bob and Codex, or Codex's rollout;
-- Spektacular's session log under /app/.spektacular/debug, for the steps
+- Spektacular's session log under /app/.spektacular/logs, for the steps
   and for placing each child agent in the spec and step it was started in;
 - pytest's JUnit XML and the reward, for the check score;
 
@@ -21,7 +21,7 @@ only that section's fields, and it always exits 0. It never writes the
 reward. Run it inside the container, or locally against a collected trial:
 
     python3 metrics.py --agent-dir <trial>/agent \\
-        --debug-dir <trial>/artifacts/spektacular/debug \\
+        --debug-dir <trial>/artifacts/spektacular/logs \\
         --junit <trial>/verifier/junit.xml --reward <trial>/verifier/reward.txt \\
         --out /tmp/metrics.json
 """
@@ -50,7 +50,7 @@ WORKFLOW_KINDS = ("spec", "plan", "implement")
 
 BUILD_INFO = Path("/tests/build.json")
 AGENT_DIR = Path("/logs/agent")
-DEBUG_DIR = Path("/app/.spektacular/debug")
+DEBUG_DIR = Path("/app/.spektacular/logs")
 BOB_LOGS = Path("/root/.bob/logs")
 JUNIT = Path("/logs/verifier/junit.xml")
 REWARD = Path("/logs/verifier/reward.txt")

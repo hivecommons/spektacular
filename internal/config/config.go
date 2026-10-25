@@ -81,9 +81,85 @@ const (
 	DefaultRepoChangelogDir      = "changelog"
 )
 
-// DebugConfig holds debug logging configuration.
-type DebugConfig struct {
-	Enabled bool `yaml:"enabled"`
+// Log levels, defaults and loggers for the log section.
+const (
+	// LogLevelOff records nothing.
+	LogLevelOff = "off"
+	// LogLevelStandard records each command's identity, timing and outcome.
+	LogLevelStandard = "standard"
+	// LogLevelVerbose also records each command's full response and the
+	// workflow state before and after it.
+	LogLevelVerbose = "verbose"
+	// DefaultLogDir is the log directory, relative to the folder holding
+	// config.yaml.
+	DefaultLogDir = "logs"
+	// DefaultLogRetention is how many recent workflow runs (and, separately,
+	// days of standalone commands) are kept.
+	DefaultLogRetention = 10
+)
+
+// LogProviders are the accepted log.provider names. It mirrors
+// tracelog.Providers(), which this package cannot import; a test in
+// internal/tracelog pins the two equal.
+var LogProviders = []string{ProviderFile}
+
+// LogConfig configures the command log: which logger writes it, how much
+// each record holds, how many runs are kept and the logger's own settings.
+type LogConfig struct {
+	Provider  string        `yaml:"provider"`
+	Level     string        `yaml:"level"`
+	Retention int           `yaml:"retention"`
+	Config    FileLogConfig `yaml:"config"`
+}
+
+// FileLogConfig is the file logger's configuration.
+type FileLogConfig struct {
+	// Directory is where logs are written: relative to the folder holding
+	// config.yaml, or absolute. It is not a store, so it is never bound to
+	// the project root.
+	Directory string `yaml:"directory"`
+}
+
+// EffectiveLevel returns the configured level, resolving an absent one to
+// the standard level.
+func (l LogConfig) EffectiveLevel() string {
+	if l.Level == "" {
+		return LogLevelStandard
+	}
+	return l.Level
+}
+
+// Validate checks the log section names a known logger and level, keeps at
+// least one run, and names a directory.
+func (l LogConfig) Validate() error {
+	if !slices.Contains(LogProviders, l.Provider) {
+		valid := strings.Join(LogProviders, ", ")
+		return output.NewError("config_invalid",
+			fmt.Sprintf("log.provider %q is not a known logger; accepted loggers are %s", l.Provider, valid)).
+			WithResource("log.provider").
+			WithNextAction(fmt.Sprintf("set log.provider in .spektacular/config.yaml to one of: %s", valid))
+	}
+	switch l.Level {
+	case "", LogLevelOff, LogLevelStandard, LogLevelVerbose:
+	default:
+		return output.NewError("config_invalid",
+			fmt.Sprintf("log.level must be one of %q, %q or %q, not %q", LogLevelOff, LogLevelStandard, LogLevelVerbose, l.Level)).
+			WithResource("log.level").
+			WithNextAction(fmt.Sprintf("set log.level in .spektacular/config.yaml to %s, %s or %s (or remove the key to use %s)",
+				LogLevelOff, LogLevelStandard, LogLevelVerbose, LogLevelStandard))
+	}
+	if l.Retention < 1 {
+		return output.NewError("config_invalid",
+			fmt.Sprintf("log.retention must be at least 1, not %d", l.Retention)).
+			WithResource("log.retention").
+			WithNextAction(fmt.Sprintf("set log.retention in .spektacular/config.yaml to a whole number of runs to keep, 1 or more (or remove the key to keep %d)", DefaultLogRetention))
+	}
+	if strings.TrimSpace(l.Config.Directory) == "" {
+		return output.NewError("config_invalid", "log.config.directory is empty").
+			WithResource("log.config.directory").
+			WithNextAction(fmt.Sprintf("set log.config.directory in .spektacular/config.yaml to a folder for logs (or remove the key to use %s)", DefaultLogDir))
+	}
+	return nil
 }
 
 // SpecConfig holds configuration for specification creation. It names a
@@ -380,6 +456,20 @@ func ProjectConfigDir(projectRoot string) string {
 	return filepath.Join(projectRoot, ProjectConfigDirName)
 }
 
+// LogDir returns the absolute log directory. An absolute
+// log.config.directory is returned cleaned; a relative one is resolved from
+// the folder holding config.yaml (see ProjectConfigDir).
+func (c Config) LogDir(projectRoot string) string {
+	d := c.Log.Config.Directory
+	if d == "" {
+		d = DefaultLogDir
+	}
+	if filepath.IsAbs(d) {
+		return filepath.Clean(d)
+	}
+	return filepath.Join(ProjectConfigDir(projectRoot), d)
+}
+
 // ResolvedLocation returns the entry's location as an absolute path. An
 // absolute location is returned cleaned; a relative one is resolved from the
 // folder holding config.yaml (see ProjectConfigDir), never from the process
@@ -418,7 +508,7 @@ type Config struct {
 	SpecTriggerThreshold string          `yaml:"spec_trigger_threshold"`
 	EpicSplitThreshold   string          `yaml:"epic_split_threshold"`
 	AutoCommit           string          `yaml:"auto_commit"`
-	Debug                DebugConfig     `yaml:"debug"`
+	Log                  LogConfig       `yaml:"log"`
 	Spec                 SpecConfig      `yaml:"spec"`
 	Plan                 PlanConfig      `yaml:"plan"`
 	Changelog            ChangelogConfig `yaml:"changelog"`
@@ -446,8 +536,11 @@ func NewDefault() Config {
 		SpecTriggerThreshold: SpecTriggerThresholdModerate,
 		EpicSplitThreshold:   EpicSplitThresholdModerate,
 		AutoCommit:           AutoCommitOff,
-		Debug: DebugConfig{
-			Enabled: false,
+		Log: LogConfig{
+			Provider:  ProviderFile,
+			Level:     LogLevelStandard,
+			Retention: DefaultLogRetention,
+			Config:    FileLogConfig{Directory: DefaultLogDir},
 		},
 		Spec: SpecConfig{
 			Provider: ProviderFile,
@@ -752,6 +845,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := c.Implement.GoalCheck.Validate(); err != nil {
+		return err
+	}
+	if err := c.Log.Validate(); err != nil {
 		return err
 	}
 	// Only the project's store directories are bound to the project root; a

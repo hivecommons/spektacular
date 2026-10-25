@@ -48,6 +48,7 @@ from pathlib import Path
 
 import pytest
 
+from loglevel import set_log_level
 from sessionlog import SessionLog, plan_steps_entered
 
 # ---------------------------------------------------------------------------
@@ -56,7 +57,7 @@ from sessionlog import SessionLog, plan_steps_entered
 
 PROJECT_DIR = Path("/app")
 SPEK_DIR = PROJECT_DIR / ".spektacular"
-DEBUG_DIR = SPEK_DIR / "debug"
+DEBUG_DIR = SPEK_DIR / "logs"
 AGENT_LOG_DIR = Path("/logs/agent")
 TRANSCRIPT = AGENT_LOG_DIR / "claude-code.txt"
 # Agents run through harbor's ACP agent, such as Bob, leave no Claude
@@ -762,8 +763,14 @@ class TestWorkflow:
     """Overall workflow integrity checks."""
 
     def test_project_initialized(self):
-        assert (SPEK_DIR / "config.yaml").exists(), (
+        # The image pre-seeds a config holding only log.level, so init is
+        # proven by the installed skills it records, not by the file alone.
+        cfg = SPEK_DIR / "config.yaml"
+        assert cfg.exists(), (
             "config.yaml missing — `spektacular init` was not run"
+        )
+        assert "skills_version:" in cfg.read_text(), (
+            "config.yaml records no installed skills — `spektacular init` was not run"
         )
 
     def test_state_file_exists(self):
@@ -1165,6 +1172,10 @@ class TestPlanTasks:
 
     def test_status_reports_the_plan_tasks(self):
         name = find_plan_name()
+        # Like every verifier that runs spektacular, switch the project's
+        # logging off first, so no call of the verifier's own reaches the
+        # session log the other checks read (status is never logged anyway).
+        set_log_level(SPEK_DIR / "config.yaml", "off")
         result = subprocess.run(
             ["spektacular", "status", name, "--format", "json"],
             cwd=PROJECT_DIR, capture_output=True, text=True,

@@ -149,7 +149,7 @@ func TestInit_InstallsCompactRulesForEveryAgent(t *testing.T) {
 
 // staleSkillsConfigYAML is a current-format config.yaml whose recorded
 // skills predate the compact standing rules.
-const staleSkillsConfigYAML = `schema: 4
+const staleSkillsConfigYAML = `schema: 5
 written_by: 0.0.1
 skills_version: 0.0.1
 name: proj

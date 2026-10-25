@@ -14,6 +14,32 @@
 set -euo pipefail
 
 SEED=/tmp/seed
+
+# set_log_level rewrites log.level in the project's config.yaml. Seeding runs
+# with logging off, so the session log holds only the agent's run, and the
+# last step turns it to verbose, which keeps the responses and state
+# snapshots the verifiers and tools read from .spektacular/logs/. The edit
+# fails the image build, not the run, if the config has no log.level line.
+set_log_level() {
+  python3 - /app/.spektacular/config.yaml "$1" <<'PY'
+import re
+import sys
+
+path, level = sys.argv[1], sys.argv[2]
+lines = open(path).read().split("\n")
+in_log = False
+for i, line in enumerate(lines):
+    if re.match(r"\S", line):
+        in_log = line.rstrip() == "log:"
+    elif in_log and re.match(r"^ +level:", line):
+        lines[i] = re.sub(r"level:.*", "level: " + level, line)
+        break
+else:
+    sys.exit("the seeded config has no log.level line")
+open(path, "w").write("\n".join(lines))
+PY
+}
+
 SCENARIO=$(cat "$SEED/scenario")
 AGENT=$(cat "$SEED/agent")
 PLAN=20260301000000-todo-count
@@ -30,7 +56,11 @@ esac
 # task names todo-app, so both are renamed. implement.worktrees is turned off
 # so the run works in /app itself.
 cd /app
+# init is never logged: a command is logged only where a project config
+# already exists when it starts, and none does yet. Logging is then switched
+# off for the rest of the seed.
 spektacular init "$AGENT" >/dev/null
+set_log_level off
 sed -i -e 's/^name: app$/name: todo-app/' -e 's/^    - name: app$/    - name: todo-app/' .spektacular/config.yaml
 grep -q '^    - name: todo-app$' .spektacular/config.yaml || { echo "the seeded config does not register todo-app" >&2; exit 1; }
 mkdir -p .spektacular/tmp
@@ -91,3 +121,11 @@ if [ "$SCENARIO" = unmet ] && grep -q "todo count" README.md; then
   echo "the unmet scenario's README already documents todo count" >&2
   exit 1
 fi
+
+# Fail the image build, not the run, if any seed command reached the log:
+# the agent must start with an empty session log.
+if compgen -G "/app/.spektacular/logs/*.jsonl" >/dev/null; then
+  echo "the seed's own spektacular commands were logged under /app/.spektacular/logs" >&2
+  exit 1
+fi
+set_log_level verbose

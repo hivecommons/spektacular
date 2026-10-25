@@ -21,12 +21,12 @@ locally with
 
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sessionlog import Event, Lane, SessionLog, StepWindow  # noqa: E402
+from sessionlog import Event, Lane, SessionLog, StepWindow, read_events, span_event  # noqa: E402
 
 NAME = "20260101000000-user-auth"
 RESUME_RESPONSE = (
@@ -402,3 +402,156 @@ def test_event_end_adds_duration(tmp_path):
     windows = SessionLog(tmp_path).lane("plan", NAME).step_windows()
     assert windows == [StepWindow("overview", at(10, 0, 0, 500000), at(10, 0, 1, 750000))]
     assert windows[0].duration_s == 1.25
+
+
+# --- 5. the span records of `.spektacular/logs/` --------------------------------
+
+
+def span_record(clock, command, before, after, *, exit_code=0, duration_ms=0, response=None,
+                kind="plan", name=NAME, error=""):
+    """A new-format (OpenTelemetry-model span) line as the CLI writes it at
+    the verbose level, the twin of `record` with the same fields."""
+    start = datetime.fromisoformat(f"2026-10-23T{clock}+00:00")
+    end = start + timedelta(milliseconds=duration_ms)
+    attrs = {
+        "spektacular.span.type": "command",
+        "spektacular.agent": "claude",
+        "process.command_args": command,
+        "process.exit_code": exit_code,
+        "spektacular.state.before": before,
+        "spektacular.state.after": after,
+    }
+    if kind:
+        attrs["spektacular.workflow.kind"] = kind
+        attrs["spektacular.workflow.name"] = name
+    if response is not None:
+        attrs["spektacular.response"] = response
+    status = {"code": "ok"} if exit_code == 0 else {"code": "error", "message": error or "failed"}
+    return {
+        "record": "span",
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+        "span_id": "00f067aa0ba902b7",
+        "name": " ".join(command[:2]),
+        "kind": "internal",
+        "start_time": start.strftime("%Y-%m-%dT%H:%M:%S.%f") + "123Z",
+        "end_time": end.strftime("%Y-%m-%dT%H:%M:%S.%f") + "456Z",
+        "status": status,
+        "attributes": attrs,
+        "resource": {"service.name": "spektacular", "service.version": "0.21.0"},
+    }
+
+
+def write_lines(path: Path, records):
+    path.write_text("".join(json.dumps(r) + "\n" for r in records))
+    return path
+
+
+TWINS = [
+    ("10:00:00", NEW, None, state("overview"), {}),
+    ("10:01:00", goto("discovery"), state("overview"), state("discovery"), {"duration_ms": 1500}),
+    ("10:02:00", FILE_READ, state("discovery"), state("discovery"), {"response": '{"body":"x"}'}),
+    ("10:03:00", NEW, state("discovery"), None, {"exit_code": 1, "response": RESUME_RESPONSE}),
+    ("10:04:00", goto("bogus"), state("discovery"), state("discovery"), {"exit_code": 1, "duration_ms": 12}),
+]
+
+
+def test_span_record_reads_as_the_same_event_as_its_old_twin(tmp_path):
+    old = write_lines(tmp_path / "old.jsonl", [record(c, cmd, b, a, **kw) for c, cmd, b, a, kw in TWINS])
+    new = write_lines(tmp_path / "new.jsonl", [span_record(c, cmd, b, a, **kw) for c, cmd, b, a, kw in TWINS])
+    old_events, new_events = read_events(old), read_events(new)
+    assert len(new_events) == len(TWINS)
+    assert new_events == old_events
+    # hand-checked fields of one twin
+    e = new_events[1]
+    assert e.at == at(10, 1, 0)
+    assert e.duration_ms == 1500
+    assert e.command == goto("discovery")
+    assert e.exit_code == 0
+    assert e.state_before == state("overview")
+    assert e.state_after == state("discovery")
+    assert new_events[3].response == RESUME_RESPONSE
+
+
+def test_span_record_at_the_standard_level_has_no_response_or_state(tmp_path):
+    rec = span_record("10:00:00", goto("discovery"), None, None, duration_ms=20)
+    for key in ("spektacular.state.before", "spektacular.state.after"):
+        del rec["attributes"][key]
+    path = write_lines(tmp_path / "std.jsonl", [rec])
+    [e] = read_events(path)
+    assert (e.state_before, e.state_after, e.response) == (None, None, "")
+    assert e.step_after == "discovery", "the step falls back to the goto's data"
+    assert e.duration_ms == 20
+
+
+def test_span_record_exit_code_falls_back_to_the_status():
+    ok = span_record("10:00:00", NEW, None, state("overview"))
+    failed = span_record("10:00:01", NEW, None, None, exit_code=1)
+    for rec in (ok, failed):
+        del rec["attributes"]["process.exit_code"]
+    assert span_event(ok).exit_code == 0
+    assert span_event(failed).exit_code == 1
+
+
+def test_span_record_without_a_start_time_is_skipped(tmp_path):
+    rec = span_record("10:00:00", NEW, None, state("overview"))
+    del rec["start_time"]
+    good = span_record("10:00:05", goto("discovery"), state("overview"), state("discovery"))
+    path = write_lines(tmp_path / "x.jsonl", [rec, good])
+    assert [e.at for e in read_events(path)] == [at(10, 0, 5)]
+
+
+def test_mixed_directory_reads_both_formats(tmp_path):
+    # an old-format lane file from .spektacular/debug
+    write_lane(
+        tmp_path,
+        "100000",
+        [
+            record("10:00:00", NEW, None, state("overview")),
+            record("10:01:00", goto("discovery"), state("overview"), state("discovery")),
+        ],
+    )
+    # a new-format lane file for another plan
+    other = "20260102000000-billing"
+    write_lines(
+        tmp_path / f"20261023T110000.000000000Z_claude_plan_{other}.jsonl",
+        [
+            span_record("11:00:00", ["plan", "new", "--data", json.dumps({"name": other})], None,
+                        {"kind": "plan", "name": other, "current_step": "overview"}, name=other),
+            span_record("11:02:00", ["plan", "goto", "--data", json.dumps({"step": "discovery", "name": other})],
+                        {"kind": "plan", "name": other, "current_step": "overview"},
+                        {"kind": "plan", "name": other, "current_step": "discovery"}, name=other),
+        ],
+    )
+    # standalone commands of the day, the shared file of the new format
+    write_lines(
+        tmp_path / "standalone_20261023.jsonl",
+        [
+            span_record("10:30:00", ["knowledge", "search", "x"], None, None, kind=""),
+            span_record("12:00:00", ["skill", "list"], None, None, kind=""),
+        ],
+    )
+    log = SessionLog(tmp_path)
+    assert sorted(log.lanes) == [("plan", NAME), ("plan", other)]
+    assert [e.at for e in log.lane("plan", NAME).events] == [at(10, 0, 0), at(10, 1, 0)]
+    new_lane = log.lane("plan", other)
+    assert [e.at for e in new_lane.events] == [at(11, 0, 0), at(11, 2, 0)]
+    assert shape(new_lane.step_windows()) == [("overview", 120.0), ("discovery", 0.0)]
+    assert [e.command[:2] for e in log.shared] == [["knowledge", "search"], ["skill", "list"]]
+    assert len(log.all_events()) == 6
+
+
+def test_verbose_span_resume_refusal_counts_as_a_resume(tmp_path):
+    write_lines(
+        tmp_path / f"20261023T100000.000000000Z_claude_plan_{NAME}.jsonl",
+        [
+            span_record("10:00:00", NEW, None, state("overview")),
+            span_record("10:01:00", goto("tasks"), state("overview"), state("tasks")),
+            span_record("10:30:00", NEW, state("tasks"), state("tasks"), exit_code=1,
+                        response=RESUME_RESPONSE, error="plan is already in progress"),
+            span_record("10:35:00", goto("finished"), state("tasks"), state("finished")),
+        ],
+    )
+    lane = SessionLog(tmp_path).lane("plan", NAME)
+    assert [e.at for e in lane.resumes] == [at(10, 30, 0)]
+    assert lane.children == 2
+    assert lane.finish.at == at(10, 35, 0)

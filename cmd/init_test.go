@@ -27,6 +27,14 @@ func snapshotDir(t *testing.T, root string) map[string]string {
 		if err != nil {
 			return err
 		}
+		if isProjectLogPath(path) {
+			// The command log is an expected side effect of every logged
+			// command, not a change the command made.
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if d.IsDir() {
 			return nil
 		}
@@ -147,7 +155,7 @@ knowledge:
 	require.NoError(t, rootCmd.Execute())
 
 	cfg := readSettingsMap(t, cfgPath)
-	require.Equal(t, 4, cfg["schema"])
+	require.Equal(t, 5, cfg["schema"])
 	require.Equal(t, "0.20.0", cfg["skills_version"])
 	require.Equal(t, "proj", cfg["name"])
 	require.Equal(t, 2, readSettingsMap(t, repoPath)["schema"])
@@ -640,7 +648,7 @@ func TestInit_FreshProjectWritesSettingsRelativeStoreDirectories(t *testing.T) {
 		require.Contains(t, string(raw), want)
 	}
 	require.NotContains(t, string(raw), ".spektacular/")
-	require.Equal(t, 4, readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["schema"])
+	require.Equal(t, 5, readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["schema"])
 	require.DirExists(t, filepath.Join(dir, ".spektacular", "specs"))
 	require.DirExists(t, filepath.Join(dir, ".spektacular", "plans"))
 	require.NoDirExists(t, filepath.Join(dir, ".spektacular", ".spektacular"))

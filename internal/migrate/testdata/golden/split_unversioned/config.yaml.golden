@@ -1,4 +1,4 @@
-schema: 4
+schema: 5
 written_by: 0.1.0
 name: split
 agent: claude
@@ -21,3 +21,9 @@ epic:
     strict_dependencies: false
     config:
         directory: epics
+log:
+    provider: file
+    level: standard
+    retention: 10
+    config:
+        directory: logs

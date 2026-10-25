@@ -27,8 +27,3 @@ WORKDIR /app
 # project instructions when its session starts.
 COPY seed/ /tmp/seed/
 RUN bash /tmp/seed/seed.sh && rm -rf /tmp/seed
-
-# Record every spektacular call, whichever agent drives the run, to
-# .spektacular/debug/, which comes back with the .spektacular artifact.
-# Set after seeding, so the log holds only the agent's run.
-ENV SPEKTACULAR_SESSION_LOG=on

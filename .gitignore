@@ -40,8 +40,9 @@ vendor/
 *~
 .DS_Store
 
-# Spektacular debug output
+# Spektacular debug output and command logs
 .spektacular/debug/
+.spektacular/logs/
 
 # Temporary files
 *.tmp

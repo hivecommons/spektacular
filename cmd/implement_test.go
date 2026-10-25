@@ -50,10 +50,20 @@ const implementSharedSlotConfig = "implement:\n  worktrees: false\n"
 func writeInProgressState(t *testing.T, dataDir string, st workflow.State) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(dataDir, 0o755))
+	// State this build writes always carries a run id. A fixture without one
+	// is the previous version's shape, which the command log backfills
+	// before the next logged command and so changes the file's bytes; give
+	// it a fixed one unless the test sets its own.
+	if st.RunID == "" && st.InProgress() {
+		st.RunID = fixtureRunID
+	}
 	b, err := json.MarshalIndent(st, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "state.json"), b, 0o644))
 }
+
+// fixtureRunID is the run id writeInProgressState gives a fixture state.
+const fixtureRunID = "0123456789abcdef0123456789abcdef"
 
 // setupImplementCmd resets rootCmd state for a clean test invocation.
 func setupImplementCmd(t *testing.T) (*bytes.Buffer, *bytes.Buffer) {

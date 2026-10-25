@@ -2,7 +2,7 @@
 
 # The timeline goes first so it is in the verifier output whatever the tests
 # find. It only reports, and never fails the run.
-python3 /tests/timeline.py /app/.spektacular/debug || true
+python3 /tests/timeline.py /app/.spektacular/logs || true
 
 pytest /tests/test_epic_workflow.py -v --junitxml=/logs/verifier/junit.xml
 

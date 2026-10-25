@@ -178,7 +178,11 @@ def layout(src: Path) -> tuple[Path, Path]:
     """The transcript's directory and the session log of a collected trial,
     or of a reference run trimmed before."""
     if (src / "agent" / "claude-code.txt").is_file():
-        return src / "agent", src / "artifacts" / "spektacular" / "debug"
+        # A trial collected before log mode kept its session log in debug/;
+        # a newer one keeps it in logs/.
+        spek = src / "artifacts" / "spektacular"
+        logs = spek / "logs"
+        return src / "agent", logs if logs.is_dir() else spek / "debug"
     return src, src / "debug"
 
 
