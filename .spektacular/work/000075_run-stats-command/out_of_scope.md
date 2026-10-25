@@ -1,0 +1,10 @@
+- **Token counts, model time and cost.** The logs do not hold them (spec Non-Goals). The per-step table leaves out the investigation's model-time column, and `command_ms` covers only Spektacular's own commands, not every tool.
+- **A visual or HTML view of a run.** That is spec `000077_html-log-viewer`, which reuses this plan's package and totals.
+- **Changing the Harbor test harness.** That is spec `000076_harbor-on-built-in-logs`, which reads this plan's JSON output. No Harbor file changes here.
+- **Reports across several projects at once, and live reports of a run as it happens** (spec Non-Goals). A report reads one logs directory as it is when the command runs.
+- **Standalone traces as runs.** Commands and spans recorded outside any workflow run are not listed or reported. That includes an epic orchestrator's own `sub-agent` spans, which 000074 records in a standalone trace. If 000076 needs orchestrator hand-off gaps from them, it extends the report.
+- **`work` spans.** Agent-marked `work` spans appear on the timeline and in gap labels, but get no table or totals of their own. The spec asks only for helper and user waits.
+- **Step breakdowns for logs written before 000074.** Command-only logs get totals and gaps, but an empty step and task breakdown.
+- **Telling a stopped-and-never-resumed session apart from one still running.** Without workflow state (absent from a copied directory), such a run reads as `in_progress` until it is restarted or overtaken by a later run of the same workflow.
+- **Interpolated percentiles, `--last N`, colour in the tables, and an index or cache beside the logs.** These were not asked for, and the last would change the logs directory.
+- **Installing the new binary or touching this repository's own `.spektacular/`** (plans-never-change-the-active-install).
