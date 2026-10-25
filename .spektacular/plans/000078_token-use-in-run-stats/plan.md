@@ -542,7 +542,7 @@ Adds tokens, cost and working time per thousand output tokens to `stats compare`
 
 **Validation point**: The site builds and `astro check` passes, with no layout HTML in page bodies and no em dashes in the new text. The README shows the note.
 
-#### - [ ] Task: Documentation site describes token figures
+#### - [x] Task: Documentation site describes token figures
 **Id:** a1a9901f-b9c4-468a-9cea-0a5ba5d50a6e
 **Repo:** docs
 **Depends on:**
@@ -588,11 +588,11 @@ Adds token and cost sections to the Run statistics page. They explain which agen
 *Technical detail:* [context.md#task-documentation-site-describes-token-figures](./context.md#task-documentation-site-describes-token-figures)
 
 **Acceptance criteria**:
-- [ ] The Run statistics page describes the token, cost and time-per-token figures, how a run is matched to its session, the price table, the supported agents and the unknown reasons.
-- [ ] The configuration reference describes `stats.prices` with an example, and the top-level key list includes `stats`.
-- [ ] The site builds and type-checks without errors, and the page bodies have no layout HTML and no em dashes.
+- [x] The Run statistics page describes the token, cost and time-per-token figures, how a run is matched to its session, the price table, the supported agents and the unknown reasons.
+- [x] The configuration reference describes `stats.prices` with an example, and the top-level key list includes `stats`.
+- [x] The site builds and type-checks without errors, and the page bodies have no layout HTML and no em dashes.
 
-#### - [ ] Task: README notes token figures
+#### - [x] Task: README notes token figures
 **Id:** 67c0ae0d-c369-439c-937d-6e4373ceaa03
 **Repo:** spektacular
 **Depends on:**
@@ -613,7 +613,7 @@ none are built in. Other agents show these figures as unknown.
 *Technical detail:* [context.md#task-readme-notes-token-figures](./context.md#task-readme-notes-token-figures)
 
 **Acceptance criteria**:
-- [ ] The README says that reports include tokens, cost and time per thousand output tokens for Claude Code runs, that prices come from `stats.prices`, and that other agents show unknown.
+- [x] The README says that reports include tokens, cost and time per thousand output tokens for Claude Code runs, that prices come from `stats.prices`, and that other agents show unknown.
 
 ## Open Questions
 
@@ -775,5 +775,28 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - `spektacular: internal/runstats/testdata/summary.golden.txt`
 - `spektacular: cmd/stats.go`
 - `spektacular: cmd/stats_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-25 — Task: Documentation site describes token figures
+
+**What was done**: The Run statistics page gained "Tokens and cost", "How a run finds its session", "What the token figures mean", "Setting prices" and "When tokens are unknown" sections between "Unfinished work and damaged lines" and "Reports for programs", and "Reports for programs" gained a `tokens` JSON excerpt and the six appended comparison and summary figures; its description mentions tokens and cost. The configuration reference gained a `stats` `ConfigKey` after `log`, a `stats.prices` block in the example `config.yaml`, `stats` in the front-matter description, and "Eighteen top-level keys" with `stats` in the list.
+
+**Deviations**: The pages also describe behaviour settled during implementation: a resumed run read from both sessions, an orchestrated run found in its own helper transcript, the `*` incomplete-cost mark and its note, and summaries leaving an unknown run out of their counts.
+
+**Files changed**:
+- `docs: src/pages/run-stats.mdx`
+- `docs: src/pages/configuration.mdx`
+
+**Discoveries**: None.
+
+### 2026-10-25 — Task: README notes token figures
+
+**What was done**: The README's Run statistics block gained the paragraph, straight after the `stats` code block, saying that for Claude Code runs `stats run`, `compare` and `summary` also show tokens, cost and time per thousand output tokens for each step, task and helper, read from Claude Code's own session files with no extra setup, that prices go under `stats.prices`, and that other agents show unknown.
+
+**Deviations**: The paragraph also names `--sessions-dir`. The block's lead-in said reports work "without reading any agent transcript", which the token figures now do; it was changed to "the timings need no agent transcript", so the README does not contradict itself.
+
+**Files changed**:
+- `spektacular: README.md`
 
 **Discoveries**: None.

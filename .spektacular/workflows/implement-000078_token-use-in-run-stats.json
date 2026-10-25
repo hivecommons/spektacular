@@ -2,19 +2,11 @@
   "kind": "implement",
   "run_id": "ffd0eaf48778d80466c6f544ac294569",
   "step_span": {
-    "id": "b9b01497587d0c9d",
-    "name": "analyze",
-    "parent": "c138614a9682fc4d",
-    "start": "2026-10-25T19:12:11.10291506Z"
+    "id": "8bb1586cf4d29e83",
+    "name": "test_plan",
+    "start": "2026-10-25T19:15:23.042537357Z"
   },
-  "task_span": {
-    "id": "c138614a9682fc4d",
-    "name": "Documentation site describes token figures",
-    "task": "a1a9901f-b9c4-468a-9cea-0a5ba5d50a6e",
-    "step": "analyze",
-    "start": "2026-10-25T19:12:11.10291506Z"
-  },
-  "current_step": "analyze",
+  "current_step": "test_plan",
   "completed_steps": [
     "new",
     "read_plan",
@@ -27,18 +19,19 @@
     "update_changelog"
   ],
   "created_at": "2026-10-25T18:27:58.645622736Z",
-  "updated_at": "2026-10-25T19:12:11.11264405Z",
+  "updated_at": "2026-10-25T19:15:23.055242905Z",
   "data": {
     "committed_milestones": [
       1,
-      2
+      2,
+      3
     ],
-    "goal_item": "",
+    "goal_item": "67c0ae0d-c369-439c-937d-6e4373ceaa03",
     "name": "000078_token-use-in-run-stats",
     "orchestrated": true,
     "trace_task": {
-      "id": "a1a9901f-b9c4-468a-9cea-0a5ba5d50a6e",
-      "title": "Documentation site describes token figures"
+      "id": "67c0ae0d-c369-439c-937d-6e4373ceaa03",
+      "title": "README notes token figures"
     }
   }
 }

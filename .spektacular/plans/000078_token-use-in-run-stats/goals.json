@@ -644,6 +644,106 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "a1a9901f-b9c4-468a-9cea-0a5ba5d50a6e",
+      "title": "Documentation site describes token figures",
+      "checks": [
+        {
+          "at": "2026-10-25T19:13:54Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "a1a9901f-b9c4-468a-9cea-0a5ba5d50a6e",
+            "title": "Documentation site describes token figures",
+            "criteria": [
+              "The Run statistics page describes the token, cost and time-per-token figures, how a run is matched to its session, the price table, the supported agents and the unknown reasons.",
+              "The configuration reference describes `stats.prices` with an example, and the top-level key list includes `stats`.",
+              "The site builds and type-checks without errors, and the page bodies have no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-stats.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/configuration.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "config.yaml"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "docs/src/pages/run-stats.mdx lines 191-293 cover the token and cost figures (the Tokens and cost section, lines 191-208, adds the token columns and TIME/1K OUT), how a run finds its session (\"How a run finds its session\", lines 210-226, covering ~/.claude/projects, the new/goto matching, resumed and orchestrated runs and --sessions-dir), the price table (\"Setting prices\", lines 254-275, with a yaml example), the supported agents (lines 284-285: only Claude Code sessions are read today, so Bob, Codex and other agents show unknown) and the unknown reasons (\"When tokens are unknown\", lines 277-293, listing agent_unsupported, sessions_dir_missing, session_not_found, session_unreadable and format_unrecognised). Also the TIME/1K OUT definition is at lines 248-252 and the token meanings at lines 228-246."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "docs/src/pages/configuration.mdx lines 51-57 give a stats.prices example in the complete config.yaml block (claude-opus-5-5 with input, output, cache_read and cache_write). The stats ConfigKey at lines 229-241 describes the four required per-million prices and links to run-stats. The top-level key list at lines 119-123 reads \"Eighteen top-level keys\" and includes `stats`, and the list does contain 18 keys (schema through repos)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "The verification summary reports npm run build pass (18 pages) and npx astro check with 0 errors and 0 warnings. I did not rerun these, since I am read-only, so this rests on that reported result. Searching run-stats.mdx and configuration.mdx for the em dash character and for \u003cdiv, \u003csection or class= returned no matches (my own grep, plus the reported grep). The docs.diff hunks added in both files contain no em dash and no layout HTML. config.yaml in the docs root is untouched by the diff, which is consistent with the scope."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "67c0ae0d-c369-439c-937d-6e4373ceaa03",
+      "title": "README notes token figures",
+      "checks": [
+        {
+          "at": "2026-10-25T19:15:10Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "67c0ae0d-c369-439c-937d-6e4373ceaa03",
+            "title": "README notes token figures",
+            "criteria": [
+              "The README says that reports include tokens, cost and time per thousand output tokens for Claude Code runs, that prices come from `stats.prices`, and that other agents show unknown."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "README.md:65 in the worktree at /home/nicj/code/github.com/hivecommons/spektacular/.spektacular/worktrees/000078_token-use-in-run-stats/spektacular/README.md, inside the 'Run statistics' block (line 53 heading). It states that for Claude Code runs `stats run`, `compare` and `summary` show tokens, cost and time per thousand output tokens for each step, task and helper. It says prices are set per million tokens under `stats.prices` in `.spektacular/config.yaml`, and that other agents show these figures as unknown. The staged diff (goal-check/spektacular.diff) lists README.md as changed."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }

@@ -18,3 +18,4 @@
   a new step span, so start the reviewer span only after the last goto.
 - Golden report is now built with goldenOptions() (contract_test.go); regenerate with
   `go test ./internal/runstats -run 'TestReportGoldenJSON|TestRenderReportGolden' -update`, then rerun Harbor shared tests.
+- All 8 tasks done; Milestones 2 and 3 committed. Next: test_plan, feature changelog, spec reconciliation.
