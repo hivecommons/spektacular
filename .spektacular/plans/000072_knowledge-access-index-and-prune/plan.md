@@ -237,7 +237,7 @@ Testing follows the project's three layers (knowledge `architecture/testing-arch
 
 **Validation point**: The full Go test suite passes, including the exact-count concurrency test. In a throwaway project, a `knowledge search` followed by a `knowledge read` shows one more discovery and one more retrieval in `knowledge usage`, and `knowledge write` to the index path is refused.
 
-#### - [ ] Task: Add a shared file lock and an atomic store update
+#### - [x] Task: Add a shared file lock and an atomic store update
 **Id:** 6a171f75-0217-4ee5-864e-228ba48424b0
 **Repo:** spektacular
 **Depends on:** none
@@ -248,12 +248,12 @@ Gives the store one operation that reads a file, computes new contents and write
 *Technical detail:* [context.md#task-add-a-shared-file-lock-and-an-atomic-store-update](./context.md#task-add-a-shared-file-lock-and-an-atomic-store-update)
 
 **Acceptance criteria**:
-- [ ] Many concurrent updaters, each with its own store instance, incrementing one value end with exactly the expected total.
-- [ ] An update whose callback fails leaves the file exactly as it was.
-- [ ] The commit lock behaves as before, with its existing tests unchanged and passing.
-- [ ] Every store implementation, including the ignore-filtering wrapper and the test doubles, supports the new operation.
+- [x] Many concurrent updaters, each with its own store instance, incrementing one value end with exactly the expected total.
+- [x] An update whose callback fails leaves the file exactly as it was.
+- [x] The commit lock behaves as before, with its existing tests unchanged and passing.
+- [x] Every store implementation, including the ignore-filtering wrapper and the test doubles, supports the new operation.
 
-#### - [ ] Task: Keep a usage index in each knowledge store
+#### - [x] Task: Keep a usage index in each knowledge store
 **Id:** 8343b890-245d-4391-99eb-fea26576a100
 **Repo:** spektacular
 **Depends on:**
@@ -265,13 +265,13 @@ Adds the usage index to the knowledge layer: its JSON format, the operations tha
 *Technical detail:* [context.md#task-keep-a-usage-index-in-each-knowledge-store](./context.md#task-keep-a-usage-index-in-each-knowledge-store)
 
 **Acceptance criteria**:
-- [ ] Recording a discovery or a retrieval adds exactly one to that entry's count, with the time given, and a retrieval keeps the workflow and spec it was given.
-- [ ] An entry written and then rewritten keeps its first creation date and its counts.
-- [ ] An entry that predates the index gains a record with a creation date (from version history when available) and a tracking start of now.
-- [ ] Records for removed entries disappear, and the index never appears as an entry in list, search, tags or the always-applied rules.
-- [ ] Concurrent searches and reads of one entry from several independent instances are all counted, none lost.
+- [x] Recording a discovery or a retrieval adds exactly one to that entry's count, with the time given, and a retrieval keeps the workflow and spec it was given.
+- [x] An entry written and then rewritten keeps its first creation date and its counts.
+- [x] An entry that predates the index gains a record with a creation date (from version history when available) and a tracking start of now.
+- [x] Records for removed entries disappear, and the index never appears as an entry in list, search, tags or the always-applied rules.
+- [x] Concurrent searches and reads of one entry from several independent instances are all counted, none lost.
 
-#### - [ ] Task: Record usage from the knowledge commands
+#### - [x] Task: Record usage from the knowledge commands
 **Id:** 381790da-cb87-4cbf-b720-35b146519d5a
 **Repo:** spektacular
 **Depends on:**
@@ -283,12 +283,12 @@ Wires the index into the commands people and agents run. Searches record discove
 *Technical detail:* [context.md#task-record-usage-from-the-knowledge-commands](./context.md#task-record-usage-from-the-knowledge-commands)
 
 **Acceptance criteria**:
-- [ ] After a search returning an entry, `knowledge usage` shows one more discovery for it at the search's time.
-- [ ] After an entry is read, or loaded as an always-applied rule, it shows one more retrieval. A read that names its spec is attributed to that spec's running workflow even when other workflows run in parallel, and an unnamed read during a single running workflow names that workflow.
-- [ ] The delete command's existence check, the tags and list commands, and other internal reads change no count.
-- [ ] Writing to the index's location through `knowledge write` is refused with a remediation, and the index is not listed or returned as an entry.
-- [ ] A search or read still returns its result, with a warning, when usage cannot be recorded.
-- [ ] Existing entries written before the change can still be searched and read, and gain a creation date with no manual edit.
+- [x] After a search returning an entry, `knowledge usage` shows one more discovery for it at the search's time.
+- [x] After an entry is read, or loaded as an always-applied rule, it shows one more retrieval. A read that names its spec is attributed to that spec's running workflow even when other workflows run in parallel, and an unnamed read during a single running workflow names that workflow.
+- [x] The delete command's existence check, the tags and list commands, and other internal reads change no count.
+- [x] Writing to the index's location through `knowledge write` is refused with a remediation, and the index is not listed or returned as an entry.
+- [x] A search or read still returns its result, with a warning, when usage cannot be recorded.
+- [x] Existing entries written before the change can still be searched and read, and gain a creation date with no manual edit.
 
 ### Milestone 2: A prune command removes unused knowledge and checks the rest
 
@@ -465,3 +465,52 @@ None. Every design choice was settled while planning and recorded as an assumpti
 - Attributing ad hoc reads that do not name their spec while several workflows run in parallel: such a retrieval names no workflow. Reads made by the workflow templates pass their spec and are attributed. Run-level attribution can follow from the epic's trace and run-id work (`000073_log-mode-and-logger-providers`, `000074_trace-spans-for-agent-work`).
 - Regenerating this repository's own installed AGENTS.md, guidance and skills: they pick up the new wording the next time the maintainer installs the binary and runs the version check, never inside a workflow.
 - New Harbor verifier assertions for knowledge behaviour: the suites only drop the obsolete "decline the offer" line, and the zero-questions metric is checked by a manual Harbor run.
+
+## Changelog
+
+
+### 2026-10-25 — Task: Add a shared file lock and an atomic store update
+
+**What was done**: The commit lock's lock-file logic moved into a new `internal/filelock` package (`Acquire`, `AcquireWithBackoff`, `LockError`), which `autocommit.AcquireLock` now delegates to. The store's `Writer` gained `Update(path, fn)`, implemented by `FileStore` with a `<path>.lock` file lock and a temp-file-and-rename write, delegated by the ignore wrapper, and added to the three test doubles.
+
+**Deviations**: `autocommit.LockError` stays its own type (the filelock error is mapped onto it) so the commit lock's exact error text and its unchanged tests keep passing; `filelock.AcquireWithBackoff` was added so the commit lock keeps its own `lockBackoff` knob. A third test double, `tagBlindStore` in `internal/knowledge/set_test.go`, also needed `Update`. The temp file is named `<base>.tmp-<random>` via `os.CreateTemp` rather than `<pid>-<rand>`.
+
+**Files changed**:
+- `spektacular: internal/filelock/filelock.go`
+- `spektacular: internal/filelock/filelock_test.go`
+- `spektacular: internal/autocommit/lock.go`
+- `spektacular: internal/store/store.go`
+- `spektacular: internal/store/ignore.go`
+- `spektacular: internal/store/store_test.go`
+- `spektacular: internal/store/ignore_test.go`
+- `spektacular: internal/design/design_test.go`
+- `spektacular: internal/knowledge/set_test.go`
+
+**Discoveries**: The lock's exponential backoff starts at 50ms and caps at 1s, so a contended test (16 writers) takes about 14s unless it shortens `filelock.Backoff`; tests that contend on `Update` should shorten it with a restoring cleanup. `store.LockSuffix` (".lock") and `store.TempInfix` (".tmp-") are exported for the knowledge layer to recognise the index's sidecar files.
+
+### 2026-10-25 — Task: Keep a usage index in each knowledge store
+
+**What was done**: Added `internal/knowledge/usage.go`: the `.usage-index.json` format (version, entries keyed by path, created/tracked_since, discoveries and retrievals with count, last and a recent list capped at 20), `IsReservedPath`, and the Set operations `RecordDiscoveries`, `RecordRetrievals`, `EnsureRecord`, `ForgetRecords`, read-only `Usage` and `SetCreatedDater`. Every index change runs through one `store.Update` that first reconciles the index with the store (backfilling unseen entries from the injected dater, else the file's modification time, and dropping records whose file no longer exists). `set.go` hides the index, its lock and temp files from listings (inside `listFiles`) and search, and refuses them in `Read`, `Write` and `Delete` with `knowledge_index_reserved`.
+
+**Deviations**: Reconcile drops a record only when its file no longer exists (`Exists`), not when the listing omits it, so an entry hidden by `.spektacular_ignore` but read by exact path keeps a stable record. The reserved-path exclusion lives inside `listFiles` itself rather than a separate `entryFiles` helper, since every caller wants it. `EntryUsage` also carries a `tracked` flag in JSON.
+
+**Files changed**:
+- `spektacular: internal/knowledge/usage.go`
+- `spektacular: internal/knowledge/usage_test.go`
+- `spektacular: internal/knowledge/set.go`
+
+**Discoveries**: `ForgetRecords` on a path whose file still exists is undone at the next index write, because reconcile re-adds every listed file; callers must delete the file first (as `knowledge delete` and prune do). Category descriptions (`<category>/README.md`) are never given a record.
+
+### 2026-10-25 — Task: Record usage from the knowledge commands
+
+**What was done**: `knowledge search` records a discovery per returned hit; `knowledge read`, `always-applied` and `conventions` record a retrieval per returned entry, naming the running workflow (an optional `"spec"` in read's `--data`, an optional `--spec` on the two loaders, else the only in-progress workflow across the shared state and the spec/plan/implement lanes). `write` ensures a record, `delete` forgets one, a recording failure becomes a `usage_warning` field, and a new read-only `knowledge usage` command reports the index. `newKnowledgeSet` injects a git first-add dater (`git log --diff-filter=A --follow --format=%aI`).
+
+**Deviations**: The recording-failure test corrupts the index rather than holding its lock past a shortened timeout, so no test hook was added to `internal/store`. Read gets its own input schema (`knowledgeReadInputSchema`) carrying the optional `spec`, leaving write/delete's schema unchanged. Two existing schema tests in `cmd/knowledge_test.go` now list `usage_warning`. A clock var `knowledgeNow` was added for tests. `cmd/root.go`, `cmd/spec.go`, `gittest.go` and `instruction_surface_test.go` needed no change.
+
+**Files changed**:
+- `spektacular: cmd/knowledge.go`
+- `spektacular: cmd/knowledge_usage.go`
+- `spektacular: cmd/knowledge_usage_test.go`
+- `spektacular: cmd/knowledge_test.go`
+
+**Discoveries**: As planned, a read naming a spec that has no running workflow falls through to the single-running-workflow rule, so it can be attributed to another spec's workflow when exactly one other runs; the goal reviewer flagged this as untested. Every knowledge search or read now writes `.usage-index.json` into the store root, which in a repo-tier store is a git-tracked file.

@@ -1,0 +1,297 @@
+{
+  "plan": "000072_knowledge-access-index-and-prune",
+  "items": [
+    {
+      "item": "6a171f75-0217-4ee5-864e-228ba48424b0",
+      "title": "Add a shared file lock and an atomic store update",
+      "checks": [
+        {
+          "at": "2026-10-25T11:08:07Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "6a171f75-0217-4ee5-864e-228ba48424b0",
+            "title": "Add a shared file lock and an atomic store update",
+            "criteria": [
+              "Many concurrent updaters, each with its own store instance, incrementing one value end with exactly the expected total.",
+              "An update whose callback fails leaves the file exactly as it was.",
+              "The commit lock behaves as before, with its existing tests unchanged and passing.",
+              "Every store implementation, including the ignore-filtering wrapper and the test doubles, supports the new operation."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/filelock/filelock.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/autocommit/lock.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/filelock/filelock_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/autocommit/lock_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/store/store.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "f.abs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/store/ignore.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/design/design_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/set_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/store/store_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/store/ignore_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/store/store_test.go (TestUpdate_ConcurrentIncrementsFromSeparateInstancesAreAllKept, added in the diff): 16 goroutines, each with its own NewFileStore over the same root, each doing 25 Update increments on counter.json, asserting the final N is exactly 400 and that only counter.json remains. FileStore.Update (internal/store/store.go, diff hunk at +210) serialises through filelock.Acquire on abs+\".lock\" and writes via temp file and rename. The test is the only evidence; I did not run it."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "internal/store/store_test.go (TestUpdate_FailingCallbackLeavesTheFileUnchanged): the callback returns ([]byte(\"half-made\"), boom); the test asserts ErrorIs boom, the file still reads \"original\\n\", and requireOnlyFiles shows no temp or lock file. In store.go Update, fn's error returns before CreateTemp, so nothing is written. The test is the only evidence; I did not run it."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "internal/autocommit/lock_test.go is not in the diff, so its four tests are unchanged. internal/autocommit/lock.go AcquireLock now delegates to filelock.AcquireWithBackoff(path, LockTimeout, LockStale, lockBackoff) and maps *filelock.LockError to the autocommit *LockError with the same Path and Holder. LockError.Error() is untouched (context lines in the diff hunk at line 37), so the \"timed out waiting for the commit lock\" message is preserved. filelock.go uses the same stale comparison (\u003e stale) and the same backoff doubling capped at 1s as the removed code."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Every type with a Write/Delete pair in the code root now has Update: FileStore (store.go:239), ignoreStore (ignore.go:89, delegates to s.inner.Update), design_test.go recordingWriter (line 650), set_test.go tagBlindStore (line 2058) and deleteRecordingStore (line 2338). A grep for `) Write(path string, content []byte)` found one more type, metadata/close_test.go fakeStore, but it implements only the metadata.StoreReadWriter surface (Read/Write), not store.Writer, so it needs no Update. store_test.go lines 200-208 also assert the interface conformance for FileStore and ignoreStore."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "8343b890-245d-4391-99eb-fea26576a100",
+      "title": "Keep a usage index in each knowledge store",
+      "checks": [
+        {
+          "at": "2026-10-25T11:15:18Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "8343b890-245d-4391-99eb-fea26576a100",
+            "title": "Keep a usage index in each knowledge store",
+            "criteria": [
+              "Recording a discovery or a retrieval adds exactly one to that entry's count, with the time given, and a retrieval keeps the workflow and spec it was given.",
+              "An entry written and then rewritten keeps its first creation date and its counts.",
+              "An entry that predates the index gains a record with a creation date (from version history when available) and a tracking start of now.",
+              "Records for removed entries disappear, and the index never appears as an entry in list, search, tags or the always-applied rules.",
+              "Concurrent searches and reads of one entry from several independent instances are all counted, none lost."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/usage.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/set.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/usage_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/set_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "usage.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "set.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/knowledge/usage.go:134-198: RecordDiscoveries and RecordRetrievals call recordEach, which increments l.Count by exactly one per path, sets Last to the given time (at.UTC()), appends an event with that time, and, for retrievals, copies wf.Kind and wf.Spec into the event (lines 166-187). internal/knowledge/usage_test.go:48-88 asserts count 1 after one discovery, the given timestamp in Last and Recent, a retrieval recorded with Workflow 'implement' and the spec, and a retrieval with nil workflow carrying neither."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "usage.go:204-227: EnsureRecord leaves an existing record untouched (the only change is to Created, and only when reconcile just met the path with no history date, line 220-224, which is the first-write case). usage_test.go:113-141 writes, records a retrieval and two discoveries, rewrites, calls EnsureRecord again, and asserts Created and TrackedSince remain t1 and counts remain 1 retrieval and 2 discoveries."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "usage.go:312-335 reconcile adds a record for every listed file with no record; usage.go:349-361 datedRecord sets Created from the CreatedDater (version history) when it returns a date, else from store Stat ModTime, and sets TrackedSince to the write time 'at'. usage_test.go:147-190 checks the historic entry dated from history (committed), the handmade entry dated from its mtime (modified), and TrackedSince equal to now for both, plus a trigger entry with the mtime date."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Dropping removed entries: usage.go:329-333 in reconcile deletes any record whose path no longer exists; ForgetRecords (usage.go:233-243) deletes named paths. usage_test.go:194-237 covers both. Reserved exclusion: listFiles in set.go:680-705 skips IsReservedPath paths, so List, Tags and AlwaysAppliedEntries (via readCategories) never see the index, lock or temp files; Search skips them explicitly at set.go:231-237; usage.go:101-109 defines the reserved set. usage_test.go:245-315 asserts the index, lock and temp file are absent from List, Search, Tags, AlwaysAppliedEntries and Usage (Usage excludes them via listFiles), and are refused as entry addresses. Note the index file is not returned by Usage either, since it uses listFiles."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "Every index change goes through Set.update (usage.go:291-304), which calls src.store.Update. internal/store/store.go:239-247 FileStore.Update takes filelock.Acquire on the index path plus LockSuffix and then does a read-modify-write through a temp file, so the read-modify-write is atomic across processes. usage_test.go:389-432 starts 8 independent Set instances over one directory, each recording one discovery and one retrieval concurrently, and asserts both counts equal 8 and that no lock or temp file remains. The race test on internal/knowledge also passes per the verification summary."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "381790da-cb87-4cbf-b720-35b146519d5a",
+      "title": "Record usage from the knowledge commands",
+      "checks": [
+        {
+          "at": "2026-10-25T11:20:26Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "381790da-cb87-4cbf-b720-35b146519d5a",
+            "title": "Record usage from the knowledge commands",
+            "criteria": [
+              "After a search returning an entry, `knowledge usage` shows one more discovery for it at the search's time.",
+              "After an entry is read, or loaded as an always-applied rule, it shows one more retrieval. A read that names its spec is attributed to that spec's running workflow even when other workflows run in parallel, and an unnamed read during a single running workflow names that workflow.",
+              "The delete command's existence check, the tags and list commands, and other internal reads change no count.",
+              "Writing to the index's location through `knowledge write` is refused with a remediation, and the index is not listed or returned as an entry.",
+              "A search or read still returns its result, with a warning, when usage cannot be recorded.",
+              "Existing entries written before the change can still be searched and read, and gain a creation date with no manual edit."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/knowledge.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/knowledge_usage.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/spec.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "data.name"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/knowledge_usage_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/knowledge_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "state.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".usage-index.json.lock"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/testutil/gittest/gittest.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/instruction_surface_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/knowledge.go runKnowledgeSearch (diff hunk ~L435-446) calls recordUsage(result, set.RecordDiscoveries(hits, knowledgeNow())) after the search, one discovery per hit. internal/knowledge/usage.go RecordDiscoveries/recordEach (L134-196) increments Discoveries.Count and sets Last to the given time. cmd/knowledge_usage_test.go TestKnowledgeSearch_RecordsADiscoveryPerHit (L89-112) checks the count and time for returned entries and that a non-returned entry gains nothing."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Retrieval recording: cmd/knowledge.go runKnowledgeRead (diff ~L460-476) calls RecordRetrievals with activeWorkflow(input.Spec); always-applied and conventions do the same (~L187, L214). Named-spec attribution: cmd/knowledge_usage.go activeWorkflow (L129-181) returns the single candidate whose Spec equals the named spec, including lane workflows; test TestKnowledgeRead_NamedSpecPicksItsWorkflowAmongParallelRuns (knowledge_usage_test.go L159-185) covers two parallel lanes. Unnamed single-workflow attribution: L177-178, tested by TestKnowledgeRead_NamesTheSingleRunningWorkflow (L143-154). Note: when a named spec has no running workflow, the code falls through to the single-candidate branch and attributes the read to some other running workflow (L159-180, no test); the criterion does not state that case, so it is noted rather than failed."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "list and tags use set.List/set.Tags (cmd/knowledge.go L486, L505), which call listFiles and never call the update/Record path (internal/knowledge/set.go L417-470). The delete existence check at cmd/knowledge.go L594-598 uses set.Read, which is untracked (usage is recorded only in the cmd layer). Delete drops the record via ForgetRecords (L162). TestKnowledgeInternalReadsRecordNothing (knowledge_usage_test.go L189-221) asserts zero counts after list, tags, sources, usage and delete."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "internal/knowledge/usage.go IsReservedPath (L101-109) covers .usage-index.json, its .lock and .tmp- files. Set.Write, Set.Delete and Set.Read refuse reserved paths (internal/knowledge/set.go L359, L384, L404) via refuseReserved (usage.go L113-121), which gives ErrCodeIndexReserved and a NextAction pointing at 'knowledge usage'. listFiles skips reserved paths (set.go L699-700) and Set.Search drops them (set.go L231), so list, tags, search and conventions never return them. TestKnowledgeIndexPathIsRefusedAndHidden (knowledge_usage_test.go L226-258) covers write, read and delete."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "cmd/knowledge_usage.go recordUsage (L94-99) sets result[\"usage_warning\"] on failure and never returns an error. It wraps the search record (knowledge.go ~L440), the read record (~L470) and the write, delete, conventions and always-applied records. Schemas carry usage_warning (knowledge.go diff L9, L19). TestKnowledge_RecordingFailureStillReturnsTheResult (knowledge_usage_test.go L339-360) corrupts the index and checks that read and search still return content or hits plus the warning."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "Pre-existing entries are reconciled on the first index write: internal/knowledge/usage.go reconcile (L312-335) adds a record for every listed file, dated from the git history via gitCreatedDater (cmd/knowledge_usage.go L105-120, injected by newKnowledgeSet in cmd/knowledge.go diff ~L93) or else from the file's mtime (datedRecord L349-361). Search and read do not depend on the index. TestKnowledge_PreExistingEntryCarriesOver (knowledge_usage_test.go L286-307) and TestKnowledge_PreExistingEntryIsDatedFromGitHistory (L311-335) cover this. I did not run the tests; the verdict rests on reading the code and test bodies, and the reported verification passes."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    }
+  ]
+}
