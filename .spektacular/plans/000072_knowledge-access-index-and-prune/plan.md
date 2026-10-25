@@ -296,7 +296,7 @@ Wires the index into the commands people and agents run. Searches record discove
 
 **Validation point**: The full Go test suite passes, including the age-rule table, the simulated-agent prune run, and the byte-for-byte dry-run check. A dry run in a throwaway project returns an instruction per entry and a complete report, and leaves every file unchanged.
 
-#### - [ ] Task: Add the prune age setting
+#### - [x] Task: Add the prune age setting
 **Id:** 9cba7df7-f7b8-4472-82a1-5647512eb0bd
 **Repo:** spektacular
 **Depends on:** none
@@ -307,12 +307,12 @@ Adds an optional `knowledge.prune.max_age_days` project setting with a default o
 *Technical detail:* [context.md#task-add-the-prune-age-setting](./context.md#task-add-the-prune-age-setting)
 
 **Acceptance criteria**:
-- [ ] A configuration without the key reports an age of 90 days.
-- [ ] A configured age is read and survives being saved and reloaded.
-- [ ] A negative age is refused with a message naming the key and the fix.
-- [ ] Configurations written before the change load without error and without a migration.
+- [x] A configuration without the key reports an age of 90 days.
+- [x] A configured age is read and survives being saved and reloaded.
+- [x] A negative age is refused with a message naming the key and the fix.
+- [x] Configurations written before the change load without error and without a migration.
 
-#### - [ ] Task: Add the knowledge prune command
+#### - [x] Task: Add the knowledge prune command
 **Id:** 2e76ead4-71c7-4af7-a8d1-1815e29189ff
 **Repo:** spektacular
 **Depends on:**
@@ -325,13 +325,13 @@ Adds `knowledge prune` and `knowledge prune verdict`. The first pass removes ent
 *Technical detail:* [context.md#task-add-the-knowledge-prune-command](./context.md#task-add-the-knowledge-prune-command)
 
 **Acceptance criteria**:
-- [ ] With a 30-day age, an entry created 40 days ago and never retrieved is removed, while one retrieved once in that window and one created 10 days ago are kept.
-- [ ] An old entry that searches surfaced but nobody read is removed, and an entry tracked for less than the age is never removed for non-use.
-- [ ] A corrected entry keeps its usage counts, and a removed or deleted entry leaves no record in the index.
-- [ ] A verdict that the store contradicts, a verdict for the wrong entry, or a change without evidence is refused with a remediation.
-- [ ] The instruction for each entry tells the agent to keep an entry stating an unmet standard as current, and to delete only an entry whose subject no longer exists.
-- [ ] A dry run reports the same removals a real run would make and a verdict for every entry, and afterwards every entry and the index are byte-for-byte unchanged.
-- [ ] Prune's own reads, in a real run or a dry run, change no retrieval count.
+- [x] With a 30-day age, an entry created 40 days ago and never retrieved is removed, while one retrieved once in that window and one created 10 days ago are kept.
+- [x] An old entry that searches surfaced but nobody read is removed, and an entry tracked for less than the age is never removed for non-use.
+- [x] A corrected entry keeps its usage counts, and a removed or deleted entry leaves no record in the index.
+- [x] A verdict that the store contradicts, a verdict for the wrong entry, or a change without evidence is refused with a remediation.
+- [x] The instruction for each entry tells the agent to keep an entry stating an unmet standard as current, and to delete only an entry whose subject no longer exists.
+- [x] A dry run reports the same removals a real run would make and a verdict for every entry, and afterwards every entry and the index are byte-for-byte unchanged.
+- [x] Prune's own reads, in a real run or a dry run, change no retrieval count.
 
 ### Milestone 3: Agents write knowledge themselves and say what they wrote
 
@@ -514,3 +514,31 @@ None. Every design choice was settled while planning and recorded as an assumpti
 - `spektacular: cmd/knowledge_test.go`
 
 **Discoveries**: As planned, a read naming a spec that has no running workflow falls through to the single-running-workflow rule, so it can be attributed to another spec's workflow when exactly one other runs; the goal reviewer flagged this as untested. Every knowledge search or read now writes `.usage-index.json` into the store root, which in a repo-tier store is a git-tracked file.
+
+### 2026-10-25 — Task: Add the prune age setting
+
+**What was done**: `KnowledgeConfig` gained an optional `prune.max_age_days` (`KnowledgePruneConfig`, omitempty), `DefaultKnowledgePruneMaxAgeDays = 90` and a `PruneMaxAgeDays()` accessor that supplies the default. `KnowledgeConfig.Validate` refuses a negative value with `config_invalid`, naming the key and the fix. No settings-format bump and no migration.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: internal/config/config.go`
+- `spektacular: internal/config/config_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-25 — Task: Add the knowledge prune command
+
+**What was done**: Added `knowledge.PruneCandidates` (the age rule: created and tracked for at least the age, no retrieval within it, untracked entries and category descriptions never removed), the embedded instruction `templates/knowledge/prune-entry.md` (entry body inlined with triple braces, the verdict rules, correct/delete commands, dry-run block, exact verdict command), and `cmd/knowledge_prune.go` with `knowledge prune [--dry-run] [--force] [--tier] [--filter]` and `knowledge prune verdict`. The command removes candidates and their records in a real run, queues every remaining entry with its checksum in `.spektacular/knowledge-prune.json`, hands out one instruction per entry, checks each verdict against the store (deleted means gone, corrected means changed, current means unchanged, a dry run must change nothing), and returns a final report of every entry with its verdict and evidence before deleting the run file.
+
+**Deviations**: Added a refusal `knowledge_prune_in_progress` when the requested mode differs from an unfinished run's (a `--dry-run` while a real prune is unfinished, or the reverse), instead of silently resuming the other kind of run; `--force` starts the requested one. The template contract test is package `templates_test`, since stepkit imports `templates`. `cmd/knowledge.go` and the spek-knowledge skill were not touched by this task (the skill is the next task).
+
+**Files changed**:
+- `spektacular: internal/knowledge/usage.go`
+- `spektacular: internal/knowledge/usage_test.go`
+- `spektacular: cmd/knowledge_prune.go`
+- `spektacular: cmd/knowledge_prune_test.go`
+- `spektacular: templates/knowledge/prune-entry.md`
+- `spektacular: templates/knowledge_prune_template_test.go`
+
+**Discoveries**: After `--force`, entries the discarded run already removed are not listed in the new run's report (their removal already happened). `ForgetRecords` stamps its reconcile with the wall clock rather than prune's injected clock, so an entry first tracked during a prune's removal update gets the real time as `tracked_since`.
