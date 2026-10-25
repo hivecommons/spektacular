@@ -86,6 +86,10 @@ func (s *ignoreStore) Write(path string, content []byte) error { return s.inner.
 
 func (s *ignoreStore) Delete(path string) error { return s.inner.Delete(path) }
 
+func (s *ignoreStore) Update(path string, fn func(current []byte, exists bool) ([]byte, error)) error {
+	return s.inner.Update(path, fn)
+}
+
 func (s *ignoreStore) Exists(path string) bool { return s.inner.Exists(path) }
 
 func (s *ignoreStore) Stat(path string) (FileInfo, error) { return s.inner.Stat(path) }

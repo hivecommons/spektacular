@@ -1,12 +1,15 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/hivecommons/spektacular/internal/filelock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -205,3 +208,139 @@ var (
 	_ Writer = (*ignoreStore)(nil)
 	_ Store  = (*ignoreStore)(nil)
 )
+
+// Update hands fn exists=false and no bytes when the file is absent, and
+// writes what fn returns, creating parent directories.
+func TestUpdate_MissingFilePassesExistsFalse(t *testing.T) {
+	st := newTestStore(t)
+
+	var sawExists = true
+	var sawBytes []byte
+	err := st.Update("sub/counter.json", func(current []byte, exists bool) ([]byte, error) {
+		sawExists, sawBytes = exists, current
+		return []byte("1\n"), nil
+	})
+	require.NoError(t, err)
+	require.False(t, sawExists)
+	require.Nil(t, sawBytes)
+
+	data, err := st.Read("sub/counter.json")
+	require.NoError(t, err)
+	require.Equal(t, "1\n", string(data))
+
+	err = st.Update("sub/counter.json", func(current []byte, exists bool) ([]byte, error) {
+		sawExists, sawBytes = exists, current
+		return []byte("2\n"), nil
+	})
+	require.NoError(t, err)
+	require.True(t, sawExists)
+	require.Equal(t, "1\n", string(sawBytes))
+}
+
+// A callback that fails aborts the update: the file keeps its bytes, the error
+// is returned, and neither a temp file nor the lock is left behind.
+func TestUpdate_FailingCallbackLeavesTheFileUnchanged(t *testing.T) {
+	st := newTestStore(t)
+	require.NoError(t, st.Write("doc.json", []byte("original\n")))
+	boom := errors.New("boom")
+
+	err := st.Update("doc.json", func([]byte, bool) ([]byte, error) {
+		return []byte("half-made"), boom
+	})
+	require.ErrorIs(t, err, boom)
+
+	data, err := st.Read("doc.json")
+	require.NoError(t, err)
+	require.Equal(t, "original\n", string(data))
+	requireOnlyFiles(t, st.Root(), "doc.json")
+}
+
+// A nil result writes nothing: an absent file stays absent, and a present one
+// keeps its bytes and its modification time.
+func TestUpdate_NilResultIsANoOp(t *testing.T) {
+	st := newTestStore(t)
+
+	require.NoError(t, st.Update("absent.json", func([]byte, bool) ([]byte, error) { return nil, nil }))
+	require.False(t, st.Exists("absent.json"))
+
+	require.NoError(t, st.Write("present.json", []byte("kept\n")))
+	past := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
+	require.NoError(t, os.Chtimes(filepath.Join(st.Root(), "present.json"), past, past))
+	require.NoError(t, st.Update("present.json", func([]byte, bool) ([]byte, error) { return nil, nil }))
+
+	info, err := st.Stat("present.json")
+	require.NoError(t, err)
+	require.True(t, past.Equal(info.ModTime), "a nil result must not rewrite the file")
+	requireOnlyFiles(t, st.Root(), "present.json")
+}
+
+// Update refuses a path that escapes the store root, like every other call.
+func TestUpdate_RejectsPathTraversal(t *testing.T) {
+	st := newTestStore(t)
+	err := st.Update("../escape.json", func([]byte, bool) ([]byte, error) { return []byte("x"), nil })
+	require.Error(t, err)
+}
+
+// Many updaters, each holding its own store instance over the same root as
+// separate processes would, increment one counter through Update. None is
+// lost: the final value is exactly the number of increments, and the lock is
+// gone afterwards.
+func TestUpdate_ConcurrentIncrementsFromSeparateInstancesAreAllKept(t *testing.T) {
+	// A short first backoff keeps sixteen waiters from sleeping their way up
+	// to the one-second cap; the lock path under test is unchanged.
+	oldBackoff := filelock.Backoff
+	filelock.Backoff = time.Millisecond
+	t.Cleanup(func() { filelock.Backoff = oldBackoff })
+	root := t.TempDir()
+	const workers, perWorker = 16, 25
+
+	errs := make([]error, workers)
+	var wg sync.WaitGroup
+	for i := range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			st := NewFileStore(root, "project")
+			for range perWorker {
+				err := st.Update("counter.json", func(current []byte, exists bool) ([]byte, error) {
+					var doc struct{ N int }
+					if exists {
+						if err := json.Unmarshal(current, &doc); err != nil {
+							return nil, err
+						}
+					}
+					doc.N++
+					return json.Marshal(doc)
+				})
+				if err != nil {
+					errs[i] = err
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		require.NoError(t, err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(root, "counter.json"))
+	require.NoError(t, err)
+	var doc struct{ N int }
+	require.NoError(t, json.Unmarshal(data, &doc))
+	require.Equal(t, 400, doc.N, "every increment must survive")
+	requireOnlyFiles(t, root, "counter.json")
+}
+
+// requireOnlyFiles asserts the directory holds exactly the named files: no
+// lock file and no temp file left over from an update.
+func requireOnlyFiles(t *testing.T, dir string, names ...string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	var got []string
+	for _, e := range entries {
+		got = append(got, e.Name())
+	}
+	require.ElementsMatch(t, names, got)
+}

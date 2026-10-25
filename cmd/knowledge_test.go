@@ -663,7 +663,9 @@ func TestKnowledgeDelete_SchemaDocumentsInputAndOutput(t *testing.T) {
 	require.Equal(t, "string", schema.Input.Properties["path"].Type)
 
 	require.NotNil(t, schema.Output)
-	require.ElementsMatch(t, []string{"tier", "name", "path", "deleted"}, mapKeys(schema.Output.Properties))
+	// usage_warning is optional: present only when the removal of the
+	// entry's usage record could not be written.
+	require.ElementsMatch(t, []string{"tier", "name", "path", "deleted", "usage_warning"}, mapKeys(schema.Output.Properties))
 	require.Equal(t, "boolean", schema.Output.Properties["deleted"].Type)
 
 	require.NotContains(t, raw, "flags",
@@ -1995,7 +1997,7 @@ func TestKnowledgeWrite_SchemaDocumentsTheAddressItRequires(t *testing.T) {
 	// optional and absent in the normal case — they are published here so a
 	// caller knows they can appear, not because every write produces them.
 	require.ElementsMatch(t,
-		[]string{"tier", "name", "path", "unreachable_tags", "next_action"},
+		[]string{"tier", "name", "path", "unreachable_tags", "next_action", "usage_warning"},
 		mapKeys(schema.Output.Properties))
 	require.Equal(t, "array", schema.Output.Properties["unreachable_tags"].Type)
 	require.Equal(t, "string", schema.Output.Properties["unreachable_tags"].Items.Type)

@@ -163,6 +163,7 @@ var knowledgeSearchOutputSchema = &schemaObj{
 				},
 			},
 		},
+		"usage_warning": {Type: "string"},
 	},
 }
 
@@ -189,6 +190,9 @@ var knowledgeReadOutputSchema = &schemaObj{
 		"name":    {Type: "string"},
 		"path":    {Type: "string"},
 		"content": {Type: "string"},
+		// usage_warning appears only when the read could not be recorded in
+		// the store's usage index; the content is complete either way.
+		"usage_warning": {Type: "string"},
 	},
 }
 
@@ -211,6 +215,7 @@ var knowledgeWriteOutputSchema = &schemaObj{
 		"path":             {Type: "string"},
 		"unreachable_tags": {Type: "array", Items: &schemaProp{Type: "string"}},
 		"next_action":      {Type: "string"},
+		"usage_warning":    {Type: "string"},
 	},
 }
 
@@ -222,10 +227,11 @@ var knowledgeWriteOutputSchema = &schemaObj{
 var knowledgeDeleteOutputSchema = &schemaObj{
 	Type: "object",
 	Properties: map[string]*schemaProp{
-		"tier":    {Type: "string"},
-		"name":    {Type: "string"},
-		"path":    {Type: "string"},
-		"deleted": {Type: "boolean"},
+		"tier":          {Type: "string"},
+		"name":          {Type: "string"},
+		"path":          {Type: "string"},
+		"deleted":       {Type: "boolean"},
+		"usage_warning": {Type: "string"},
 	},
 }
 
@@ -246,6 +252,7 @@ var knowledgeConventionsOutputSchema = &schemaObj{
 			"path":    {Type: "string"},
 			"content": {Type: "string"},
 		}),
+		"usage_warning": {Type: "string"},
 	},
 }
 
@@ -262,6 +269,7 @@ var knowledgeAlwaysAppliedOutputSchema = &schemaObj{
 			"content":  {Type: "string"},
 			"category": {Type: "string"},
 		}),
+		"usage_warning": {Type: "string"},
 	},
 }
 
@@ -271,6 +279,20 @@ var knowledgeAddressInputSchema = &schemaObj{
 		"tier": {Type: "string", Enum: []string{string(knowledge.TierProject), string(knowledge.TierRepo)}},
 		"name": {Type: "string"},
 		"path": {Type: "string"},
+	},
+	Required: []string{"tier", "name", "path"},
+}
+
+// knowledgeReadInputSchema is the address plus an optional "spec": the spec
+// the caller is working on, which attributes the retrieval to that spec's
+// running workflow and never changes what is returned.
+var knowledgeReadInputSchema = &schemaObj{
+	Type: "object",
+	Properties: map[string]*schemaProp{
+		"tier": {Type: "string", Enum: []string{string(knowledge.TierProject), string(knowledge.TierRepo)}},
+		"name": {Type: "string"},
+		"path": {Type: "string"},
+		"spec": {Type: "string"},
 	},
 	Required: []string{"tier", "name", "path"},
 }
@@ -296,7 +318,12 @@ func newKnowledgeSet() (*knowledge.Set, error) {
 	}
 	cfg.Knowledge = config.KnowledgeConfig{Sources: sources}
 
-	return knowledge.NewSet(cfg, cwd)
+	set, err := knowledge.NewSet(cfg, cwd)
+	if err != nil {
+		return nil, err
+	}
+	set.SetCreatedDater(gitCreatedDater)
+	return set, nil
 }
 
 // aggregateKnowledgeSources builds the effective knowledge store list for the
@@ -408,13 +435,18 @@ func runKnowledgeSearch(cmd *cobra.Command, args []string) error {
 	if hits == nil {
 		hits = []store.Hit{}
 	}
+	result := map[string]any{"hits": hits}
+	// One discovery per returned hit, recorded after the search has its
+	// result: Set.Search itself stays untracked, so internal searches never
+	// count.
+	recordUsage(result, func() error { return set.RecordDiscoveries(hits, knowledgeNow()) })
 	out := output.New(cmd.OutOrStdout(), globalFields)
-	return out.WriteResult(map[string]any{"hits": hits})
+	return out.WriteResult(result)
 }
 
 func runKnowledgeRead(cmd *cobra.Command, _ []string) error {
 	if schema, _ := cmd.Flags().GetBool("schema"); schema {
-		return output.Write(cmd.OutOrStdout(), commandSchema{Input: knowledgeAddressInputSchema, Output: knowledgeReadOutputSchema}, "")
+		return output.Write(cmd.OutOrStdout(), commandSchema{Input: knowledgeReadInputSchema, Output: knowledgeReadOutputSchema}, "")
 	}
 	input, err := knowledgeAddressData(cmd)
 	if err != nil {
@@ -428,13 +460,19 @@ func runKnowledgeRead(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	out := output.New(cmd.OutOrStdout(), globalFields)
-	return out.WriteResult(map[string]any{
+	result := map[string]any{
 		"tier":    input.Tier,
 		"name":    input.Name,
 		"path":    input.Path,
 		"content": string(content),
+	}
+	recordUsage(result, func() error {
+		return set.RecordRetrievals(
+			[]knowledge.Entry{{Tier: input.Tier, Name: input.Name, Path: input.Path}},
+			knowledgeNow(), activeWorkflow(input.Spec))
 	})
+	out := output.New(cmd.OutOrStdout(), globalFields)
+	return out.WriteResult(result)
 }
 
 func runKnowledgeList(cmd *cobra.Command, _ []string) error {
@@ -495,6 +533,9 @@ func runKnowledgeWrite(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	result := map[string]any{"tier": input.Tier, "name": input.Name, "path": input.Path}
+	// A first write gives the entry its usage record and creation date; a
+	// rewrite leaves the existing record, and so the date and counts, alone.
+	recordUsage(result, func() error { return set.EnsureRecord(input.Address(), input.Path, knowledgeNow()) })
 	// Reported after the write, not before, and as fields on a success rather
 	// than a refusal: the requirement is to tell the caller, not to refuse, and
 	// reporting afterwards makes it structurally impossible for this to become
@@ -562,10 +603,13 @@ func runKnowledgeDelete(cmd *cobra.Command, _ []string) error {
 	if err := set.Delete(input.Address(), input.Path); err != nil {
 		return err
 	}
-	out := output.New(cmd.OutOrStdout(), globalFields)
-	return out.WriteResult(map[string]any{
+	result := map[string]any{
 		"tier": input.Tier, "name": input.Name, "path": input.Path, "deleted": deleted,
-	})
+	}
+	// The removed entry's usage history goes with it.
+	recordUsage(result, func() error { return set.ForgetRecords(input.Address(), []string{input.Path}) })
+	out := output.New(cmd.OutOrStdout(), globalFields)
+	return out.WriteResult(result)
 }
 
 func runKnowledgeSources(cmd *cobra.Command, _ []string) error {
@@ -582,7 +626,7 @@ func runKnowledgeSources(cmd *cobra.Command, _ []string) error {
 
 func runKnowledgeConventions(cmd *cobra.Command, _ []string) error {
 	if schema, _ := cmd.Flags().GetBool("schema"); schema {
-		return output.Write(cmd.OutOrStdout(), commandSchema{Input: nil, Output: knowledgeConventionsOutputSchema, Flags: knowledgeNarrowingFlags}, "")
+		return output.Write(cmd.OutOrStdout(), commandSchema{Input: nil, Output: knowledgeConventionsOutputSchema, Flags: knowledgeSpecFlags}, "")
 	}
 	set, err := newKnowledgeSet()
 	if err != nil {
@@ -595,8 +639,16 @@ func runKnowledgeConventions(cmd *cobra.Command, _ []string) error {
 	if conventions == nil {
 		conventions = []knowledge.Convention{}
 	}
+	result := map[string]any{"conventions": conventions}
+	retrieved := make([]knowledge.Entry, 0, len(conventions))
+	for _, c := range conventions {
+		retrieved = append(retrieved, knowledge.Entry{Tier: c.Tier, Name: c.Name, Path: c.Path})
+	}
+	recordUsage(result, func() error {
+		return set.RecordRetrievals(retrieved, knowledgeNow(), activeWorkflow(knowledgeSpec))
+	})
 	out := output.New(cmd.OutOrStdout(), globalFields)
-	return out.WriteResult(map[string]any{"conventions": conventions})
+	return out.WriteResult(result)
 }
 
 func runKnowledgeCategories(cmd *cobra.Command, _ []string) error {
@@ -609,7 +661,7 @@ func runKnowledgeCategories(cmd *cobra.Command, _ []string) error {
 
 func runKnowledgeAlwaysApplied(cmd *cobra.Command, _ []string) error {
 	if schema, _ := cmd.Flags().GetBool("schema"); schema {
-		return output.Write(cmd.OutOrStdout(), commandSchema{Input: nil, Output: knowledgeAlwaysAppliedOutputSchema, Flags: knowledgeNarrowingFlags}, "")
+		return output.Write(cmd.OutOrStdout(), commandSchema{Input: nil, Output: knowledgeAlwaysAppliedOutputSchema, Flags: knowledgeSpecFlags}, "")
 	}
 	set, err := newKnowledgeSet()
 	if err != nil {
@@ -622,8 +674,16 @@ func runKnowledgeAlwaysApplied(cmd *cobra.Command, _ []string) error {
 	if entries == nil {
 		entries = []knowledge.AlwaysAppliedEntry{}
 	}
+	result := map[string]any{"entries": entries}
+	retrieved := make([]knowledge.Entry, 0, len(entries))
+	for _, e := range entries {
+		retrieved = append(retrieved, knowledge.Entry{Tier: e.Tier, Name: e.Name, Path: e.Path})
+	}
+	recordUsage(result, func() error {
+		return set.RecordRetrievals(retrieved, knowledgeNow(), activeWorkflow(knowledgeSpec))
+	})
 	out := output.New(cmd.OutOrStdout(), globalFields)
-	return out.WriteResult(map[string]any{"entries": entries})
+	return out.WriteResult(result)
 }
 
 // knowledgeSelector builds the selector the fan-out commands narrow on from
@@ -643,11 +703,14 @@ func knowledgeSelector() knowledge.Selector {
 }
 
 // knowledgeAddressInput is the --data payload for the read and write commands:
-// the store's address (tier and name) plus the entry's path within it.
+// the store's address (tier and name) plus the entry's path within it. Spec is
+// read's optional attribution: the spec the caller is working on, which names
+// the workflow the retrieval is recorded under.
 type knowledgeAddressInput struct {
 	Tier knowledge.Tier `json:"tier"`
 	Name string         `json:"name"`
 	Path string         `json:"path"`
+	Spec string         `json:"spec,omitempty"`
 }
 
 // Address returns the store address the input names.
@@ -707,12 +770,16 @@ func init() {
 	knowledgeWriteCmd.Flags().StringP("data", "d", "", `JSON input (e.g. '{"tier":"repo","name":"docs","path":"learnings/x.md"}')`)
 	knowledgeDeleteCmd.Flags().StringP("data", "d", "", `JSON input (e.g. '{"tier":"repo","name":"docs","path":"learnings/x.md"}')`)
 	knowledgeWriteCmd.Flags().String("file", "", "Read entry content from the file at <path> (relative to cwd); stdin is used when omitted")
-	for _, c := range []*cobra.Command{knowledgeSearchCmd, knowledgeListCmd, knowledgeConventionsCmd, knowledgeAlwaysAppliedCmd, knowledgeTagsCmd} {
+	for _, c := range []*cobra.Command{knowledgeSearchCmd, knowledgeListCmd, knowledgeConventionsCmd, knowledgeAlwaysAppliedCmd, knowledgeTagsCmd, knowledgeUsageCmd} {
 		c.Flags().StringVar(&knowledgeTier, "tier", string(knowledge.TierAll), `Which knowledge to cover: "project", "repo", or "all"`)
 		c.Flags().StringArrayVar(&knowledgeFilter, "filter", nil, "Narrow to the named store(s) within the tier (repeatable); omit to cover every store the tier reaches")
 	}
 
+	for _, c := range []*cobra.Command{knowledgeConventionsCmd, knowledgeAlwaysAppliedCmd} {
+		c.Flags().StringVar(&knowledgeSpec, "spec", "", "The spec you are working on; attributes the retrieval to its running workflow and never changes what is returned")
+	}
+
 	knowledgeSearchCmd.Flags().StringArrayVar(&knowledgeTags, "tag", nil, "Narrow to entries carrying the tag (repeatable); an entry must carry every tag listed, and one lacking any of them is never returned")
 
-	knowledgeCmd.AddCommand(knowledgeSearchCmd, knowledgeReadCmd, knowledgeListCmd, knowledgeWriteCmd, knowledgeDeleteCmd, knowledgeSourcesCmd, knowledgeConventionsCmd, knowledgeCategoriesCmd, knowledgeAlwaysAppliedCmd, knowledgeTagsCmd)
+	knowledgeCmd.AddCommand(knowledgeSearchCmd, knowledgeReadCmd, knowledgeListCmd, knowledgeWriteCmd, knowledgeDeleteCmd, knowledgeSourcesCmd, knowledgeConventionsCmd, knowledgeCategoriesCmd, knowledgeAlwaysAppliedCmd, knowledgeTagsCmd, knowledgeUsageCmd)
 }
