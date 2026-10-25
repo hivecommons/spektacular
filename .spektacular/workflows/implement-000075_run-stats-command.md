@@ -34,3 +34,5 @@ Orchestrated run (epic 000002). Code: spektacular worktree
 - gaps under 1 ms are not gaps.
 
 ## Tasks 5-6 (compare/summary): done; Milestone 2 committed. Remaining: docs page (docs repo, needs npm ci) and README.
+
+## Tasks 7-8 (docs page, README): done; Milestone 3 commit made on advancing to test_plan.

@@ -774,6 +774,238 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "a86aebb6-e10d-48b7-9fbb-a7e273e0a257",
+      "title": "Documentation site describes run statistics",
+      "checks": [
+        {
+          "at": "2026-10-25T14:45:18Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "a86aebb6-e10d-48b7-9fbb-a7e273e0a257",
+            "title": "Documentation site describes run statistics",
+            "criteria": [
+              "The Run statistics page explains listing, reporting on, comparing and summarising runs, choosing runs, and reporting on a copied logs directory.",
+              "The page defines every figure the report shows, and how unfinished work and skipped lines appear.",
+              "The Resources menu links to the page, and the logging page points to it.",
+              "The site builds and type-checks without errors, and the page body has no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-stats.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "run-stats.mdx covers listing (\"## Listing runs\", lines 18-35), reporting on one run (\"## Reporting on one run\", lines 37-65), choosing runs (\"## Choosing runs\", lines 67-81), comparing (\"## Comparing runs\", lines 83-101), summarising (\"## Summarising runs\", lines 103-112) and reporting on a copied logs directory (\"## Logs from elsewhere\", lines 164-173, using --dir)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "not_met",
+              "evidence": "run-stats.mdx lines 114-131 define wall time, working time, user wait, helper wait, command time, entries, gap and gap total, and lines 133-143 cover interrupted/abandoned/open items marked with * and skipped_lines. Figures still shown in the sample report with no definition: the per-step COMMANDS column (lines 55-57), the INCOMPLETE column count (only implied by the * rule, never said to be a count of unfinished entries), and the parenthesised counts '(2 waits)', '(3 helpers)', '(3 gaps)' (lines 49-52). Those need one-line definitions in the 'What each figure means' section."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Nav.astro:13 places the item under label \"Resources\", and line 23 adds { label: \"Run statistics\", href: \"/run-stats/\" } inside that group (diff hunk at Nav.astro lines 20-25). debugging.mdx diff adds a link \"[Run statistics](/run-stats/)\" after the records description (debugging.mdx diff hunk at line 258 onward)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Build and astro check results are reported as passing in the verification summary; I did not re-run them (read-only). run-stats.mdx body uses the same Hero/Prose/CtaBanner components as every other page (e.g. debugging.mdx:11,16,273) and has no raw div/section/class markup. No em dash appears in run-stats.mdx; the only non-ASCII symbol is the arrow in the button label at line 186. The Nav.astro diff adds no em dash."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T14:46:40Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "a86aebb6-e10d-48b7-9fbb-a7e273e0a257",
+            "title": "Documentation site describes run statistics",
+            "criteria": [
+              "The Run statistics page explains listing, reporting on, comparing and summarising runs, choosing runs, and reporting on a copied logs directory.",
+              "The page defines every figure the report shows, and how unfinished work and skipped lines appear.",
+              "The Resources menu links to the page, and the logging page points to it.",
+              "The site builds and type-checks without errors, and the page body has no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-stats.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "docs/src/pages/run-stats.mdx sections 'Listing runs' (lines 18-35, stats list), 'Reporting on one run' (37-65, stats run), 'Choosing runs' (67-81, selection flags and prefix rules), 'Comparing runs' (83-101, stats compare), 'Summarising runs' (103-112, stats summary) and 'Logs from elsewhere' (176-185, stats run --dir on a copied logs directory) cover every item the criterion names."
+            },
+            {
+              "criterion": 2,
+              "verdict": "not_met",
+              "evidence": "Most figures are defined (run-stats.mdx lines 114-143) and match render.go. But lines 147-149 say steps, tasks, helpers and waits that did not finish are marked with '*' in the tables and have \"complete\": false in the JSON. The code does not do this for steps: render.go:77-81 prints the Steps table with no mark() call, only the INCOMPLETE count column, and report.go StepRow (lines 103-113) has no Complete field. Tasks, helpers and waits are marked (render.go:91, 106), so the page must drop the step claim or the code must change. The unfinished-run footnote and skipped-lines behaviour (render.go:126-129, 138-142) are described accurately at lines 145-155, but the page's 'Skipped lines' wording differs slightly from the printed 'Skipped lines: N' and the JSON key is skipped_lines, which the page does name."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "docs/src/components/Nav.astro:23 adds { label: \"Run statistics\", href: \"/run-stats/\" } inside the 'Resources' children array (lines 13-24). docs/src/pages/debugging.mdx:21-23 adds 'To turn these records into timings per step, task and helper, see [Run statistics](/run-stats/).' (diff hunk @@ -258,6 +258,9 @@)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Build and check results are taken from the supplied verification summary (npm run build pass, 17 pages; npx astro check 0 errors), which I could not re-run as a read-only reviewer. Em dashes: grep for U+2014 in run-stats.mdx returned no matches. Raw layout HTML: grep for \u003cdiv, \u003csection and class= across src/pages/*.mdx returned no matches for those tags. The page body does use Astro layout components (Hero, Prose, CtaBanner, Fragment, Button, run-stats.mdx lines 6-9, 11-14, 16, 189-202), the same pattern used by the other pages, so this is read as component use rather than layout HTML."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T14:48:21Z",
+          "round": 1,
+          "attempt": 3,
+          "goal": {
+            "item": "a86aebb6-e10d-48b7-9fbb-a7e273e0a257",
+            "title": "Documentation site describes run statistics",
+            "criteria": [
+              "The Run statistics page explains listing, reporting on, comparing and summarising runs, choosing runs, and reporting on a copied logs directory.",
+              "The page defines every figure the report shows, and how unfinished work and skipped lines appear.",
+              "The Resources menu links to the page, and the logging page points to it.",
+              "The site builds and type-checks without errors, and the page body has no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-stats.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "run-stats.mdx covers each topic under its own heading: '## Listing runs' (line 18, stats list), '## Reporting on one run' (line 37, stats run), '## Choosing runs' (line 68, --name/--kind/--agent/--run), '## Comparing runs' (line 84, stats compare) and '## Summarising runs' (line 104, stats summary). '## Logs from elsewhere' (line 184) covers reporting on a copied logs directory via --dir."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "run-stats.mdx '## What each figure means' (lines 115-144) defines wall time, working time, user wait, helper wait, command time, commands, duration, entries, incomplete, helpers and waits, gap, and gap total. '## Unfinished work and damaged lines' (lines 146-162) explains the '*' marker on unfinished tasks, helpers and waits, the INCOMPLETE column, the end_reason and complete:false JSON fields, and 'Skipped lines: N' with skipped_lines in the JSON. The labels match render.go (lines 56-60, 85-140: 'Working time', 'Helper wait', 'Command time', 'Gaps over', 'Tasks', 'Helpers', 'User waits', 'Longest gaps', 'Skipped lines'). Tasks, Helpers, User waits and Longest gaps are also described in the report walkthrough (lines 60-66)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "docs/src/components/Nav.astro:23 adds { label: \"Run statistics\", href: \"/run-stats/\" } inside the 'Resources' children list (lines 13-24). docs/src/pages/debugging.mdx diff lines 21-22 adds 'see [Run statistics](/run-stats/)' to the logging page."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The staged verification reports npm run build pass (17 pages, dist/run-stats/index.html) and astro check with 0 errors and 0 warnings; I did not rerun them because I am read-only. The body of run-stats.mdx uses only the Astro components Hero, Prose, CtaBanner and Button (lines 6-9, 11-14, 16, 195-210), the same pattern as other pages in docs/src/pages (for example index.mdx, install.mdx). The grep for div, section and class= finds nothing in src/pages/*.mdx. Reading run-stats.mdx, I found no em dash character (the arrow in line 206 is a right arrow, not an em dash)."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 3,
+      "state": "accepted"
+    },
+    {
+      "item": "b152f2a6-8bbc-4b92-b981-558c68cb032e",
+      "title": "README lists the stats commands",
+      "checks": [
+        {
+          "at": "2026-10-25T14:49:35Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "b152f2a6-8bbc-4b92-b981-558c68cb032e",
+            "title": "README lists the stats commands",
+            "criteria": [
+              "The README shows `stats list`, `stats run`, `stats compare` and `stats summary` with a one-line description each, and mentions `--dir` and `--format json`."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "README.md:53-60 (the 'Run statistics' block under 'How It Works', in the spektacular code root and in spektacular.diff hunk @@ -50,6 +50,17 @@) shows a bash block with four lines, one per command: `spektacular stats list` (line 56, '# every recorded run, newest first'), `spektacular stats run [--name \u003cspec\u003e]` (line 57, '# where one run's time went: steps, tasks, helpers, waits, gaps'), `spektacular stats compare` (line 58, '# the two latest runs of a kind, side by side'), and `spektacular stats summary --kind implement` (line 59, '# median and 90th percentile per step'). Each has a one-line description. README.md:62 mentions `--dir \u003cpath\u003e` and `--format json`, and the same paragraph also states the json form is available for every form. No em dashes appear in the added lines (lines 53-62)."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }

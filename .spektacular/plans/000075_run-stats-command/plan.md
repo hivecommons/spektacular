@@ -542,7 +542,7 @@ Adds `spektacular stats compare` and `spektacular stats summary`, with the same 
 
 **Validation point**: The site builds and `astro check` passes, with no layout HTML in the page body and no em dashes in the new text. The README shows the `stats` commands.
 
-#### - [ ] Task: Documentation site describes run statistics
+#### - [x] Task: Documentation site describes run statistics
 **Id:** a86aebb6-e10d-48b7-9fbb-a7e273e0a257
 **Repo:** docs
 **Depends on:**
@@ -581,12 +581,12 @@ Adds a "Run statistics" page to the documentation site. It explains how to list,
 *Technical detail:* [context.md#task-documentation-site-describes-run-statistics](./context.md#task-documentation-site-describes-run-statistics)
 
 **Acceptance criteria**:
-- [ ] The Run statistics page explains listing, reporting on, comparing and summarising runs, choosing runs, and reporting on a copied logs directory.
-- [ ] The page defines every figure the report shows, and how unfinished work and skipped lines appear.
-- [ ] The Resources menu links to the page, and the logging page points to it.
-- [ ] The site builds and type-checks without errors, and the page body has no layout HTML and no em dashes.
+- [x] The Run statistics page explains listing, reporting on, comparing and summarising runs, choosing runs, and reporting on a copied logs directory.
+- [x] The page defines every figure the report shows, and how unfinished work and skipped lines appear.
+- [x] The Resources menu links to the page, and the logging page points to it.
+- [x] The site builds and type-checks without errors, and the page body has no layout HTML and no em dashes.
 
-#### - [ ] Task: README lists the stats commands
+#### - [x] Task: README lists the stats commands
 **Id:** b152f2a6-8bbc-4b92-b981-558c68cb032e
 **Repo:** spektacular
 **Depends on:**
@@ -607,7 +607,7 @@ spektacular stats summary --kind implement # median and 90th percentile per step
 *Technical detail:* [context.md#task-readme-lists-the-stats-commands](./context.md#task-readme-lists-the-stats-commands)
 
 **Acceptance criteria**:
-- [ ] The README shows `stats list`, `stats run`, `stats compare` and `stats summary` with a one-line description each, and mentions `--dir` and `--format json`.
+- [x] The README shows `stats list`, `stats run`, `stats compare` and `stats summary` with a one-line description each, and mentions `--dir` and `--format json`.
 
 ## Open Questions
 
@@ -733,5 +733,29 @@ No other implementation-time uncertainties remain. Every design choice is settle
 **Files changed**:
 - `spektacular: cmd/stats.go`
 - `spektacular: cmd/stats_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-25 — Task: Documentation site describes run statistics
+
+**What was done**: Added the "Run statistics" page (`src/pages/run-stats.mdx`) following the plan's content outline: listing runs, reporting on one run, choosing runs, comparing and summarising runs, what each figure means, unfinished work and damaged lines, reports for programs and logs from elsewhere, with a call to action to the logging page. The Resources menu links to it after "Logging and debugging", and the logging page's span records section points to it.
+
+**Deviations**: The figure definitions also cover commands, duration, incomplete and the counts beside the totals, which the goal check asked for (attempt 1), and the unfinished-work section says exactly where each kind of unfinished item is marked (a `*` for tasks, helpers and waits, the `INCOMPLETE` count for steps, `complete: false` in the JSON), corrected at attempt 2. The examples use the tables' real column layout. The logging page already named `stats` among the commands that are never logged (written by 000073), so that text was left as it was.
+
+**Files changed**:
+- `docs: src/pages/run-stats.mdx`
+- `docs: src/components/Nav.astro`
+- `docs: src/pages/debugging.mdx`
+
+**Discoveries**: The docs worktree needs `npm ci` before `npm run build` and `npx astro check`; `dist/` and `node_modules/` are ignored by git there.
+
+### 2026-10-25 — Task: README lists the stats commands
+
+**What was done**: Added a "Run statistics" paragraph to the README's "How It Works" overview with the four `stats` forms and a one-line description each, followed by a line on the shared selection, `--format json`, `--dir <path>`, the never-changes-the-logs guarantee and a link to the documentation site's Run statistics page.
+
+**Deviations**: The block sits after the `status` paragraphs and the Spans paragraph that follows them (its natural neighbour, since the report reads those spans), before "Epics", rather than directly under the `status` code block.
+
+**Files changed**:
+- `spektacular: README.md`
 
 **Discoveries**: None.
