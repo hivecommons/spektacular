@@ -32,31 +32,31 @@ Spektacular's run reports will show how many tokens each run, step, task and hel
 -->
 ## Requirements
 
-- [ ] **A run's report gives its token use**
+- [x] **A run's report gives its token use**
   A report on one run must give the tokens the agent used during it (input, output, cache read and cache write), in total and for each workflow step, each plan task and each helper agent.
-- [ ] **Helper agents' tokens are counted**
+- [x] **Helper agents' tokens are counted**
   Tokens used by helper agents must be counted and attributed to the helper launch that started them and to the step and task it was launched in, even when the helper is still running after that step has ended.
-- [ ] **Tokens are attributed by when they were used**
+- [x] **Tokens are attributed by when they were used**
   Each of the main agent's model requests must be attributed to the step and task that were running when the request was made; tokens used outside every step of the run are reported separately.
-- [ ] **Time is set against work done**
+- [x] **Time is set against work done**
   For the run and for each step, task and helper, the report must give a figure relating time to tokens: its working time (as the run statistics report defines it, wall time less time waiting on the user; for a helper, its own duration) per thousand output tokens, so a long step that did much work can be told from a long step that did little. Each helper's figure uses only its own time and tokens, even when helpers run at the same time.
-- [ ] **The report gives cost**
+- [x] **The report gives cost**
   The report must give the cost of the run and of each step, task and helper, priced per model from the project's price table. With no price for a model, its cost is reported as unknown, never as zero; a total that includes tokens from an unpriced model gives the cost of the priced part, is marked incomplete and names the unpriced models.
-- [ ] **The models used are listed**
+- [x] **The models used are listed**
   The report must name the models used in the run and the tokens used by each.
-- [ ] **Comparisons include tokens**
+- [x] **Comparisons include tokens**
   Comparing runs must include tokens, cost and the time-per-token figure alongside the timings, with each run's difference from the first.
-- [ ] **Summaries include tokens**
+- [x] **Summaries include tokens**
   The summary of many runs must give, for tokens, cost and the time-per-token figure, the same median and 90th percentile it gives for timings.
-- [ ] **Runs are matched to agent sessions without agent action**
+- [x] **Runs are matched to agent sessions without agent action**
   The system must find which agent session drove each run without the agent doing anything extra during the run; anything Spektacular installs once when it sets up a project does not count as agent action.
-- [ ] **Claude Code sessions are supported**
+- [x] **Claude Code sessions are supported**
   Token use must be read for runs driven by Claude Code, including its helper agents. For any other agent, token figures are reported as unknown with the reason.
-- [ ] **Missing token data stays explicit**
+- [x] **Missing token data stays explicit**
   When a run's agent session cannot be found or read, its token and cost figures must be reported as unknown with the reason, and its timings are unaffected.
-- [ ] **Reading token data changes nothing**
+- [x] **Reading token data changes nothing**
   Reading agent session data must not modify the agent's files or the logs.
-- [ ] **The documentation describes token figures**
+- [x] **The documentation describes token figures**
   User documentation must describe the token, cost and time-per-token figures, the price table and which agents are supported.
 
 
@@ -92,31 +92,31 @@ Spektacular's run reports will show how many tokens each run, step, task and hel
 -->
 ## Acceptance Criteria
 
-- [ ] **Totals and breakdowns appear**
+- [x] **Totals and breakdowns appear**
   For a Claude Code spec run, the report gives input, output, cache-read and cache-write tokens for the run, each step and each helper, and the step figures add up to the run total less the tokens reported outside any step.
-- [ ] **Helper tokens land on their launch**
+- [x] **Helper tokens land on their launch**
   For a run in which a helper agent was launched in one step and finished after the workflow had moved to the next step, all of that helper's tokens are reported under its launch and counted in the launching step's figures, not the next step's.
-- [ ] **Tasks carry tokens**
+- [x] **Tasks carry tokens**
   For an implement run of a two-task plan, each task shows its tokens and cost.
-- [ ] **Time per token is reported**
+- [x] **Time per token is reported**
   For a run, the run total and each step, task and helper show working time per thousand output tokens, and one with no output tokens shows the figure as not applicable rather than infinite or zero.
-- [ ] **Cost follows the price table**
+- [x] **Cost follows the price table**
   With prices set for the models used, the run's cost equals the tokens of each type multiplied by that model's price for the type, summed. With one of two models unpriced, the run's cost covers the priced model only, is marked incomplete and names the unpriced model.
-- [ ] **Models are listed**
+- [x] **Models are listed**
   For a run that used two models, the report names both with the tokens each used.
-- [ ] **Comparisons show tokens**
+- [x] **Comparisons show tokens**
   Comparing two runs shows each step's tokens, cost and time per thousand output tokens for both, with the difference.
-- [ ] **Summaries show tokens**
+- [x] **Summaries show tokens**
   Summarising five runs shows, for tokens, cost and time per thousand output tokens, the median and 90th percentile alongside the timings.
-- [ ] **No extra agent step is needed**
+- [x] **No extra agent step is needed**
   A run driven by Claude Code with no change to how the agent works produces token figures.
-- [ ] **Other agents are unknown, not zero**
+- [x] **Other agents are unknown, not zero**
   For a run driven by another agent, token and cost figures are shown as unknown with a reason.
-- [ ] **A missing session is unknown**
+- [x] **A missing session is unknown**
   When the agent's session data has been removed, the run's token figures are unknown with a reason and its timings match the report without token data.
-- [ ] **Agent files are untouched**
+- [x] **Agent files are untouched**
   Every agent session file and log file is byte-identical before and after a report.
-- [ ] **The docs describe token figures**
+- [x] **The docs describe token figures**
   The documentation site describes the token, cost and time-per-token figures, the price table and supported agents; the site builds without errors.
 
 
