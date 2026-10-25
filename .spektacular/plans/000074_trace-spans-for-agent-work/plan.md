@@ -585,7 +585,7 @@ The README lists the `trace` commands. The project's testing-architecture knowle
 
 **Validation point**: The site builds and `astro check` passes, with no layout HTML in page bodies and no em dashes in the new text. The knowledge entry reads back through the CLI with the new coupling.
 
-#### - [ ] Task: Documentation site describes spans
+#### - [x] Task: Documentation site describes spans
 **Id:** 2cccbac8-a943-4e23-993d-d29054f2a037
 **Repo:** docs
 **Depends on:**
@@ -618,11 +618,11 @@ Adds sections on spans to the logging page that spec 000073 rewrites as "Logging
 *Technical detail:* [context.md#task-documentation-site-describes-spans](./context.md#task-documentation-site-describes-spans)
 
 **Acceptance criteria**:
-- [ ] The logging page describes the six span types, says which spans Spektacular records by itself, and shows `trace start` and `trace stop` with their options.
-- [ ] The page explains parents, abandoned and interrupted spans, and logging off, and shows a span start and end record.
-- [ ] The site builds and type-checks without errors, and the new text has no layout HTML and no em dashes.
+- [x] The logging page describes the six span types, says which spans Spektacular records by itself, and shows `trace start` and `trace stop` with their options.
+- [x] The page explains parents, abandoned and interrupted spans, and logging off, and shows a span start and end record.
+- [x] The site builds and type-checks without errors, and the new text has no layout HTML and no em dashes.
 
-#### - [ ] Task: README and knowledge describe spans
+#### - [x] Task: README and knowledge describe spans
 **Id:** f1a446d5-c4a3-4daf-b490-86e56d138aaf
 **Repo:** spektacular
 **Depends on:**
@@ -635,9 +635,9 @@ Brings the project's own descriptions up to date. The README's command overview 
 *Technical detail:* [context.md#task-readme-and-knowledge-describe-spans](./context.md#task-readme-and-knowledge-describe-spans)
 
 **Acceptance criteria**:
-- [ ] The README shows `trace start` and `trace stop` with their options and says that steps and tasks are recorded automatically.
-- [ ] The testing-architecture knowledge entry names the trace oracle and the shared paragraph it mirrors, and reads back through the knowledge CLI.
-- [ ] The goto-to-the-current-step gotcha says the progress is still unchanged and that the step's span is closed as interrupted and reopened.
+- [x] The README shows `trace start` and `trace stop` with their options and says that steps and tasks are recorded automatically.
+- [x] The testing-architecture knowledge entry names the trace oracle and the shared paragraph it mirrors, and reads back through the knowledge CLI.
+- [x] The goto-to-the-current-step gotcha says the progress is still unchanged and that the step's span is closed as interrupted and reopened.
 
 ## Open Questions
 
@@ -800,3 +800,25 @@ No other implementation-time uncertainties remain. The design choices are settle
 - `spektacular: tests/harbor/spec-workflow/tests/test_spec_workflow.py`
 
 **Discoveries**: The spec suite's verifier reads `/app` paths, so its new `TestUserWaits` check runs only in a real Harbor trial; the matching logic it relies on is covered offline in `test_spans.py`. The epic and implement-epic reference runs under `shared/tests/data/` hold no span records, so the new launch check is exercised on the hand-built implement-epic run instead.
+
+### 2026-10-25 — Task: Documentation site describes spans
+
+**What was done**: The site's "Logging and debugging" page gained five sections, between "Reading a record" and "Upgrading from debug mode": where the time went, the six span types and which Spektacular records itself, marking spans with `trace start` and `trace stop` and their options and parents, how spans end (moved, abandoned, interrupted, `--force`, logging off), and a sample `span_start` and `span_end` with notes on `record`, `parent_span_id`, the span type, the end reasons and the task id. The page description mentions spans.
+
+**Deviations**: The optional one-line note on the configuration page was left out; the logging page covers logging off. The marking section also lists the refusals.
+
+**Files changed**:
+- `docs: src/pages/debugging.mdx`
+
+**Discoveries**: The docs worktree needed `npm ci` before it could build; `dist/` and `node_modules/` stay ignored.
+
+### 2026-10-25 — Task: README and knowledge describe spans
+
+**What was done**: The README's "How It Works" gained a **Spans.** paragraph: Spektacular records commands, workflow steps and plan tasks as spans by itself, agents mark helper agents and questions to the user, and `trace start`/`trace stop` are shown with their options, with a link to the logging page. Through the knowledge CLI, the testing-architecture entry now lists the Harbor trace oracle and the trace partials it mirrors, with the self-check that ties them and the span reader the verifiers use; the goto-to-the-current-step gotcha notes that such a goto still leaves progress alone but closes the step's span as interrupted and opens a fresh one.
+
+**Deviations**: None. `CHANGELOG.md` and historical plans were left alone.
+
+**Files changed**:
+- `spektacular: README.md`
+
+**Discoveries**: The two knowledge entries live in the project's knowledge store, outside the spec's worktrees, so they are not part of the worktree branch the orchestrator merges.

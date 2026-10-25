@@ -903,6 +903,146 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "2cccbac8-a943-4e23-993d-d29054f2a037",
+      "title": "Documentation site describes spans",
+      "checks": [
+        {
+          "at": "2026-10-25T13:58:38Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "2cccbac8-a943-4e23-993d-d29054f2a037",
+            "title": "Documentation site describes spans",
+            "criteria": [
+              "The logging page describes the six span types, says which spans Spektacular records by itself, and shows `trace start` and `trace stop` with their options.",
+              "The page explains parents, abandoned and interrupted spans, and logging off, and shows a span start and end record.",
+              "The site builds and type-checks without errors, and the new text has no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/configuration.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "CHANGELOG.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "src/pages/debugging.mdx lines 149-161 list all six span types (command, step, task, sub-agent, user-wait, work) and say which are recorded automatically (command, step, task) and which the agent marks (sub-agent, user-wait, work). Lines 163-177 show `spektacular trace start test-writer --type sub-agent` and `spektacular trace stop \u003cid\u003e --status error --message ...` and explain the start options (--type sub-agent, user-wait, work, default work) and the stop options (--status ok|error, --message)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Parents: lines 179-181 (--parent \u003cid\u003e, nesting under current step) and lines 132-134 (parent_span_id rules). Abandoned and interrupted: lines 189-197 (How spans end) and lines 255-258 (end_reason, abandoned/interrupted status error). Logging off: line 199 ('With log.level: off the trace commands still succeed, and record nothing'). Span start and end record: lines 201-246 show a span_start JSON record and a span_end JSON record for a step."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Build and check results are taken from the supplied verification lines (npm run build pass, 16 pages; npx astro check 0 errors, 0 warnings); I did not rerun them since I am read-only. The new text contains no layout HTML: the staged docs.diff added lines contain no tags or class= attributes, and the only angle-bracket hits (docs.diff lines 52, 56, 60) are placeholders inside code spans or backticks such as \u003cid\u003e and \u003ctrace_id\u003e-\u003cspan_id\u003e. The em-dash search of debugging.mdx returned zero matches, and the diff adds no em dashes."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "f1a446d5-c4a3-4daf-b490-86e56d138aaf",
+      "title": "README and knowledge describe spans",
+      "checks": [
+        {
+          "at": "2026-10-25T14:00:32Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "f1a446d5-c4a3-4daf-b490-86e56d138aaf",
+            "title": "README and knowledge describe spans",
+            "criteria": [
+              "The README shows `trace start` and `trace stop` with their options and says that steps and tasks are recorded automatically.",
+              "The testing-architecture knowledge entry names the trace oracle and the shared paragraph it mirrors, and reads back through the knowledge CLI.",
+              "The goto-to-the-current-step gotcha says the progress is still unchanged and that the step's span is closed as interrupted and reopened."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "architecture/testing-architecture.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/delegation.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/trace-helpers.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "trace-marking.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "gotchas/goto-to-current-step-is-a-silent-noop.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "state.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "CHANGELOG.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Staged diff spektacular.diff, README.md hunk @@ -41,6 +41,15 @@ adds a **Spans.** paragraph. Line 9 says every run's log records each command, each workflow step and, during implement, each plan task as a timed span 'by itself' (automatic). Lines 11-14 show `spektacular trace start \u003cname\u003e --type sub-agent|user-wait|work [--parent \u003cid\u003e]` and `spektacular trace stop \u003cid\u003e [--status ok|error] [--message \u003ctext\u003e]` in a bash block, with the options spelled out. The README is the only file in the spektacular status (` M README.md`)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "knowledge-testing-architecture.readback.json: \"error\": false, \"path\": \"architecture/testing-architecture.md\", and the content has a bullet 'The trace oracle (`TRACE_START`, `SUB_AGENT_TYPE`, `USER_WAIT_TYPE` in `tests/harbor/shared/delegation.py`) mirrors the shared trace partials `templates/partials/trace-helpers.md` and `trace-marking.md`, the paragraph every step instruction and workflow skill carries.' It also names the self-check test `test_the_trace_oracle_and_the_trace_partials_agree`. The entry reads back through the CLI read-back file with content intact. The store itself was not opened."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "knowledge-goto-gotcha.readback.json: \"error\": false, content ends with 'Since spec 000074 such a goto still leaves `current_step` and `completed_steps` alone ... so it closes the step's open span as interrupted (at its last recorded command) and opens a fresh span for the same step: `state.json`'s `step_span` changes and the state file is saved. The progress is unchanged; only the span id moves.' This covers the unchanged progress, the span closed as interrupted, and the span reopened. The entry reads back through the CLI read-back file."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }

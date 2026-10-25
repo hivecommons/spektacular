@@ -18,3 +18,5 @@
 - Task 5 done (trace commands). Milestone 2 committed.
 - Task 6 done (trace partials; lead-in '**Mark spans.**'). Harbor oracle must mirror partial wording: 'trace start', '--type sub-agent', '--type user-wait'.
 - Task 7 done (Harbor). Milestone 3 committed.
+- Task 8 done (docs page). Next: README + knowledge entries (task 9, last of Milestone 4).
+- Task 9 done (README + knowledge). Milestone 4 committed; now test_plan wrap-up.
