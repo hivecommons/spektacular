@@ -26,7 +26,7 @@ func TestNewDefault_HasExpectedDefaults(t *testing.T) {
 	cfg := NewDefault()
 
 	require.Equal(t, "spektacular", cfg.Command)
-	require.False(t, cfg.Debug.Enabled)
+	require.Equal(t, LogConfig{Provider: "file", Level: "standard", Retention: 10, Config: FileLogConfig{Directory: "logs"}}, cfg.Log)
 	require.Equal(t, "timestamp", cfg.Spec.IDMethod)
 	require.Equal(t, SpecTriggerThresholdModerate, cfg.SpecTriggerThreshold)
 	require.Equal(t, AutoCommitOff, cfg.AutoCommit)
@@ -264,7 +264,7 @@ knowledge:
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Contains(t, string(raw), "prune:\n        max_age_days: 30\n")
-	require.Contains(t, string(raw), "schema: 4\n")
+	require.Contains(t, string(raw), "schema: 5\n")
 
 	loaded, err := FromYAMLFile(path)
 	require.NoError(t, err)
@@ -317,18 +317,19 @@ func TestToYAMLFile_ImplementWorktreesFalseRoundTrips(t *testing.T) {
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Contains(t, string(raw), "implement:\n    worktrees: false\n")
-	require.Contains(t, string(raw), "schema: 4\n")
+	require.Contains(t, string(raw), "schema: 5\n")
 
 	loaded, err := FromYAMLFile(path)
 	require.NoError(t, err)
 	require.False(t, loaded.Implement.Worktrees)
-	require.Equal(t, 4, loaded.Schema)
+	require.Equal(t, 5, loaded.Schema)
 }
 
 // Implement-in-worktrees criterion 3: adding the implement section did not
-// bump the project settings format version.
+// bump the project settings format version. Format 5, which replaced debug
+// with the log section, is the current one.
 func TestCurrentProjectSchema_UnchangedByImplementSection(t *testing.T) {
-	require.Equal(t, 4, CurrentProjectSchema)
+	require.Equal(t, 5, CurrentProjectSchema)
 }
 
 func TestFromYAMLFile_MissingFile_ReturnsError(t *testing.T) {
@@ -351,7 +352,7 @@ func TestToYAMLFile_RoundTrip(t *testing.T) {
 	loaded, err := FromYAMLFile(path)
 	require.NoError(t, err)
 	require.Equal(t, cfg.Command, loaded.Command)
-	require.Equal(t, cfg.Debug.Enabled, loaded.Debug.Enabled)
+	require.Equal(t, cfg.Log, loaded.Log)
 	require.Equal(t, cfg.Spec.IDMethod, loaded.Spec.IDMethod)
 }
 
@@ -1046,12 +1047,12 @@ func TestToYAMLFile_ProjectDesignSourcesRoundTrip(t *testing.T) {
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Contains(t, string(raw), "design:\n")
-	require.Contains(t, string(raw), "schema: 4\n", "a design block does not bump the settings format version")
+	require.Contains(t, string(raw), "schema: 5\n", "a design block does not bump the settings format version")
 
 	loaded, err := FromYAMLFile(path)
 	require.NoError(t, err)
 	require.Equal(t, cfg.Design, loaded.Design)
-	require.Equal(t, 4, loaded.Schema)
+	require.Equal(t, 5, loaded.Schema)
 }
 
 // Phase 1.1 criterion 2: a project that declares no design sources loads as
@@ -1315,12 +1316,12 @@ func TestToYAMLFile_StampsSchemaAndWriter(t *testing.T) {
 
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
-	require.Contains(t, string(raw), "schema: 4\n")
+	require.Contains(t, string(raw), "schema: 5\n")
 	require.Contains(t, string(raw), "written_by: test-x\n")
 
 	loaded, err := FromYAMLFile(path)
 	require.NoError(t, err)
-	require.Equal(t, 4, loaded.Schema)
+	require.Equal(t, 5, loaded.Schema)
 	require.Equal(t, "test-x", loaded.WrittenBy)
 }
 
@@ -1330,7 +1331,7 @@ func TestToYAMLFile_StampsSchemaAndWriter(t *testing.T) {
 func TestToYAMLFile_PreservesSkillsVersion(t *testing.T) {
 	pinWriterVersion(t, "test-x")
 
-	body := "schema: 4\n" +
+	body := "schema: 5\n" +
 		"written_by: 0.9.0\n" +
 		"skills_version: 0.9.0\n" +
 		"name: testproj\n" +
@@ -1425,7 +1426,7 @@ func TestToYAMLFile_GoalCheckDisabledRoundTrips(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(raw), "implement:\n    worktrees: true\n    goal_check:\n        enabled: false\n")
 	require.NotContains(t, string(raw), "models:", "an empty models map is not written")
-	require.Contains(t, string(raw), "schema: 4\n")
+	require.Contains(t, string(raw), "schema: 5\n")
 
 	loaded, err := FromYAMLFile(path)
 	require.NoError(t, err)
@@ -1487,4 +1488,113 @@ func TestFromYAMLFile_GoalCheckModelsRefusesUnknownAgentOrEmptyModel(t *testing.
 			require.Contains(t, oe.NextAction, tc.fix)
 		})
 	}
+}
+
+// A config file with no log section takes every log default, and the
+// written default config carries a log section and no debug section.
+func TestLogDefaults_AbsentSectionAndWrittenFile(t *testing.T) {
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema("name: testproj\nrepos:\n  - name: testproj\n    location: ..\n")), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, LogConfig{Provider: "file", Level: "standard", Retention: 10, Config: FileLogConfig{Directory: "logs"}}, cfg.Log)
+
+	out := filepath.Join(t.TempDir(), "config.yaml")
+	def := NewDefault()
+	def.Name = "testproj"
+	require.NoError(t, def.ToYAMLFile(out))
+	raw, err := os.ReadFile(out)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "log:\n    provider: file\n    level: standard\n    retention: 10\n    config:\n        directory: logs\n")
+	require.NotContains(t, string(raw), "debug")
+}
+
+// Each bad log setting is refused as config_invalid naming the key and the
+// accepted values.
+func TestLogValidate_RefusesBadSettings(t *testing.T) {
+	cases := []struct {
+		name         string
+		log          string
+		wantResource string
+		wantMessage  string
+		wantNext     string
+	}{
+		{
+			name:         "unknown provider",
+			log:          "log:\n  provider: syslog\n",
+			wantResource: "log.provider",
+			wantMessage:  `log.provider "syslog" is not a known logger; accepted loggers are file`,
+			wantNext:     "set log.provider in .spektacular/config.yaml to one of: file",
+		},
+		{
+			name:         "unknown level",
+			log:          "log:\n  level: loud\n",
+			wantResource: "log.level",
+			wantMessage:  `log.level must be one of "off", "standard" or "verbose", not "loud"`,
+			wantNext:     "set log.level in .spektacular/config.yaml to off, standard or verbose (or remove the key to use standard)",
+		},
+		{
+			name:         "retention zero",
+			log:          "log:\n  retention: 0\n",
+			wantResource: "log.retention",
+			wantMessage:  "log.retention must be at least 1, not 0",
+			wantNext:     "set log.retention in .spektacular/config.yaml to a whole number of runs to keep, 1 or more (or remove the key to keep 10)",
+		},
+		{
+			name:         "retention negative",
+			log:          "log:\n  retention: -2\n",
+			wantResource: "log.retention",
+			wantMessage:  "log.retention must be at least 1, not -2",
+			wantNext:     "set log.retention in .spektacular/config.yaml to a whole number of runs to keep, 1 or more (or remove the key to keep 10)",
+		},
+		{
+			name:         "empty directory",
+			log:          "log:\n  config:\n    directory: \"\"\n",
+			wantResource: "log.config.directory",
+			wantMessage:  "log.config.directory is empty",
+			wantNext:     "set log.config.directory in .spektacular/config.yaml to a folder for logs (or remove the key to use logs)",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, path := projectConfigPath(t)
+			body := "name: testproj\nrepos:\n  - name: testproj\n    location: ..\n" + tc.log
+			require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(body)), 0644))
+
+			_, err := FromYAMLFile(path)
+			var er *output.ErrorResponse
+			require.ErrorAs(t, err, &er)
+			require.Equal(t, "config_invalid", er.Code)
+			require.Equal(t, tc.wantResource, er.Resource)
+			require.Equal(t, tc.wantMessage, er.Message)
+			require.Equal(t, tc.wantNext, er.NextAction)
+		})
+	}
+}
+
+// Every accepted level validates, and an empty level means standard.
+func TestLogValidate_AcceptsEveryLevel(t *testing.T) {
+	for _, level := range []string{"", "off", "standard", "verbose"} {
+		l := NewDefault().Log
+		l.Level = level
+		require.NoError(t, l.Validate(), "level %q", level)
+	}
+	require.Equal(t, LogLevelStandard, LogConfig{}.EffectiveLevel())
+	require.Equal(t, LogLevelOff, LogConfig{Level: "off"}.EffectiveLevel())
+}
+
+// A relative log directory resolves from the folder holding config.yaml; an
+// absolute one is used as written.
+func TestLogDir_ResolvesRelativeToConfigFolder(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "work", "proj")
+	cfg := NewDefault()
+	require.Equal(t, filepath.Join(root, ".spektacular", "logs"), cfg.LogDir(root))
+
+	cfg.Log.Config.Directory = "../var/logs"
+	require.Equal(t, filepath.Join(root, "var", "logs"), cfg.LogDir(root))
+
+	abs := filepath.Join(string(filepath.Separator), "tmp", "spek-logs")
+	cfg.Log.Config.Directory = abs + string(filepath.Separator) + "."
+	require.Equal(t, abs, cfg.LogDir(root))
 }

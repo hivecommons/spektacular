@@ -124,6 +124,14 @@ func listPaths(t *testing.T, root string) []string {
 		if err != nil {
 			return err
 		}
+		if isProjectLogPath(path) {
+			// The command log is an expected side effect of every logged
+			// command, not a change the command made.
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
 			return err

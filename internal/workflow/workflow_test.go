@@ -473,3 +473,35 @@ func TestInProgress(t *testing.T) {
 		})
 	}
 }
+
+func TestNewMintsRunIDOnFreshState(t *testing.T) {
+	sp := filepath.Join(t.TempDir(), "state.json")
+	wf := New(testSteps, sp, Config{Kind: "spec"}, nil, nil)
+	require.NoError(t, wf.Next()) // new → one, persists state
+
+	loaded, err := loadState(sp)
+	require.NoError(t, err)
+	require.Regexp(t, `^[0-9a-f]{32}$`, loaded.RunID)
+	require.Equal(t, wf.State().RunID, loaded.RunID)
+}
+
+func TestRunIDKeptAcrossReloadAndAdvance(t *testing.T) {
+	sp := filepath.Join(t.TempDir(), "state.json")
+	wf := New(testSteps, sp, Config{}, nil, nil)
+	require.NoError(t, wf.Next()) // → one
+	id := wf.State().RunID
+
+	resumed := New(testSteps, sp, Config{}, nil, nil)
+	require.Equal(t, id, resumed.State().RunID)
+	require.NoError(t, resumed.Goto("two"))
+
+	loaded, err := loadState(sp)
+	require.NoError(t, err)
+	require.Equal(t, id, loaded.RunID)
+}
+
+func TestFreshStatesGetDistinctRunIDs(t *testing.T) {
+	a := New(testSteps, filepath.Join(t.TempDir(), "state.json"), Config{}, nil, nil)
+	b := New(testSteps, filepath.Join(t.TempDir(), "state.json"), Config{}, nil, nil)
+	require.NotEqual(t, a.State().RunID, b.State().RunID)
+}
