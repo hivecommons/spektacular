@@ -41,6 +41,15 @@ spektacular status [name] --watch         # keep the readable tree on screen, sc
 
 When `plan.strict_spec_changes` is true, `status` reports a plan's `document_status: "stale"` and `current_step: "stale"`, and its spec's state as `stale`, once the linked spek is modified after a final plan; `implement new` and subsequent implement steps refuse that plan until it is replanned and re-approved. With the default non-strict setting, a later spek edit does not invalidate an existing plan. A spek change recorded with `spektacular spec amend` during an implement run does not make the plan stale in either mode; any other edit to the spek's body still does under the strict setting.
 
+**Spans.** Every run's log shows where its time went. Spektacular records each command, each workflow step and, during implement, each plan task as a timed span by itself, with every command nested under its step. Agents mark the helper agents they launch and the questions they ask the user, as the workflow instructions tell them:
+
+```bash
+spektacular trace start <name> --type sub-agent|user-wait|work [--parent <id>]   # prints a span id
+spektacular trace stop <id> [--status ok|error] [--message <text>]
+```
+
+A span nests under the current step unless `--parent` names another open span, and one left open is closed, marked abandoned, when its step ends or its run finishes. With logging off both commands succeed and record nothing. See [Logging and debugging](https://spektacular.dev/debugging/).
+
 **Epics.** When a piece of work is split into an epic, ask your agent to *plan this epic*, review the plans, then *implement this epic*. Independent specs are worked on in parallel, each spec is built in its own worktree and merged before the specs that depend on it, and repeating either request picks up where it stopped. Naming an epic in `status` adds a `run` view that says, for planning and for implementing, what each spec still needs and what blocks the epic. See [Epics](https://spektacular.dev/epics/).
 
 ### Addressing specs, plans and changelog records
