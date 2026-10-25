@@ -437,7 +437,7 @@ Both include what was recorded outside any workflow run, such as an epic orchest
 
 **Validation point**: Go unit, golden and command tests for both listings pass in the full shuffled suite, and 000075's golden files are unchanged. The site builds. The baseline jobs exist for every suite. The characterisation test passes on the current harness.
 
-#### - [ ] Task: List commands and spans in the run statistics package
+#### - [x] Task: List commands and spans in the run statistics package
 **Id:** 49fb2534-0645-4447-a50e-92865db63a87
 **Repo:** spektacular
 **Depends on:** none
@@ -452,13 +452,13 @@ Records written outside any workflow run, which 000075 drops, are now kept for t
 *Technical detail:* [context.md#task-list-commands-and-spans-in-the-run-statistics-package](./context.md#task-list-commands-and-spans-in-the-run-statistics-package)
 
 **Acceptance criteria**:
-- [ ] Listing commands over a logs directory with two runs and a day of standalone commands gives every command, oldest first. Each carries its run, workflow, step, step moved to, arguments, timing, exit code and any error message, and a standalone command has no run.
-- [ ] Listing spans gives every helper, user-wait and work span in runs and outside them, each with its run, step, task, parent and outcome. An unfinished span is capped and marked exactly as the run report marks it.
-- [ ] A run selection narrows both listings to that run's records, and asking only for records outside runs gives just the orchestrator's.
-- [ ] The run report, comparison and summary output is unchanged for the same logs.
-- [ ] The structured form of both listings uses exactly the field names in the plan's Data Structures section.
+- [x] Listing commands over a logs directory with two runs and a day of standalone commands gives every command, oldest first. Each carries its run, workflow, step, step moved to, arguments, timing, exit code and any error message, and a standalone command has no run.
+- [x] Listing spans gives every helper, user-wait and work span in runs and outside them, each with its run, step, task, parent and outcome. An unfinished span is capped and marked exactly as the run report marks it.
+- [x] A run selection narrows both listings to that run's records, and asking only for records outside runs gives just the orchestrator's.
+- [x] The run report, comparison and summary output is unchanged for the same logs.
+- [x] The structured form of both listings uses exactly the field names in the plan's Data Structures section.
 
-#### - [ ] Task: List commands and spans from the command line
+#### - [x] Task: List commands and spans from the command line
 **Id:** 1510a2c7-a35f-49f9-9fd4-ae8854c980dc
 **Repo:** spektacular
 **Depends on:**
@@ -470,12 +470,12 @@ Adds `spektacular stats commands` and `spektacular stats spans`. They take the s
 *Technical detail:* [context.md#task-list-commands-and-spans-from-the-command-line](./context.md#task-list-commands-and-spans-from-the-command-line)
 
 **Acceptance criteria**:
-- [ ] `stats commands` and `stats spans` show the fixture project's records in table and JSON form, with the same figures in both, and the JSON honours `--fields`.
-- [ ] Pointing `--dir` at a copy of the logs from outside any project gives the same output as in the project.
-- [ ] Combining a run selection with the outside-runs switch is refused with a message naming the fix, and the other refusals match the rest of the group.
-- [ ] Every log file is byte-identical before and after both commands, run inside a project with logging on.
+- [x] `stats commands` and `stats spans` show the fixture project's records in table and JSON form, with the same figures in both, and the JSON honours `--fields`.
+- [x] Pointing `--dir` at a copy of the logs from outside any project gives the same output as in the project.
+- [x] Combining a run selection with the outside-runs switch is refused with a message naming the fix, and the other refusals match the rest of the group.
+- [x] Every log file is byte-identical before and after both commands, run inside a project with logging on.
 
-#### - [ ] Task: Documentation site describes the two listings
+#### - [x] Task: Documentation site describes the two listings
 **Id:** 11b365fd-7097-426c-b440-623d7c2fd973
 **Repo:** docs
 **Depends on:**
@@ -499,10 +499,10 @@ Adds a section to the documentation site's Run statistics page that explains `st
 *Technical detail:* [context.md#task-documentation-site-describes-the-two-listings](./context.md#task-documentation-site-describes-the-two-listings)
 
 **Acceptance criteria**:
-- [ ] The Run statistics page explains both listings, how to narrow them, the outside-runs switch and their structured fields.
-- [ ] The site builds and type-checks without errors, and the new text has no layout HTML and no em dashes.
+- [x] The Run statistics page explains both listings, how to narrow them, the outside-runs switch and their structured fields.
+- [x] The site builds and type-checks without errors, and the new text has no layout HTML and no em dashes.
 
-#### - [ ] Task: Record baseline Harbor pass rates
+#### - [x] Task: Record baseline Harbor pass rates
 **Id:** 9ce541c6-1a0c-4bfb-8ba7-b3b42e231ceb
 **Repo:** spektacular
 **Depends on:** none
@@ -513,10 +513,10 @@ Runs each Harbor suite 5 times under Claude on the harness exactly as 000073 to 
 *Technical detail:* [context.md#task-record-baseline-harbor-pass-rates](./context.md#task-record-baseline-harbor-pass-rates)
 
 **Acceptance criteria**:
-- [ ] Five collected Claude runs exist for every Harbor suite, from a build that includes 000073 to 000075 and none of this plan's Harbor changes.
-- [ ] Each suite's pass count out of 5 is noted where the later comparison will find it.
+- [x] Five collected Claude runs exist for every Harbor suite, from a build that includes 000073 to 000075 and none of this plan's Harbor changes.
+- [x] Each suite's pass count out of 5 is noted where the later comparison will find it.
 
-#### - [ ] Task: Pin today's token, model and cost figures
+#### - [x] Task: Pin today's token, model and cost figures
 **Id:** 70054b85-d967-47e6-ac0d-e5c7a1741288
 **Repo:** spektacular
 **Depends on:** none
@@ -527,8 +527,8 @@ Adds a characterisation self-test that records the token usage, models and cost 
 *Technical detail:* [context.md#task-pin-todays-token-model-and-cost-figures](./context.md#task-pin-todays-token-model-and-cost-figures)
 
 **Acceptance criteria**:
-- [ ] For every reference run, the self-test pins the token counts, model, models used and cost as today's code computes them, and passes on the unchanged harness.
-- [ ] The pinned values come from the transcripts alone and do not depend on Spektacular's logs.
+- [x] For every reference run, the self-test pins the token counts, model, models used and cost as today's code computes them, and passes on the unchanged harness.
+- [x] The pinned values come from the transcripts alone and do not depend on Spektacular's logs.
 
 ### Milestone 2: Harbor measures and judges every run from Spektacular's own logs
 
@@ -780,3 +780,83 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - **Regrading collected trials in a separate verifier container** (`harbor trial regrade`). The verifier still runs in the agent's container, which has the binary.
 - **Changing the run report's figures, its 5-minute gap threshold, retention or the log levels.** Those belong to 000073 to 000075. Harbor uses their defaults.
 - **Installing the new binary or touching this repository's own `.spektacular/`** (plans-never-change-the-active-install). Harbor suite runs are manual.
+
+## Changelog
+
+### 2026-10-25 — Task: List commands and spans in the run statistics package
+
+**What was done**: `internal/runstats` keeps the records of traces outside any workflow run in a new `Logs.Outside`, and gains two pure listings over the loaded logs: `Commands` (every command record with its run, workflow, step, `step_to`, argv, times, exit code and error message) and `AgentSpans` (every `sub-agent`, `user-wait` and `work` span, in runs and outside them, paired and capped as the run report caps them), with `RenderCommands`/`RenderSpans` text tables and golden JSON files pinning the field names Harbor reads.
+
+**Deviations**: The span-pairing loop of `buildRun` moved into a shared `splitTrace` helper, and the helper-row construction of `BuildReport` into a shared `waitRow`, so the listings reuse them verbatim; `select.go` gains the `bad_selection` message. The renderers take the skipped-line count, as the other renderers do. `CommandRow.agent` is nullable. Golden files wrap the rows as `{"commands":[...]}` and `{"spans":[...]}`.
+
+**Files changed**:
+- `spektacular: internal/runstats/assemble.go`
+- `spektacular: internal/runstats/load.go`
+- `spektacular: internal/runstats/report.go`
+- `spektacular: internal/runstats/select.go`
+- `spektacular: internal/runstats/render.go`
+- `spektacular: internal/runstats/listings.go`
+- `spektacular: internal/runstats/listings_test.go`
+- `spektacular: internal/runstats/testdata/commands.golden.json`
+- `spektacular: internal/runstats/testdata/spans.golden.json`
+
+**Discoveries**: An orchestrator's `trace start` outside any run opens a trace of its own, so a span it never stops has nothing later in its trace and is capped at its start (duration 0, `complete:false`). Attributes decoded from a log line arrive as `[]any`/`float64`, while records built in memory carry `[]string`/`int`; the listings accept both.
+
+### 2026-10-25 — Task: List commands and spans from the command line
+
+**What was done**: Added `spektacular stats commands` and `spektacular stats spans` under the logging-exempt `stats` group, with the shared `--dir`, `--format`, selection flags and `--schema`, plus a local `--outside-runs` switch; JSON goes through the standard envelope (`log_dir`, `skipped_lines`, `commands` or `spans`) and honours `--fields`, pretty output uses the new renderers, and a selection combined with `--outside-runs` is refused as `stats_bad_selection` with a next action. The README's run statistics block lists both.
+
+**Deviations**: The cmd tests seed the orchestrator's records in a second day file (`standalone_20261024.jsonl`) through a new `seedOrchestrator` helper rather than changing `seedLogs`, so 000075's stats tests keep their fixture unchanged. The bare-`stats` refusal's next action and the schema test now name the two new subcommands.
+
+**Files changed**:
+- `spektacular: cmd/stats.go`
+- `spektacular: cmd/stats_test.go`
+- `spektacular: README.md`
+
+**Discoveries**: A `trace start` run without a lane in reach records its span in a standalone trace of its own, so under an orchestrated lane an agent's own helper spans can land outside the lane's run when no `--parent` in that run is given.
+
+### 2026-10-25 — Task: Documentation site describes the two listings
+
+**What was done**: The documentation site's Run statistics page gains a "Listing commands and spans" section, after "Summarising runs" and before "What each figure means", explaining `stats commands` and `stats spans`, how a selection narrows them, the `--outside-runs` switch for an epic orchestrator's records and the JSON fields each carries; "Reports for programs" names the `commands` and `spans` arrays as stable.
+
+**Deviations**: None.
+
+**Files changed**:
+- `docs: src/pages/run-stats.mdx`
+
+**Discoveries**: The docs worktree needs `npm ci` before `npm run build` and `npx astro check` can run; `node_modules` is ignored, so it leaves the tree clean.
+
+### 2026-10-25 — Task: Record baseline Harbor pass rates
+
+**What was done**: A person-run task, done by the epic orchestrator on 2026-10-25 (15:10 to 16:24): each Harbor suite target ran 5 times under Claude from a clean detached checkout at commit bfd5dc1b52bfa2392f40826d8c0bc42df4f7491a (000073 to 000075, none of this plan's changes; every trial's `verifier/metrics.json` records that commit). The 50 jobs are kept in the main checkout's `tests/harbor/jobs/`, prefix `base76-`, named `base76-<suite target>-r<1..5>`. Read them with `python3 tests/harbor/shared/report.py 'tests/harbor/jobs/base76-*'`; compare after the change with `report.py --baseline 'tests/harbor/jobs/base76-*' --candidate <after jobs>`.
+
+Baseline pass counts out of 5 (Claude):
+- harbor-test-background-child: 5/5
+- harbor-test-epic-claude: 5/5
+- harbor-test-implement: 5/5
+- harbor-test-standing-rules-claude: 5/5
+- harbor-test-goal-check-claude: 4/5
+- harbor-test-plan-claude: 3/5
+- harbor-test-implement-epic-claude: 2/5
+- harbor-test-repo-delegated: 1/5
+- harbor-test-repo-one-at-a-time: 0/5
+- harbor-test-spec-claude: 0/5 (fails `TestUserWaits::test_constraints_question_is_a_user_wait` and `TestVerificationStep::test_review_was_a_briefed_child` every run)
+
+**Deviations**: The task was run by the orchestrator rather than in this agent's run; the agent checked the jobs and recorded the counts here and in the run's notes.
+
+**Files changed**:
+- none in the repos (the jobs live in the main checkout's ignored `tests/harbor/jobs/`)
+
+**Discoveries**: The implement workflow has no way to pass over a person-run task in a full run: the goal check treats the first unchecked task as current, and `implement goal decide ... skip` is refused until a check has stopped the run.
+
+### 2026-10-25 — Task: Pin today's token, model and cost figures
+
+**What was done**: `test_reference_runs.py` pins, for every checked-in reference run with a transcript (the four trials and the background-child probe), the model, models used, token counts, cost, turns, model time and wall time that `transcripts.claude_summary` computes on the unchanged harness, as literals marked "pinned before 000076; must not change". One test reads them from the transcript alone, one through `metrics.build_record` with no Spektacular logs, and one requires every reference run to be pinned. The `test_transcripts_summary.py` docstring notes that it pins the ATIF and Codex readers on hand-built input.
+
+**Deviations**: The goal check's first attempt found the background-child probe unpinned; the second attempt pins it too (`PINNED_RUNS`), and a test ties the pinned set to the data directory. "Models used" is pinned as the run's `modelUsage` models (`PINNED_MODELS_USED`); the per-child models stay pinned by the existing child tests.
+
+**Files changed**:
+- `spektacular: tests/harbor/shared/tests/test_reference_runs.py`
+- `spektacular: tests/harbor/shared/tests/test_transcripts_summary.py`
+
+**Discoveries**: `pytest tests/harbor` as a whole errors at collection, before this plan, because the in-container suite verifiers and the goal-check seed projects need their container paths; the runnable local self-tests are `tests/harbor/shared/tests` plus each suite's `test_verifier_selfcheck.py`.

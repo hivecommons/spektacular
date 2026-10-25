@@ -1,0 +1,374 @@
+{
+  "plan": "000076_harbor-on-built-in-logs",
+  "items": [
+    {
+      "item": "49fb2534-0645-4447-a50e-92865db63a87",
+      "title": "List commands and spans in the run statistics package",
+      "checks": [
+        {
+          "at": "2026-10-25T15:00:37Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "49fb2534-0645-4447-a50e-92865db63a87",
+            "title": "List commands and spans in the run statistics package",
+            "criteria": [
+              "Listing commands over a logs directory with two runs and a day of standalone commands gives every command, oldest first. Each carries its run, workflow, step, step moved to, arguments, timing, exit code and any error message, and a standalone command has no run.",
+              "Listing spans gives every helper, user-wait and work span in runs and outside them, each with its run, step, task, parent and outcome. An unfinished span is capped and marked exactly as the run report marks it.",
+              "A run selection narrows both listings to that run's records, and asking only for records outside runs gives just the orchestrator's.",
+              "The run report, comparison and summary output is unchanged for the same logs.",
+              "The structured form of both listings uses exactly the field names in the plan's Data Structures section."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/load.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/assemble.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.workflow.kind"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/listings.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.step"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.step.to"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/render.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/listings_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/testdata/commands.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spans.golden.json"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "listings.go:87-112 Commands gathers every run's Commands plus l.Outside command records (listed() includes outside records when no selection is given), then sorts by StartedAt. commandRow (listings.go:115-142) fills run_id/kind/name only when run != nil, so standalone commands get nulls. It carries step (AttrStep), step_to (AttrStepTo), args (stringsAttr over AttrCommandArgs), duration, exit code (intAttr, with 1 for an error status lacking an exit code) and message (kept only for StatusError). listings_test.go:93-133 asserts the seven-command oldest-first order over the two-run plus standalone fixture (listingLogs, lines 38-83) and checks the standalone fields, the goto's step/step_to, and the refused command's exit 1 and message."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "listings.go:147-175 AgentSpans covers run spans and l.Outside spans, filtered by tracelog.AgentTypes (record.go:45: sub-agent, user-wait, work). Each row is built by waitRow, which supplies step, task, parent, end reason, status and complete, plus type, trace, run, kind and workflow. Outside spans are capped in outsideSpans (listings.go:180-221): an unfinished span ends at the last event of its own trace and never before its start. Run spans reuse capUnfinished from assemble.go:313-328, and the rendered end marker is the same unfinishedMark used by the run report (render.go:21, 183). listings_test.go:180-237 checks the open helper in the run (ih) matches the run report's helper row exactly, and the outside open span (oh2) is capped at its start."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "listings.go:73-84 listed(): a run selection (f.selected()) narrows to l.Candidates(f) with outside=false; outsideRuns with no selection returns only outside records (runs nil, outside true). listings_test.go:146-167 checks Filter{Name:\"000002_beta\"} gives 3 rows all with the implement run id, Filter{Runs:[prefix]} gives 2 rows, and Commands(Filter{}, true) gives exactly the two epic commands with nil run_id. listings_test.go:239-259 checks the same for AgentSpans. listings.go:75-76 refuses outsideRuns combined with a selection (CodeBadSelection, select.go:47-48)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The report, comparison and summary paths only move code without changing it. assemble.go splitTrace (lines 69-106) is the old buildRun loop moved into a helper, and report.go waitRow (lines 229-243) is the old wait-building block moved verbatim. Load keeps the runs identical: assemble.go:96-108 only collects the outside records. listings_test.go:263-282 (TestOutsideRecordsLeaveRunsUnchanged) checks that runs, BuildReport, Compare and Summarise are equal with and without the outside records. The existing golden tests (report.golden.json, compare.golden.json, summary.golden.json, and the txt goldens) are not in the diff, so they are unchanged and still pass. Scope observation: report.go and select.go are modified but are not in the goal's file list. The changes are the waitRow extraction and the CodeBadSelection message, which the listings need, so this is not a criterion failure."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "The JSON field names come from struct tags. CommandRow (listings.go:32-49) has run_id, kind, name, agent, span_id, parent_span_id, command, args, step, step_to, started_at, ended_at, duration_ms, exit_code, status, message. SpanRow (listings.go:55-62) embeds Wait and adds type, trace_id, run_id, kind, workflow. listings_test.go:287-307 pins those key sets, and both golden files (testdata/commands.golden.json, testdata/spans.golden.json) use exactly those keys. The code comment at listings.go:16-29 quotes the contract as the plan's Data Structures section. I did not open the plan itself because the repo's rules forbid reading store files with my own tools, so this verdict rests on the code's quoted contract and the pinning tests."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "1510a2c7-a35f-49f9-9fd4-ae8854c980dc",
+      "title": "List commands and spans from the command line",
+      "checks": [
+        {
+          "at": "2026-10-25T15:04:26Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "1510a2c7-a35f-49f9-9fd4-ae8854c980dc",
+            "title": "List commands and spans from the command line",
+            "criteria": [
+              "`stats commands` and `stats spans` show the fixture project's records in table and JSON form, with the same figures in both, and the JSON honours `--fields`.",
+              "Pointing `--dir` at a copy of the logs from outside any project gives the same output as in the project.",
+              "Combining a run selection with the outside-runs switch is refused with a message naming the fix, and the other refusals match the rest of the group.",
+              "Every log file is byte-identical before and after both commands, run inside a project with logging on."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:272-316 (runStatsCommands and runStatsSpans) renders the same logs.Commands/logs.AgentSpans rows as a table (runstats.RenderCommands/RenderSpans, internal/runstats/render.go:572-619) or as JSON via output.New(...).WriteResult with globalFields, so --fields applies. cmd/stats_test.go:263-299 checks the pretty table columns and the JSON duration_ms (60000) and exit_code for the same record, and TestStatsCommandsListsEveryCommandInBothForms checks --fields [\"commands\"] yields only that key. cmd/stats_test.go:301-339 does the same for spans (25m00s / 25*60000 for the stopped orchestrator span, 3m00s / 180000 for the helper) and checks --fields [\"spans\"]. Table and JSON are asserted against the same fixture values, though no single test compares the two outputs directly."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "cmd/stats_test.go:400-416 (TestStatsListingsDirOnACopyGiveTheSameOutput) takes the in-project JSON for commands and spans, copies the logs with copyLogs (line 308) to a directory, does t.Chdir(t.TempDir()) outside any project, runs with --dir, and requires the output equal to the in-project output except log_dir. cmd/stats.go:476-514 (statsLogs) only needs a project when --dir is absent."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "A run selection with --outside-runs is refused in internal/runstats/listings.go:75-76 (CodeBadSelection). internal/runstats/select.go:47-48 gives the message \"--outside-runs lists only the records written outside any workflow run, so it cannot be combined with a run selection\" (names the flag). cmd/stats.go:539-542 maps it to stats_bad_selection with the next action \"use --outside-runs on its own, or drop it and select runs with --name, --kind, --agent or --run\", the same code and envelope as the other selection refusals (bad kind, bad run id, run not found, ambiguous) at cmd/stats.go:523-538. cmd/stats_test.go:370-398 checks the code, next action and message for both commands, and the other refusals (format, missing dir, bad kind, unknown and ambiguous run) for both subcommands."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:76-98 and 273-316: statsCommandsCmd and statsSpansCmd are added to statsCmd, so they inherit the logging-exempt annotation (cmd/stats.go:21-23, 25-27). cmd/stats_test.go:418-430 (TestStatsListingsLeaveTheLogsByteIdentical) runs useConfiguredLogLevel with a verbose project, snapshots every log with rawLogSnapshot, runs commands and spans in pretty, JSON, --outside-runs and --kind forms, and requires the snapshot unchanged. No code path in the diff writes to the logs directory."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "11b365fd-7097-426c-b440-623d7c2fd973",
+      "title": "Documentation site describes the two listings",
+      "checks": [
+        {
+          "at": "2026-10-25T15:05:51Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "11b365fd-7097-426c-b440-623d7c2fd973",
+            "title": "Documentation site describes the two listings",
+            "criteria": [
+              "The Run statistics page explains both listings, how to narrow them, the outside-runs switch and their structured fields.",
+              "The site builds and type-checks without errors, and the new text has no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-stats.mdx"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "docs/src/pages/run-stats.mdx lines 115-138 (new section \"Listing commands and spans\", added in the staged diff hunk at @@ -112,6 +112,31 @@) explain both listings: `stats commands` (lines 117-119) and `stats spans` (lines 118-121). Narrowing: lines 129-131 say both take the same --name, --kind, --agent, --run, --dir and --format as the other commands, with no selection listing everything and a selection narrowing to the selected runs. Outside-runs switch: lines 126 and 132-134 explain `--outside-runs` and that it cannot be combined with a run selection. Structured fields: lines 134-138 list the JSON fields for commands (run_id, step, step_to, args, exit_code, message) and spans (type, run_id, workflow, step, task_id, end_reason, complete), plus null handling outside runs. The diff also adds a JSON-records note at lines 205-209 referencing the commands and spans arrays."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Grep of src/pages/run-stats.mdx for the em dash character and for \u003cdiv, \u003csection, class=, \u003cspan, \u003cp\u003e, \u003cbr returned no matches. The added lines in docs.diff (lines 9-42 of that file) contain only plain markdown and inline code, with no HTML and no em dashes. The build and type-check are not re-run here, since this review is read-only; the claimed passing results (npm run build: 17 pages, Complete; npx astro check: 0 errors, 0 warnings) are taken from the verification summary and were not independently confirmed."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "9ce541c6-1a0c-4bfb-8ba7-b3b42e231ceb",
+      "title": "Record baseline Harbor pass rates",
+      "checks": [
+        {
+          "at": "2026-10-25T16:27:59Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "9ce541c6-1a0c-4bfb-8ba7-b3b42e231ceb",
+            "title": "Record baseline Harbor pass rates",
+            "criteria": [
+              "Five collected Claude runs exist for every Harbor suite, from a build that includes 000073 to 000075 and none of this plan's Harbor changes.",
+              "Each suite's pass count out of 5 is noted where the later comparison will find it."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "verifier/reward.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "build.json"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Fifty trial directories exist under tests/harbor/jobs/base76-{spec-claude,plan-claude,implement,repo-one-at-a-time,repo-delegated,epic-claude,implement-epic-claude,standing-rules-claude,goal-check-claude,background-child}-r{1..5}, each with a verifier/reward.txt (Glob of base76-*/**/verifier/reward.txt returned 50 files, 5 per suite). All 50 verifier/metrics.json files record \"commit\": \"bfd5dc1b52bfa2392f40826d8c0bc42df4f7491a\" and \"spektacular_version\": \"0.28.0-103-gbfd5dc1\" (no -dirty suffix), so the build is the committed tree, not this plan's uncommitted working-tree changes. bfd5dc1 is the merge of spek/000075 (.git/logs/HEAD line 139), and 000073 (merged at e8903123) and 000074 (merged at 7984b0a, .git/logs/HEAD line 134) are in its history per the same log and .spektacular/changelog/000073 to 000075 entries. I could not run git merge-base to confirm ancestry directly, so that part rests on the reflog."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The per-suite counts are noted in .spektacular/workflows/implement-000076_harbor-on-built-in-logs.md lines 19-33, under the heading 'Baseline Harbor pass rates (task 9ce541c6), for the before/after comparison'. I recounted reward.txt for the base76 jobs and every count matches: background-child 5/5, epic-claude 5/5, implement 5/5, standing-rules-claude 5/5, goal-check-claude 4/5 (r4=0), plan-claude 3/5, implement-epic-claude 2/5, repo-delegated 1/5 (r4 only), repo-one-at-a-time 0/5, spec-claude 0/5. Caveat: the note also says the counts go into the plan changelog entry and the test plan's before/after comparison; neither exists yet (no changelog entry for 000076 and no before/after comparison found under .spektacular), so those copies are still to be written. The later comparison reads the job directories by prefix (context.md:126), which the note's section is written to support."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "70054b85-d967-47e6-ac0d-e5c7a1741288",
+      "title": "Pin today's token, model and cost figures",
+      "checks": [
+        {
+          "at": "2026-10-25T16:29:36Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "70054b85-d967-47e6-ac0d-e5c7a1741288",
+            "title": "Pin today's token, model and cost figures",
+            "criteria": [
+              "For every reference run, the self-test pins the token counts, model, models used and cost as today's code computes them, and passes on the unchanged harness.",
+              "The pinned values come from the transcripts alone and do not depend on Spektacular's logs."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "claude-code.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/transcripts.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_transcripts_summary.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "not_met",
+              "evidence": "The four runs in RUNS (tests/harbor/shared/tests/test_reference_runs.py:36) are pinned in PINNED_TOTALS and PINNED_MODELS_USED (lines 90-117), and test_reference_totals_are_pinned and test_reference_record_totals_match_the_pins_without_spektacular_logs check them. The probe run tests/harbor/shared/tests/data/probe-background-child/ is also a trimmed reference run with a claude-code.txt and build.json (model claude-sonnet-5-5; test_reference_runs.py:346-361 and 379-398). It is not in RUNS and has no pinned token, model, models-used or cost values, so the self-test does not pin every reference run. The staged diff adds no probe pin. The verification pass (55 passed) covers only the four pinned runs. For the four pinned runs the values are checked by passing tests, so the gap is the probe alone."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "test_reference_totals_are_pinned (test_reference_runs.py:199-205 in the staged diff) calls transcripts.claude_summary(transcript(DATA / name)), which reads only the claude-code.txt lines. claude_summary at tests/harbor/shared/transcripts.py:286 takes only the list of transcript objects. transcripts.py is not in the staged diff. The record check at lines 208-217 passes debug_dir=NONE and bob_logs=NONE, so it cannot read Spektacular's debug logs. The diff does not touch any claude-code.txt fixture."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T16:31:01Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "70054b85-d967-47e6-ac0d-e5c7a1741288",
+            "title": "Pin today's token, model and cost figures",
+            "criteria": [
+              "For every reference run, the self-test pins the token counts, model, models used and cost as today's code computes them, and passes on the unchanged harness.",
+              "The pinned values come from the transcripts alone and do not depend on Spektacular's logs."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "claude-code.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/transcripts.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_transcripts_summary.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/tests/test_reference_runs.py:85-126 pins PINNED_TOTALS and PINNED_MODELS_USED for all five runs (m70-epic, s55-epic, s55-plan, s55-implement, probe-background-child), via PINNED_RUNS = [*RUNS, 'probe-background-child'] at line 126. test_reference_totals_are_pinned (lines 213-219) checks every pinned field against transcripts.claude_summary, the models used via totals.model.split('+'), and unknowns == []. test_every_reference_run_is_pinned (lines 208-210) checks the set of runs matches the data directory. The staged diff (spektacular.diff lines 691-781) shows only additions to this file, and transcripts.py and metrics.py do not appear in the diff, so the harness is unchanged. I could not run pytest (read-only), so the pass rests on the verification line 'tests/harbor/shared/tests → 545 passed', which I take as covering these tests."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The token and model pins are checked through transcripts.claude_summary(transcript(DATA / name)) (test_reference_runs.py:215), which takes only the parsed claude-code.txt objects. The record-level test (lines 222-231) calls metrics.build_record with debug_dir=NONE and bob_logs=NONE (line 226), so no Spektacular debug or Bob log is read. In metrics.py, totals come from read_agent_log's claude_summary (metrics.py:160), and the bob-log and debug fallback for wall time (metrics.py:610-620) runs only when wall_time_s is None. For these runs claude_summary sets wall_time_s from duration_ms or timestamps (transcripts.py:308-313), so the fallback does not fire. transcripts.py is unchanged in the staged diff."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 2,
+      "state": "accepted"
+    }
+  ]
+}
