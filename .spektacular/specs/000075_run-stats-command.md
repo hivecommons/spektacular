@@ -35,35 +35,35 @@ Maintainers will be able to ask Spektacular directly where a run's time went: ho
 -->
 ## Requirements
 
-- [ ] **Users can list recorded runs**
+- [x] **Users can list recorded runs**
   Users can list the runs held in the logs, newest first, each with its workflow kind, name, agent, start time, wall time and whether it finished, was interrupted or is still in progress.
-- [ ] **Users can choose which runs to report**
+- [x] **Users can choose which runs to report**
   Users can select runs by workflow name, by run identifier, by workflow kind or by agent, and combine these. With no selection, a single-run report covers the most recent run, a comparison covers the two most recent runs of that run's workflow kind, and a summary covers every held run of that kind.
-- [ ] **A run's report gives its totals**
+- [x] **A run's report gives its totals**
   A report on one run must give its wall time (from its first to its last recorded event, so a run in progress is measured to its latest event), its working time (wall time less time waiting on the user), its total time waiting on the user and its total time waiting on helper agents.
-- [ ] **A run's report breaks time down by step**
+- [x] **A run's report breaks time down by step**
   A report on one run must give, for each workflow step, its total duration, how many times the step was entered, the number of Spektacular commands the agent ran in it, and the time in it spent waiting on helper agents and on the user.
-- [ ] **A run's report breaks time down by task**
+- [x] **A run's report breaks time down by task**
   For an implement run, the report must give each plan task's duration, with its time waiting on helper agents and on the user.
-- [ ] **Helper-agent launches are listed**
+- [x] **Helper-agent launches are listed**
   A run's report must list each helper-agent launch with its name, the step it was launched in and how long it ran.
-- [ ] **The longest gaps are reported**
+- [x] **The longest gaps are reported**
   A run's report must list the longest gaps between consecutive recorded events, longest first, each with its length and the step it fell in (10 by default, a number the user can change), and the total time in gaps longer than a threshold (5 minutes by default, a value the user can change).
-- [ ] **Interrupted and unfinished work is flagged**
+- [x] **Interrupted and unfinished work is flagged**
   Steps, tasks, helper launches and waits on the user that were interrupted or never finished must be shown as such. An interrupted step counts toward its step's duration up to the point it was cut off; a helper launch or wait on the user that never finished is listed but left out of the helper-wait and user-wait totals and the per-step wait times.
-- [ ] **Users can compare runs**
+- [x] **Users can compare runs**
   Users can compare two or more selected runs side by side, step by step and in total, showing each run's figures and its difference from the first selected run in both time and percentage. A step missing from a run is shown as absent for that run, not as zero.
-- [ ] **Users can summarise many runs**
+- [x] **Users can summarise many runs**
   Users can summarise a set of selected runs, giving for each step and for the totals the number of runs, the median and the 90th percentile.
-- [ ] **Reports can be read by programs and people**
+- [x] **Reports can be read by programs and people**
   The report must be available as structured output consistent with Spektacular's other commands, and as a readable table.
-- [ ] **Users can report on logs from elsewhere**
+- [x] **Users can report on logs from elsewhere**
   Users can point the report at a logs directory other than the project's own, such as one collected from a test run, and get the same report.
-- [ ] **Damaged logs do not stop the report**
+- [x] **Damaged logs do not stop the report**
   A log line that cannot be read must be skipped and counted in the report, not stop the report or change other runs' numbers.
-- [ ] **The report never changes the logs**
+- [x] **The report never changes the logs**
   Producing a report must not modify, move or delete any log.
-- [ ] **The documentation describes the report**
+- [x] **The documentation describes the report**
   User documentation must describe how to list, report on, compare and summarise runs, and what each figure means.
 
 
@@ -96,37 +96,37 @@ Maintainers will be able to ask Spektacular directly where a run's time went: ho
 -->
 ## Acceptance Criteria
 
-- [ ] **Runs are listed newest first**
+- [x] **Runs are listed newest first**
   In a project whose logs hold three finished runs and one in progress, listing runs shows all four, newest first, each with its kind, name, agent, start time, wall time and status.
-- [ ] **The most recent run is the default**
+- [x] **The most recent run is the default**
   Asking for a report with no selection reports the run that started most recently.
-- [ ] **Selections narrow the runs**
+- [x] **Selections narrow the runs**
   Selecting by a spec's name reports only that spec's runs; selecting by one workflow kind reports only runs of that kind; selecting by agent reports only that agent's runs; selecting by kind and agent together reports only runs matching both; selecting by run identifier reports exactly that run.
-- [ ] **Totals add up**
+- [x] **Totals add up**
   For a run that waited on the user and on helper agents for known periods, the reported working time equals the wall time less the total of the user waits, and the reported user-wait and helper-wait totals equal the sums of those periods.
-- [ ] **Steps are broken down**
+- [x] **Steps are broken down**
   For a spec run that entered the same step twice, the report shows that step with an entry count of 2, its total duration, its command count and its helper and user wait times.
-- [ ] **Tasks are broken down**
+- [x] **Tasks are broken down**
   For an implement run of a two-task plan, the report shows both tasks with their durations and wait times.
-- [ ] **Helper launches are listed**
+- [x] **Helper launches are listed**
   For a run with three helper-agent launches, the report lists all three with name, step and duration.
-- [ ] **Gaps are reported**
+- [x] **Gaps are reported**
   For a run containing a 20-minute pause between two commands, the report lists that gap first among the longest gaps, with its step, lists at most 10 gaps longest first, and includes the pause in the total above the default 5-minute threshold; setting the threshold to 30 minutes leaves it out of that total, and asking for 3 gaps lists exactly 3.
-- [ ] **Interrupted work is flagged**
+- [x] **Interrupted work is flagged**
   For a run with an interrupted step and a helper launch that never finished, the report marks both, counts the interrupted step's time up to where it was cut off, and leaves the unfinished helper out of the helper-wait totals.
-- [ ] **Runs compare side by side**
+- [x] **Runs compare side by side**
   Comparing two spec runs shows each step's duration for both runs and the second run's difference from the first in time and percentage, and the same for the totals; a step only one run entered is shown as absent for the other.
-- [ ] **Many runs summarise**
+- [x] **Many runs summarise**
   Summarising five implement runs shows, for each step and for the totals, a count of 5, the median and the 90th percentile.
-- [ ] **Output works for programs and people**
+- [x] **Output works for programs and people**
   The structured output parses as JSON in the same envelope as other Spektacular commands, and the table output shows the same figures.
-- [ ] **Collected logs can be reported on**
+- [x] **Collected logs can be reported on**
   Copying a project's logs directory elsewhere and pointing the report at the copy gives the same figures as reporting in the project.
-- [ ] **Damaged lines are skipped**
+- [x] **Damaged lines are skipped**
   Adding a malformed line to a log leaves every run's figures unchanged and the report shows one skipped line.
-- [ ] **Logs are unchanged by reporting**
+- [x] **Logs are unchanged by reporting**
   Every log file's contents are byte-identical before and after running each kind of report.
-- [ ] **The docs describe the report**
+- [x] **The docs describe the report**
   The documentation site describes listing, reporting, comparing and summarising runs and defines each figure; the site builds without errors.
 
 
