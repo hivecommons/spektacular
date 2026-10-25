@@ -65,11 +65,11 @@ rm .spektacular/tmp/{{plan_name}}/plan_update.md
 {{^orchestrated}}
 Re-read the `**Discoveries**` entry you just wrote and weigh each item for durability — does it hold beyond this one change? Durable means something a future plan or implementation would pay to re-discover: an undocumented coupling, a surprising contract, a convention inferred from behavior rather than written down anywhere, a wrong default that had to be corrected. Only items that are both durable and non-obvious beyond the current change qualify — most tasks produce none, and when nothing qualifies, say nothing about knowledge capture and continue straight to Step 3.
 
-When a discovery does clear that bar, do not offer it now, and do not stop the run for it. Add it, phrased as the general lesson rather than the specific edit, to a `## Knowledge candidates` list in `{{working_context_path}}`. The run's `finished` step offers every candidate to the user at once. The `**Discoveries**` entry itself stays exactly as written; the candidate is additive on top of it.
+When a discovery does clear that bar, write it to the knowledge base now through the `spek-knowledge` skill, phrased as the general lesson rather than the specific edit; do not ask first, and do not stop the run for it. Then add a line for it to a `## Knowledge written` list in `{{working_context_path}}`, naming the entry's tier, store, path and why it is worth keeping. The run's `finished` step reports every entry on that list to the user at once. The `**Discoveries**` entry itself stays exactly as written.
 
 {{/orchestrated}}
 {{#orchestrated}}
-Re-read the `**Discoveries**` entry you just wrote. This run is orchestrated, so do not offer to save anything yourself: note any item that is durable and non-obvious beyond this change, and list it in your closing summary for the orchestrator to raise with the user. Most tasks produce none.
+Re-read the `**Discoveries**` entry you just wrote. For any item that is durable and non-obvious beyond this change, write it to the knowledge base now through the `spek-knowledge` skill, phrased as the general lesson; do not ask first. List each entry you wrote (tier, store, path, why) in your closing summary for the orchestrator. Most tasks produce none.
 
 {{/orchestrated}}
 {{#task}}

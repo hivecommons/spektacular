@@ -2055,6 +2055,10 @@ func (s *tagBlindStore) Stat(string) (store.FileInfo, error) {
 	return store.FileInfo{}, store.ErrNotFound
 }
 
+func (s *tagBlindStore) Update(string, func([]byte, bool) ([]byte, error)) error {
+	return nil
+}
+
 func (s *tagBlindStore) Search(_ []string, opts store.SearchOptions) ([]store.Hit, error) {
 	s.sawTags = opts.Tags
 	return s.hits, nil
@@ -2328,6 +2332,10 @@ func (s *deleteRecordingStore) Search([]string, store.SearchOptions) ([]store.Hi
 
 func (s *deleteRecordingStore) Delete(path string) error {
 	s.deleted = append(s.deleted, path)
+	return nil
+}
+
+func (s *deleteRecordingStore) Update(string, func([]byte, bool) ([]byte, error)) error {
 	return nil
 }
 

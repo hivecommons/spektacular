@@ -234,12 +234,14 @@ func TestImplementEpicSkillAsksNothingBetweenSpecs(t *testing.T) {
 		require.Truef(t, ok, "unsanctioned stop for the user: %q", body[lo:hi])
 	}
 
-	// The knowledge offer is the only end-of-run question, and nothing is
-	// saved unless the user accepts.
+	// The children write durable knowledge themselves; the final report
+	// tells the user what they wrote, and asks nothing about it.
 	report := flat(section(t, skill, "# Step 8: The final report"))
 	requirePhrases(t, "The final report", report,
-		"Offer to save any durable discovery the children reported with the `spek-knowledge` skill, and save it only if the user accepts.",
+		"Report every knowledge entry the children wrote (tier, store, path, why), so the user sees how the knowledge base changed.",
 	)
+	require.NotContains(t, report, "Offer to save")
+	require.NotContains(t, report, "if the user accepts")
 }
 
 // Criterion 6: repeating the request resumes in-progress specs in their

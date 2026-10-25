@@ -241,8 +241,34 @@ type FileChangelogConfig struct {
 // KnowledgeConfig holds the ordered list of the project's own shared knowledge
 // stores. It is the project-tier declaration; a repo declares its single store
 // with RepoKnowledgeConfig instead.
+//
+// Prune is the knowledge.prune subsection. Like implement.worktrees it needs no
+// settings-format bump or migration step: it is optional, a config written
+// before the key existed parses with it absent, and PruneMaxAgeDays supplies
+// the default.
 type KnowledgeConfig struct {
-	Sources []SourceConfig `yaml:"sources,omitempty"`
+	Sources []SourceConfig       `yaml:"sources,omitempty"`
+	Prune   KnowledgePruneConfig `yaml:"prune,omitempty"`
+}
+
+// DefaultKnowledgePruneMaxAgeDays is the prune age used when a project sets
+// none.
+const DefaultKnowledgePruneMaxAgeDays = 90
+
+// KnowledgePruneConfig configures `knowledge prune`. MaxAgeDays is how many
+// days an entry may go unretrieved before prune removes it (an entry must also
+// have been tracked that long); zero or absent means the default.
+type KnowledgePruneConfig struct {
+	MaxAgeDays int `yaml:"max_age_days,omitempty"`
+}
+
+// PruneMaxAgeDays is the prune age in days: the configured value, or
+// DefaultKnowledgePruneMaxAgeDays when none is set.
+func (k KnowledgeConfig) PruneMaxAgeDays() int {
+	if k.Prune.MaxAgeDays == 0 {
+		return DefaultKnowledgePruneMaxAgeDays
+	}
+	return k.Prune.MaxAgeDays
 }
 
 // DesignConfig holds the ordered list of the design sources the project
@@ -872,6 +898,12 @@ func (c EpicConfig) Validate() error {
 // checked within this list rather than globally, so naming a shared store after
 // a repo is allowed: a store's identity is its tier and its name together.
 func (c KnowledgeConfig) Validate() error {
+	if c.Prune.MaxAgeDays < 0 {
+		return output.NewError("config_invalid",
+			fmt.Sprintf("knowledge.prune.max_age_days must be a positive number of days, got %d", c.Prune.MaxAgeDays)).
+			WithResource("knowledge.prune.max_age_days").
+			WithNextAction(fmt.Sprintf("set knowledge.prune.max_age_days in .spektacular/config.yaml to a positive number of days (or remove the key to use %d)", DefaultKnowledgePruneMaxAgeDays))
+	}
 	seen := make(map[string]bool, len(c.Sources))
 	for i, src := range c.Sources {
 		if src.Name == "" {

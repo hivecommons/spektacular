@@ -189,9 +189,18 @@ func TestDiscoveryStepUsesKnowledgeCommands(t *testing.T) {
 	require.Contains(t, out, "knowledge read", "discovery step must instruct the agent to use `knowledge read`")
 	require.NotContains(t, out, ".spektacular/knowledge/", "discovery step must not hardcode the knowledge directory path")
 
-	// Criterion 2: knowledge writes require explicit user confirmation.
+	// Criterion 2: a durable learning is written through the spek-knowledge
+	// skill without asking, then reported to the user.
 	require.Contains(t, out, "knowledge write", "discovery step must reference `knowledge write` for capturing learnings")
-	require.Contains(t, strings.ToLower(out), "confirm", "discovery step must require explicit user confirmation before a knowledge write")
+	require.Contains(t, out, "write it yourself through the `spek-knowledge` skill")
+	require.Contains(t, out, "Do not stop to ask first.")
+	require.Contains(t, out, "which entry you wrote, its tier, store and path, and why it is worth keeping")
+	require.NotContains(t, out, "wait for explicit confirmation")
+
+	// The knowledge reads name the plan's spec, so parallel lanes are
+	// attributed to the right workflow.
+	require.Contains(t, out, "knowledge always-applied --tier repo --filter <name> --spec test")
+	require.Contains(t, out, `"path":"<path>","spec":"test"}'`)
 }
 
 func TestImplementationDetailStepIsHighLevelOnly(t *testing.T) {
@@ -540,39 +549,28 @@ func TestWalkthroughStepWalksDraftingAssumptions(t *testing.T) {
 		"walkthrough must route a challenged assumption through the change-request path")
 }
 
-// TestWalkthroughStepOffersKnowledgeCaptureForRevealingCorrections asserts the
-// walkthrough step's correction-assessment-and-offer beat (Phase 2.1): after a
-// correction is applied and confirmed, the step directs assessing what the
-// correction reveals and — only for durable, generalizable lessons — offering
-// to capture the general lesson, gated on explicit acceptance and handed to
-// the `spek-knowledge` skill, with a decline being final.
-func TestWalkthroughStepOffersKnowledgeCaptureForRevealingCorrections(t *testing.T) {
+// TestWalkthroughStepWritesKnowledgeForRevealingCorrections asserts the
+// walkthrough step's correction-assessment beat: after a correction is applied
+// and confirmed, the step directs assessing what the correction reveals and,
+// only for durable, generalizable lessons, writing the general lesson through
+// the `spek-knowledge` skill without asking, then telling the user in the same
+// review message which entry was written, where and why.
+func TestWalkthroughStepWritesKnowledgeForRevealingCorrections(t *testing.T) {
 	out := renderStep(t, walkthrough())
 	lower := strings.ToLower(out)
 
-	// Assess what an applied correction reveals before resuming.
 	require.Contains(t, lower, "what the correction reveals",
 		"walkthrough must direct assessing what an applied correction reveals")
-
-	// The offer is phrased as the general lesson, not the specific edit.
 	require.Contains(t, lower, "general lesson",
-		"walkthrough must phrase the offer as the general lesson rather than the specific edit")
-
-	// Selectivity bar: most corrections reveal nothing durable and produce no offer.
-	require.Contains(t, lower, "produce no offer",
-		"walkthrough must state that corrections revealing nothing durable produce no offer")
-
-	// Capture is gated on the user's explicit acceptance.
-	require.Contains(t, lower, "explicit acceptance",
-		"walkthrough must gate knowledge capture on the user's explicit acceptance")
-
-	// A decline is final for that lesson within the conversation.
-	require.Contains(t, lower, "not offered again",
-		"walkthrough must state a declined lesson is not offered again")
-
-	// Accepted items are handed to the spek-knowledge skill.
-	require.Contains(t, out, "spek-knowledge",
-		"walkthrough must hand accepted items to the `spek-knowledge` skill")
+		"walkthrough must phrase the entry as the general lesson rather than the specific edit")
+	require.Contains(t, lower, "reveal nothing durable",
+		"walkthrough must state that most corrections reveal nothing durable")
+	require.Contains(t, out, "write it to the project knowledge base yourself through the `spek-knowledge` skill")
+	require.Contains(t, out, "Do not ask first.")
+	require.Contains(t, out, "tell the user which entry you wrote, its tier, store and path, and why it is worth keeping")
+	for _, banned := range []string{"explicit acceptance", "not offered again", "produce no offer", "propose-then-confirm"} {
+		require.NotContains(t, lower, banned)
+	}
 	require.NotContains(t, out, "skill spek-knowledge",
 		"walkthrough must not direct the unreachable CLI invocation `spektacular skill spek-knowledge`")
 }

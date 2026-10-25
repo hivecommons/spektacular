@@ -33,6 +33,9 @@ type scopedStore struct {
 // Set is an ordered collection of addressed knowledge stores.
 type Set struct {
 	sources []scopedStore
+	// dater dates an entry the usage index meets for the first time from the
+	// store's version history; nil means no history lookup. See usage.go.
+	dater CreatedDater
 }
 
 // Entry is a single knowledge entry, tagged with the store it lives in. The
@@ -225,6 +228,13 @@ func (s *Set) Search(query string, sel Selector) ([]store.Hit, error) {
 			// place the exclusion lives — the store no longer special-cases it.
 			continue
 		}
+		if IsReservedPath(hit.Path) {
+			// The usage index and its sidecar files sit in the store root, so
+			// a store that walks every file reports them. They are
+			// Spektacular's bookkeeping, never an entry, so they are never a
+			// result.
+			continue
+		}
 		if IsCategoryDescription(hit.Path) {
 			// A category's own description documents the category rather than
 			// contributing to it, and every one of them shares the same
@@ -342,7 +352,13 @@ func alwaysAppliedSet() map[string]bool {
 // Read returns the full content of a knowledge entry from the one store the
 // address names. An address that does not name exactly one store is refused
 // rather than resolved to whichever store happens to look closest.
+//
+// The usage index is not an entry and is refused by name: it is read through
+// Usage, which is what the "knowledge usage" command reports.
 func (s *Set) Read(addr Address, path string) ([]byte, error) {
+	if IsReservedPath(path) {
+		return nil, refuseReserved(addr, path)
+	}
 	src, err := s.resolve(addr)
 	if err != nil {
 		return nil, err
@@ -362,8 +378,12 @@ func (s *Set) Read(addr Address, path string) ([]byte, error) {
 
 // Write persists a knowledge entry into the one store the address names,
 // leaving every other store untouched. An address that does not name exactly
-// one store is refused and nothing is written anywhere.
+// one store is refused and nothing is written anywhere. The usage index and
+// its sidecar files are refused: only the index operations change them.
 func (s *Set) Write(addr Address, path string, content []byte) error {
+	if IsReservedPath(path) {
+		return refuseReserved(addr, path)
+	}
 	src, err := s.resolve(addr)
 	if err != nil {
 		return err
@@ -378,8 +398,12 @@ func (s *Set) Write(addr Address, path string, content []byte) error {
 // Removing a path that holds nothing is a success, not a refusal: the storage
 // contract states Delete returns nil when the file is absent, so a maintenance
 // pass that retries is safe. The caller is the one that reports which of the
-// two happened, because the storage layer cannot tell them apart.
+// two happened, because the storage layer cannot tell them apart. The usage
+// index and its sidecar files are refused, as they are for Write.
 func (s *Set) Delete(addr Address, path string) error {
+	if IsReservedPath(path) {
+		return refuseReserved(addr, path)
+	}
 	src, err := s.resolve(addr)
 	if err != nil {
 		return err
@@ -649,7 +673,10 @@ func withAvailable(err error, tier Tier, names []string) error {
 
 // listFiles recursively walks a store from dir, returning store-relative file
 // locators. Directories are descended into via Store.List, which stays one
-// level deep — the recursion lives here in the knowledge layer.
+// level deep — the recursion lives here in the knowledge layer. The usage
+// index and its sidecar files are never returned: every enumeration (list,
+// tags, the always-applied reader, reconcile) goes through here, so this is
+// the one place they are left out.
 func listFiles(st store.Store, dir string) ([]string, error) {
 	children, err := st.List(dir)
 	if err != nil {
@@ -667,6 +694,9 @@ func listFiles(st store.Store, dir string) ([]string, error) {
 				return nil, err
 			}
 			files = append(files, sub...)
+			continue
+		}
+		if IsReservedPath(childPath) {
 			continue
 		}
 		files = append(files, childPath)

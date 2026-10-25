@@ -260,12 +260,18 @@ Agents (and you) reach knowledge through the `spektacular knowledge` commands ra
 - `knowledge delete` — remove one addressed entry, via `--data '{"tier":"…","name":"…","path":"…"}'`; an address holding nothing succeeds and changes nothing, and a category's own generated description is refused
 - `knowledge list` — list entries across the stores the request covers; takes `--tier` and `--filter`
 - `knowledge sources` — list the configured stores by tier and name, with their locations
+- `knowledge usage` — show each entry's creation date and discovery and retrieval history from the store's usage index; takes `--tier` and `--filter`
+- `knowledge prune` — remove old, unread entries, then check every remaining entry against the project, one instruction per entry answered with `knowledge prune verdict`; `--dry-run` previews without changing anything
 
 Every subcommand accepts `--schema` to print its input/output JSON schema and exit.
 
 ### Capturing knowledge
 
-When research surfaces a durable learning, gotcha, or convention worth keeping, the agent **proposes** the destination — the tier, the store name, and the path — along with the exact content, and waits for your explicit confirmation before writing; it never persists to a knowledge store unprompted. In a Spek-initialised repo, the `spek-knowledge` skill is the entry point for reading, contributing to, and updating the knowledge base in any session, and coding agents route what they would otherwise save to their own per-user memory into the project knowledge base instead, so captured knowledge lands in git and travels with the project.
+When research surfaces a durable learning, gotcha, or convention worth keeping, the agent writes it to the knowledge base itself through the `spek-knowledge` skill and tells you which entry it wrote, where (the tier, the store name, and the path) and why. Nothing waits for your approval: the report is how you see the knowledge base change, and the project's version history is the undo.
+
+Each store keeps a usage index, `.usage-index.json` at its root, recording when every entry was created and each time a search surfaced it (a discovery) or a read returned it (a retrieval), written only by the knowledge commands and read with `knowledge usage`. `spektacular knowledge prune` (preview it with `--dry-run`) removes entries nobody has retrieved within `knowledge.prune.max_age_days` (90 days by default), then has the agent correct or delete the rest where they no longer describe the project, and reports every entry with its verdict and evidence.
+
+In a Spek-initialised repo, the `spek-knowledge` skill is the entry point for reading, contributing to, and updating the knowledge base in any session, and coding agents route what they would otherwise save to their own per-user memory into the project knowledge base instead, so captured knowledge lands in git and travels with the project.
 
 ## Configuration
 
@@ -316,6 +322,8 @@ knowledge:
       provider: file
       config:
         location: ../team-kb        # relative to the folder holding config.yaml, as repos are
+  prune:
+    max_age_days: 90                # optional; days an entry may go unretrieved before prune removes it
 design:
   sources:                          # optional, where the project's design documents live;
     - name: api                     # declared by the project only, never by a repo

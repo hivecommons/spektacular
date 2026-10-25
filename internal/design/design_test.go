@@ -647,6 +647,11 @@ func (w *recordingWriter) Delete(path string) error {
 	return w.err
 }
 
+func (w *recordingWriter) Update(path string, _ func([]byte, bool) ([]byte, error)) error {
+	w.written = append(w.written, path)
+	return w.err
+}
+
 // Criterion: removal reaches the source through the same store.Writer seam
 // reading and writing use, proven against a source whose backend is not a
 // local directory — the writer receives the store-relative path, the document

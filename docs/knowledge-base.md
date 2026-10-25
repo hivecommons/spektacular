@@ -240,9 +240,9 @@ The rules, each of which is a real behaviour rather than a convention:
   than its prose, so two entries differing only in their tags stay distinct during
   de-duplication.
 
-You rarely write this block by hand. The `spek-knowledge` skill proposes tags when
-it captures an entry, drawn from the vocabulary already in use, and shows them
-alongside the destination for confirmation before anything is written.
+You rarely write this block by hand. The `spek-knowledge` skill chooses tags when
+it captures an entry, drawn from the vocabulary already in use, writes the entry
+without asking, and then tells you the tags it chose alongside the destination.
 
 ## De-duplication and consolidation
 
@@ -343,10 +343,13 @@ category — keeping the always-applied retrieval tier compact. The entry is fil
 The skill also loads the tag vocabulary already in use
 (`spektacular knowledge tags`) and proposes tags for the entry, preferring an
 established tag over a near-duplicate so the vocabulary converges instead of
-fragmenting as the knowledge base grows. As always, the assistant proposes the
-destination — the tier, the store name, and the path — along with the tags and the
-body, and waits for explicit confirmation before writing. That is one gate, not
-several: tags are confirmed with everything else.
+fragmenting as the knowledge base grows. The skill then writes the entry itself,
+without asking, and tells you which entry it wrote: the tier, the store name, the
+path, the tags, and why it is worth keeping. Agents write knowledge the same way
+whenever they surface something durable during a workflow, and an orchestrated
+child lists the entries it wrote in its hand-back. The report is how you see the
+knowledge base change; a wrong entry is fixed by asking for it to be revised or
+deleted, and the project's version history holds every earlier state.
 
 ### Auditing the tags on existing entries
 
@@ -355,7 +358,9 @@ same way. There is no separate command: invoke the `spek-knowledge` skill and as
 it to audit the knowledge base tags. The skill discriminates the audit intent from
 the wording of the request, the same way it tells a lookup from a contribution.
 
-The flow is read-only until you approve something. It enumerates the entries in
+The audit is the one knowledge flow that still asks before it writes: it is a
+review of entries that already exist, so it proposes tag changes and applies each
+only once you agree to it. It enumerates the entries in
 scope with `knowledge list`, loads the vocabulary in use with `knowledge tags`,
 reads each entry, and for each one reports two things:
 
@@ -378,32 +383,82 @@ reduced strength. But it will report `apples` sitting beside `apple` as removabl
 because prefix matching already reaches it and a redundant tag is how a vocabulary
 silently doubles.
 
-### Reviewing whether entries are still true
+### Pruning the knowledge base
 
-The audit above asks whether an entry is well *labelled*. Its sibling, the
-maintenance review, asks the question that matters more over time: whether the
-entry is still *true*. It is the same skill and the same shape — invoke
-`spek-knowledge` and ask whether the knowledge base is still accurate — and it is
-read-only until you approve something, one entry at a time.
+The audit above asks whether an entry is well *labelled*. Pruning asks the
+questions that matter more over time: whether anyone still uses an entry, and
+whether it is still *true*. Run it with `spektacular knowledge prune`, or invoke
+`spek-knowledge` and ask whether the knowledge base is still accurate. Prune runs
+in two passes and acts without asking; `--dry-run` is the preview, which produces
+the same report and changes nothing, not an entry and not a usage record.
 
-Each entry in scope is classified as **current**, **stale**, **incorrect** or
-**unverifiable**, and every stale or incorrect verdict has to name the specific
-file, command or behaviour that changed, so you can check a finding rather than
-take it on trust. "Looks old" is not a finding.
+**Pass one: unused entries.** The command removes every entry that was created
+more than `knowledge.prune.max_age_days` ago (90 by default, set in
+`.spektacular/config.yaml`), has been tracked by the usage index for at least that
+long, and has not been retrieved in that time. A discovery does not keep an entry:
+one that searches keep surfacing but nobody reads is still unused. The tracking
+clock is what protects entries written before the index existed, which are only
+tracked from their first use after the upgrade.
 
-One rule decides whether such a review helps or harms, and it is worth stating
-plainly: an entry describing a standard the code has not met yet is **current**,
-not stale. In this project an entry states the target and the code is what has yet
-to meet it, so a difference between the two is work to do, never evidence against
-the entry. Only an entry whose subject no longer exists is stale. Without that
-rule a review would propose deleting exactly the entries doing the most work.
+**Pass two: entries that are no longer true.** The command then hands the agent
+one instruction per remaining entry, with the entry's text inlined, and the agent
+gives each one verdict:
 
-The review also reports any category description that no longer matches the
-project's current definition of that category, naming where it is and pointing at
-`spektacular init <agent>` as the remedy. It reports drift and never repairs it —
-bringing a store back into line stays something you run deliberately. An entry you
-agree to remove is removed with `spektacular knowledge delete`, and only after you
-agree to that entry specifically.
+- **current** — the entry still describes how the project works, or states a
+  standard it is meant to meet, or cannot be checked from the code.
+- **corrected** — the subject still exists but the entry described it wrongly; the
+  agent rewrites it with `knowledge write`, which keeps its creation date and
+  usage history.
+- **deleted** — the entry's subject no longer exists; the agent removes it with
+  `knowledge delete`, and its usage history goes with it.
+
+One rule decides whether pruning helps or harms, and it is worth stating plainly:
+an entry describing a standard the code has not met yet is **current**, not stale.
+In this project an entry states the target and the code is what has yet to meet
+it, so a difference between the two is work to do, never evidence against the
+entry. Only an entry whose subject no longer exists is deleted. Without that rule
+a review would delete exactly the entries doing the most work. "Looks old" is not
+a finding either.
+
+Every correction and deletion carries evidence naming the file, command, flag or
+behaviour checked, and the agent reports each verdict with
+`spektacular knowledge prune verdict`, which checks it against the store before
+handing out the next entry: deleted means the entry is gone, corrected means its
+text changed, current means it is untouched, and in a dry run nothing may change.
+The final report lists every entry as removed, corrected, deleted or current (or
+would remove, would correct, would delete in a preview), with its evidence.
+Prune's own reads never count as usage. An interrupted prune resumes where it
+stopped when run again, and `--force` starts it over. Recovery from a prune is
+through the project's version history.
+
+The `spek-knowledge` skill also reports any category description that no longer
+matches the project's current definition of that category, naming where it is and
+pointing at `spektacular init <agent>` as the remedy. It reports drift and never
+repairs it — bringing a store back into line stays something you run deliberately.
+
+## The usage index
+
+Each knowledge store keeps a usage index, `.usage-index.json`, at its root. For
+every entry it records when the entry was created, when the index started
+tracking it, and two histories: **discoveries**, one for each search that
+returned the entry, and **retrievals**, one for each read of it, including loads
+of the always-applied categories. Each history keeps a total count, the time of
+the latest use and a short list of recent events. A retrieval made while a
+workflow runs names that workflow and its spec: the spec the caller passes (the
+plan workflow passes its own), or otherwise the one workflow in progress when
+exactly one is.
+
+An entry's creation date is set by its first write and survives every rewrite.
+Entries that predate the index gain a record the first time a knowledge command
+writes the index, dated from the commit that first added them when the store is
+in a git work tree, and otherwise from the file's modification time. Records for
+deleted entries are dropped. Parallel workflow runs update the index under a lock,
+so no use is lost.
+
+The index is Spektacular's own bookkeeping, not an entry: it never appears in a
+listing or a search, and `knowledge read`, `knowledge write` and
+`knowledge delete` refuse its path. Read it with
+`spektacular knowledge usage [--tier T] [--filter N]`.
 
 ## Command reference
 
@@ -414,12 +469,15 @@ Each command has a `--schema` mode that prints its input/output schema.
 | Command | Purpose |
 |---------|---------|
 | `spektacular knowledge search <query> [--tier T] [--filter N] [--tag G]` | Keyword-search the stores the request covers (always-applied categories excluded); ranked, one tier-, store- and category-tagged result per matching document, each with title, score, excerpts, tags, and a content checksum. A document need not contain every query word. Repeatable `--tag` restricts results to entries carrying every tag listed |
-| `spektacular knowledge read --data '{"tier":"repo","name":"docs","path":"architecture/x.md"}'` | Read one entry's full body from one addressed store |
+| `spektacular knowledge read --data '{"tier":"repo","name":"docs","path":"architecture/x.md"}'` | Read one entry's full body from one addressed store. An optional `"spec"` in `--data` attributes the retrieval to that spec's workflow |
 | `spektacular knowledge list [--tier T] [--filter N]` | List every entry across the stores the request covers |
 | `spektacular knowledge write --data '{"tier":"repo","name":"docs","path":"gotchas/x.md"}' --file <path>` | Write an entry into one addressed store (content from `--file`, or stdin) |
-| `spektacular knowledge delete --data '{"tier":"repo","name":"docs","path":"gotchas/x.md"}'` | Remove one entry from one addressed store. An address naming an undeclared store is refused with the names available in that tier; an address holding nothing reports success and changes nothing, so a maintenance pass that retries is safe. A category's own generated `README.md` is refused, since it is rendered from the project's definition of that category rather than written by anyone |
+| `spektacular knowledge delete --data '{"tier":"repo","name":"docs","path":"gotchas/x.md"}'` | Remove one entry from one addressed store. An address naming an undeclared store is refused with the names available in that tier; an address holding nothing reports success and changes nothing, so a prune that retries is safe. A category's own generated `README.md` is refused, since it is rendered from the project's definition of that category rather than written by anyone |
 | `spektacular knowledge sources` | List the configured stores by tier and name, with their locations |
 | `spektacular knowledge categories` | List the category definitions — purpose, boundary, tier, and entry shape |
 | `spektacular knowledge tags [--tier T] [--filter N]` | List the tag vocabulary already in use across the stores the request covers, each with the number of entries carrying it, most-used first |
-| `spektacular knowledge always-applied [--tier T] [--filter N]` | Read every always-applied entry (conventions and glossary) across the stores the request covers, each tagged with its category |
-| `spektacular knowledge conventions [--tier T] [--filter N]` | Read every convention across the stores the request covers (the conventions-only view) |
+| `spektacular knowledge always-applied [--tier T] [--filter N] [--spec S]` | Read every always-applied entry (conventions and glossary) across the stores the request covers, each tagged with its category. `--spec` names the spec you are working on, so the retrievals are attributed to its workflow |
+| `spektacular knowledge conventions [--tier T] [--filter N] [--spec S]` | Read every convention across the stores the request covers (the conventions-only view) |
+| `spektacular knowledge usage [--tier T] [--filter N]` | Show each entry's creation date and discovery and retrieval history from the store's usage index |
+| `spektacular knowledge prune [--dry-run] [--force] [--tier T] [--filter N]` | Remove old, unread entries, then check every remaining entry against the project; `--dry-run` previews without changing anything |
+| `spektacular knowledge prune verdict --data '{"tier":"repo","name":"docs","path":"gotchas/x.md","verdict":"current","evidence":"…"}'` | Record the verdict and evidence for the entry prune is checking, and get the next entry or the final report |

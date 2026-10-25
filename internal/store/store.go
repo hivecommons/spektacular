@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/hivecommons/spektacular/internal/filelock"
 )
 
 // ErrNotFound is returned when the requested file or directory does not exist.
@@ -118,6 +120,19 @@ type Writer interface {
 	Write(path string, content []byte) error
 	// Delete removes the file at path. Returns nil if the file does not exist.
 	Delete(path string) error
+	// Update reads the file at path (exists=false when it is absent), passes
+	// its bytes to fn, and writes fn's result back as one step that no other
+	// process updating the same path can interleave with: every concurrent
+	// Update of a path sees the result of the one before it. fn returning
+	// (nil, nil) leaves the file untouched; fn returning an error aborts with
+	// nothing written, and Update returns that error. Parent directories are
+	// created automatically.
+	//
+	// A file backend serialises with a lock file and writes through a temp
+	// file and rename; another backend may use its own transaction or
+	// compare-and-swap. Plain Write and Delete calls are not serialised
+	// against Update, so a path is either updated or overwritten, never both.
+	Update(path string, fn func(current []byte, exists bool) ([]byte, error)) error
 }
 
 // Store provides read/write access to a project's data directory.
@@ -198,6 +213,81 @@ func (f *FileStore) Delete(path string) error {
 		return nil
 	}
 	return err
+}
+
+// Names FileStore.Update creates beside the file it updates. The lock file is
+// the path plus LockSuffix; the temp file is the path plus TempInfix plus a
+// unique tail, renamed onto the path once written. A caller that enumerates a
+// store recognises them by these names.
+const (
+	LockSuffix = ".lock"
+	TempInfix  = ".tmp-"
+)
+
+// Update timing: a waiter gives up after updateLockTimeout, and a lock older
+// than updateLockStale was left by a process that died holding it and is
+// broken.
+var (
+	updateLockTimeout = 30 * time.Second
+	updateLockStale   = 10 * time.Minute
+)
+
+// Update implements Writer.Update with a lock file beside the target, taken
+// with the shared portable file lock, and a temp-file-and-rename write, so a
+// reader never sees a half-written file and two processes never lose an
+// update.
+func (f *FileStore) Update(path string, fn func(current []byte, exists bool) ([]byte, error)) error {
+	abs, err := f.abs(path)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(abs), 0755); err != nil {
+		return err
+	}
+	release, err := filelock.Acquire(abs+LockSuffix, updateLockTimeout, updateLockStale)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	current, err := os.ReadFile(abs)
+	exists := true
+	if errors.Is(err, fs.ErrNotExist) {
+		current, exists, err = nil, false, nil
+	}
+	if err != nil {
+		return err
+	}
+	next, err := fn(current, exists)
+	if err != nil {
+		return err
+	}
+	if next == nil {
+		return nil
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(abs), filepath.Base(abs)+TempInfix+"*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(next); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Chmod(tmpName, 0644); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, abs); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	return nil
 }
 
 func (f *FileStore) List(path string) ([]DirEntry, error) {
