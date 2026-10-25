@@ -1598,3 +1598,141 @@ func TestLogDir_ResolvesRelativeToConfigFolder(t *testing.T) {
 	cfg.Log.Config.Directory = abs + string(filepath.Separator) + "."
 	require.Equal(t, abs, cfg.LogDir(root))
 }
+
+const statsBase = `name: testproj
+repos:
+  - name: testproj
+    location: ..
+`
+
+func price(v float64) *float64 { return &v }
+
+// Price table criterion 1: prices for two models load exactly as written,
+// and survive being saved and loaded again.
+func TestFromYAMLFile_StatsPricesLoadAsWritten(t *testing.T) {
+	yaml := statsBase + `stats:
+  prices:
+    claude-opus-5-5:
+      input: 5.00
+      output: 25.00
+      cache_read: 0.50
+      cache_write: 6.25
+    claude-haiku-5-5:
+      input: 1
+      output: 5
+      cache_read: 0.1
+      cache_write: 0
+`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	want := map[string]ModelPrice{
+		"claude-opus-5-5":  {Input: price(5), Output: price(25), CacheRead: price(0.5), CacheWrite: price(6.25)},
+		"claude-haiku-5-5": {Input: price(1), Output: price(5), CacheRead: price(0.1), CacheWrite: price(0)},
+	}
+	require.Equal(t, want, cfg.Stats.Prices)
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+	loaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, want, loaded.Stats.Prices)
+}
+
+// Price table criterion 2: a config without a price table loads as before,
+// and saving it does not add a stats key.
+func TestFromYAMLFile_AbsentStatsLoadsEmptyAndIsNotWritten(t *testing.T) {
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(statsBase)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Empty(t, cfg.Stats.Prices)
+	require.True(t, cfg.Stats.IsZero())
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "stats:")
+
+	fresh := NewDefault()
+	fresh.Name = "testproj"
+	fresh.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	require.Empty(t, fresh.Stats.Prices, "no prices are built in")
+	require.NoError(t, fresh.ToYAMLFile(path))
+	raw, err = os.ReadFile(path)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "stats:", "a new project's config has no price table")
+}
+
+// Price table criterion 3: a missing or negative price is refused with
+// config_invalid, naming the model and the key to set.
+func TestFromYAMLFile_IncompleteOrNegativePriceIsRefused(t *testing.T) {
+	cases := []struct {
+		name, table, message, next string
+	}{
+		{
+			name: "missing cache_write",
+			table: `    claude-opus-5-5:
+      input: 5
+      output: 25
+      cache_read: 0.5
+`,
+			message: "stats.prices.claude-opus-5-5 has no cache_write price",
+			next:    "set stats.prices.claude-opus-5-5.cache_write in .spektacular/config.yaml to its price per million tokens, or remove the model to report its cost as unknown",
+		},
+		{
+			name: "negative output",
+			table: `    claude-opus-5-5:
+      input: 5
+      output: -25
+      cache_read: 0.5
+      cache_write: 6.25
+`,
+			message: "stats.prices.claude-opus-5-5.output is -25, and a price must not be negative",
+			next:    "set stats.prices.claude-opus-5-5.output in .spektacular/config.yaml to its price per million tokens, 0 or more",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, path := projectConfigPath(t)
+			yaml := statsBase + "stats:\n  prices:\n" + tc.table
+			require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+			_, err := FromYAMLFile(path)
+			var er *output.ErrorResponse
+			require.ErrorAs(t, err, &er)
+			require.Equal(t, "config_invalid", er.Code)
+			require.Equal(t, tc.message, er.Message)
+			require.Equal(t, "stats.prices", er.Resource)
+			require.Equal(t, tc.next, er.NextAction)
+		})
+	}
+}
+
+// An entry with an empty model name is refused the same way.
+func TestStatsConfigValidate_RefusesAnUnnamedModel(t *testing.T) {
+	s := StatsConfig{Prices: map[string]ModelPrice{"": {Input: price(1), Output: price(1), CacheRead: price(1), CacheWrite: price(1)}}}
+	var er *output.ErrorResponse
+	require.ErrorAs(t, s.Validate(), &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.NotEmpty(t, er.NextAction)
+}
+
+// Price table criterion 4: the optional table leaves the settings format
+// version unchanged, and a saved table is stamped with that version.
+func TestStatsPrices_LeaveTheSettingsFormatUnchanged(t *testing.T) {
+	require.Equal(t, 5, CurrentProjectSchema)
+
+	cfg := NewDefault()
+	cfg.Name = "testproj"
+	cfg.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	cfg.Stats.Prices = map[string]ModelPrice{"m": {Input: price(1), Output: price(2), CacheRead: price(3), CacheWrite: price(4)}}
+	_, path := projectConfigPath(t)
+	require.NoError(t, cfg.ToYAMLFile(path))
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "schema: 5\n")
+	require.Contains(t, string(raw), "stats:\n    prices:\n        m:\n            input: 1\n")
+}

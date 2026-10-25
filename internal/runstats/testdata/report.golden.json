@@ -32,7 +32,17 @@
       "command_ms": 30000,
       "helper_wait_ms": 0,
       "user_wait_ms": 0,
-      "incomplete": 0
+      "incomplete": 0,
+      "tokens": {
+        "input": 5,
+        "output": 200,
+        "cache_read": 2000,
+        "cache_write": 50,
+        "cost": 0.006338,
+        "cost_complete": true,
+        "unpriced_models": [],
+        "working_ms_per_1k_output": 300000
+      }
     },
     {
       "step": "analyze",
@@ -42,7 +52,17 @@
       "command_ms": 60000,
       "helper_wait_ms": 180000,
       "user_wait_ms": 0,
-      "incomplete": 1
+      "incomplete": 1,
+      "tokens": {
+        "input": 13,
+        "output": 2400,
+        "cache_read": 15000,
+        "cache_write": 150,
+        "cost": 0.068503,
+        "cost_complete": true,
+        "unpriced_models": [],
+        "working_ms_per_1k_output": 400000
+      }
     },
     {
       "step": "verify",
@@ -52,7 +72,19 @@
       "command_ms": 60000,
       "helper_wait_ms": 0,
       "user_wait_ms": 120000,
-      "incomplete": 0
+      "incomplete": 0,
+      "tokens": {
+        "input": 4,
+        "output": 450,
+        "cache_read": 4000,
+        "cache_write": 10,
+        "cost": 0.012078,
+        "cost_complete": false,
+        "unpriced_models": [
+          "claude-haiku-5-5"
+        ],
+        "working_ms_per_1k_output": 1333333
+      }
     },
     {
       "step": "finished",
@@ -62,7 +94,17 @@
       "command_ms": 0,
       "helper_wait_ms": 0,
       "user_wait_ms": 0,
-      "incomplete": 0
+      "incomplete": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0,
+        "cache_write": 0,
+        "cost": 0,
+        "cost_complete": true,
+        "unpriced_models": [],
+        "working_ms_per_1k_output": null
+      }
     }
   ],
   "step_entries": [
@@ -128,7 +170,19 @@
       "helper_wait_ms": 180000,
       "user_wait_ms": 120000,
       "end_reason": "moved",
-      "complete": true
+      "complete": true,
+      "tokens": {
+        "input": 13,
+        "output": 2250,
+        "cache_read": 13000,
+        "cache_write": 140,
+        "cost": 0.062435,
+        "cost_complete": false,
+        "unpriced_models": [
+          "claude-haiku-5-5"
+        ],
+        "working_ms_per_1k_output": 426667
+      }
     },
     {
       "task_id": "df1bade8-0000-4000-8000-000000000002",
@@ -140,7 +194,17 @@
       "helper_wait_ms": 0,
       "user_wait_ms": 0,
       "end_reason": "moved",
-      "complete": true
+      "complete": true,
+      "tokens": {
+        "input": 4,
+        "output": 600,
+        "cache_read": 6000,
+        "cache_write": 20,
+        "cost": 0.018145,
+        "cost_complete": true,
+        "unpriced_models": [],
+        "working_ms_per_1k_output": 1000000
+      }
     }
   ],
   "helpers": [
@@ -156,7 +220,17 @@
       "end_reason": "stopped",
       "status": "ok",
       "message": null,
-      "complete": true
+      "complete": true,
+      "tokens": {
+        "input": 2,
+        "output": 500,
+        "cache_read": 1000,
+        "cache_write": 30,
+        "cost": 0.013198,
+        "cost_complete": true,
+        "unpriced_models": [],
+        "working_ms_per_1k_output": 360000
+      }
     },
     {
       "span_id": "h2",
@@ -170,7 +244,8 @@
       "end_reason": "open",
       "status": null,
       "message": null,
-      "complete": false
+      "complete": false,
+      "tokens": null
     }
   ],
   "user_waits": [
@@ -350,5 +425,75 @@
         "name": "implement goto"
       }
     }
-  ]
+  ],
+  "tokens": {
+    "status": "known",
+    "reason_code": null,
+    "reason": null,
+    "agent": "claude",
+    "sessions": [
+      {
+        "session_id": "bc997d3b-1caa-4579-9318-a6795dd8b757",
+        "transcript": "main",
+        "file": "/home/u/.claude/projects/-home-u-proj/bc997d3b-1caa-4579-9318-a6795dd8b757.jsonl"
+      }
+    ],
+    "skipped_lines": 0,
+    "total": {
+      "input": 153,
+      "output": 3215,
+      "cache_read": 22100,
+      "cache_write": 310,
+      "cost": 0.092648,
+      "cost_complete": false,
+      "unpriced_models": [
+        "claude-haiku-5-5"
+      ],
+      "working_ms_per_1k_output": 522551
+    },
+    "outside_steps": {
+      "input": 131,
+      "output": 165,
+      "cache_read": 1100,
+      "cache_write": 100,
+      "cost": 0.00573,
+      "cost_complete": false,
+      "unpriced_models": [
+        "claude-haiku-5-5"
+      ],
+      "working_ms_per_1k_output": null
+    },
+    "session_overhead": {
+      "input": 120,
+      "output": 55,
+      "cache_read": 0,
+      "cache_write": 0,
+      "cost": 0.00175,
+      "cost_complete": false,
+      "unpriced_models": [
+        "claude-haiku-5-5"
+      ],
+      "working_ms_per_1k_output": null
+    },
+    "session_overhead_reason": null,
+    "models": [
+      {
+        "model": "claude-haiku-5-5",
+        "input": 21,
+        "output": 55,
+        "cache_read": 0,
+        "cache_write": 0,
+        "cost": null
+      },
+      {
+        "model": "claude-opus-5-5",
+        "input": 132,
+        "output": 3160,
+        "cache_read": 22100,
+        "cache_write": 310,
+        "cost": 0.092648
+      }
+    ],
+    "unmatched_helpers": []
+  }
 }

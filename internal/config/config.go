@@ -288,6 +288,63 @@ func (g GoalCheckConfig) Validate() error {
 	return nil
 }
 
+// StatsConfig configures the run reports of `spektacular stats`. It is
+// optional, has no default and is never written by init or migrate, so a
+// project without it loads and saves exactly as before.
+type StatsConfig struct {
+	// Prices are each model's prices per million tokens, keyed by the model
+	// name exactly as a run report lists it, in any one currency. No prices
+	// are built in: a model with none has an unknown cost.
+	Prices map[string]ModelPrice `yaml:"prices,omitempty"`
+}
+
+// ModelPrice is one model's price per million tokens of each type. Every
+// price is required; a pointer tells a missing price from 0.
+type ModelPrice struct {
+	Input      *float64 `yaml:"input"`
+	Output     *float64 `yaml:"output"`
+	CacheRead  *float64 `yaml:"cache_read"`
+	CacheWrite *float64 `yaml:"cache_write"`
+}
+
+// IsZero reports whether the section sets nothing, so a config without it
+// is saved without a stats key.
+func (s StatsConfig) IsZero() bool { return len(s.Prices) == 0 }
+
+// Validate checks every model in the price table has all four prices, none
+// negative, and a name.
+func (s StatsConfig) Validate() error {
+	models := make([]string, 0, len(s.Prices))
+	for m := range s.Prices {
+		models = append(models, m)
+	}
+	sort.Strings(models)
+	for _, m := range models {
+		if strings.TrimSpace(m) == "" {
+			return output.NewError("config_invalid", "stats.prices has a model with no name").
+				WithResource("stats.prices").
+				WithNextAction("name each model under stats.prices in .spektacular/config.yaml exactly as `spektacular stats run` lists it, or remove the entry")
+		}
+		p := s.Prices[m]
+		for _, f := range []struct {
+			key string
+			v   *float64
+		}{{"input", p.Input}, {"output", p.Output}, {"cache_read", p.CacheRead}, {"cache_write", p.CacheWrite}} {
+			if f.v == nil {
+				return output.NewError("config_invalid", fmt.Sprintf("stats.prices.%s has no %s price", m, f.key)).
+					WithResource("stats.prices").
+					WithNextAction(fmt.Sprintf("set stats.prices.%s.%s in .spektacular/config.yaml to its price per million tokens, or remove the model to report its cost as unknown", m, f.key))
+			}
+			if *f.v < 0 {
+				return output.NewError("config_invalid", fmt.Sprintf("stats.prices.%s.%s is %g, and a price must not be negative", m, f.key, *f.v)).
+					WithResource("stats.prices").
+					WithNextAction(fmt.Sprintf("set stats.prices.%s.%s in .spektacular/config.yaml to its price per million tokens, 0 or more", m, f.key))
+			}
+		}
+	}
+	return nil
+}
+
 // FileEpicConfig is the file-provider configuration for the epic section.
 type FileEpicConfig struct {
 	// Directory is the store directory, in the same two forms as
@@ -509,6 +566,7 @@ type Config struct {
 	EpicSplitThreshold   string          `yaml:"epic_split_threshold"`
 	AutoCommit           string          `yaml:"auto_commit"`
 	Log                  LogConfig       `yaml:"log"`
+	Stats                StatsConfig     `yaml:"stats,omitempty"`
 	Spec                 SpecConfig      `yaml:"spec"`
 	Plan                 PlanConfig      `yaml:"plan"`
 	Changelog            ChangelogConfig `yaml:"changelog"`
@@ -848,6 +906,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := c.Log.Validate(); err != nil {
+		return err
+	}
+	if err := c.Stats.Validate(); err != nil {
 		return err
 	}
 	// Only the project's store directories are bound to the project root; a

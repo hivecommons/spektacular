@@ -215,7 +215,7 @@ func TestAgentSpansListsHelpersWaitsAndWorkInAndOutsideRuns(t *testing.T) {
 	require.False(t, ih.Complete)
 	rep := BuildReport(runByID(t, logs.Runs, listImplTrace), DefaultOptions)
 	require.Len(t, rep.Helpers, 1)
-	require.Equal(t, rep.Helpers[0], ih.Wait)
+	require.Equal(t, rep.Helpers[0].Wait, ih.Wait)
 	require.Equal(t, at(8.5), ih.EndedAt)
 
 	oh1 := byID["oh1"]

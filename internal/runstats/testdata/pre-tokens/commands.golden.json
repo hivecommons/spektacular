@@ -1,0 +1,164 @@
+{
+  "commands": [
+    {
+      "run_id": null,
+      "kind": null,
+      "name": null,
+      "agent": "claude",
+      "span_id": "cepic order090000.000",
+      "parent_span_id": null,
+      "command": "epic order",
+      "args": [
+        "epic",
+        "order",
+        "--data",
+        "{\"name\":\"e\"}"
+      ],
+      "step": null,
+      "step_to": null,
+      "started_at": "2026-10-25T09:00:00Z",
+      "ended_at": "2026-10-25T09:00:30Z",
+      "duration_ms": 30000,
+      "exit_code": 0,
+      "status": "ok",
+      "message": null
+    },
+    {
+      "run_id": "bbbbbbbb000000000000000000000002",
+      "kind": "plan",
+      "name": "000001_alpha",
+      "agent": "claude",
+      "span_id": "cplan new090200.000",
+      "parent_span_id": null,
+      "command": "plan new",
+      "args": [
+        "plan",
+        "new",
+        "--data",
+        "{\"name\":\"000001_alpha\"}"
+      ],
+      "step": null,
+      "step_to": "discovery",
+      "started_at": "2026-10-25T09:02:00Z",
+      "ended_at": "2026-10-25T09:02:06Z",
+      "duration_ms": 6000,
+      "exit_code": 0,
+      "status": "ok",
+      "message": null
+    },
+    {
+      "run_id": "cccccccc000000000000000000000003",
+      "kind": "implement",
+      "name": "000002_beta",
+      "agent": "claude",
+      "span_id": "cimplement new090300.000",
+      "parent_span_id": null,
+      "command": "implement new",
+      "args": [
+        "implement",
+        "new",
+        "--data",
+        "{\"name\":\"000002_beta\"}"
+      ],
+      "step": null,
+      "step_to": null,
+      "started_at": "2026-10-25T09:03:00Z",
+      "ended_at": "2026-10-25T09:03:06Z",
+      "duration_ms": 6000,
+      "exit_code": 1,
+      "status": "error",
+      "message": "dependencies are not met"
+    },
+    {
+      "run_id": "cccccccc000000000000000000000003",
+      "kind": "implement",
+      "name": "000002_beta",
+      "agent": "claude",
+      "span_id": "cimplement new090330.000",
+      "parent_span_id": null,
+      "command": "implement new",
+      "args": [
+        "implement",
+        "new"
+      ],
+      "step": null,
+      "step_to": "read_plan",
+      "started_at": "2026-10-25T09:03:30Z",
+      "ended_at": "2026-10-25T09:03:36Z",
+      "duration_ms": 6000,
+      "exit_code": 0,
+      "status": "ok",
+      "message": null
+    },
+    {
+      "run_id": "bbbbbbbb000000000000000000000002",
+      "kind": "plan",
+      "name": "000001_alpha",
+      "agent": "claude",
+      "span_id": "cplan goto090600.000",
+      "parent_span_id": "d1",
+      "command": "plan goto",
+      "args": [
+        "plan",
+        "goto",
+        "--data",
+        "{\"step\":\"finished\"}"
+      ],
+      "step": "discovery",
+      "step_to": "finished",
+      "started_at": "2026-10-25T09:06:00Z",
+      "ended_at": "2026-10-25T09:06:12Z",
+      "duration_ms": 12000,
+      "exit_code": 0,
+      "status": "ok",
+      "message": null
+    },
+    {
+      "run_id": "cccccccc000000000000000000000003",
+      "kind": "implement",
+      "name": "000002_beta",
+      "agent": "claude",
+      "span_id": "cplan file read090800.000",
+      "parent_span_id": "i1",
+      "command": "plan file read",
+      "args": [
+        "plan",
+        "file",
+        "read",
+        "000002_beta",
+        "plan"
+      ],
+      "step": null,
+      "step_to": null,
+      "started_at": "2026-10-25T09:08:00Z",
+      "ended_at": "2026-10-25T09:08:30Z",
+      "duration_ms": 30000,
+      "exit_code": 0,
+      "status": "ok",
+      "message": null
+    },
+    {
+      "run_id": null,
+      "kind": null,
+      "name": null,
+      "agent": "claude",
+      "span_id": "cepic merge090900.000",
+      "parent_span_id": null,
+      "command": "epic merge",
+      "args": [
+        "epic",
+        "merge",
+        "--data",
+        "{\"spec\":\"000001_alpha\"}"
+      ],
+      "step": null,
+      "step_to": null,
+      "started_at": "2026-10-25T09:09:00Z",
+      "ended_at": "2026-10-25T09:09:30Z",
+      "duration_ms": 30000,
+      "exit_code": 0,
+      "status": "ok",
+      "message": null
+    }
+  ]
+}

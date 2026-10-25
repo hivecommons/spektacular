@@ -74,41 +74,52 @@ func RenderReport(w io.Writer, rep Report, skipped int) error {
 		fmt.Fprintln(b, "none recorded")
 	} else {
 		tw = table(b)
-		fmt.Fprintln(tw, "STEP\tENTRIES\tDURATION\tCOMMANDS\tCMD TIME\tHELPER WAIT\tUSER WAIT\tINCOMPLETE")
+		fmt.Fprintln(tw, "STEP\tENTRIES\tDURATION\tCOMMANDS\tCMD TIME\tHELPER WAIT\tUSER WAIT\tINCOMPLETE\t"+tokenHeads)
 		for _, s := range rep.Steps {
-			fmt.Fprintf(tw, "%s\t%d\t%s\t%d\t%s\t%s\t%s\t%d\n", s.Step, s.Entries, fmtMS(s.DurationMS),
-				s.Commands, fmtMS(s.CommandMS), fmtMS(s.HelperWaitMS), fmtMS(s.UserWaitMS), s.Incomplete)
+			fmt.Fprintf(tw, "%s\t%d\t%s\t%d\t%s\t%s\t%s\t%d\t%s\n", s.Step, s.Entries, fmtMS(s.DurationMS),
+				s.Commands, fmtMS(s.CommandMS), fmtMS(s.HelperWaitMS), fmtMS(s.UserWaitMS), s.Incomplete, tokenCells(s.Tokens))
 		}
 		tw.Flush()
 	}
+
+	renderTokens(b, rep)
 
 	if len(rep.Tasks) > 0 {
 		section(b, "Tasks")
 		tw = table(b)
-		fmt.Fprintln(tw, "TASK\tSTARTED\tDURATION\tHELPER WAIT\tUSER WAIT\tEND")
+		fmt.Fprintln(tw, "TASK\tSTARTED\tDURATION\tHELPER WAIT\tUSER WAIT\tEND\t"+tokenHeads)
 		for _, k := range rep.Tasks {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", k.Name, k.StartedAt.Format(timeLayout), fmtMS(k.DurationMS),
-				fmtMS(k.HelperWaitMS), fmtMS(k.UserWaitMS), mark(k.EndReason, k.Complete))
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", k.Name, k.StartedAt.Format(timeLayout), fmtMS(k.DurationMS),
+				fmtMS(k.HelperWaitMS), fmtMS(k.UserWaitMS), mark(k.EndReason, k.Complete), tokenCells(k.Tokens))
 		}
 		tw.Flush()
 	}
 
-	waits := func(title string, ws []Wait) {
-		section(b, title)
-		if len(ws) == 0 {
-			fmt.Fprintln(b, "none")
-			return
+	section(b, "Helpers")
+	if len(rep.Helpers) == 0 {
+		fmt.Fprintln(b, "none")
+	} else {
+		tw := table(b)
+		fmt.Fprintln(tw, "NAME\tSTEP\tSTARTED\tDURATION\tEND\t"+tokenHeads)
+		for _, x := range rep.Helpers {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", x.Name, orDash(x.Step), x.StartedAt.Format(timeLayout),
+				fmtMS(x.DurationMS), mark(x.EndReason, x.Complete), tokenCells(x.Tokens))
 		}
+		tw.Flush()
+	}
+
+	section(b, "User waits")
+	if len(rep.UserWaits) == 0 {
+		fmt.Fprintln(b, "none")
+	} else {
 		tw := table(b)
 		fmt.Fprintln(tw, "NAME\tSTEP\tSTARTED\tDURATION\tEND")
-		for _, x := range ws {
+		for _, x := range rep.UserWaits {
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", x.Name, orDash(x.Step), x.StartedAt.Format(timeLayout),
 				fmtMS(x.DurationMS), mark(x.EndReason, x.Complete))
 		}
 		tw.Flush()
 	}
-	waits("Helpers", rep.Helpers)
-	waits("User waits", rep.UserWaits)
 
 	section(b, "Longest gaps")
 	if len(rep.Gaps) == 0 {
@@ -125,6 +136,10 @@ func RenderReport(w io.Writer, rep Report, skipped int) error {
 
 	if unfinished {
 		fmt.Fprintf(b, "\n%s did not finish: counted up to where it was cut off, and left out of every wait total.\n", unfinishedMark)
+	}
+	if t := rep.Tokens.Total; t != nil && !t.CostComplete {
+		fmt.Fprintf(b, "\n%s after a cost: incomplete, no price for %s (prices per million tokens go under stats.prices in .spektacular/config.yaml).\n",
+			incompleteMark, strings.Join(t.UnpricedModels, ", "))
 	}
 	skippedLine(b, skipped)
 	_, err := io.WriteString(w, b.String())
@@ -368,4 +383,132 @@ func runCell(id *string) string {
 		return "-"
 	}
 	return shortID(*id)
+}
+
+// incompleteMark follows a cost that leaves out unpriced models.
+const incompleteMark = "*"
+
+// tokenHeads are the token columns beside a step's, task's or helper's
+// timings.
+const tokenHeads = "OUT TOKENS\tCOST\tTIME/1K OUT"
+
+// tokenCells are a token figure's columns: output tokens, cost and time per
+// thousand output tokens, each "?" when token use is unknown.
+func tokenCells(f *TokenFigure) string {
+	if f == nil {
+		return "?\t?\t?"
+	}
+	return fmtTokens(f.Output) + "\t" + fmtCost(f) + "\t" + fmtPace(f.WorkingMSPer1kOutput)
+}
+
+// fmtTokens prints a token count with thousands separators.
+func fmtTokens(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	neg := strings.HasPrefix(s, "-")
+	s = strings.TrimPrefix(s, "-")
+	var out []byte
+	for i := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			out = append(out, ',')
+		}
+		out = append(out, s[i])
+	}
+	if neg {
+		return "-" + string(out)
+	}
+	return string(out)
+}
+
+// fmtCost prints a figure's cost with 2 decimals: "?" when unknown, marked
+// when it leaves out unpriced models.
+func fmtCost(f *TokenFigure) string {
+	if f == nil || f.Cost == nil {
+		return "?"
+	}
+	c := strconv.FormatFloat(*f.Cost, 'f', 2, 64)
+	if !f.CostComplete {
+		c += incompleteMark
+	}
+	return c
+}
+
+// fmtPace prints working time per thousand output tokens, "n/a" when it
+// does not apply.
+func fmtPace(v *int64) string {
+	if v == nil {
+		return "n/a"
+	}
+	return fmtMS(*v)
+}
+
+// tokenRow is a figure's four token types and cost, as table cells.
+func tokenRow(f *TokenFigure) string {
+	if f == nil {
+		return "?\t?\t?\t?\t?"
+	}
+	return fmt.Sprintf("%s\t%s\t%s\t%s\t%s", fmtTokens(f.Input), fmtTokens(f.Output),
+		fmtTokens(f.CacheRead), fmtTokens(f.CacheWrite), fmtCost(f))
+}
+
+// renderTokens draws the Tokens block: the sessions read, each step's four
+// token types and cost, the tokens outside any step (with the session
+// overhead in them), the total, the models used and any helper no launch
+// matched. For unknown token use it prints only the reason.
+func renderTokens(b *strings.Builder, rep Report) {
+	tk := rep.Tokens
+	section(b, "Tokens")
+	if tk.Status != TokensKnown {
+		code, reason := "", ""
+		if tk.ReasonCode != nil {
+			code = *tk.ReasonCode
+		}
+		if tk.Reason != nil {
+			reason = *tk.Reason
+		}
+		fmt.Fprintf(b, "unknown (%s): %s\n", code, reason)
+		return
+	}
+	var from []string
+	for _, s := range tk.Sessions {
+		from = append(from, "session "+shortID(s.SessionID)+" ("+s.Transcript+")")
+	}
+	fmt.Fprintf(b, "Read from %s\n", strings.Join(from, ", "))
+
+	tw := table(b)
+	fmt.Fprintln(tw, "STEP\tINPUT\tOUTPUT\tCACHE READ\tCACHE WRITE\tCOST")
+	for _, s := range rep.Steps {
+		fmt.Fprintf(tw, "%s\t%s\n", s.Step, tokenRow(s.Tokens))
+	}
+	fmt.Fprintf(tw, "(outside any step)\t%s\n", tokenRow(tk.OutsideSteps))
+	if tk.SessionOverhead != nil {
+		fmt.Fprintf(tw, "  of which session overhead\t%s\n", tokenRow(tk.SessionOverhead))
+	} else if tk.SessionOverheadReason != nil {
+		fmt.Fprintf(tw, "  session overhead unknown (%s)\t\t\t\t\t\n", *tk.SessionOverheadReason)
+	}
+	fmt.Fprintf(tw, "TOTAL\t%s\n", tokenRow(tk.Total))
+	tw.Flush()
+
+	section(b, "Models")
+	tw = table(b)
+	fmt.Fprintln(tw, "MODEL\tINPUT\tOUTPUT\tCACHE READ\tCACHE WRITE\tCOST")
+	for _, m := range tk.Models {
+		cost := "?"
+		if m.Cost != nil {
+			cost = strconv.FormatFloat(*m.Cost, 'f', 2, 64)
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", m.Model, fmtTokens(m.Input), fmtTokens(m.Output),
+			fmtTokens(m.CacheRead), fmtTokens(m.CacheWrite), cost)
+	}
+	tw.Flush()
+
+	if len(tk.UnmatchedHelpers) > 0 {
+		section(b, "Unmatched helpers")
+		tw = table(b)
+		fmt.Fprintln(tw, "NAME\tSTEP\tSTARTED\tDURATION\t"+tokenHeads)
+		for _, h := range tk.UnmatchedHelpers {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", h.Name, orDash(h.Step), h.StartedAt.Format(timeLayout),
+				fmtMS(h.DurationMS), tokenCells(h.Tokens))
+		}
+		tw.Flush()
+	}
 }

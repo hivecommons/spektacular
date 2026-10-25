@@ -274,10 +274,10 @@ func TestReportInterrupted(t *testing.T) {
 		{Step: "interview", SpanID: "s1b", StartedAt: at(30), EndedAt: at(40), DurationMS: 600000, EndReason: tracelog.EndMoved, Complete: true},
 	}, rep.StepEntries)
 
-	require.Equal(t, []Wait{{
+	require.Equal(t, []HelperRow{{Wait: Wait{
 		SpanID: "h1", ParentSpanID: str("s1"), Name: "research", Step: str("interview"),
 		StartedAt: at(3), EndedAt: at(40), DurationMS: 2220000, EndReason: EndOpen, Complete: false,
-	}}, rep.Helpers, "an open helper runs to the run's last event")
+	}}}, rep.Helpers, "an open helper runs to the run's last event")
 	require.Equal(t, []Wait{{
 		SpanID: "u1", ParentSpanID: str("s1"), Name: "question", Step: str("interview"),
 		StartedAt: at(4), EndedAt: at(30), DurationMS: 1560000, EndReason: tracelog.EndAbandoned,
@@ -331,18 +331,18 @@ func goldenRun() []tracelog.Record {
 	task1 := map[string]any{tracelog.AttrTaskID: "df1bade8-0000-4000-8000-000000000001"}
 	task2 := map[string]any{tracelog.AttrTaskID: "df1bade8-0000-4000-8000-000000000002"}
 	return recs(
-		a.cmd("implement new", "", at(0), at(0.5)),
+		a.cmd("implement new", "", at(0), at(0.5), argv(0, "implement", "new", "--data", `{"name":"000075_run-stats-command"}`)),
 		a.span("p0", "setup", tracelog.TypeStep, "", at(1), at(2), tracelog.EndMoved),
-		a.cmd("implement goto", "p0", at(1.5), at(2)),
+		a.cmd("implement goto", "p0", at(1.5), at(2), argv(0, "implement", "goto", "--data", `{"step":"analyze"}`)),
 		a.span("t1", "Trace log package", tracelog.TypeTask, "", at(2), at(20), tracelog.EndMoved, task1),
 		a.span("a1", "analyze", tracelog.TypeStep, "t1", at(2), at(8), tracelog.EndMoved),
 		a.span("h1", "research", tracelog.TypeSubAgent, "a1", at(3), at(6), tracelog.EndStopped),
-		a.cmd("implement goto", "a1", at(7.5), at(8)),
+		a.cmd("implement goto", "a1", at(7.5), at(8), argv(0, "implement", "goto", "--data", `{"step":"verify"}`)),
 		a.span("b1", "verify", tracelog.TypeStep, "t1", at(8), at(20), tracelog.EndMoved),
 		a.cmd("implement status", "b1", at(9), at(9.5)),
 		a.span("u1", "approval", tracelog.TypeUserWait, "", at(10), at(12), tracelog.EndStopped,
 			map[string]any{tracelog.AttrStep: "verify"}),
-		a.cmd("implement goto", "b1", at(19.5), at(20)),
+		a.cmd("implement goto", "b1", at(19.5), at(20), argv(0, "implement", "goto", "--data", `{"step":"analyze"}`)),
 		a.span("t2", "Report builder", tracelog.TypeTask, "", at(20), at(30), tracelog.EndMoved, task2),
 		a.span("a2", "analyze", tracelog.TypeStep, "t2", at(20), at(30), tracelog.EndInterrupted),
 		a.open("h2", "review", tracelog.TypeSubAgent, "a2", at(22)),
@@ -352,7 +352,7 @@ func goldenRun() []tracelog.Record {
 }
 
 func TestReportGoldenJSON(t *testing.T) {
-	rep := reportOf(t, DefaultOptions, goldenRun())
+	rep := reportOf(t, goldenOptions(), goldenRun())
 	got, err := json.MarshalIndent(rep, "", "  ")
 	require.NoError(t, err)
 	got = append(got, '\n')
@@ -401,19 +401,19 @@ func first(t *testing.T, v any) map[string]any {
 // the Data Structures section of plan 000075_run-stats-command (reproduced
 // in Report's doc comment): the key sets below are written by hand from it.
 func TestReportJSONFieldNamesAndUnits(t *testing.T) {
-	data, err := json.Marshal(reportOf(t, DefaultOptions, goldenRun()))
+	data, err := json.Marshal(reportOf(t, goldenOptions(), goldenRun()))
 	require.NoError(t, err)
 	var doc map[string]any
 	require.NoError(t, json.Unmarshal(data, &doc))
 
-	require.Equal(t, sorted("gap_threshold_ms", "run", "totals", "steps", "step_entries", "tasks", "helpers", "user_waits", "gaps"), keys(t, doc))
+	require.Equal(t, sorted("gap_threshold_ms", "run", "totals", "steps", "step_entries", "tasks", "helpers", "user_waits", "gaps", "tokens"), keys(t, doc))
 	require.Equal(t, sorted("run_id", "kind", "name", "agent", "log_file", "started_at", "ended_at", "wall_ms", "status"), keys(t, doc["run"]))
 	require.Equal(t, sorted("wall_ms", "working_ms", "user_wait_ms", "helper_wait_ms", "command_ms", "commands", "helpers", "user_waits", "gap_ms", "gaps_over_threshold"), keys(t, doc["totals"]))
-	require.Equal(t, sorted("step", "entries", "duration_ms", "commands", "command_ms", "helper_wait_ms", "user_wait_ms", "incomplete"), keys(t, first(t, doc["steps"])))
+	require.Equal(t, sorted("step", "entries", "duration_ms", "commands", "command_ms", "helper_wait_ms", "user_wait_ms", "incomplete", "tokens"), keys(t, first(t, doc["steps"])))
 	require.Equal(t, sorted("step", "span_id", "task_id", "started_at", "ended_at", "duration_ms", "end_reason", "complete"), keys(t, first(t, doc["step_entries"])))
-	require.Equal(t, sorted("task_id", "name", "span_id", "started_at", "ended_at", "duration_ms", "helper_wait_ms", "user_wait_ms", "end_reason", "complete"), keys(t, first(t, doc["tasks"])))
+	require.Equal(t, sorted("task_id", "name", "span_id", "started_at", "ended_at", "duration_ms", "helper_wait_ms", "user_wait_ms", "end_reason", "complete", "tokens"), keys(t, first(t, doc["tasks"])))
 	waitKeys := sorted("span_id", "parent_span_id", "name", "step", "task_id", "started_at", "ended_at", "duration_ms", "end_reason", "status", "message", "complete")
-	require.Equal(t, waitKeys, keys(t, first(t, doc["helpers"])))
+	require.Equal(t, sorted(append([]string{"tokens"}, waitKeys...)...), keys(t, first(t, doc["helpers"])))
 	require.Equal(t, waitKeys, keys(t, first(t, doc["user_waits"])))
 	gap := first(t, doc["gaps"])
 	require.Equal(t, sorted("started_at", "ended_at", "duration_ms", "step", "after", "before"), keys(t, gap))
@@ -471,4 +471,20 @@ func TestReportJSONFieldNamesAndUnits(t *testing.T) {
 		}
 	}
 	require.True(t, nullStep, "the gap before the first step falls in no step")
+
+	// Token use, as in the Data Structures section of plan
+	// 000078_token-use-in-run-stats.
+	tokenKeys := sorted("input", "output", "cache_read", "cache_write", "cost", "cost_complete", "unpriced_models", "working_ms_per_1k_output")
+	tk := doc["tokens"].(map[string]any)
+	require.Equal(t, sorted("status", "reason_code", "reason", "agent", "sessions", "skipped_lines", "total", "outside_steps",
+		"session_overhead", "session_overhead_reason", "models", "unmatched_helpers"), keys(t, tk))
+	require.Equal(t, tokenKeys, keys(t, tk["total"]))
+	require.Equal(t, tokenKeys, keys(t, tk["outside_steps"]))
+	require.Equal(t, tokenKeys, keys(t, tk["session_overhead"]))
+	require.Equal(t, tokenKeys, keys(t, first(t, doc["steps"])["tokens"]))
+	require.Equal(t, tokenKeys, keys(t, first(t, doc["tasks"])["tokens"]))
+	require.Equal(t, tokenKeys, keys(t, first(t, doc["helpers"])["tokens"]))
+	require.Equal(t, sorted("session_id", "transcript", "file"), keys(t, first(t, tk["sessions"])))
+	require.Equal(t, sorted("model", "input", "output", "cache_read", "cache_write", "cost"), keys(t, first(t, tk["models"])))
+	require.Nil(t, openHelper["tokens"], "a helper launch with no transcript has unknown tokens")
 }
