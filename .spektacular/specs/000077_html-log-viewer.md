@@ -35,29 +35,29 @@ Maintainers will be able to open any recorded run as a web page that draws it as
 -->
 ## Requirements
 
-- [ ] **Users can render a run as a page**
+- [x] **Users can render a run as a page**
   Users can produce a web page for one recorded run, selecting it by workflow name, by run identifier, by workflow kind or by agent (every way the run statistics report selects a run), with the most recent matching run as the default.
-- [ ] **The page draws a waterfall**
+- [x] **The page draws a waterfall**
   The page must draw the run's spans as bars on a shared timeline, each bar placed at its start and sized by its duration, with every span nested under its parent.
-- [ ] **Span types are distinguishable**
+- [x] **Span types are distinguishable**
   Steps, tasks, helper agents, waits on the user, other work an agent marked (general work), and individual commands must each be visually distinct, with waits on the user clearly set apart.
-- [ ] **Problem spans stand out**
+- [x] **Problem spans stand out**
   Spans that failed, were interrupted or were abandoned must be marked so they stand out from finished work.
-- [ ] **Details are available on demand**
+- [x] **Details are available on demand**
   Selecting a span must show its name, type, start, duration, status and recorded details such as the agent, workflow and step.
-- [ ] **The page shows the run's totals**
+- [x] **The page shows the run's totals**
   The page must show the run's wall time, working time, user-wait time and helper-wait time, matching the run statistics report.
-- [ ] **Long gaps are visible**
+- [x] **Long gaps are visible**
   Gaps between recorded events longer than a threshold must be visible on the timeline; the threshold defaults to 5 minutes, as in the run statistics report, and users can change it.
-- [ ] **Users can zoom and collapse**
+- [x] **Users can zoom and collapse**
   Users can zoom into part of the timeline and collapse or expand any span's children.
-- [ ] **The page works on its own**
+- [x] **The page works on its own**
   The page must be a single file that opens in a current browser with no server and no network access.
-- [ ] **Large runs stay usable**
+- [x] **Large runs stay usable**
   A run with several thousand spans must render and respond to zooming and selection without noticeable delay.
-- [ ] **Collected logs can be rendered**
+- [x] **Collected logs can be rendered**
   Users can render a run from a logs directory other than the project's own, such as one collected from a test run.
-- [ ] **The documentation describes the viewer**
+- [x] **The documentation describes the viewer**
   User documentation must describe how to render a run and how to read the page.
 
 
@@ -88,27 +88,27 @@ Maintainers will be able to open any recorded run as a web page that draws it as
 -->
 ## Acceptance Criteria
 
-- [ ] **A page is produced for the latest run**
+- [x] **A page is produced for the latest run**
   Asking for a page with no selection produces an HTML file for the most recent run; selecting by a workflow's name, by run identifier, by workflow kind or by agent produces one for the most recent run matching that selection.
-- [ ] **Bars match the spans**
+- [x] **Bars match the spans**
   For a run, the page shows one bar per recorded span, each starting and ending at the span's recorded times, nested under its parent span.
-- [ ] **Types and problems are distinct**
+- [x] **Types and problems are distinct**
   On a run containing every span type, a failed helper launch, an interrupted step and an abandoned span, each type has its own appearance, user waits are set apart, and the failed, interrupted and abandoned items are each marked.
-- [ ] **Selecting shows details**
+- [x] **Selecting shows details**
   Selecting a helper-agent bar shows its name, type, start, duration, status, agent, workflow and step.
-- [ ] **Totals match the report**
+- [x] **Totals match the report**
   The page's wall, working, user-wait and helper-wait times equal the run statistics report's figures for the same run.
-- [ ] **A long gap is visible**
+- [x] **A long gap is visible**
   For a run with a 20-minute pause and a 2-minute pause, the 20-minute pause is visibly marked on the timeline at the default threshold and the 2-minute one is not; with the threshold set to 1 minute, both are marked.
-- [ ] **Zoom and collapse work**
+- [x] **Zoom and collapse work**
   Zooming into one step shows only that period across the width of the timeline, and collapsing a step hides its children until expanded.
-- [ ] **The page works offline**
+- [x] **The page works offline**
   The HTML file opens and renders fully with networking disabled and no server running.
-- [ ] **A large run stays responsive**
+- [x] **A large run stays responsive**
   A run with 5,000 spans renders in under 3 seconds and responds to a zoom or selection in under 200 ms in a current desktop browser.
-- [ ] **Collected logs render**
+- [x] **Collected logs render**
   Pointing the viewer at a copy of a project's logs directory produces a page showing the same spans, totals and layout as rendering in the project.
-- [ ] **The docs describe the viewer**
+- [x] **The docs describe the viewer**
   The documentation site describes rendering a run and reading the page; the site builds without errors.
 
 
