@@ -59,9 +59,10 @@ spektacular stats compare                  # the two latest runs of a kind, side
 spektacular stats summary --kind implement # median and 90th percentile per step
 spektacular stats commands                 # every recorded command, with its step and arguments
 spektacular stats spans                    # helpers and waits, including an epic orchestrator's
+spektacular stats view [--name <spec>]     # the run as a single-file HTML waterfall you can open or share
 ```
 
-Every form takes the same selection (`--name`, `--kind`, `--agent`, and a repeatable `--run <id or 8+ character prefix>`), prints a readable table by default, and gives the structured report with `--format json`, whose durations are integer milliseconds and whose field names are stable. `--dir <path>` reads a logs directory copied from anywhere, such as a test run's, with no project needed. Reporting never changes a log, and `stats` commands are never logged. The figures are defined on the documentation site's [Run statistics](https://spektacular.dev/run-stats/) page.
+Every form takes the same selection (`--name`, `--kind`, `--agent`, and a repeatable `--run <id or 8+ character prefix>`), prints a readable table by default, and gives the structured report with `--format json`, whose durations are integer milliseconds and whose field names are stable. `--dir <path>` reads a logs directory copied from anywhere, such as a test run's, with no project needed. Reporting never changes a log, and `stats` commands are never logged. The figures are defined on the documentation site's [Run statistics](https://spektacular.dev/run-stats/) page. `stats view` writes a single HTML file that opens in any browser without a server; see the [Run viewer](https://spektacular.dev/run-viewer/) page on the documentation site.
 
 **Epics.** When a piece of work is split into an epic, ask your agent to *plan this epic*, review the plans, then *implement this epic*. Independent specs are worked on in parallel, each spec is built in its own worktree and merged before the specs that depend on it, and repeating either request picks up where it stopped. Naming an epic in `status` adds a `run` view that says, for planning and for implementing, what each spec still needs and what blocks the epic. See [Epics](https://spektacular.dev/epics/).
 
