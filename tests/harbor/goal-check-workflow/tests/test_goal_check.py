@@ -373,6 +373,19 @@ def test_required_steps_each_started_a_child():
     assert rule_required_children(dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, DEBUG_DIR)) == []
 
 
+def test_reviewer_launch_is_a_sub_agent_span():
+    """The check_goal instruction tells the agent to run `trace start
+    <helper> --type sub-agent` before it launches the reviewer (spec
+    000074), so every launch, the reviewer's among them, has a sub-agent
+    span."""
+    import delegation as dl
+
+    if not dl.is_claude():
+        pytest.skip("only a Claude transcript shows where a child agent was started")
+    run = dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, DEBUG_DIR)
+    assert [str(f) for f in dl.unmarked_launches(run.placed, run.spans)] == []
+
+
 def test_reviewer_was_a_separate_helper_on_a_cheaper_model():
     from transcripts import claude_main_models
 

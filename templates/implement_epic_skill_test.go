@@ -59,7 +59,8 @@ func TestImplementEpicSkillRendersLikeAnInstalledSkill(t *testing.T) {
 		"the skill body must open with the version-check partial")
 
 	raw := readTemplate(t, implementEpicSkill)
-	want := strings.Count(raw, "{{command}}") + strings.Count(readTemplate(t, versionCheckRaw), "{{command}}")
+	want := strings.Count(raw, "{{command}}") + strings.Count(readTemplate(t, versionCheckRaw), "{{command}}") +
+		strings.Count(readTemplate(t, traceMarkingRaw), "{{command}}") + strings.Count(readTemplate(t, traceHelpersRaw), "{{command}}")
 	custom := renderImplementEpicSkill(t, "spekx")
 	require.Equal(t, want, strings.Count(custom, "spekx"), "every {{command}} must render to the installed command")
 	require.NotRegexp(t,
@@ -219,6 +220,8 @@ func TestImplementEpicSkillAsksNothingBetweenSpecs(t *testing.T) {
 		"Name the repos in `dirty_repos` to the user and ask once whether to commit that work first; the answer is theirs.",
 		"tasks run one after another without asking between them",
 		"you never ask the user anything yourself",
+		// The shared trace block marks each question to the user as a wait.
+		"Before you ask the user a question, run",
 		"A child never asks whether to continue to its next task.",
 		"naming the spec, the options and the recommended default, then ask.",
 	}

@@ -225,6 +225,15 @@ class TestChildren:
         failures = dl.epic_children_run_as_settled(children_run.placed, children_run.turns, list(children_run.windows))
         assert not failures, failed(failures)
 
+    def test_every_launch_is_a_sub_agent_span(self, children_run):
+        """Each step instruction and the epic skill tell the agent to run
+        `trace start <helper> --type sub-agent` before it launches a helper
+        (spec 000074), so every launch has a sub-agent span."""
+        import delegation as dl
+
+        failures = dl.unmarked_launches(children_run.placed, children_run.spans)
+        assert not failures, failed(failures)
+
 
 # ---------------------------------------------------------------------------
 # The planning summary.

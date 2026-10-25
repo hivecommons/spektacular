@@ -56,6 +56,7 @@ RULES = (
     "child_in_foreground ",
     "no_turn_ended_while_children_ran ",
     "no_notice_woken_turn ",
+    "unmarked_launch ",
 )
 
 
@@ -188,7 +189,22 @@ def spec_prompt(spec, worktrees):
     )
 
 
-def implement_epic_run(tmp_path, *, skip_spec=None, skip_step=None, short_prompt=None, extra=(), background=False) -> delegation.Run:
+def sub_agent_span(clock, name, span_id):
+    """A sub-agent span_start at clock, as `trace start --type sub-agent`
+    writes it to the day file of a standalone span."""
+    return {
+        "record": "span_start",
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+        "span_id": span_id,
+        "name": name,
+        "kind": "internal",
+        "start_time": f"2026-10-23T{clock}.000000000Z",
+        "attributes": {"spektacular.span.type": "sub-agent", "spektacular.agent": "claude"},
+        "resource": {"service.name": "spektacular"},
+    }
+
+
+def implement_epic_run(tmp_path, *, skip_spec=None, skip_step=None, short_prompt=None, extra=(), background=False, marked=None) -> delegation.Run:
     """Two implement lanes walked side by side from 10:00, each worked by a
     top-level child of its own launched before the lanes start, which starts
     a child half a minute into each check_goal step. The orchestrator asked
@@ -200,6 +216,8 @@ def implement_epic_run(tmp_path, *, skip_spec=None, skip_step=None, short_prompt
     skip_spec: the spec no top-level child works. skip_step: (spec, step)
     whose nested child is never started. short_prompt: the spec whose child
     is not given its worktree path. extra: more transcript objects.
+    marked: the clocks of the sub-agent spans to write, one per launch they
+    mark (every launch when "all"); None writes no spans.
     """
     debug = tmp_path / "debug"
     write_jsonl(debug / "20261023T095800.903970323Z_claude_no-active-workflow.jsonl", [worktree_record(f"09:58:{n}0", s) for n, s in enumerate(SPECS)])
@@ -220,6 +238,12 @@ def implement_epic_run(tmp_path, *, skip_spec=None, skip_step=None, short_prompt
         objs.append(assistant(m(5, 30), {"type": "text", "text": "Both specs are implemented."}))
     objs += list(extra)
     objs.append({"type": "result", "subtype": "success", "num_turns": 1})
+
+    if marked is not None:
+        launches = [f"09:59:{n}0" for n, spec in enumerate(SPECS) if spec != skip_spec]
+        launches += [m(i, 30) for i, step in enumerate(LANE_STEPS) if ("implement", step) in delegation.REQUIRED for _ in SPECS]
+        clocks = launches if marked == "all" else list(marked)
+        write_jsonl(debug / "standalone_20261023.jsonl", [sub_agent_span(c, f"child-{k}", f"{k + 1:016x}") for k, c in enumerate(clocks)])
 
     path = tmp_path / "claude-code.txt"
     write_jsonl(path, objs)
@@ -405,3 +429,30 @@ def test_only_the_child_checks_read_the_transcript(verifier):
     children = next(n for n in defs if n.name == "TestChildren")
     assert users == [f"TestChildren.{f.name}" for f in children.body if isinstance(f, ast.FunctionDef)]
     assert all(f.name.startswith("test_") for f in children.body if isinstance(f, ast.FunctionDef))
+
+
+# --- every launch is a sub-agent span (spec 000074) -------------------------------
+
+
+@pytest.mark.parametrize("verifier", sorted(VERIFIERS))
+def test_a_run_whose_every_launch_is_marked_passes(tmp_path, verifier):
+    run = implement_epic_run(tmp_path, marked="all")
+    assert len(run.spans) == 4
+    assert verdict(VERIFIERS[verifier].TestChildren().test_every_launch_is_a_sub_agent_span, run) == []
+
+
+@pytest.mark.parametrize("verifier", sorted(VERIFIERS))
+def test_an_unmarked_launch_fails_naming_its_step(tmp_path, verifier):
+    # the two spec children and one of the two goal reviewers, launched at
+    # the same moment, are marked
+    run = implement_epic_run(tmp_path, marked=["09:59:00", "09:59:10", m(2, 30)])
+    lines = verdict(VERIFIERS[verifier].TestChildren().test_every_launch_is_a_sub_agent_span, run)
+    assert len(lines) == 1
+    assert lines[0].split(": child ")[0] in (f"unmarked_launch {A}", f"unmarked_launch {B}")
+    assert "in step check_goal has no sub-agent span (`trace start <helper> --type sub-agent`)" in lines[0]
+
+
+def test_a_run_with_no_spans_fails_every_launch(tmp_path):
+    run = implement_epic_run(tmp_path)
+    assert run.spans == []
+    assert len(verdict(implement_verifier.TestChildren().test_every_launch_is_a_sub_agent_span, run)) == 4

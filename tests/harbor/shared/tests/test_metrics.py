@@ -51,7 +51,11 @@ TOTALS_KEYS = [
 SUBAGENT_KEYS = ["started", "completed", "failed", "stopped", "durations_s"]
 # The record's totals and subagents sections add the run's idle time and its
 # child list to the counts above.
-RECORD_TOTALS_KEYS = [*TOTALS_KEYS, "idle_s"]
+RECORD_TOTALS_KEYS = [*TOTALS_KEYS, "idle_s", "trace_calls", "trace_calls_per_task"]
+# The trace calls (spec 000074) of a run whose session log holds none, and of
+# a run with no session log at all.
+TRACE_ZERO = {"trace_calls": 0, "trace_calls_per_task": None}
+TRACE_NONE = {"trace_calls": None, "trace_calls_per_task": None}
 RECORD_SUBAGENT_KEYS = [*SUBAGENT_KEYS, "children"]
 STEP_KEYS = ["step", "started_at", "duration_s", "output", "children"]
 CHILD_KEYS = [
@@ -661,7 +665,7 @@ def test_oracle_run_has_no_agent_measures(tmp_path):
     record = run_main(paths)
     reason = "no agent log (oracle or missing)"
     # wall time alone comes back, from the session log's span
-    assert record["totals"] == {**dict.fromkeys(RECORD_TOTALS_KEYS), "wall_time_s": 420.0}
+    assert record["totals"] == {**dict.fromkeys(RECORD_TOTALS_KEYS), "wall_time_s": 420.0, **TRACE_ZERO}
     assert record["subagents"] == dict.fromkeys(RECORD_SUBAGENT_KEYS)
     assert record["run"]["model"] is None
     assert record["unknown"] == (
@@ -726,7 +730,7 @@ def test_missing_or_malformed_junit_leaves_checks_unknown(tmp_path, junit, reaso
     assert unknown_fields(record) == ["result.checks", "result.groups"]
     assert reason_of(record, "result.checks").startswith(reason_start)
     # the rest of the record is untouched
-    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_S}
+    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_S, **TRACE_ZERO}
 
 
 def test_junit_with_no_checks_has_no_score(tmp_path):
@@ -759,7 +763,7 @@ def test_claude_plan_run_record_is_complete(tmp_path):
             "dirty": False,
         },
         "result": {"reward": 1, "checks": CHECKS, "groups": GROUPS},
-        "totals": {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_S},
+        "totals": {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_S, **TRACE_ZERO},
         "steps": {
             "unit": "characters",
             # no children: every step counts zero, not null
@@ -817,7 +821,7 @@ def test_missing_build_info_leaves_run_fields_unknown(tmp_path):
         {"field": f"run.{n}", "reason": reason}
         for n in ("suite", "spektacular_version", "commit", "dirty")
     ]  # the agent is not unknown: the log named it
-    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_S}
+    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_S, **TRACE_ZERO}
 
 
 @pytest.mark.parametrize(
@@ -861,7 +865,7 @@ def test_malformed_lines_in_claude_log_are_skipped(tmp_path):
     (paths.agent_dir / "claude-code.txt").write_text("\n".join(lines) + "\n")
     write_plan_lane(paths.debug_dir)
     record = run_main(paths)
-    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_S}
+    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_S, **TRACE_ZERO}
     assert record["steps"]["workflows"][0]["steps"] == plan_steps([10, 25, 40, 5], NO_CHILDREN)
     assert record["unknown"] == []
 
@@ -873,7 +877,7 @@ def test_claude_log_of_only_malformed_lines_leaves_totals_unknown(tmp_path):
     record = run_main(paths)
     reason = "no result event in claude-code.txt"
     # wall time falls back to the session log's span; everything else is unknown
-    assert record["totals"] == {**dict.fromkeys(RECORD_TOTALS_KEYS), "wall_time_s": 420.0}
+    assert record["totals"] == {**dict.fromkeys(RECORD_TOTALS_KEYS), "wall_time_s": 420.0, **TRACE_ZERO}
     assert record["unknown"] == (
         [{"field": f"totals.{n}", "reason": reason} for n in TOTALS_KEYS if n != "wall_time_s"]
         + [{"field": "run.model", "reason": "no result or init event in claude-code.txt"}]
@@ -905,7 +909,7 @@ def test_unreadable_claude_log_still_gives_a_record(tmp_path):
     assert reason_of(record, "totals.turns") == "recorder error reading the agent log"
     assert reason_of(record, "subagents.children") == "recorder error reading the agent log"
     assert reason_of(record, "totals.idle_s") == "the agent's log carries no activity times"
-    assert record["totals"] == {**dict.fromkeys(RECORD_TOTALS_KEYS), "wall_time_s": 420.0}
+    assert record["totals"] == {**dict.fromkeys(RECORD_TOTALS_KEYS), "wall_time_s": 420.0, **TRACE_ZERO}
     assert record["subagents"] == dict.fromkeys(RECORD_SUBAGENT_KEYS)
     assert record["result"]["checks"] == CHECKS
 
@@ -931,7 +935,7 @@ def test_missing_debug_dir_leaves_steps_unknown(tmp_path):
     record = run_main(paths)
     assert record["steps"] == {"unit": "characters", "workflows": None}
     assert record["unknown"] == [{"field": "steps", "reason": "no session log"}]
-    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_NO_SESSION_S}
+    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_NO_SESSION_S, **TRACE_NONE}
 
 
 def test_empty_debug_dir_leaves_steps_unknown(tmp_path):
@@ -952,7 +956,7 @@ def test_broken_session_log_costs_only_the_steps(tmp_path):
     assert unknown_fields(record) == ["steps"]
     assert reason_of(record, "steps").startswith("recorder error: ")
     # idle time falls back to the messages alone
-    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_NO_SESSION_S}
+    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_NO_SESSION_S, **TRACE_NONE}
     assert record["result"]["checks"] == CHECKS
 
 
@@ -1004,6 +1008,7 @@ def test_bob_run_wall_time_from_shell_logs(tmp_path):
         # quiet stretch is the session log's last command, 10:07:00, to the
         # shell log's 10:12:30.052
         "idle_s": 330.052,
+        **TRACE_ZERO,
     }
     assert record["unknown"] == [
         {"field": "totals.model_time_s", "reason": "bob reports no model time"},
@@ -1066,6 +1071,7 @@ def test_codex_atif_run(tmp_path):
         # its messages (10:00:30, 10:02:30, 10:06:30) among the session log's
         # commands: 10:03:00 to 10:06:00 is the longest quiet stretch
         "idle_s": 180.0,
+        **TRACE_ZERO,
     }
     # the child list is unknown, not empty, and no step counts zero children
     assert record["subagents"] == dict.fromkeys(RECORD_SUBAGENT_KEYS)
@@ -1503,7 +1509,7 @@ def test_raising_child_reader_costs_only_the_children(tmp_path, monkeypatch):
     write_plan_lane(paths.debug_dir)
     record = run_main(paths)  # returns 0 and leaves the reward untouched
     assert record["result"] == {"reward": 1, "checks": CHECKS, "groups": GROUPS}
-    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_S}
+    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_S, **TRACE_ZERO}
     assert record["subagents"] == {"started": 0, "completed": 0, "failed": 0, "stopped": 0, "durations_s": [], "children": None}
     assert record["steps"]["workflows"][0]["steps"] == plan_steps([10, 25, 40, 5], CHILDREN_UNKNOWN)
     assert record["unknown"] == [
@@ -1522,7 +1528,7 @@ def test_raising_idle_computation_costs_only_the_idle_time(tmp_path, monkeypatch
     write_plan_lane(paths.debug_dir)
     record = run_main(paths)
     assert record["result"] == {"reward": 1, "checks": CHECKS, "groups": GROUPS}
-    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": None}
+    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": None, **TRACE_ZERO}
     assert record["subagents"]["children"] == []
     assert record["steps"]["workflows"][0]["steps"] == plan_steps([10, 25, 40, 5], NO_CHILDREN)
     assert record["unknown"] == [{"field": "totals.idle_s", "reason": "recorder error: bad instant"}]
@@ -1581,7 +1587,7 @@ def test_agent_log_not_matching_build_info_is_flagged(tmp_path):
     assert record["unknown"] == [
         {"field": "run.agent", "reason": "the agent log is claude's but build.json names codex"}
     ]
-    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_S}
+    assert record["totals"] == {**CLAUDE_TOTALS, "idle_s": CLAUDE_PLAN_IDLE_S, **TRACE_ZERO}
 
 
 # --- writing the record -------------------------------------------------------
@@ -1620,3 +1626,47 @@ def test_main_with_unwritable_out_still_returns_zero(tmp_path, capsys):
 def test_main_with_bad_arguments_returns_zero(tmp_path, capsys):
     assert main(["--no-such-option"]) == 0
     capsys.readouterr()
+
+
+# --- trace calls (spec 000074) -------------------------------------------------------
+
+
+def test_trace_calls_are_counted_from_the_session_log_per_task(tmp_path):
+    from metrics import read_trace_calls
+    from sessionlog import SessionLog
+
+    def rec(kind, clock, **extra):
+        r = {"record": kind, "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736", "span_id": extra.pop("span_id", "c" * 16),
+             "name": extra.pop("name", "x"), "kind": "internal", "start_time": f"2026-10-23T{clock}.000000000Z"}
+        r.update(extra)
+        return r
+
+    def cmd(clock, args):
+        return rec("span", clock, end_time=f"2026-10-23T{clock}.100000000Z", status={"code": "ok"},
+                   attributes={"spektacular.span.type": "command", "process.command_args": args, "process.exit_code": 0})
+
+    def task(clock, span_id):
+        return rec("span_start", clock, span_id=span_id, name="Task", attributes={"spektacular.span.type": "task"})
+
+    lines = [
+        cmd("10:00:00", ["implement", "new", "--data", "{}"]),
+        task("10:00:01", "a" * 16),
+        cmd("10:01:00", ["trace", "start", "test-writer", "--type", "sub-agent"]),
+        cmd("10:02:00", ["trace", "stop", "x-y"]),
+        task("10:03:00", "b" * 16),
+        cmd("10:04:00", ["trace", "start", "reviewer", "--type", "sub-agent"]),
+        cmd("10:05:00", ["implement", "goto", "--data", "{}"]),
+    ]
+    (tmp_path / "20261023T100000.000000000Z_claude_implement_x.jsonl").write_text("".join(json.dumps(r) + "\n" for r in lines))
+    totals, unknowns = read_trace_calls(SessionLog(tmp_path), tmp_path)
+    assert totals == {"trace_calls": 3, "trace_calls_per_task": 1.5}
+    assert unknowns == []
+
+
+def test_trace_calls_without_tasks_have_no_average(tmp_path):
+    from metrics import read_trace_calls
+    from sessionlog import SessionLog
+
+    assert read_trace_calls(None, tmp_path) == ({"trace_calls": None, "trace_calls_per_task": None}, [])
+    (tmp_path / "standalone_20261023.jsonl").write_text("")
+    assert read_trace_calls(SessionLog(tmp_path), tmp_path)[0]["trace_calls_per_task"] is None

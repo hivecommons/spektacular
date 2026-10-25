@@ -23,11 +23,12 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
 import metrics
+import spans as sp
 import transcripts as tx
 from metrics import PlacedChild
 from sessionlog import Lane, SessionLog, StepWindow
@@ -55,6 +56,19 @@ STAGED_SPEC = ".spektacular/tmp/spec_template.md"
 # as written", gives the same instruction.
 REVIEW_ONLY_WRITTEN = ("only what is written", "exactly as written")
 PROJECT_ROOT = "/app"
+
+# The trace oracle, by hand from templates/partials/trace-helpers.md and
+# trace-marking.md (spec 000074): an agent marks each helper launch with a
+# `trace start ... --type sub-agent` span and each question to the user with
+# a `--type user-wait` one. A local self-check ties these to the partials.
+TRACE_START = "trace start"
+SUB_AGENT_TYPE = "--type sub-agent"
+USER_WAIT_TYPE = "--type user-wait"
+# A launch is marked when a sub-agent span started at most this long before
+# the launching tool call (the agent starts the span, then writes the brief),
+# or within a small clock slack after it.
+LAUNCH_MARK_BEFORE_S = 120
+LAUNCH_MARK_AFTER_S = 5
 
 
 @dataclass
@@ -89,6 +103,7 @@ class Run:
     turns: list[tx.Turn]
     wakeups: list[Wakeup]
     end: datetime | None  # the run's last timestamp
+    spans: list[sp.Span] = field(default_factory=list)  # every span in the run's logs
 
 
 def read_run(transcript: Path, debug_dir: Path) -> Run:
@@ -100,7 +115,15 @@ def read_run(transcript: Path, debug_dir: Path) -> Run:
     windows = metrics.lane_windows(session) or {}
     placed, _ = metrics.place_children(children, windows, tx.claude_messages(objs))
     times = [t for t in (tx.parse_timestamp(o.get("timestamp")) for o in objs) if t]
-    return Run(placed, session, windows, tx.claude_turns(objs), tx.claude_wakeups(objs), max(times) if times else None)
+    return Run(
+        placed,
+        session,
+        windows,
+        tx.claude_turns(objs),
+        tx.claude_wakeups(objs),
+        max(times) if times else None,
+        sp.read_spans(debug_dir),
+    )
 
 
 def worktree_paths(session: SessionLog) -> dict[str, list[str]]:
@@ -300,3 +323,57 @@ def epic_children_run_as_settled(placed: list[PlacedChild], turns: list[tx.Turn]
     """The epic children rule the probe's recorded outcome calls for."""
     rule = epic_children_foreground_together if PROBE_OUTCOME == "stopped" else epic_children_backgrounded
     return rule(placed, turns, lanes)
+
+
+# Marked helper launches (spec 000074).
+
+
+def _marking_span(p: PlacedChild, free: list[sp.Span]) -> sp.Span | None:
+    at = p.child.launched_at
+    if at is None:
+        return None
+    for s in free:
+        lead = (at - s.start).total_seconds()
+        if -LAUNCH_MARK_AFTER_S <= lead <= LAUNCH_MARK_BEFORE_S:
+            return s
+    return None
+
+
+def match_launches(placed: list[PlacedChild], spans: list[sp.Span]) -> tuple[list[PlacedChild], list[PlacedChild]]:
+    """Pairs each launch that has a time with one distinct sub-agent span
+    started just before it, in launch order. Returns the marked launches and
+    the unmarked ones; a launch with no time is in neither."""
+    free = sorted(sp.sub_agents(spans), key=lambda s: s.start)
+    marked, unmarked = [], []
+    for p in sorted((p for p in placed if p.child.launched_at), key=lambda p: p.child.launched_at):
+        s = _marking_span(p, free)
+        if s is None:
+            unmarked.append(p)
+            continue
+        free.remove(s)
+        marked.append(p)
+    return marked, unmarked
+
+
+def unmarked_launches(placed: list[PlacedChild], spans: list[sp.Span]) -> list[Failure]:
+    """Every helper launch with no sub-agent span marking it: the step's
+    instruction tells the agent to run `trace start <helper> --type
+    sub-agent` before each launch."""
+    _, unmarked = match_launches(placed, spans)
+    return [
+        Failure(
+            "unmarked_launch",
+            p.spec or (p.step or "the run"),
+            f"child {p.child.description or p.child.id} launched at {p.child.launched_at:%H:%M:%S} "
+            f"in step {p.step} has no sub-agent span (`{TRACE_START} <helper> {SUB_AGENT_TYPE}`)",
+        )
+        for p in unmarked
+    ]
+
+
+def marked_rate(placed: list[PlacedChild], spans: list[sp.Span]) -> float | None:
+    """The share of timed helper launches marked by a sub-agent span, or
+    None when there were none."""
+    marked, unmarked = match_launches(placed, spans)
+    total = len(marked) + len(unmarked)
+    return len(marked) / total if total else None

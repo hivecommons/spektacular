@@ -900,3 +900,95 @@ def test_other_runs_are_not_judged(tmp_path, build, transcript_text):
 def test_failure_names_its_rule_and_subject():
     assert str(Failure("missing_child", "implement:x:test", "why")) == "missing_child implement:x:test: why"
     assert delegation.PER_SPEC_CHILD == {"plan", "implement"}
+
+
+# --- the trace oracle and the trace partials (spec 000074) --------------------------
+
+PARTIALS = Path(__file__).resolve().parents[4] / "templates" / "partials"
+
+
+def trace_oracle_mismatches(partials: Path) -> list[str]:
+    """Where the trace oracle and the shared trace partials disagree: each
+    oracle wording must appear in the partial that carries it, and the
+    marking partial must include the helper rule."""
+    helpers = (partials / "trace-helpers.md").read_text()
+    marking = (partials / "trace-marking.md").read_text()
+    out = []
+    for name, value, rel, text in [
+        ("TRACE_START", delegation.TRACE_START, "trace-helpers.md", helpers),
+        ("SUB_AGENT_TYPE", delegation.SUB_AGENT_TYPE, "trace-helpers.md", helpers),
+        ("TRACE_START", delegation.TRACE_START, "trace-marking.md", marking),
+        ("USER_WAIT_TYPE", delegation.USER_WAIT_TYPE, "trace-marking.md", marking),
+    ]:
+        if value not in text:
+            out.append(f"{rel} does not say {name} {value!r}")
+    if "{{> partials/trace-helpers}}" not in marking:
+        out.append("trace-marking.md does not include the helper rule")
+    return out
+
+
+def test_the_trace_oracle_and_the_trace_partials_agree():
+    assert PARTIALS.is_dir()
+    assert trace_oracle_mismatches(PARTIALS) == []
+
+
+@pytest.mark.parametrize(
+    "rel, old, new, expected",
+    [
+        ("trace-helpers.md", "--type sub-agent", "--kind sub-agent", "trace-helpers.md does not say SUB_AGENT_TYPE '--type sub-agent'"),
+        ("trace-marking.md", "--type user-wait", "--type wait", "trace-marking.md does not say USER_WAIT_TYPE '--type user-wait'"),
+        ("trace-helpers.md", "trace start", "span begin", "trace-helpers.md does not say TRACE_START 'trace start'"),
+    ],
+)
+def test_changing_the_trace_wording_fails_the_tie(tmp_path, rel, old, new, expected):
+    copy = tmp_path / "partials"
+    shutil.copytree(PARTIALS, copy)
+    path = copy / rel
+    assert old in path.read_text()
+    path.write_text(path.read_text().replace(old, new))
+    assert expected in trace_oracle_mismatches(copy)
+
+
+# --- helper launches marked by sub-agent spans -------------------------------------
+
+
+def placed_child(cid, clock, step="check_goal", spec=NAME):
+    from transcripts import Child
+
+    c = Child(
+        id=cid, parent=None, kind="general-purpose", description=f"child {cid}", background=False,
+        launched_at=datetime.fromisoformat(f"2026-10-23T{clock}+00:00"), ended_at=None, duration_s=None,
+        ending=None, hand_back=None, models=None, output=None, prompt=None,
+    )
+    return delegation.PlacedChild(c, ("implement", spec), 0, spec, step)
+
+
+def sub_agent(span_id, clock, span_type="sub-agent"):
+    import spans as sp
+
+    return sp.Span(
+        trace_id="t", span_id=span_id, parent=None, name=span_id, type=span_type,
+        start=datetime.fromisoformat(f"2026-10-23T{clock}+00:00"), end=None, status=None,
+        end_reason=None, step=None, lane="x",
+    )
+
+
+def test_each_launch_needs_its_own_sub_agent_span_just_before_it():
+    placed = [placed_child("a", "10:05:00"), placed_child("b", "10:05:00"), placed_child("c", "10:20:00")]
+    spans = [
+        sub_agent("s1", "10:04:30"),  # 30 s before both a and b: marks one of them
+        sub_agent("s2", "10:05:03"),  # within the slack after a launch
+        sub_agent("w1", "10:19:50", "user-wait"),  # not a sub-agent span
+        sub_agent("s3", "10:10:00"),  # ten minutes before c: too early
+    ]
+    marked, unmarked = delegation.match_launches(placed, spans)
+    assert [p.child.id for p in marked] == ["a", "b"]
+    assert [p.child.id for p in unmarked] == ["c"]
+    assert [str(f) for f in delegation.unmarked_launches(placed, spans)] == [
+        f"unmarked_launch {NAME}: child child c launched at 10:20:00 in step check_goal has no sub-agent span (`trace start <helper> --type sub-agent`)"
+    ]
+    assert delegation.marked_rate(placed, spans) == 2 / 3
+
+
+def test_no_timed_launches_has_no_rate():
+    assert delegation.marked_rate([], [sub_agent("s1", "10:00:00")]) is None

@@ -179,6 +179,15 @@ func renderAllStepInstructionsMode(t *testing.T, command, autoCommit string) []r
 // can be rendered as a standalone run or as a lane of an orchestrated one.
 func renderAllStepInstructionsWith(t *testing.T, command, autoCommit string, orchestrated bool) []renderedInstruction {
 	t.Helper()
+	return renderAllStepInstructionsSpan(t, command, autoCommit, orchestrated, "")
+}
+
+// renderAllStepInstructionsSpan is renderAllStepInstructionsWith with a step
+// span id on the config, as the workflow engine sets it before rendering a
+// step: every continuing step is rendered with stepSpan, and a terminal step
+// (no next step) with none, as the engine gives the terminal step no span.
+func renderAllStepInstructionsSpan(t *testing.T, command, autoCommit string, orchestrated bool, stepSpan string) []renderedInstruction {
+	t.Helper()
 	requireStepTableComplete(t)
 
 	out := make([]renderedInstruction, 0, len(stepTemplateTable))
@@ -188,6 +197,10 @@ func renderAllStepInstructionsWith(t *testing.T, command, autoCommit string, orc
 			renderData["orchestrated"] = true
 		}
 		capture := &contractCapture{}
+		span := stepSpan
+		if row.nextStep == "" {
+			span = ""
+		}
 		err := stepkit.WriteStepResult(
 			stepkit.StepRequest{
 				StepName:     row.stepName,
@@ -196,7 +209,7 @@ func renderAllStepInstructionsWith(t *testing.T, command, autoCommit string, orc
 				Strategy:     contractStrategy{},
 			},
 			renderData,
-			capture, nil, workflow.Config{Command: command, Kind: row.workflow, AutoCommit: autoCommit},
+			capture, nil, workflow.Config{Command: command, Kind: row.workflow, AutoCommit: autoCommit, StepSpan: span},
 			func(_, _, _, instruction string) any { return instruction },
 		)
 		require.NoErrorf(t, err, "rendering %s", row.templatePath)

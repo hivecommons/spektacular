@@ -141,8 +141,8 @@ func TestLogRetention_UndeletableOldLogDoesNotChangeTheCommand(t *testing.T) {
 	require.Equal(t, normaliseClock(wantOut), normaliseClock(gotOut))
 }
 
-// normaliseClock replaces RFC3339 clock times, which differ between two
+// normaliseClock replaces RFC3339 clock times and step span ids, which differ between two
 // runs, so outputs can be compared.
 func normaliseClock(s string) string {
-	return timestampPattern.ReplaceAllString(s, "TIMESTAMP")
+	return spanIDPatternInText.ReplaceAllString(timestampPattern.ReplaceAllString(s, "TIMESTAMP"), "SPANID")
 }

@@ -964,6 +964,10 @@ func TestLog_OldDebugFolderIsUntouched(t *testing.T) {
 // workflow's updated_at), which differ between two otherwise identical runs.
 var timestampPattern = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z`)
 
+// spanIDPatternInText matches the step span id an instruction names in its
+// trace block, "<run id>-<span id>", which is minted afresh on every run.
+var spanIDPatternInText = regexp.MustCompile(`[0-9a-f]{32}-[0-9a-f]{16}`)
+
 // parityRun is one command's caller-visible outcome.
 type parityRun struct {
 	Args   []string
@@ -1001,6 +1005,7 @@ func runParitySet(t *testing.T, level string, readOnlyLogs bool) []parityRun {
 		stdout, code := runLogged(t, args...)
 		normalised := strings.ReplaceAll(stdout, dir, "TESTDIR")
 		normalised = timestampPattern.ReplaceAllString(normalised, "TIMESTAMP")
+		normalised = spanIDPatternInText.ReplaceAllString(normalised, "SPANID")
 		runs = append(runs, parityRun{Args: args, Stdout: normalised, Code: code})
 	}
 	require.Contains(t, runs[2].Stdout, marker)
