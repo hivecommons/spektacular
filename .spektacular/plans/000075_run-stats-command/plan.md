@@ -412,7 +412,7 @@ Interrupted and unfinished steps, tasks, helpers and waits are flagged, and they
 
 **Validation point**: The package's unit tests and the `cmd` integration tests pass in the full shuffled Go suite. They cover listing, every selection, totals, steps, tasks, helpers, gaps, unfinished work, damaged lines, a copied directory and byte-identical logs after reporting. Running the built binary against a fixture logs directory shows a readable list and run report.
 
-#### - [ ] Task: Load logs into runs
+#### - [x] Task: Load logs into runs
 **Id:** dad1813d-55e1-4a5e-9ee0-667f48f26a41
 **Repo:** spektacular
 **Depends on:** none
@@ -423,15 +423,15 @@ Adds the run statistics package's foundation, which turns a logs directory into 
 *Technical detail:* [context.md#task-load-logs-into-runs](./context.md#task-load-logs-into-runs)
 
 **Acceptance criteria**:
-- [ ] Records from run files and day files are grouped into one run per workflow run, and commands run outside any workflow are not reported as runs.
-- [ ] Each run has the kind, name, agent and log file its records name, and its wall time runs from its first recorded event to its last, ignoring the moment a later restart closed its leftover spans.
-- [ ] A run that reached its last step is finished. One that was restarted or overtaken by a later run of the same workflow is interrupted. Any other is in progress.
-- [ ] A malformed line, a line missing its identifiers and a partly written last line are each skipped and counted, and every run's figures are unchanged by them.
-- [ ] Runs can be picked by workflow name, by kind, by agent, by these combined, and by a full run id or a unique prefix of one. An unknown, ambiguous or malformed id is refused with a reason.
-- [ ] With no selection, a report picks the latest run, a comparison the two latest runs of that run's kind, and a summary every run of that kind.
-- [ ] Reading never creates, changes, moves or deletes a file in the logs directory.
+- [x] Records from run files and day files are grouped into one run per workflow run, and commands run outside any workflow are not reported as runs.
+- [x] Each run has the kind, name, agent and log file its records name, and its wall time runs from its first recorded event to its last, ignoring the moment a later restart closed its leftover spans.
+- [x] A run that reached its last step is finished. One that was restarted or overtaken by a later run of the same workflow is interrupted. Any other is in progress.
+- [x] A malformed line, a line missing its identifiers and a partly written last line are each skipped and counted, and every run's figures are unchanged by them.
+- [x] Runs can be picked by workflow name, by kind, by agent, by these combined, and by a full run id or a unique prefix of one. An unknown, ambiguous or malformed id is refused with a reason.
+- [x] With no selection, a report picks the latest run, a comparison the two latest runs of that run's kind, and a summary every run of that kind.
+- [x] Reading never creates, changes, moves or deletes a file in the logs directory.
 
-#### - [ ] Task: Report on one run
+#### - [x] Task: Report on one run
 **Id:** d2c23d18-d5b3-4e67-9c65-c8c3354474b9
 **Repo:** spektacular
 **Depends on:**
@@ -450,15 +450,15 @@ Waits are counted once even when helpers overlap. Interrupted and unfinished wor
 *Technical detail:* [context.md#task-report-on-one-run](./context.md#task-report-on-one-run)
 
 **Acceptance criteria**:
-- [ ] For a run with known waits, working time equals wall time less the user waits, and the user-wait and helper-wait totals equal the sums of those periods. Two helpers running at the same time are counted once.
-- [ ] A step entered twice shows two entries, its total duration, its command count, its command time, and its helper and user wait.
-- [ ] An implement run of a two-task plan shows both tasks, each with its duration and waits.
-- [ ] A run with three helper launches lists all three, each with its name, step and duration.
-- [ ] A 20-minute pause between two commands is listed first among the longest gaps, with its step and the events either side. At most the requested number of gaps is listed, longest first. The pause counts toward the total over the default 5-minute threshold, but not over a 30-minute one.
-- [ ] An interrupted step is marked and counted up to where it was cut off. A helper launch or user wait that never finished is listed and marked, and left out of every wait total and per-step wait.
-- [ ] The structured form of the report uses exactly the field names and units given in the plan's Data Structures section.
+- [x] For a run with known waits, working time equals wall time less the user waits, and the user-wait and helper-wait totals equal the sums of those periods. Two helpers running at the same time are counted once.
+- [x] A step entered twice shows two entries, its total duration, its command count, its command time, and its helper and user wait.
+- [x] An implement run of a two-task plan shows both tasks, each with its duration and waits.
+- [x] A run with three helper launches lists all three, each with its name, step and duration.
+- [x] A 20-minute pause between two commands is listed first among the longest gaps, with its step and the events either side. At most the requested number of gaps is listed, longest first. The pause counts toward the total over the default 5-minute threshold, but not over a 30-minute one.
+- [x] An interrupted step is marked and counted up to where it was cut off. A helper launch or user wait that never finished is listed and marked, and left out of every wait total and per-step wait.
+- [x] The structured form of the report uses exactly the field names and units given in the plan's Data Structures section.
 
-#### - [ ] Task: Keep the stats commands out of the logs
+#### - [x] Task: Keep the stats commands out of the logs
 **Id:** a49a4d72-79d8-4ce2-b320-6a6b63eca363
 **Repo:** spektacular
 **Depends on:** none
@@ -469,10 +469,10 @@ Adds the `spektacular stats` command group, with no subcommands yet, and marks i
 *Technical detail:* [context.md#task-keep-the-stats-commands-out-of-the-logs](./context.md#task-keep-the-stats-commands-out-of-the-logs)
 
 **Acceptance criteria**:
-- [ ] Running `stats` inside a project leaves every log file as it was, even with logging at the verbose level.
-- [ ] A normal command run straight after it is still logged exactly as before, and its output and exit code are unchanged.
+- [x] Running `stats` inside a project leaves every log file as it was, even with logging at the verbose level.
+- [x] A normal command run straight after it is still logged exactly as before, and its output and exit code are unchanged.
 
-#### - [ ] Task: List runs and report on one from the command line
+#### - [x] Task: List runs and report on one from the command line
 **Id:** ad0176a5-97fb-47c0-98b1-7267765659a2
 **Repo:** spektacular
 **Depends on:**
@@ -486,13 +486,13 @@ Adds `list` and `run` to the `spektacular stats` command group. Both read the pr
 *Technical detail:* [context.md#task-list-runs-and-report-on-one-from-the-command-line](./context.md#task-list-runs-and-report-on-one-from-the-command-line)
 
 **Acceptance criteria**:
-- [ ] In a project whose logs hold three finished runs and one in progress, `stats list` shows all four, newest first, each with kind, name, agent, start time, wall time and status.
-- [ ] `stats run` with no selection reports the run that started most recently, and each selection reports only the runs it names.
-- [ ] The JSON output parses in the same envelope as other commands and honours `--fields`, and the table output shows the same figures.
-- [ ] Pointing `--dir` at a copy of the logs directory, from outside any project, gives the same figures as reporting in the project.
-- [ ] A malformed log line leaves every figure unchanged, and the report shows one skipped line.
-- [ ] Every log file is byte-identical before and after `stats list` and `stats run`, run inside a project with logging on.
-- [ ] An unsupported format, no project without `--dir`, a missing directory, no matching run, an unknown or ambiguous run id, a bad kind, and a bad gap count or threshold are each refused with a message naming the fix. A bare `stats` names its subcommands.
+- [x] In a project whose logs hold three finished runs and one in progress, `stats list` shows all four, newest first, each with kind, name, agent, start time, wall time and status.
+- [x] `stats run` with no selection reports the run that started most recently, and each selection reports only the runs it names.
+- [x] The JSON output parses in the same envelope as other commands and honours `--fields`, and the table output shows the same figures.
+- [x] Pointing `--dir` at a copy of the logs directory, from outside any project, gives the same figures as reporting in the project.
+- [x] A malformed log line leaves every figure unchanged, and the report shows one skipped line.
+- [x] Every log file is byte-identical before and after `stats list` and `stats run`, run inside a project with logging on.
+- [x] An unsupported format, no project without `--dir`, a missing directory, no matching run, an unknown or ambiguous run id, a bad kind, and a bad gap count or threshold are each refused with a message naming the fix. A bare `stats` names its subcommands.
 
 ### Milestone 2: Maintainers can compare runs and summarise many
 
@@ -636,3 +636,71 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - **Telling a stopped-and-never-resumed session apart from one still running.** Without workflow state (absent from a copied directory), such a run reads as `in_progress` until it is restarted or overtaken by a later run of the same workflow.
 - **Interpolated percentiles, `--last N`, colour in the tables, and an index or cache beside the logs.** These were not asked for, and the last would change the logs directory.
 - **Installing the new binary or touching this repository's own `.spektacular/`** (plans-never-change-the-active-install).
+
+## Changelog
+
+### 2026-10-25 — Task: Load logs into runs
+
+**What was done**: Added the `internal/runstats` package's read side: `Load` reads every `*.jsonl` file in a logs directory read-only and line by line, skipping and counting damaged lines; `Assemble` groups records into workflow runs by trace id, pairs span starts and ends, builds each run's event timeline, extent and status; `Candidates`, `ForReport`, `ForCompare` and `ForSummary` select runs by name, kind, agent and run id or prefix, with each mode's defaults.
+
+**Deviations**: A line with no `span_id` is also skipped and counted (the goal check asked for it under "a line missing its identifiers"); the plan listed only a missing trace id or start time. Run ids given with `--run` are lower-cased before matching. A run named twice with `--run` is kept once. A complete `span` record of a non-command type, or a `span_end` with no end reason, counts as a complete span. Shared test builders live in `internal/runstats/fixtures_test.go`, which later tasks reuse.
+
+**Files changed**:
+- `spektacular: internal/runstats/doc.go`
+- `spektacular: internal/runstats/load.go`
+- `spektacular: internal/runstats/assemble.go`
+- `spektacular: internal/runstats/select.go`
+- `spektacular: internal/runstats/fixtures_test.go`
+- `spektacular: internal/runstats/load_test.go`
+- `spektacular: internal/runstats/assemble_test.go`
+- `spektacular: internal/runstats/select_test.go`
+
+**Discoveries**: 000073 and 000074 landed with the names this plan assumed (`tracelog` constants, `cfg.LogDir`, `logAnnotation`/`logExempt`). 000074's `Interrupted` closes the step and every span under it as `interrupted` at the step's last command, so an interrupted helper is also incomplete and keeps that cut-off end. The run's "overtaken" rule compares a later run's start with this run's last event, so a run still writing events when another starts stays `in_progress`.
+
+### 2026-10-25 — Task: Report on one run
+
+**What was done**: Added `BuildReport` and its data types to `internal/runstats`: whole-run totals (wall, working, user wait, helper wait, command time, counts, gap total over the threshold), one row per step name, each step entry, one row per plan task, every helper launch and wait on the user, and the longest gaps with their step and the events either side. Waits are interval unions of completed spans (`intervals.go`), clipped to each step or task; gaps come from a walk over the run's timeline (`gaps.go`).
+
+**Deviations**: `gap_threshold_ms` is a field of `Report` itself rather than added by the command layer, so the golden file pins it; `cmd` adds only `log_dir` and `skipped_lines`. `RunSummary` and `(*Run).Summary()` were added here rather than in the command-line task, because `Report.run` needs them. `Options.Gaps` of 0 lists every gap. A gap equal to the threshold does not count toward the total (strictly longer, as the plan says). The JSON contract is reproduced in `Report`'s doc comment, because the goal reviewer cannot read the plan to check field names against it (attempt 1 was sent back for that reason alone).
+
+**Files changed**:
+- `spektacular: internal/runstats/intervals.go`
+- `spektacular: internal/runstats/gaps.go`
+- `spektacular: internal/runstats/report.go`
+- `spektacular: internal/runstats/intervals_test.go`
+- `spektacular: internal/runstats/gaps_test.go`
+- `spektacular: internal/runstats/report_test.go`
+- `spektacular: internal/runstats/testdata/report.golden.json`
+
+**Discoveries**: Time inside a helper launch or a wait on the user is also a gap on the timeline (no event and no command running), which is the investigation's method: such gaps are labelled by the span edge before them (for example `end/user-wait/...` or `start/sub-agent/...`), so a reader can tell waiting from idle. A criterion that cites a plan section cannot be checked by the read-only goal reviewer unless the work itself carries that text.
+
+### 2026-10-25 — Task: Keep the stats commands out of the logs
+
+**What was done**: Added the `spektacular stats` command group in `cmd/stats.go`, with no subcommands yet, carrying 000073's logging-exempt annotation (`logAnnotation: logExempt`) so every `stats` command inherits it, and registered it on the root command. A `cmd` test proves a bare or mistyped `stats` leaves the logs directory byte-identical at the standard and verbose levels, and that the next ordinary command is logged with unchanged output and exit code.
+
+**Deviations**: None. The test uses the existing log test helpers (`runLogged`, `rawLogSnapshot`, `allRecords`, `useConfiguredLogLevel`), so `cmd/root_test.go` needed no change.
+
+**Files changed**:
+- `spektacular: cmd/stats.go`
+- `spektacular: cmd/root.go`
+- `spektacular: cmd/stats_test.go`
+
+**Discoveries**: `runRoot` checks the logging exemption twice: once before the command on `rootCmd.Find(os.Args[1:])` (which decides whether a logger, a state snapshot and a run id are made at all), and once after it on the command that ran. A test driving `runRoot` must set `os.Args` (as `runLogged` and `runDebugCmd` do) to exercise the first check.
+
+### 2026-10-25 — Task: List runs and report on one from the command line
+
+**What was done**: Added `spektacular stats list` and `spektacular stats run` to the `stats` group, with the shared flags (`--dir`, `--format pretty|json`, `--name`, `--kind`, `--agent`, repeatable `--run`, `--gap-threshold`), `--gaps` on `run`, and `--schema` on each. Both read the project's configured log directory or `--dir`, print plain text tables through the package's new renderer (`RenderList`, `RenderReport`) or the standard JSON envelope, and map every refusal to its error code with a next action. `cmd` tests seed a fixture project with three finished runs, one in progress and a day file.
+
+**Deviations**: `RunSummary` lives in `internal/runstats/report.go` (added with the report), not a separate `summary_types.go`. `RenderReport` takes the report and the skipped count; `RenderList` takes the logs and the runs, as Data Structures gives it. A selection that matches nothing gives an empty `stats list` (`"runs": []`), and `stats_no_runs` only for `run`. The tables mark an unfinished item's end reason with `*` and explain it under the tables. Running the built binary on a copy of real logs showed sub-millisecond stretches listed as `0.0s` gaps, so `gaps.go` now ignores stretches under one millisecond (with a test).
+
+**Files changed**:
+- `spektacular: cmd/stats.go`
+- `spektacular: cmd/stats_test.go`
+- `spektacular: internal/runstats/render.go`
+- `spektacular: internal/runstats/render_test.go`
+- `spektacular: internal/runstats/testdata/list.golden.txt`
+- `spektacular: internal/runstats/testdata/report.golden.txt`
+- `spektacular: internal/runstats/gaps.go`
+- `spektacular: internal/runstats/gaps_test.go`
+
+**Discoveries**: `cmd` tests that run a command with no project (such as `--schema`) must `t.Chdir` to a temp directory first: run from inside a spec worktree, every command is refused with `inside_spec_worktree`. `output.Write` re-marshals the result through a map, so the JSON keys come out sorted, whatever the struct order.
