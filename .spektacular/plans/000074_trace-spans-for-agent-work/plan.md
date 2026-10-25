@@ -495,7 +495,7 @@ Connects the engine's span reports to the log, so every real run records its ste
 
 **Validation point**: Integration tests cover a sub-agent span recorded with its name, times and status, an error stop, the default parent, two concurrent helpers each with their own parent and children, a user-wait span, abandoned spans on step change and on finish, every refusal, an untouched workflow state, and logging off. They also show a lane's spans landing in the lane's own run log.
 
-#### - [ ] Task: Trace start and stop commands
+#### - [x] Task: Trace start and stop commands
 **Id:** b78010a5-aa8f-4faa-ae73-0b3d93fdf88b
 **Repo:** spektacular
 **Depends on:**
@@ -507,16 +507,16 @@ Adds `spektacular trace start <name> --type sub-agent|user-wait|work [--parent <
 *Technical detail:* [context.md#task-trace-start-and-stop-commands](./context.md#task-trace-start-and-stop-commands)
 
 **Acceptance criteria**:
-- [ ] Starting a sub-agent span named `test-writer` returns an id, and stopping it records a sub-agent span named `test-writer` with a start, an end and a success status.
-- [ ] Stopping a span with an error status records it with an error status and the given message.
-- [ ] A span started without a parent is nested under the current step span.
-- [ ] Two sub-agent spans started at the same time with different parents keep their own parents, and spans each helper starts with its parent's id nest under the right one.
-- [ ] A user-wait span is recorded as user-wait, and no other kind of span ever is.
-- [ ] A span left open is closed and marked abandoned when the workflow moves to the next step, or when it reaches `finished`.
-- [ ] Naming an unknown or closed parent, stopping an id never started or already stopped, stopping a step or task span, or giving a bad type, name or id each returns an error that names the problem and the next step, and records no span.
-- [ ] Starting and stopping spans leaves the workflow's current step and completed steps unchanged.
-- [ ] With logging off, both commands succeed and nothing is written.
-- [ ] A trace command run for an orchestrated lane's span is recorded in that lane's run log, along with the span.
+- [x] Starting a sub-agent span named `test-writer` returns an id, and stopping it records a sub-agent span named `test-writer` with a start, an end and a success status.
+- [x] Stopping a span with an error status records it with an error status and the given message.
+- [x] A span started without a parent is nested under the current step span.
+- [x] Two sub-agent spans started at the same time with different parents keep their own parents, and spans each helper starts with its parent's id nest under the right one.
+- [x] A user-wait span is recorded as user-wait, and no other kind of span ever is.
+- [x] A span left open is closed and marked abandoned when the workflow moves to the next step, or when it reaches `finished`.
+- [x] Naming an unknown or closed parent, stopping an id never started or already stopped, stopping a step or task span, or giving a bad type, name or id each returns an error that names the problem and the next step, and records no span.
+- [x] Starting and stopping spans leaves the workflow's current step and completed steps unchanged.
+- [x] With logging off, both commands succeed and nothing is written.
+- [x] A trace command run for an orchestrated lane's span is recorded in that lane's run log, along with the span.
 
 ### Milestone 3: Every workflow tells agents what to mark
 
@@ -732,3 +732,16 @@ No other implementation-time uncertainties remain. The design choices are settle
 - `spektacular: cmd/log_spans_test.go`
 
 **Discoveries**: Most cmd tests log at the standard level by default, so every workflow test now also writes span records; helpers that assumed one record kind had to filter. State gains `step_span`/`task_span` even with logging off (ids are kept, nothing is written). Repo workflow commands are snapshotted from `state.json`, not `repo-state.json` (000073 behaviour), so a repo run's step spans land in its own run file but its command records are not parented to them.
+
+### 2026-10-25 — Task: Trace start and stop commands
+
+**What was done**: A new `trace` command group lets agents mark their own spans. `trace start <name> [--type sub-agent|user-wait|work] [--parent <id>]` writes a `span_start` and prints the `<trace_id>-<span_id>` id; `trace stop <id> [--status ok|error] [--message <text>]` writes the complete `span_end`. A span nests under the current step span unless `--parent` names another open span; its id's trace finds its run (the shared state, a plan or implement lane, or the repo state), and a span outside any run is standalone in the day file. Every refusal is an `output` error with a next action and records nothing; neither command writes workflow state; with logging off both succeed with `recorded: false`. `snapshotStatePath` routes a trace command's own record to the run its id names.
+
+**Deviations**: The run's composite parent is validated against the state's open step and task spans first, then against the log's open agent spans; a step or task span that is already closed is refused as `parent_not_open`, and stopping one as `span_owned_by_workflow`. The `--message` of a stop is kept only with `--status error`. A multi-word name given unquoted is joined with spaces. Codebase research for this High task was done inline, reusing the previous task's helper map, rather than by new research agents.
+
+**Files changed**:
+- `spektacular: cmd/trace.go`
+- `spektacular: cmd/root.go`
+- `spektacular: cmd/trace_test.go`
+
+**Discoveries**: `--type`, `--status`, `--message` and `--parent` are now value-taking flags in `snapshotStatePath`'s argv scan; no other command uses those names. Trace commands are refused inside a spec worktree like every other command, so agents must run them from the project root.

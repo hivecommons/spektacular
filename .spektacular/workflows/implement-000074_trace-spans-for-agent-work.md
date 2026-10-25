@@ -15,3 +15,4 @@
 - Task 2 (engine step spans) done: moveSpans/resumeSpans/prepareSpan in workflow.go; OpenSpan has extra step field. TODO in task 4: pass EndFinished to RunEnded on terminal and let sink always mark leftovers abandoned (reviewer caveat).
 - Task 3 done (task roles; RunEnded now gets EndFinished on terminal). Task 4: sink must mark RunEnded leftovers abandoned whatever the reason.
 - Task 4 done (cmd recorder). Milestone 1 committed on loop to analyze.
+- Task 5 done (trace commands). Milestone 2 committed.

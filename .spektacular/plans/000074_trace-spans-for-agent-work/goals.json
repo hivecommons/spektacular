@@ -495,6 +495,136 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "b78010a5-aa8f-4faa-ae73-0b3d93fdf88b",
+      "title": "Trace start and stop commands",
+      "checks": [
+        {
+          "at": "2026-10-25T13:42:08Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "b78010a5-aa8f-4faa-ae73-0b3d93fdf88b",
+            "title": "Trace start and stop commands",
+            "criteria": [
+              "Starting a sub-agent span named `test-writer` returns an id, and stopping it records a sub-agent span named `test-writer` with a start, an end and a success status.",
+              "Stopping a span with an error status records it with an error status and the given message.",
+              "A span started without a parent is nested under the current step span.",
+              "Two sub-agent spans started at the same time with different parents keep their own parents, and spans each helper starts with its parent's id nest under the right one.",
+              "A user-wait span is recorded as user-wait, and no other kind of span ever is.",
+              "A span left open is closed and marked abandoned when the workflow moves to the next step, or when it reaches `finished`.",
+              "Naming an unknown or closed parent, stopping an id never started or already stopped, stopping a step or task span, or giving a bad type, name or id each returns an error that names the problem and the next step, and records no span.",
+              "Starting and stopping spans leaves the workflow's current step and completed steps unchanged.",
+              "With logging off, both commands succeed and nothing is written.",
+              "A trace command run for an orchestrated lane's span is recorded in that lane's run log, along with the span."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/trace.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/status.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/repo.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/spans.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "step_span.id"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.step"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/trace_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "state.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/instruction_contract_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/trace.go:127-234 runTraceStart returns a span id of the form \u003ctrace\u003e-\u003cspan\u003e, and runTraceStop (255-330) ends it with status ok. cmd/trace_test.go:122-166 TestTrace_StartAndStopRecordASubAgentSpan checks the id, that the recorded sub-agent span is named test-writer, has start and end times, and has status ok."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "cmd/trace.go:324-327 sets st.Message only when status is error, then sp.End records it. cmd/trace_test.go:171-191 TestTrace_StopWithErrorStatusRecordsTheMessage asserts Status{Code: error, Message: \"tests did not compile\"} on the logged end record, and that an ok stop drops its message."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "cmd/trace.go:215-216 sets parent to state.StepSpan.ID when no --parent is given. cmd/trace_test.go:195-219 TestTrace_SpanWithoutParentNestsUnderTheStep checks the parent is the current step's span, both before and after a goto."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "cmd/trace.go:207-214 takes the parent from --parent and checks it is open, so each span keeps its own parent. cmd/trace_test.go:224-270 TestTrace_ConcurrentHelpersKeepTheirOwnParents keeps coordinator, helperA and helperB open together, nests children under each helper's own id, and checks each recorded parent and end."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "cmd/trace.go:146-162 passes --type through, and only the value user-wait is a wait. cmd/trace_test.go:275-317 TestTrace_OnlyUserWaitSpansAreUserWait checks each span's recorded type, that only the user-wait spans are user-wait, and that the workflow's own commands are typed command. Only the test's own type check covers the rest of the spec run; the code path for other types is not separately exercised."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "internal/workflow/workflow.go:397-402 ends the previous step span through Spans.Ended on each move, and workflow.go:420-421 calls Ended and RunEnded with EndFinished when the terminal step is reached. cmd/spans.go:98-104 Ended calls sp.EndUnder(s.ID, at, EndAbandoned) before ending the step, and cmd/spans.go:129 RunEnded calls EndAll with EndAbandoned. cmd/trace_test.go:322-366 TestTrace_OpenSpansAreAbandonedWhenTheWorkflowMoves covers both the move and finished cases, including nested spans."
+            },
+            {
+              "criterion": 7,
+              "verdict": "met",
+              "evidence": "Each refusal returns output.NewError with a message and a next action: unknown or closed parent parent_not_open (cmd/trace.go:208-212), stop of a never-started id span_not_open (308-313), already-stopped span_already_stopped (318-323), step or task stop span_owned_by_workflow (303-305, 315-316, 333-338), bad id invalid_span_id (171-175, 280-285), bad type invalid_span_type (159-167), bad name invalid_span_name (154-158). All return before sp.Start or sp.End, so no span is recorded. cmd/trace_test.go:380-434 TestTrace_RefusalsNameTheProblemAndRecordNoSpan and 438-467 TestTrace_StoppingATaskSpanIsRefused check each code, message fragment and next-action fragment."
+            },
+            {
+              "criterion": 8,
+              "verdict": "met",
+              "evidence": "cmd/trace.go only reads state through resolveTraceRun and readState and never calls a state write. cmd/trace_test.go:471-493 TestTrace_CommandsLeaveTheWorkflowStateUnchanged compares state.json bytes before and after start and stop and checks current_step and completed_steps are unchanged."
+            },
+            {
+              "criterion": 9,
+              "verdict": "met",
+              "evidence": "cmd/trace.go:194-201 and 293-296 return a result with Recorded false and never reach sp.Start or sp.End when logging is off. cmd/trace_test.go:497-517 TestTrace_LoggingOffSucceedsAndWritesNothing checks both commands succeed, Recorded is false, and the logs directory does not exist."
+            },
+            {
+              "criterion": 10,
+              "verdict": "met",
+              "evidence": "cmd/trace.go:146-162 via resolveTraceRun (78-92) matches a lane state by run id, and traceSpans (107-117) writes through r.spans(state.RunRef()). cmd/root.go:433-520 adds the --parent and --type handling and traceSnapshotPath so the command record lands in the lane's file. cmd/trace_test.go:522-572 TestTrace_LaneSpanIsRecordedInTheLaneLog checks the span and both trace commands are in the alpha lane log and nothing reaches the solo run's log."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }
