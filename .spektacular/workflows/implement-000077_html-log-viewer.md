@@ -24,3 +24,7 @@
 ## Task 3 (stats view command) done; Milestone 1 committed
 - cmd/stats_view.go + cmd/stats_view_test.go; cmd/stats_test.go lists updated for `view`.
 - Built binary for manual checks: scratchpad bin/spek; copied project logs at scratchpad logs/ (read-only copy).
+
+## Task 4 (zoom/collapse/summary) done; Milestone 2 committed
+- Page controls ids: reset-zoom, expand-all, collapse-steps, gap-threshold, gap-summary, longest-steps, longest-gaps. Triangles are ▶/▼ glyphs in the label column.
+- Docs task: real look is task purple, step blue, sub-agent teal, user-wait amber hatched + band, work olive, command thin slate; problems failed red ✕, interrupted orange dashed ‖, abandoned grey dotted ∅, never closed fading end …; gap labels "gap 20m00s" at the foot.

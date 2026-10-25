@@ -300,6 +300,90 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "4940ba43-261c-47ea-b214-ba19f8235260",
+      "title": "Zoom, collapse and summarise on the page",
+      "checks": [
+        {
+          "at": "2026-10-25T18:16:10Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "4940ba43-261c-47ea-b214-ba19f8235260",
+            "title": "Zoom, collapse and summarise on the page",
+            "criteria": [
+              "Zooming into one step shows only that period across the full width of the timeline, and reset returns to the whole run.",
+              "Collapsing a step hides its children until it is expanded again. A collapsed row shows any problem among its hidden children. The page opens collapsed to steps, and one action expands every row.",
+              "With the page's threshold set to 1 minute, a 2-minute pause is marked as well as a 20-minute one, and the gap count and total change to match.",
+              "The side summary lists the longest steps and the longest gaps, and choosing one zooms to it.",
+              "Building and writing a generated 5,000-span page is measured by a benchmark in the Go suite, and that page opens and responds to zooming and selection without noticeable delay in a current browser."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/assets/viewer.js"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/assets/page.html"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "viewer.css"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/write_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spans-5000.html"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/build_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Diff viewer.js hunk at @@ -541 adds zoomTo/resetZoom (lines ~279-292) and a dblclick handler (~338-346) that calls zoomTo(R.start_ms[row], R.start_ms[row]+duration) and select(row). Reset zoom is wired to resetZoom via the #reset-zoom button and Escape (~362-364, ~440). The screenshot g-t1.png shows the axis labelled from 0 to about +20m for the whole run, and the headless run reported drag and Ctrl+wheel zoom working. The full-width mapping comes from the existing draw code, which the diff does not change."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "viewer.js (diff ~lines 152-180) builds end[] and collapsed[] state, and computeVisible() skips the rows under a collapsed row. toggle() and the triangle hit-test (~353) collapse and expand a row. collapseToSteps() (~176-179) sets every non-task row collapsed on load, so the page opens collapsed to steps. The Expand all button (~441-445) zeroes state.collapsed. A collapsed row draws its problem glyph from worst[row] (indexTree ~135-151; drawLabel ~212-235). The screenshot g-t1.png shows the collapsed 'discovery (4)' row with its triangle."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "thresholdInput (page.html diff line 14, viewer.js ~368-438) sets state.threshold through setThreshold(), which calls fillGaps() and schedule(). fillGaps() recounts gaps with duration \u003e threshold and updates #gap-summary. The screenshot g-t1.png, with the threshold input at 1 min, reads 'Gaps over threshold: 2, total 22m00s' and lists both the 20m00s and 2m00s gaps under Longest gaps, with a 'gap 2m00s' label on the canvas. The headless run reported the same text, and the 2-minute pause is marked on the canvas."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "page.html diff adds the #longest-steps and #longest-gaps lists inside the aside (lines 25-30). viewer.js fillLongestSteps() (~390-401) fills them from data.longest_steps and, on click, calls reveal(row), zoomAround(...), select(row) and scrollToRow. fillGaps() (~403-419) lists the top five gaps over threshold and, on click, calls zoomAround(G.start_ms[g], G.duration_ms[g]). The screenshot g-t1.png shows populated Longest steps and Longest gaps lists."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "write_test.go diff adds BenchmarkBuildAndWrite5000 (line ~539), which calls benchBuildAndWrite(b, 5000) (lines 541-557) to build and Write a genRun(5000,1) page. It reports page-bytes. The verification summary shows this benchmark ran (20.1 ms/op, 499,142 bytes). The headless Chrome timings in the verification summary show first paint at about 311 ms and every zoom and selection input at 33-66 ms on spans-5000.html with no console errors. I did not reproduce the browser run; that evidence is taken from the verification summary."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }

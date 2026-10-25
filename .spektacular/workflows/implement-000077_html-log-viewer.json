@@ -2,17 +2,17 @@
   "kind": "implement",
   "run_id": "93f8b822c657312f837dd6d9fbb32180",
   "step_span": {
-    "id": "076e6dae727eb9fb",
+    "id": "dbef17b221a98935",
     "name": "analyze",
-    "parent": "d7737263af595918",
-    "start": "2026-10-25T18:11:31.697350721Z"
+    "parent": "2ba01b95504fa491",
+    "start": "2026-10-25T18:16:29.676607351Z"
   },
   "task_span": {
-    "id": "d7737263af595918",
-    "name": "Zoom, collapse and summarise on the page",
-    "task": "4940ba43-261c-47ea-b214-ba19f8235260",
+    "id": "2ba01b95504fa491",
+    "name": "Documentation site describes the run viewer",
+    "task": "139a70b2-621d-4bc9-872d-f40a2e22dc21",
     "step": "analyze",
-    "start": "2026-10-25T18:11:31.697350721Z"
+    "start": "2026-10-25T18:16:29.676607351Z"
   },
   "current_step": "analyze",
   "completed_steps": [
@@ -27,17 +27,18 @@
     "update_changelog"
   ],
   "created_at": "2026-10-25T17:50:08.145262199Z",
-  "updated_at": "2026-10-25T18:11:31.702708067Z",
+  "updated_at": "2026-10-25T18:16:29.682916613Z",
   "data": {
     "committed_milestones": [
-      1
+      1,
+      2
     ],
     "goal_item": "",
     "name": "000077_html-log-viewer",
     "orchestrated": true,
     "trace_task": {
-      "id": "4940ba43-261c-47ea-b214-ba19f8235260",
-      "title": "Zoom, collapse and summarise on the page"
+      "id": "139a70b2-621d-4bc9-872d-f40a2e22dc21",
+      "title": "Documentation site describes the run viewer"
     }
   }
 }

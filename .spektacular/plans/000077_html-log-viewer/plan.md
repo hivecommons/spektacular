@@ -457,7 +457,7 @@ A run of several thousand spans stays quick to open and to zoom or select, becau
 
 **Validation point**: A Go benchmark builds and writes a generated 5,000-span page, and the full Go suite passes. In current Chrome and Firefox, that page opens in under 3 seconds, and a zoom, a collapse or a selection responds in under 200 ms. Zooming into a step fills the width with that step. Collapsing a step hides its children until expanded. With the threshold set to 1 minute, a 2-minute pause is marked as well as a 20-minute one.
 
-#### - [ ] Task: Zoom, collapse and summarise on the page
+#### - [x] Task: Zoom, collapse and summarise on the page
 **Id:** 4940ba43-261c-47ea-b214-ba19f8235260
 **Repo:** spektacular
 **Depends on:**
@@ -475,11 +475,11 @@ Drawing stays limited to the rows in view, so runs of thousands of spans stay qu
 *Technical detail:* [context.md#task-zoom-collapse-and-summarise-on-the-page](./context.md#task-zoom-collapse-and-summarise-on-the-page)
 
 **Acceptance criteria**:
-- [ ] Zooming into one step shows only that period across the full width of the timeline, and reset returns to the whole run.
-- [ ] Collapsing a step hides its children until it is expanded again. A collapsed row shows any problem among its hidden children. The page opens collapsed to steps, and one action expands every row.
-- [ ] With the page's threshold set to 1 minute, a 2-minute pause is marked as well as a 20-minute one, and the gap count and total change to match.
-- [ ] The side summary lists the longest steps and the longest gaps, and choosing one zooms to it.
-- [ ] Building and writing a generated 5,000-span page is measured by a benchmark in the Go suite, and that page opens and responds to zooming and selection without noticeable delay in a current browser.
+- [x] Zooming into one step shows only that period across the full width of the timeline, and reset returns to the whole run.
+- [x] Collapsing a step hides its children until it is expanded again. A collapsed row shows any problem among its hidden children. The page opens collapsed to steps, and one action expands every row.
+- [x] With the page's threshold set to 1 minute, a 2-minute pause is marked as well as a 20-minute one, and the gap count and total change to match.
+- [x] The side summary lists the longest steps and the longest gaps, and choosing one zooms to it.
+- [x] Building and writing a generated 5,000-span page is measured by a benchmark in the Go suite, and that page opens and responds to zooming and selection without noticeable delay in a current browser.
 
 ### Milestone 3: The run viewer is documented
 
@@ -618,3 +618,18 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - `spektacular: cmd/stats_test.go`
 
 **Discoveries**: Rendered against a copy of this project's own logs, a real 2h55m implement run (365 spans) makes a 60 KB page whose biggest feature is the long idle gaps between tasks, which is exactly what the viewer is for.
+
+### 2026-10-25 — Task: Zoom, collapse and summarise on the page
+
+**What was done**: The page script gained a zoom window (drag across the axis, Ctrl or Cmd with the wheel at the pointer, double-click a bar to fit exactly that span, Reset zoom or Escape for the whole run, 10 ms at narrowest), collapse and expand (a triangle per row with children, Expand all, Collapse to steps, opening collapsed to steps), a collapsed row's hidden-row count and the strongest problem among its hidden rows, a Gap threshold input in minutes (down to the page's gap floor) with "Gaps over threshold: N, total T" following it, and a side summary of the five longest steps and longest gaps over the threshold, each zooming to its place (a step is also revealed, selected and centred). The tree index (each row's subtree end and worst hidden problem) is built once; the visible-row list is rebuilt only when the collapse state changes. Tests add `BenchmarkBuildAndWrite5000` (about 20 ms, a 499 KB page), a test that each row's descendants are exactly the deeper rows that follow it, and a test that the page carries every control the script reads.
+
+**Deviations**: Arrow keys still move the selection, and picking a step from the summary centres its row. A row with no children has no triangle.
+
+**Files changed**:
+- `spektacular: internal/runview/assets/viewer.js`
+- `spektacular: internal/runview/assets/page.html`
+- `spektacular: internal/runview/assets/viewer.css`
+- `spektacular: internal/runview/write_test.go`
+- `spektacular: internal/runview/build_test.go`
+
+**Discoveries**: Measured in headless Chrome on the 5,000-span sample page, offline: first paint about 0.3 s, and every zoom, collapse, expand, summary pick and selection lands within two animation frames (33 to 66 ms). Headless Firefox renders the same page identically.
