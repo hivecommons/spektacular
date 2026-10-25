@@ -540,6 +540,110 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "9a1effc0-c05f-43f4-903f-c801e4887ef2",
+      "title": "Comparisons and summaries carry tokens",
+      "checks": [
+        {
+          "at": "2026-10-25T19:11:54Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "9a1effc0-c05f-43f4-903f-c801e4887ef2",
+            "title": "Comparisons and summaries carry tokens",
+            "criteria": [
+              "Comparing two runs shows each step's tokens, cost and time per thousand output tokens for both runs, with the second run's difference in amount and percentage, and the same for the totals.",
+              "Summarising five runs gives the median and 90th percentile of tokens, cost and time per thousand output tokens, for each step and the totals, beside the timings.",
+              "A run with unknown token use shows as absent for the new figures, and the timings are unaffected.",
+              "With the new figures removed, comparison and summary output is identical to before this change.",
+              "Every log file and agent session file is byte-identical before and after `stats compare` and `stats summary`."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/compare.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/summary.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/render.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/testdata/compare.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "summary.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "compare.golden.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "summary.golden.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/compare_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "summary_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "spektacular.diff, internal/runstats/compare.go tokenValues and totalValues/stepRowValues append six token figures to both totalFigures and stepFigures; render.go RenderComparison (diff hunk at @@ -231) adds per-step tables for output tokens, cost and time per 1k output tokens, and the totals table gains the token rows. compare.golden.txt lines 12-40 show step values for both runs with deltas and delta_pct, e.g. 'overview 1,000 2,000 (+1,000, +100.0%)'. TestCompareCarriesTokens in compare_test.go checks the per-step and total figures and deltas."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "summary.go newStat is shared, so each token figure gets median and p90 (nearest rank). render.go RenderSummary adds 'Steps (output tokens)', 'Steps (cost)' and 'Steps (time per 1k output tokens)' tables after the existing step timings table and before Totals, and the totals table lists the token rows. summary.golden.txt lines 14-35 show analyze 30,000/50,000 and 0.30/0.50. TestSummariseCarriesTokens covers five runs with median and p90 for steps and totals."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "compare.go tokenValues returns all-nil values when the run's TokenFigure is nil, and the cost and pace are nil when their inputs are nil. compare.golden.json shows null values for the unknown run's token figures, with the timings unchanged. summary.golden.json shows count 4 for output_tokens when one run is unknown (the summary test expects count 4 and median 25000). TestCompareUnknownTokensAreAbsent and TestSummariseUnknownTokensAreLeftOut assert the absence, and that the first eight totals and six step figures equal the no-token output."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "contract_test.go TestTokenFieldsAreAdditive compares compare.golden.json and summary.golden.json (with token keys stripped by canonical()) against testdata/pre-tokens copies, and requires equality. Integer figures still encode as whole numbers because num() now yields float64 with the same values, and delta_pct uses the same rounding for integers. Caveats: the text goldens' totals table is re-padded for the longer 'working_ms_per_1k_output' label, which reverts when those rows are removed; the cmd schema for values changed from integer to number and its description text changed (cmd/stats.go hunk at @@ -363), which is documentation output rather than comparison or summary output. Judged met on the reading that the comparison and summary output is the report itself."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "cmd/stats.go statsTokenInput (diff hunks @@ -378 and @@ -405) only reads: it calls agentusage.Claude{Dir}.Sessions and statsPrices and writes nothing. The only write calls in the touched packages are in test files. cmd/stats_test.go TestStatsCompareAndSummaryLeaveTheLogsAndSessionsByteIdentical snapshots the logs (rawLogSnapshot) and session tree (treeSnapshot) before and after compare and summary, in text and JSON, and requires equality. I did not run that test; the verification summary reports the full suite passing."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }

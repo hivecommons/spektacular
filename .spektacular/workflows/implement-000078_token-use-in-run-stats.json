@@ -2,17 +2,17 @@
   "kind": "implement",
   "run_id": "ffd0eaf48778d80466c6f544ac294569",
   "step_span": {
-    "id": "6ce5956ce0bb57e6",
+    "id": "b9b01497587d0c9d",
     "name": "analyze",
-    "parent": "ca1086b67c5b8735",
-    "start": "2026-10-25T19:06:57.994517963Z"
+    "parent": "c138614a9682fc4d",
+    "start": "2026-10-25T19:12:11.10291506Z"
   },
   "task_span": {
-    "id": "ca1086b67c5b8735",
-    "name": "Comparisons and summaries carry tokens",
-    "task": "9a1effc0-c05f-43f4-903f-c801e4887ef2",
+    "id": "c138614a9682fc4d",
+    "name": "Documentation site describes token figures",
+    "task": "a1a9901f-b9c4-468a-9cea-0a5ba5d50a6e",
     "step": "analyze",
-    "start": "2026-10-25T19:06:57.994517963Z"
+    "start": "2026-10-25T19:12:11.10291506Z"
   },
   "current_step": "analyze",
   "completed_steps": [
@@ -27,17 +27,18 @@
     "update_changelog"
   ],
   "created_at": "2026-10-25T18:27:58.645622736Z",
-  "updated_at": "2026-10-25T19:06:58.003348528Z",
+  "updated_at": "2026-10-25T19:12:11.11264405Z",
   "data": {
     "committed_milestones": [
-      1
+      1,
+      2
     ],
     "goal_item": "",
     "name": "000078_token-use-in-run-stats",
     "orchestrated": true,
     "trace_task": {
-      "id": "9a1effc0-c05f-43f4-903f-c801e4887ef2",
-      "title": "Comparisons and summaries carry tokens"
+      "id": "a1a9901f-b9c4-468a-9cea-0a5ba5d50a6e",
+      "title": "Documentation site describes token figures"
     }
   }
 }

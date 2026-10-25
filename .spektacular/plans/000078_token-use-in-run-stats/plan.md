@@ -517,7 +517,7 @@ Makes `spektacular stats run` read token use for the runs it reports. It finds t
 
 **Validation point**: Comparison and summary tests show the six new figures for totals and steps, with deltas, percentages, medians and 90th percentiles, and `null` for unknown runs. The additivity check still passes for compare and summary, and `cmd` tests show both commands in both formats with the new figures. The full Go suite passes.
 
-#### - [ ] Task: Comparisons and summaries carry tokens
+#### - [x] Task: Comparisons and summaries carry tokens
 **Id:** 9a1effc0-c05f-43f4-903f-c801e4887ef2
 **Repo:** spektacular
 **Depends on:**
@@ -530,11 +530,11 @@ Adds tokens, cost and working time per thousand output tokens to `stats compare`
 *Technical detail:* [context.md#task-comparisons-and-summaries-carry-tokens](./context.md#task-comparisons-and-summaries-carry-tokens)
 
 **Acceptance criteria**:
-- [ ] Comparing two runs shows each step's tokens, cost and time per thousand output tokens for both runs, with the second run's difference in amount and percentage, and the same for the totals.
-- [ ] Summarising five runs gives the median and 90th percentile of tokens, cost and time per thousand output tokens, for each step and the totals, beside the timings.
-- [ ] A run with unknown token use shows as absent for the new figures, and the timings are unaffected.
-- [ ] With the new figures removed, comparison and summary output is identical to before this change.
-- [ ] Every log file and agent session file is byte-identical before and after `stats compare` and `stats summary`.
+- [x] Comparing two runs shows each step's tokens, cost and time per thousand output tokens for both runs, with the second run's difference in amount and percentage, and the same for the totals.
+- [x] Summarising five runs gives the median and 90th percentile of tokens, cost and time per thousand output tokens, for each step and the totals, beside the timings.
+- [x] A run with unknown token use shows as absent for the new figures, and the timings are unaffected.
+- [x] With the new figures removed, comparison and summary output is identical to before this change.
+- [x] Every log file and agent session file is byte-identical before and after `stats compare` and `stats summary`.
 
 ### Milestone 3: Token figures are documented
 
@@ -752,3 +752,28 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - `spektacular: internal/runstats/testdata/report.golden.txt`
 
 **Discoveries**: `resetRootCmd` already resets persistent string flags, so `--sessions-dir` needed no reset code; `TestStatsRunNeverReadsTheDevelopersSessions` proves it.
+
+### 2026-10-25 — Task: Comparisons and summaries carry tokens
+
+**What was done**: The comparison and summary figure lists gained `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `cost` and `working_ms_per_1k_output`, appended after 000075's figures for the totals and every step, read from each run's report (null for a run with unknown token use, a null cost or a null pace). `Figure.Values` and `Figure.Delta` widened from `[]*int64` to `[]*float64` (whole numbers encode as before; a cost delta is rounded to 6 decimals). `stats compare` and `stats summary` build their token input like `stats run`, and their `--schema` lists the new figures and `--sessions-dir`. The tables print tokens with thousands separators, costs with 2 decimals and pace as a time.
+
+**Deviations**:
+- Rather than extra columns in the comparison's and summary's step table (one column per run already), each gets three more step tables, "Steps (output tokens)", "Steps (cost)" and "Steps (time per 1k output tokens)", shown only when some run's token use is known; the totals table lists all six new figures.
+- `isDuration` now also treats `working_ms_per_1k_output` as milliseconds.
+- The comparison and summary golden files are now built with fixture sessions (`withTokens`, `sessionFor` in `compare_test.go`); `seqRun`'s commands gained their `process.command_args`.
+- Two existing `cmd` tests were updated for the appended figures (the figure order list, and the summary's per-figure count, which is 0 for token figures when no session drove the runs).
+
+**Files changed**:
+- `spektacular: internal/runstats/compare.go`
+- `spektacular: internal/runstats/summary.go`
+- `spektacular: internal/runstats/render.go`
+- `spektacular: internal/runstats/compare_test.go`
+- `spektacular: internal/runstats/summary_test.go`
+- `spektacular: internal/runstats/testdata/compare.golden.json`
+- `spektacular: internal/runstats/testdata/compare.golden.txt`
+- `spektacular: internal/runstats/testdata/summary.golden.json`
+- `spektacular: internal/runstats/testdata/summary.golden.txt`
+- `spektacular: cmd/stats.go`
+- `spektacular: cmd/stats_test.go`
+
+**Discoveries**: None.
