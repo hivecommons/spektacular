@@ -408,7 +408,7 @@ A helper's tokens stay with the step that launched it, even when it finishes lat
 
 **Validation point**: The session reader, attribution, configuration, contract and `cmd` tests pass in the full shuffled Go suite. They show tokens adding up across steps, helpers staying on their launch, tasks carrying tokens, cost following the price table, unknown reasons, the additivity check against 000075's golden files, and byte-identical log and session files. Running the built binary against a fixture logs and sessions directory shows the token columns and blocks.
 
-#### - [ ] Task: Read Claude Code sessions
+#### - [x] Task: Read Claude Code sessions
 **Id:** b7d6cb42-9b9d-4ffb-8941-1c93a17c2558
 **Repo:** spektacular
 **Depends on:** none
@@ -419,15 +419,15 @@ Adds a small, self-contained reader for Claude Code's own session files. It find
 *Technical detail:* [context.md#task-read-claude-code-sessions](./context.md#task-read-claude-code-sessions)
 
 **Acceptance criteria**:
-- [ ] A response written over several records counts once, with its tokens, its model and the time of its first record.
-- [ ] Each shell command the agent ran is read with its command text, the time it was issued and the time its result came back.
-- [ ] Each helper agent's transcript is linked to the launch that started it, and a helper started by another helper is linked to that helper.
-- [ ] Claude Code's own per-model totals for a session are read when present, and reported as absent otherwise.
-- [ ] Only sessions with activity at or after the given time are read, including a session whose only recent activity is in its helpers' files.
-- [ ] A missing sessions folder, an unreadable file and a file with no recognisable records each give their own reason, and damaged lines are skipped and counted.
-- [ ] Every session file is byte-identical before and after reading.
+- [x] A response written over several records counts once, with its tokens, its model and the time of its first record.
+- [x] Each shell command the agent ran is read with its command text, the time it was issued and the time its result came back.
+- [x] Each helper agent's transcript is linked to the launch that started it, and a helper started by another helper is linked to that helper.
+- [x] Claude Code's own per-model totals for a session are read when present, and reported as absent otherwise.
+- [x] Only sessions with activity at or after the given time are read, including a session whose only recent activity is in its helpers' files.
+- [x] A missing sessions folder, an unreadable file and a file with no recognisable records each give their own reason, and damaged lines are skipped and counted.
+- [x] Every session file is byte-identical before and after reading.
 
-#### - [ ] Task: Price table in the project configuration
+#### - [x] Task: Price table in the project configuration
 **Id:** a1cd3849-cb71-4659-bf32-9286976b50c7
 **Repo:** spektacular
 **Depends on:** none
@@ -438,12 +438,12 @@ Lets a project give model prices in its configuration, as an optional `stats.pri
 *Technical detail:* [context.md#task-price-table-in-the-project-configuration](./context.md#task-price-table-in-the-project-configuration)
 
 **Acceptance criteria**:
-- [ ] A configuration with prices for two models loads with every price as written.
-- [ ] A configuration without a price table loads as before, and saving it does not add one.
-- [ ] A model missing one of its four prices, or with a negative price, is refused with a message naming the model and the key to set.
-- [ ] The settings format version is unchanged.
+- [x] A configuration with prices for two models loads with every price as written.
+- [x] A configuration without a price table loads as before, and saving it does not add one.
+- [x] A model missing one of its four prices, or with a negative price, is refused with a message naming the model and the key to set.
+- [x] The settings format version is unchanged.
 
-#### - [ ] Task: Place tokens on steps, tasks and helpers
+#### - [x] Task: Place tokens on steps, tasks and helpers
 **Id:** f0791ec4-1820-4ab8-a498-3d7725b5da27
 **Repo:** spektacular
 **Depends on:**
@@ -462,17 +462,17 @@ When nothing usable is found, the result says why.
 *Technical detail:* [context.md#task-place-tokens-on-steps-tasks-and-helpers](./context.md#task-place-tokens-on-steps-tasks-and-helpers)
 
 **Acceptance criteria**:
-- [ ] For a run driven by one session, every token is placed exactly once, and the step figures plus the tokens outside any step equal the run total for each token type.
-- [ ] A helper launched in one step that finishes after the next step began has all its tokens on its launch and in the launching step, not the next.
-- [ ] Each task of a two-task implement run has its own tokens and cost.
-- [ ] Helpers are matched to the helper launches the run recorded, by the id in their brief, or in launch order when the brief has none. A helper that matches no recorded launch is still counted, and listed as unmatched.
-- [ ] A run resumed in a second session counts both sessions' requests, and a session that drove two runs splits its requests between them.
-- [ ] With prices for both models, cost equals each type's tokens times its price, summed. With one of two models unpriced, cost covers the priced model only, is marked incomplete and names the other.
-- [ ] Working time per thousand output tokens is given for the run, each step, each task and each helper. A helper's figure uses only its own time and tokens, and a part with no output tokens shows not applicable.
-- [ ] When the session drove only this run and holds Claude Code's own totals, the run total equals those totals. Otherwise the overhead is unknown with a reason.
-- [ ] A run driven by another agent, or with no matching session, gives unknown token figures with the reason.
+- [x] For a run driven by one session, every token is placed exactly once, and the step figures plus the tokens outside any step equal the run total for each token type.
+- [x] A helper launched in one step that finishes after the next step began has all its tokens on its launch and in the launching step, not the next.
+- [x] Each task of a two-task implement run has its own tokens and cost.
+- [x] Helpers are matched to the helper launches the run recorded, by the id in their brief, or in launch order when the brief has none. A helper that matches no recorded launch is still counted, and listed as unmatched.
+- [x] A run resumed in a second session counts both sessions' requests, and a session that drove two runs splits its requests between them.
+- [x] With prices for both models, cost equals each type's tokens times its price, summed. With one of two models unpriced, cost covers the priced model only, is marked incomplete and names the other.
+- [x] Working time per thousand output tokens is given for the run, each step, each task and each helper. A helper's figure uses only its own time and tokens, and a part with no output tokens shows not applicable.
+- [x] When the session drove only this run and holds Claude Code's own totals, the run total equals those totals. Otherwise the overhead is unknown with a reason.
+- [x] A run driven by another agent, or with no matching session, gives unknown token figures with the reason.
 
-#### - [ ] Task: Report and print token figures
+#### - [x] Task: Report and print token figures
 **Id:** e5b929cc-c2e0-434c-8518-ac874da67f3e
 **Repo:** spektacular
 **Depends on:**
@@ -484,13 +484,13 @@ Puts the token figures into the run report. Each step, task and helper row gains
 *Technical detail:* [context.md#task-report-and-print-token-figures](./context.md#task-report-and-print-token-figures)
 
 **Acceptance criteria**:
-- [ ] The structured report gives input, output, cache-read and cache-write tokens, cost and time per thousand output tokens for the run, each step, each task and each helper, with the field names in the plan's Data Structures section.
-- [ ] The report names every model used with the tokens each used.
-- [ ] With the new token fields removed, the structured report is identical to the report before this change.
-- [ ] The table form shows output tokens, cost and time per thousand output tokens beside each step's, task's and helper's timings, plus a token breakdown, the models and any unmatched helpers.
-- [ ] When token use is unknown, both forms say so with the reason, and every timing is unchanged.
+- [x] The structured report gives input, output, cache-read and cache-write tokens, cost and time per thousand output tokens for the run, each step, each task and each helper, with the field names in the plan's Data Structures section.
+- [x] The report names every model used with the tokens each used.
+- [x] With the new token fields removed, the structured report is identical to the report before this change.
+- [x] The table form shows output tokens, cost and time per thousand output tokens beside each step's, task's and helper's timings, plus a token breakdown, the models and any unmatched helpers.
+- [x] When token use is unknown, both forms say so with the reason, and every timing is unchanged.
 
-#### - [ ] Task: Token figures from the command line
+#### - [x] Task: Token figures from the command line
 **Id:** bc066b45-20f2-41ed-897c-798fb1a645f8
 **Repo:** spektacular
 **Depends on:**
@@ -504,12 +504,12 @@ Makes `spektacular stats run` read token use for the runs it reports. It finds t
 *Technical detail:* [context.md#task-token-figures-from-the-command-line](./context.md#task-token-figures-from-the-command-line)
 
 **Acceptance criteria**:
-- [ ] For a run driven by Claude Code with no change to how the agent works, `stats run` gives token, cost and time-per-token figures in both table and JSON form.
-- [ ] Costs use the prices in the project's configuration. Outside a project, or with no price table, every cost is unknown with the reason.
-- [ ] A run driven by another agent shows unknown token figures with the reason.
-- [ ] With the agent's session removed, token figures are unknown with a reason, and the timings match the report without token data.
-- [ ] Every log file and agent session file is byte-identical before and after `stats run`.
-- [ ] The existing `stats` tests still pass, without reading any real Claude Code sessions.
+- [x] For a run driven by Claude Code with no change to how the agent works, `stats run` gives token, cost and time-per-token figures in both table and JSON form.
+- [x] Costs use the prices in the project's configuration. Outside a project, or with no price table, every cost is unknown with the reason.
+- [x] A run driven by another agent shows unknown token figures with the reason.
+- [x] With the agent's session removed, token figures are unknown with a reason, and the timings match the report without token data.
+- [x] Every log file and agent session file is byte-identical before and after `stats run`.
+- [x] The existing `stats` tests still pass, without reading any real Claude Code sessions.
 
 ### Milestone 2: Comparisons and summaries weigh runs by tokens and cost as well as time
 
@@ -645,3 +645,110 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - **Token figures for standalone traces**, such as an epic orchestrator's own session. Only workflow runs are reported, as in 000075.
 - **A `--no-tokens` switch or a cache of parsed sessions.** Each report reads the candidate sessions once, read-only. Nothing is written beside the logs or the sessions.
 - **Installing the new binary or touching this repository's own `.spektacular/`** (plans-never-change-the-active-install).
+
+## Changelog
+
+### 2026-10-25 — Task: Read Claude Code sessions
+
+**What was done**: Added the leaf package `internal/agentusage`, which finds Claude Code sessions active at or after a given time (by the latest modification time of the main file and every helper file) and reads each one read-only into plain data: de-duplicated model requests (first-record time, model, field-wise largest usage), Bash calls with their result times, Agent/Task launches with their brief, helper links from `agent-<id>.meta.json`, and Claude Code's own `cost-state` totals. Problems come back as `sessions_dir_missing`, `session_unreadable` or `format_unrecognised`, never as errors.
+
+**Deviations**: `readTranscript` and `readSession` return a small internal struct and a recognised-record count instead of the four-value signature sketched in context.md, so the "no recognised records" problem can be told apart from an empty transcript. Responses from Claude Code's `<synthetic>` model with no tokens are dropped, so they never appear as a model. An unreadable helper transcript is left out with its own `session_unreadable` problem while the rest of the session is still read. `Usage` also gained `Sub` and `IsZero` for the overhead step.
+
+**Files changed**:
+- `spektacular: internal/agentusage/doc.go`
+- `spektacular: internal/agentusage/types.go`
+- `spektacular: internal/agentusage/claude.go`
+- `spektacular: internal/agentusage/transcript.go`
+- `spektacular: internal/agentusage/meta.go`
+- `spektacular: internal/agentusage/session.go`
+- `spektacular: internal/agentusage/claude_test.go`
+- `spektacular: internal/agentusage/transcript_test.go`
+- `spektacular: internal/agentusage/bench_test.go`
+- `spektacular: internal/agentusage/testdata/claude/-tmp-proj/` (fixture sessions s1 with two helpers, s2 unrecognised, s3 with no trailing newline)
+
+**Discoveries**: A user record's `message.content` is sometimes a plain string rather than a block list, so content is decoded as raw JSON and only lists are walked. Filtering lines by the unescaped substring `"type":"assistant"` before decoding is safe, because the same text inside a string value is escaped (`\"type\":\"assistant\"`). On this machine's real sessions the reader parses a 26-transcript session in well under a second; the benchmark parses ~10 MB in about 40 ms.
+
+### 2026-10-25 — Task: Price table in the project configuration
+
+**What was done**: `config.Config` gained an optional `stats` section (`StatsConfig{Prices map[string]ModelPrice}`, each price a `*float64` for input, output, cache_read and cache_write per million tokens), dropped from the saved file when empty through `IsZero`. `StatsConfig.Validate`, called from `Config.Validate`, refuses an unnamed model, a missing price or a negative price as `config_invalid` with a next action naming `stats.prices.<model>.<key>`.
+
+**Deviations**: None. (Placed after the `log` section 000073 added; schema stays 5.)
+
+**Files changed**:
+- `spektacular: internal/config/config.go`
+- `spektacular: internal/config/config_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-25 — Task: Place tokens on steps, tasks and helpers
+
+**What was done**: Added pure token attribution to `internal/runstats`: drivers are the transcripts whose Bash calls ran the run's own `<kind> new`/`<kind> goto` commands (±1 s); a transcript that drove several runs splits its moments by the between-runs rule; main-agent requests go to the step entry and task running at their time or outside any step; helper transcripts (with descendants rolled in) are matched to `sub-agent` spans by the span id in their brief, then by launch order, else listed as unmatched; session overhead is Claude Code's `cost-state` totals less every transcript request when the session drove only this run; `figure` prices tokens and computes working time per thousand output tokens. `buildTokens(run, rep, in)` returns the section and per-row figures (wired into `BuildReport` by the next task).
+
+**Deviations**:
+- The token JSON types (`TokenFigure`, `TokenSection`, `ModelTokens`, `UnmatchedHelper`, `SessionRef`) were written here in `tokens_types.go`, because `buildTokens` returns them; context.md placed that file in the next task.
+- `TokenInput` gained `Dir` (the sessions directory, named in the `session_not_found` message) and an unexported per-transcript memo of the runs each drove.
+- Matching adds one guard: a shell call whose `--data` names a workflow (`"name":"X"`) other than the run's is not that run's, so concurrent orchestrated children running `implement goto` at the same moment are not confused.
+- Launch-order fallback pairs a response's concurrent launches with the latest unmatched spans in start order (earliest launch to earliest span), rather than each launch taking the single latest span.
+- With no sessions read at all and a reader problem, the reason is that problem's own code (`sessions_dir_missing`, `session_unreadable` or `format_unrecognised`); `session_not_found` is used when sessions were read but none drove the run.
+- The test author found that a transcript driving two runs was counted as owned for overhead; fixed so any transcript that drove runs must have driven only this one (`TestTokensOverheadOneTranscriptTwoRuns`).
+- Codebase research for this High task was done in the main context (the report, assembly and listing code were already read in `read_plan`); the tests were written by a sub-agent.
+
+**Files changed**:
+- `spektacular: internal/runstats/prices.go`
+- `spektacular: internal/runstats/tokens_types.go`
+- `spektacular: internal/runstats/tokens.go`
+- `spektacular: internal/runstats/tokens_match.go`
+- `spektacular: internal/runstats/tokens_place.go`
+- `spektacular: internal/runstats/tokens_helpers.go`
+- `spektacular: internal/runstats/tokens_overhead.go`
+- `spektacular: internal/runstats/prices_test.go`
+- `spektacular: internal/runstats/tokens_test.go`
+- `spektacular: internal/runstats/tokens_match_test.go`
+- `spektacular: internal/runstats/tokens_place_test.go`
+- `spektacular: internal/runstats/tokens_helpers_test.go`
+- `spektacular: internal/runstats/tokens_overhead_test.go`
+
+**Discoveries**: On this machine's real logs and sessions, every recent orchestrated implement child is matched to its own helper transcript inside the orchestrator's session, and its helpers to their spans. Overhead is `several_runs` for orchestrated children, because the orchestrator's session holds other runs. A helper span started without `--parent` after a step was re-entered lands in another trace, and that helper is then listed as unmatched; this is correct behaviour, not a matching fault.
+
+### 2026-10-25 — Task: Report and print token figures
+
+**What was done**: `BuildReport` now calls `buildTokens` at its end and fills `Report.Tokens` (the top-level section) and a `tokens` figure on every step, task and helper row; `Options` gained `Tokens *TokenInput` (nil gives `not_read`). The text report adds OUT TOKENS, COST and TIME/1K OUT columns to the Steps, Tasks and Helpers tables, a Tokens block (per-step four types and cost, outside any step with the session overhead in it, total), a Models table, Unmatched helpers when there are any, and a footnote naming unpriced models; unknown token use prints `unknown (<code>): <reason>` and `?` cells. 000075's and 000076's golden JSON files were copied to `testdata/pre-tokens/` before any type changed, and `TestTokenFieldsAreAdditive` proves the regenerated files differ only by the new keys.
+
+**Deviations**:
+- 000075 has no `HelperRow` type: helper launches and user waits shared `Wait`. A new `HelperRow{Wait; Tokens}` (embedded, so the JSON stays flat with `tokens` appended) is the type of `Report.Helpers`; `user_waits` keep `[]Wait` with no tokens.
+- The golden run's `implement new`/`goto` commands gained `process.command_args`, and the golden report and text are now built with a fixture Claude session (`goldenSession`, opus priced, haiku not, with `cost-state` totals), so the golden files pin known figures, including session overhead and an incomplete cost.
+- Test files outside the goal's list needed mechanical updates for the new row type and columns: `internal/runstats/report_test.go` (key sets, `HelperRow`), `internal/runstats/listings_test.go` (`rep.Helpers[0].Wait`) and `cmd/stats_test.go` (three row regexes now end with the three token columns).
+
+**Files changed**:
+- `spektacular: internal/runstats/report.go`
+- `spektacular: internal/runstats/render.go`
+- `spektacular: internal/runstats/tokens_helpers.go`
+- `spektacular: internal/runstats/contract_test.go`
+- `spektacular: internal/runstats/report_test.go`
+- `spektacular: internal/runstats/render_test.go`
+- `spektacular: internal/runstats/listings_test.go`
+- `spektacular: cmd/stats_test.go`
+- `spektacular: internal/runstats/testdata/report.golden.json`
+- `spektacular: internal/runstats/testdata/report.golden.txt`
+- `spektacular: internal/runstats/testdata/pre-tokens/` (report, compare, summary, commands, spans golden JSON as before token use)
+
+**Discoveries**: Harbor's Python self-checks read `internal/runstats/testdata/report.golden.json` directly (`tests/harbor/shared/tests/test_metrics.py`, `test_runlog.py`), so any golden change must be followed by `uv run --with pytest pytest tests/harbor/shared/tests`; they pass with the added `tokens` keys.
+
+### 2026-10-25 — Task: Token figures from the command line
+
+**What was done**: The `stats` group gained a persistent `--sessions-dir` flag. `stats run` now builds its report with `statsTokenInput`, which resolves the sessions directory (`--sessions-dir` made absolute, else `$CLAUDE_CONFIG_DIR/projects`, else `~/.claude/projects`), reads the Claude Code sessions active since the earliest selected run started (only when a selected run's agent is `claude` or unset), takes `stats.prices` from the project's config when there is a project, and passes every run in the logs for the between-runs rule. `--schema` lists `tokens` and `sessions-dir`, and the group's help names the session folders and the price table. `cmd`'s `TestMain` points `CLAUDE_CONFIG_DIR` at an empty temp directory, so no test reads the developer's sessions.
+
+**Deviations**:
+- "Every cost is unknown with the reason": a cost with no price is `null` with `cost_complete: false` and `unpriced_models` naming the models (the JSON reason). The table's footnote now also says where prices go: "incomplete, no price for <models> (prices per million tokens go under stats.prices in .spektacular/config.yaml)" (a one-line change to `render.go` and its golden text).
+- The cmd fixtures' command records carried no `process.command_args`; the token tests use their own logs (`seedTokenLogs`, the spec and implement runs with arguments) so the existing listing tests' output is unchanged.
+- The first reviewer reply carried a note after its JSON and was refused as `goal_reply_invalid`; the reviewer was asked again with the same input.
+
+**Files changed**:
+- `spektacular: cmd/stats.go`
+- `spektacular: cmd/main_test.go`
+- `spektacular: cmd/stats_test.go`
+- `spektacular: internal/runstats/render.go`
+- `spektacular: internal/runstats/contract_test.go`
+- `spektacular: internal/runstats/testdata/report.golden.txt`
+
+**Discoveries**: `resetRootCmd` already resets persistent string flags, so `--sessions-dir` needed no reset code; `TestStatsRunNeverReadsTheDevelopersSessions` proves it.
