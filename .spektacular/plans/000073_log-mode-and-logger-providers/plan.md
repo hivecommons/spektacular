@@ -515,7 +515,7 @@ The configuration reference documents the `log` settings and no longer mentions 
 
 **Validation point**: The site builds and `astro check` passes with no layout HTML in page bodies. Grepping the site, the README and the knowledge base finds no remaining `debug.enabled`, `.spektacular/debug` or `SPEKTACULAR_SESSION_LOG` description of current behaviour.
 
-#### - [ ] Task: Documentation site describes logging
+#### - [x] Task: Documentation site describes logging
 **Id:** 6f66ab15-ff74-47ff-bea3-f3d5adbfb1c9
 **Repo:** docs
 **Depends on:**
@@ -563,12 +563,12 @@ Rewrites the site's debugging page, retitled "Logging and debugging" with its ad
 *Technical detail:* [context.md#task-documentation-site-describes-logging](./context.md#task-documentation-site-describes-logging)
 
 **Acceptance criteria**:
-- [ ] The debugging page explains the levels and what each records, the logs location and how to change it, retention, switching logging off, and that `status` and the `stats` reports are never logged; it describes no environment variable.
-- [ ] The configuration reference documents every `log` setting with its default, and no longer documents `debug` anywhere, including the example file and the key list.
-- [ ] The navigation shows the page as "Logging and debugging" at its existing address.
-- [ ] The site builds and type-checks without errors, and no page body contains layout HTML or em dashes in the new text.
+- [x] The debugging page explains the levels and what each records, the logs location and how to change it, retention, switching logging off, and that `status` and the `stats` reports are never logged; it describes no environment variable.
+- [x] The configuration reference documents every `log` setting with its default, and no longer documents `debug` anywhere, including the example file and the key list.
+- [x] The navigation shows the page as "Logging and debugging" at its existing address.
+- [x] The site builds and type-checks without errors, and no page body contains layout HTML or em dashes in the new text.
 
-#### - [ ] Task: README and knowledge describe logging
+#### - [x] Task: README and knowledge describe logging
 **Id:** 6ec1a2f7-0b73-4c90-b1a2-cf897ed8d097
 **Repo:** spektacular
 **Depends on:**
@@ -582,8 +582,8 @@ Brings the project's own descriptions up to date. The README's configuration exa
 *Technical detail:* [context.md#task-readme-and-knowledge-describe-logging](./context.md#task-readme-and-knowledge-describe-logging)
 
 **Acceptance criteria**:
-- [ ] The README's configuration example shows the `log` section with its defaults and a one-line explanation of each key, mentions `debug` nowhere as a current setting, and describes no logging environment variable.
-- [ ] The Harbor knowledge entries say the session log is collected from `.spektacular/logs/` at the verbose level set in each suite's seeded configuration, and no longer mention `.spektacular/debug/` or `SPEKTACULAR_SESSION_LOG` as current behaviour.
+- [x] The README's configuration example shows the `log` section with its defaults and a one-line explanation of each key, mentions `debug` nowhere as a current setting, and describes no logging environment variable.
+- [x] The Harbor knowledge entries say the session log is collected from `.spektacular/logs/` at the verbose level set in each suite's seeded configuration, and no longer mention `.spektacular/debug/` or `SPEKTACULAR_SESSION_LOG` as current behaviour.
 
 ## Open Questions
 
@@ -775,3 +775,29 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - `spektacular: README.md`
 
 **Discoveries**: The first `init` of a project is never logged, so a seed that runs `init` in `/app` needs logging switched off only after it. Harbor's epic timeline can no longer show when the orchestrator spawned each child, since that came from its `status` polls. A real suite run was not possible here (Docker and agent logins); it stays a manual check in the test plan.
+
+### 2026-10-25 — Task: Documentation site describes logging
+
+**What was done**: The docs site's debugging page, retitled "Logging and debugging" at the same `/debugging/` address, now explains logging as shipped: on by default in `.spektacular/logs/` and git-ignored, what the `standard`, `verbose` and `off` levels record, per-run and per-day file names and `log.config.directory`, retention (`log.retention`, runs and days counted separately), the commands that are never logged, a sample record with its fields, and upgrading from debug mode. The configuration reference replaces the `debug` key, example lines and key-list entry with the `log` section (with each setting's default), and its example `schema:` line now reads 5. The navigation label follows the new title.
+
+**Deviations**: The never-logged section names `spektacular stats` although spec 000075 has not built it yet (the plan's fallback was to name `status` only); the goal check's second attempt required the `stats` reports to be named, and the epic merges its specs together. The example config's `schema: 4` was bumped to 5 to match the new format. The `log` ConfigKey's default names the file provider (goal check retry).
+
+**Files changed**:
+- `docs: src/pages/debugging.mdx`
+- `docs: src/pages/configuration.mdx`
+- `docs: src/components/Nav.astro`
+
+**Discoveries**: The docs worktree needs `npm ci` before `npm run build` and `npx astro check`; `node_modules` is not carried into a worktree.
+
+### 2026-10-25 — Task: README and knowledge describe logging
+
+**What was done**: The README's configuration example shows the `log` section (provider, level, retention, directory, each with a one-line comment, and that `status` is never logged) instead of `debug`, its `schema:` line reads 5, and the `.spektacular/` tree names `log` among the settings. The two Harbor knowledge entries (`gotchas/harbor-agent-logs-and-artifacts.md`, `architecture/testing-architecture.md`) now say each suite seeds `log.level: verbose` and the session log is collected from `.spektacular/logs/`, describe per-run and `standalone_<day>.jsonl` files, the verifiers switching logging off, `status` never being logged, the reader accepting both record formats until 000076, and that `SPEKTACULAR_SESSION_LOG` no longer exists.
+
+**Deviations**: The knowledge entries were written through `spektacular knowledge write` from the project root, so they changed in the project's knowledge store in the main checkout, not on the spec's worktree branch; they are left for the orchestrator to commit or merge.
+
+**Files changed**:
+- `spektacular: README.md`
+- `spektacular: .spektacular/knowledge/gotchas/harbor-agent-logs-and-artifacts.md` (through the knowledge CLI)
+- `spektacular: .spektacular/knowledge/architecture/testing-architecture.md` (through the knowledge CLI)
+
+**Discoveries**: Knowledge writes during a worktree-based implement run land in the main checkout's store, outside the spec's branch.

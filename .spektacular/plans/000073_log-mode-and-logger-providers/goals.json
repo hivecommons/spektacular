@@ -1182,6 +1182,284 @@
       "decisions": [],
       "attempts": 3,
       "state": "accepted"
+    },
+    {
+      "item": "6f66ab15-ff74-47ff-bea3-f3d5adbfb1c9",
+      "title": "Documentation site describes logging",
+      "checks": [
+        {
+          "at": "2026-10-25T12:53:53Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "6f66ab15-ff74-47ff-bea3-f3d5adbfb1c9",
+            "title": "Documentation site describes logging",
+            "criteria": [
+              "The debugging page explains the levels and what each records, the logs location and how to change it, retention, switching logging off, and that `status` and the `stats` reports are never logged; it describes no environment variable.",
+              "The configuration reference documents every `log` setting with its default, and no longer documents `debug` anywhere, including the example file and the key list.",
+              "The navigation shows the page as \"Logging and debugging\" at its existing address.",
+              "The site builds and type-checks without errors, and no page body contains layout HTML or em dashes in the new text."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/configuration.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "config.yaml"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                },
+                {
+                  "repo": "docs",
+                  "path": "CHANGELOG.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "src/pages/debugging.mdx covers the levels and what each records (\"What each level records\", lines 41-52: standard, verbose, off); the log location and how to change it (line 21 `.spektacular/logs/`, lines 67-69 `log.config.directory`, relative or absolute); retention (lines 71-78, 10 runs by default or `log.retention`, standalone days counted separately); switching off (line 51-52, `log.level: off`); and that status is never logged (lines 82-85). The stats rule is stated as a rule for reporting commands ('Commands that only report on the project or its logs are never logged either', lines 83-85), and the page names no stats command. The stats command does not exist in the spektacular code root (cmd/root.go:182-184 only mentions it as spec 000075), so the plan's fallback applies. The page describes no environment variable and states there is none (lines 87-88); no SPEKTACULAR_SESSION_LOG text is in src/ outside the 'Upgrading' prose, which does not name it."
+            },
+            {
+              "criterion": 2,
+              "verdict": "not_met",
+              "evidence": "src/pages/configuration.mdx has the log example (lines 44-49), the key list (line 113, `log` replaces `debug`), and a log ConfigKey (lines 206-217) with defaults for level (standard), retention (10) and directory (logs). The log.provider setting has no default documented: the ConfigKey defaultValue at line 206 is 'level: standard, retention: 10, logs' and the bullet at line 210 says only 'the logger; only `file` ships today'. The shipped default is file (internal/config/config.go:540, Provider: ProviderFile). Other sections such as changelog (configuration.mdx:273) state 'file provider' in defaultValue, so log should do the same. No remaining 'debug' key text in configuration.mdx; grep found no 'debug' there. The docs root has no config.yaml file, so nothing in it needed changing."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "src/components/Nav.astro:22 reads `{ label: \"Logging and debugging\", href: \"/debugging/\" }` (diff hunk at Nav.astro line 19-22). The address /debugging/ is unchanged, and the page's title and Hero heading are also 'Logging and debugging' (debugging.mdx:3, :12)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The build and type-check results come from the verification summary (npm run build pass, 16 pages; npx astro check 0 errors, 0 warnings); I did not rerun them. Layout HTML: grep for '\u003cdiv|\u003csection|class=' in src/pages/*.mdx had no matches per the verification list, and debugging.mdx uses only the existing Astro components Hero, Prose, CtaBanner and Button (debugging.mdx:6-9, 11-14, 148-160). Em dashes: I read all of src/pages/debugging.mdx and found none; a grep of configuration.mdx for the em dash character returned no matches. Both checks hold for the new text."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T12:55:12Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "6f66ab15-ff74-47ff-bea3-f3d5adbfb1c9",
+            "title": "Documentation site describes logging",
+            "criteria": [
+              "The debugging page explains the levels and what each records, the logs location and how to change it, retention, switching logging off, and that `status` and the `stats` reports are never logged; it describes no environment variable.",
+              "The configuration reference documents every `log` setting with its default, and no longer documents `debug` anywhere, including the example file and the key list.",
+              "The navigation shows the page as \"Logging and debugging\" at its existing address.",
+              "The site builds and type-checks without errors, and no page body contains layout HTML or em dashes in the new text."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/configuration.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "config.yaml"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                },
+                {
+                  "repo": "docs",
+                  "path": "CHANGELOG.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "not_met",
+              "evidence": "debugging.mdx covers levels (lines 41-52), location and the `log.config.directory` setting (lines 54-69, 27-36), retention (lines 71-78), switching off via `log.level: off` (lines 51-52), and names no environment variable (lines 87-88 say there is none). But the 'never logged' section (lines 80-85) says only that `spektacular status` is never logged and that 'commands that only report on the project or its logs' are never logged. It never names the `stats` reports, which criterion 1 requires. The fix is to name `spektacular stats` in that section. The stats command is not built in the spektacular code root (grep of cmd/ finds `stats` only in a comment at cmd/root.go:184), so the sentence must be forward-looking, but the criterion can still be met by naming it."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "configuration.mdx:44-49 example shows the `log` block (provider, level, retention, config.directory) in place of `debug`; the key list at lines 113-114 names `log` and no `debug`; the ConfigKey at lines 206-217 documents provider (file), level (standard), retention (10) and directory (logs) with the default in the header at line 206. The only remaining 'debug' hit in configuration.mdx is the link text 'Logging and debugging' at line 217, which is the page title, not the key. The description at line 4 also uses `log`. The docs config.yaml the goal lists does not exist in the docs code root (Glob for **/config.yaml found nothing), and the diff does not touch it, so nothing there documents debug."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "docs/src/components/Nav.astro:22 reads `{ label: \"Logging and debugging\", href: \"/debugging/\" }` (diff hunk at line 10 of docs.diff); the href is unchanged. debugging.mdx:3 title and :12 Hero heading also read 'Logging and debugging'."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The build and astro check results are accepted from the verification summary (npm run build passed; astro check 0 errors, 0 warnings); I did not rerun them. Read-only checks: no em dash (U+2014) in src/pages/debugging.mdx (grep returned no matches) or in the added lines of docs.diff (lines 9-10, 14-82, 84-300 reviewed, none contain one). No div, section or class= markup in the new page body (debugging.mdx uses only the existing Hero, Prose and CtaBanner components)."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T12:56:37Z",
+          "round": 1,
+          "attempt": 3,
+          "goal": {
+            "item": "6f66ab15-ff74-47ff-bea3-f3d5adbfb1c9",
+            "title": "Documentation site describes logging",
+            "criteria": [
+              "The debugging page explains the levels and what each records, the logs location and how to change it, retention, switching logging off, and that `status` and the `stats` reports are never logged; it describes no environment variable.",
+              "The configuration reference documents every `log` setting with its default, and no longer documents `debug` anywhere, including the example file and the key list.",
+              "The navigation shows the page as \"Logging and debugging\" at its existing address.",
+              "The site builds and type-checks without errors, and no page body contains layout HTML or em dashes in the new text."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/configuration.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "config.yaml"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                },
+                {
+                  "repo": "docs",
+                  "path": "CHANGELOG.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "docs/src/pages/debugging.mdx covers the levels (lines 41-52: standard, verbose, off, each with what it records), the location (lines 20-21 `.spektacular/logs/`; lines 67-69 `log.config.directory`, relative to .spektacular/ or absolute), retention (lines 71-78: 10 recent runs or log.retention, plus standalone days), switching off (line 51-52 `log.level: off`), and the never-logged rule for `status` and the `stats` reports (lines 80-86). It names no environment variable; lines 88-89 say there is none. Shipped defaults match: internal/config/config.go:93-98 (DefaultLogDir logs, DefaultLogRetention 10), config.go:459-471 (LogDir resolves under .spektacular/), cmd/status.go:33 carries the log:exempt annotation, cmd/root.go:155 and 193-199 skip logExempted commands. Caveat: no stats command or stats annotation exists in this worktree (no cmd/stats*.go; the comment at root.go:183-184 refers to spec 000075 as future work), so the `stats` claim describes behaviour not shipped here. The page text itself meets the criterion."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "docs/src/pages/configuration.mdx:42-47 documents log.provider (file), log.level (standard), log.retention (10) and log.config.directory (logs) in the example YAML; lines 199-216 ConfigKey name=\"log\" with defaultValue and a bullet per setting, each with its default. The debug key is gone: grep for 'debug' across docs/src (excluding debugging.mdx) returns only the link text at configuration.mdx:217 and no debug key. The key list at line 110-113 now reads `log` and still counts seventeen top-level keys, matching the schema. No docs config.yaml file exists in the docs code root (glob for **/config.yaml found nothing), and grep of docs *.yaml found no debug key, so no example file still shows it."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "docs/src/components/Nav.astro:22 now reads `{ label: \"Logging and debugging\", href: \"/debugging/\" }`, and the href is unchanged. debugging.mdx:3 and :12 also use the new title and heading."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The supplied verification shows `npm run build` pass and `npx astro check` with 0 errors and 0 warnings. Not re-run here. No raw layout HTML: the grep for \u003cdiv, \u003csection or class= in debugging.mdx returned no matches, and the configuration.mdx and Nav.astro diff hunks add no HTML. No em dash: grep for the em dash character in debugging.mdx returned no matches, and none appear in the added lines of docs.diff (lines 9-82 of the diff read clean)."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 3,
+      "state": "accepted"
+    },
+    {
+      "item": "6ec1a2f7-0b73-4c90-b1a2-cf897ed8d097",
+      "title": "README and knowledge describe logging",
+      "checks": [
+        {
+          "at": "2026-10-25T12:58:45Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "6ec1a2f7-0b73-4c90-b1a2-cf897ed8d097",
+            "title": "README and knowledge describe logging",
+            "criteria": [
+              "The README's configuration example shows the `log` section with its defaults and a one-line explanation of each key, mentions `debug` nowhere as a current setting, and describes no logging environment variable.",
+              "The Harbor knowledge entries say the session log is collected from `.spektacular/logs/` at the verbose level set in each suite's seeded configuration, and no longer mention `.spektacular/debug/` or `SPEKTACULAR_SESSION_LOG` as current behaviour."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "gotchas/harbor-agent-logs-and-artifacts.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "architecture/testing-architecture.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "CHANGELOG.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "README.md (worktree .spektacular/worktrees/000073_log-mode-and-logger-providers/spektacular/README.md) lines 296-301 show the config.yaml example with a `log:` block: `provider: file` (one-line comment: the logger; only file ships), `level: standard` (off | standard | verbose (full responses and state); status is never logged), `retention: 10` (most recent workflow runs kept, and as many days of standalone commands), and `config: directory: logs` (relative to the folder holding config.yaml). Each key has a defaults value and a one-line explanation. A grep for 'debug' in the README returns only line 491 (\"Bob's own debug log\", the permitted agent-logs line) and line 617 (`--debug-dir`, the permitted metrics.py flag name); the old `debug:` config block is gone from the example (diff hunk at @@ -293,8 +293,12 @@). No SPEKTACULAR_SESSION_LOG or other logging environment variable appears in the README. Line 199 (the .spektacular/ tree) now reads 'agent, command, log, store settings'."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Staged gotchas/harbor-agent-logs-and-artifacts.md lines 32-50: 'Each suite sets `log.level: verbose` in the configuration of the project it seeds', with the spec/plan/repo images pre-seeding a config.yaml and the implement suite's copied config carrying it; the session log is collected from `.spektacular/logs/` (with 'the existing /app/.spektacular artifact carries it out'). `SPEKTACULAR_SESSION_LOG` appears once (line 49-50) only as 'no longer exists'. Staged architecture/testing-architecture.md line 15 states each epic suite sets `log.level: verbose` in the seeded project's configuration, reads `.spektacular/logs/`, and that `SPEKTACULAR_SESSION_LOG` no longer exists (once). Neither staged file contains the path `.spektacular/debug/`. The only remaining 'debug' wording is at testing-architecture.md line 24, 'the old debug records of the checked-in reference runs', which describes legacy reference data rather than current behaviour and does not name the debug path."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }
