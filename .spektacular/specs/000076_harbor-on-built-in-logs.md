@@ -6,6 +6,10 @@ epic: 000002_workflow-tracing-and-run-stats
 sources:
     - uri: docs/workflow-performance-investigation.md
       retrieved_date: "2026-10-24"
+amendments:
+    - at: "2026-10-25T17:39:20Z"
+      sections: [Success Metrics]
+      hash: sha256:73427573e90edd20ffce8a37b50c92b3672763cc6d5ce2f3b04f69ed48d97407
 ---
 
 # Feature: 000076_harbor-on-built-in-logs
@@ -143,7 +147,7 @@ Spektacular's end-to-end test harness, Harbor, measures each test run's step tim
 -->
 ## Success Metrics
 
-- The harness's shared measurement scripts shrink by at least a third from about 3,000 lines.
+- The harness's old parsers are removed and its shared measurement scripts do not grow, with no measure parsed in two places.
 - For the same scenario, Claude, Codex and Bob records report the same set of steps and a helper count for every helper-starting step, with no agent-specific fields.
 - No Harbor suite's pass rate drops, comparing 5 runs per suite for Claude on the harness before and after the change.
 
@@ -164,3 +168,7 @@ Spektacular's end-to-end test harness, Harbor, measures each test run's step tim
 - Changing any suite's scenarios or its pass and fail checks, beyond where they read their data.
 - A visual view of runs (covered by a separate spec, the HTML log viewer).
 
+## Amendments
+
+- **2026-10-25: Success Metrics** (epic 000002_workflow-tracing-and-run-stats implement run, task Remove the old parsers and debug fixtures)
+  After every planned removal the shared scripts total 2,990 lines (down from 3,299); the remaining lines serve kept requirements and Non-Goals, so the user accepted the size reached instead of a one-third cut

@@ -2,19 +2,11 @@
   "kind": "implement",
   "run_id": "a9a6ad40f2124aaa3957b1771677193e",
   "step_span": {
-    "id": "f13f10886ff2f939",
-    "name": "analyze",
-    "parent": "c557fb2cf2f2f415",
-    "start": "2026-10-25T17:20:25.868152595Z"
+    "id": "7c2a9c98b011963b",
+    "name": "test_plan",
+    "start": "2026-10-25T17:46:37.408996367Z"
   },
-  "task_span": {
-    "id": "c557fb2cf2f2f415",
-    "name": "Epic timeline from Spektacular's logs",
-    "task": "fc67375e-111c-4c2d-9b03-0bba26bde5b0",
-    "step": "analyze",
-    "start": "2026-10-25T17:20:25.868152595Z"
-  },
-  "current_step": "analyze",
+  "current_step": "test_plan",
   "completed_steps": [
     "new",
     "read_plan",
@@ -27,18 +19,19 @@
     "update_changelog"
   ],
   "created_at": "2026-10-25T14:53:19.414816827Z",
-  "updated_at": "2026-10-25T17:20:25.885120282Z",
+  "updated_at": "2026-10-25T17:46:37.434415448Z",
   "data": {
     "committed_milestones": [
       1,
-      2
+      2,
+      3
     ],
-    "goal_item": "",
+    "goal_item": "c855d276-ed7e-46bc-9418-3e426dac25e6",
     "name": "000076_harbor-on-built-in-logs",
     "orchestrated": true,
     "trace_task": {
-      "id": "fc67375e-111c-4c2d-9b03-0bba26bde5b0",
-      "title": "Epic timeline from Spektacular's logs"
+      "id": "c855d276-ed7e-46bc-9418-3e426dac25e6",
+      "title": "README and knowledge describe Harbor on built-in logs"
     }
   }
 }

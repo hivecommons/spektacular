@@ -1131,6 +1131,388 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "fc67375e-111c-4c2d-9b03-0bba26bde5b0",
+      "title": "Epic timeline from Spektacular's logs",
+      "checks": [
+        {
+          "at": "2026-10-25T17:23:56Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "fc67375e-111c-4c2d-9b03-0bba26bde5b0",
+            "title": "Epic timeline from Spektacular's logs",
+            "criteria": [
+              "For a fixture implement-epic trial with no debug directory, the timeline lists each spec's child start and finish, its slowest step and both hand-off gaps, measured from the orchestrator's helper spans, and the merge gap.",
+              "A child whose orchestrator helper span was never stopped takes its picked-up gap from the orchestrator's next recorded command or span, and a child with no orchestrator span shows no spawned-after or picked-up-after gap.",
+              "A resumed lane shows its extra child and the step the earlier one stopped at.",
+              "With the logs missing, it prints why and exits successfully."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "lane.start.at"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "lane.finish.end"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "lane.stops"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/tests/test.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/tests/test.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/standing-rules/tests/test.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_runlog_integration.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "timeline.report"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_suite_wiring.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "/app/.spektacular/logs"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/tests/test_timeline.py:147-155 (test_an_implement_epic_trial_with_no_debug_directory) asserts the implement trial's lane row (start +2m00s, finish +15m06s, slowest step discovery 7m54s) and hand-off row (spawned after 1m00s from span oa, picked up after 4m54s, merged after 6m54s). timeline.py:120-161 computes these from lane.start/finish, log.child_span (orchestrator sub-agent spans) and log.merge. The test also asserts the debug directory does not exist. Verification summary reports test_timeline.py 9 passed."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Unstopped span: runlog.py:152 treats a never-stopped span as open from its start, and runlog.py:319-338 (orchestrator_reaction) takes the first later command or span start/stop. timeline.py:155 uses it for picked-up. test_timeline.py:80-83 checks a child with no span shows 'no span' for spawned and picked-up, and test_timeline.py:68-77 checks beta's never-stopped ob2 gives 0m54s from the read at 17:00. Caveat: runlog.py:329-330 skips outside commands that name only the lane's own spec, so the reaction is not literally the next recorded command in every case. The fixture case still satisfies the criterion."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "runlog.py:394-397 sets lane.child_starts and lane.stops, with each refused later 'new' recorded at its failed step. timeline.py:163-171 prints 'N resume(s); stopped at: \u003cstep\u003e' for lanes with more than one child. test_timeline.py:96-100 asserts beta shows '1 resume(s); stopped at: architecture' and alpha is absent from that section. The fixture (runlog_fixtures.py:141-146) has beta's refused new at architecture."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "timeline.py:101-106 catches Unavailable from log.lanes()/runs() and prints 'No Spektacular logs under \u003cdir\u003e: \u003creason\u003e' from report(). timeline.py:182-189 (main) catches any other exception, prints the reason, and returns 0. runlog.py:215-226 raises Unavailable with reasons for a missing binary, a missing directory or an OSError. test_timeline.py:103-110 asserts both the missing-directory and missing-binary cases print the reason and main returns 0."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "b3638e0c-26e0-4c89-bc06-f086d7ca64e8",
+      "title": "Cross-run report shows the per-step split",
+      "checks": [
+        {
+          "at": "2026-10-25T17:30:22Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "b3638e0c-26e0-4c89-bc06-f086d7ca64e8",
+            "title": "Cross-run report shows the per-step split",
+            "criteria": [
+              "Comparing two trials shows each trial's per-step working, helper-wait and user-wait time and totals, with the second trial's difference from the first. A step only one trial entered shows as absent, not zero.",
+              "One run's breakdown shows its per-step split and helpers, and the run table shows user-wait and gap time.",
+              "Before-and-after medians include user wait, helper wait and gap time.",
+              "A schema-2 record still loads, with the new figures shown as unknown."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/report.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "subagents.briefs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_report.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_readme_metrics.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/report.py:453-501 compare_trials pairs each trial's workflows (pair_workflows, lines 431-450) and prints per step the secs, work, helper, user and helpers figures for A, B and B-A (STEP_FIGURES line 413). A step missing from one trial gets \"-\" on that side and in the difference column (side() lines 422-428, row loop lines 476-483). The Totals block (lines 487-500) prints wall, user wait, helper wait, gap, cost and total tokens with a B-A column. test_report.py:1238-1257 and the walkthrough assertion at 1266-1272 confirm the \"-\" rendering and the difference."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "report.py:358-408 breakdown() prints, for each workflow, wall, user wait, helper wait and gaps (lines 376-380), the per-step table with working, helper wait, user wait and helpers columns (step_table lines 301-312, STEP_HEADERS line 298), the totals line with gap threshold (lines 384-392), and the helper table (helpers_table lines 318-337). The run table has \"user wait m\" and \"gap m\" columns (TABLE_HEADERS lines 195-197, rows lines 217-219). test_report.py:1178-1190 and the breakdown expectations in the test file cover these."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "report.py:528-538 MEASURES lists \"user wait m\", \"helper wait m\" and \"gap m\" (lines 530-532) alongside wall m, and median()/compare() (lines 549-605) iterate over MEASURES, so before-and-after medians print them. test_report.py:1200-1210 asserts the labels and the printed user, helper and gap rows and the regression flag. README.md \"Comparing runs\" (in the diff) says the medians cover user wait, helper wait and gap time."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "report.py loads any record: load_run and total() read missing keys as None, and all new figures print through number()/seconds()/minutes(), which turn None into \"unknown\" (report.py:155-160, 294-295). helpers_table() prints \"Helper spans: not recorded (schema N)\" when the subagents record has no helpers key (report.py:318-321). test_report.py:1162-1190 builds a schema-2 record with the user/helper/gap totals deleted and no entries/split fields, and asserts the table row shows unknown for user wait and gap, the step row shows unknown for the split, and the helper spans line says schema 2. test_report.py:1281-1284 covers the same record in --compare, with unknown for the split figures."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "a49f5e7b-8b38-4224-a665-b462ecfc2c64",
+      "title": "Remove the old parsers and debug fixtures",
+      "checks": [
+        {
+          "at": "2026-10-25T17:42:35Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "a49f5e7b-8b38-4224-a665-b462ecfc2c64",
+            "title": "Remove the old parsers and debug fixtures",
+            "criteria": [
+              "The old session-log reader and span reader no longer exist, and nothing in the harness refers to them or to `.spektacular/debug`.",
+              "The reference runs keep their transcripts and pinned token, child and turn figures, and no longer carry old debug logs.",
+              "Trimming a collected trial keeps its Spektacular logs and leaves every log-sourced measure unchanged.",
+              "The shared measurement scripts total 3,000 lines or fewer, and a self-test fails if they grow past that.",
+              "The full Harbor self-test suite and the Go test suite pass."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/sessionlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/spans.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_windows.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_runlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/trim_reference.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "artifacts/spektacular/logs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/transcripts.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".build"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_suite_wiring.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Glob of tests/harbor/shared/*.py lists no sessionlog.py or spans.py (both staged as deleted in spektacular.status). Grep for sessionlog|SessionLog|spektacular/debug|DEBUG_DIR across tests/harbor (excluding __pycache__ and jobs) finds only guard tests: test_suite_wiring.py:445 (`assert not names \u0026 {\"sessionlog.py\", \"spans.py\"}`), test_runlog.py:503 (`assert \".spektacular/debug\" not in text`), and test_timeline.py:148 (`assert not (tmp_path / \"debug\").exists()`). The only other hits outside the harness are the root .gitignore:44 and docs/workflow-performance-investigation.md:53, which are outside tests/harbor. The data READMEs (s55-plan/README:2 and the others) say the old session log 'in the debug format Harbor read before spec 000076' is not kept; they do not name .spektacular/debug."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Glob of tests/harbor/shared/tests/data/** shows only README, build.json and claude-code.txt for m70-epic, s55-epic, s55-implement and s55-plan, plus the probe-background-child OUTCOME/README/build.json/claude-code.txt; no debug/ folder remains (status shows the debug/*.jsonl files as staged deletions). test_reference_runs.py:308-311 asserts each run has exactly README, build.json and claude-code.txt, and test_reference_totals_are_pinned (around line 273) and test_every_reference_run_is_pinned (line 267) keep the pinned token, child and turn figures."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/tests/test_runlog_integration.py:214-237 copies a logs directory into a collected trial, runs trim_reference.main, and asserts the copied log names match (line 230), each log file is byte-identical (lines 231-232), and measured() before and after are equal (lines 233-235), with non-empty step and helper sections (lines 236-237). trim_reference.py:175-186 copies logs unchanged with shutil.copyfile, and trim_reference.py:219-224 refuses to write when any measured value differs."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/tests/test_suite_wiring.py:423-440 sets SHARED_LINE_CEILING = 3000 and test_shared_scripts_stay_small fails when sum(len(lines)) over shared/*.py exceeds it. Line counts of the top-level scripts from Grep are transcripts.py 634, timeline.py 193, runlog.py 397, report.py 687, metrics.py 593, loglevel.py 47 and delegation.py 439, totalling 2,990. sessionlog.py and spans.py are absent."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "Not re-run, since this reviewer is read-only. The verification summary reports `uvx --with pytest pytest -p no:cacheprovider --import-mode=importlib tests/harbor/shared/tests` at 629 passed and 1 skipped, the three verifier self-check suites at 14, 31 and 40 passed, and `go test -shuffle=on ./...` with every package ok. The test files behind these results exist in the worktree (for example test_runlog_integration.py and test_suite_wiring.py), and nothing in the diff suggests a failure the summary omits."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "c855d276-ed7e-46bc-9418-3e426dac25e6",
+      "title": "README and knowledge describe Harbor on built-in logs",
+      "checks": [
+        {
+          "at": "2026-10-25T17:46:14Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "c855d276-ed7e-46bc-9418-3e426dac25e6",
+            "title": "README and knowledge describe Harbor on built-in logs",
+            "criteria": [
+              "The README's Harbor sections name `.spektacular/logs`, the default level, `stats` as the source, the timeline command, the two-trial comparison and how to run the self-tests, and no longer describe the debug log or `idle_s`.",
+              "The three knowledge entries read back through the knowledge CLI with the new arrangement and no current-tense mention of the debug session log or the override."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/logs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "architecture/testing-architecture.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/runlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/worktree.Dir"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "gotchas/harbor-agent-logs-and-artifacts.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "/app/.spektacular"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "gotchas/harbor-agent-log-fields.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "transcripts.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "CHANGELOG.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "README.md:536-542 names `.spektacular/logs/` and says every suite records at the default log level and that Harbor reads the logs only through `spektacular stats` (list, run, commands, spans). README.md:551-553 gives the timeline command `python3 tests/harbor/shared/timeline.py \u003cjob\u003e/\u003ctrial\u003e/artifacts/spektacular/logs ...`. README.md:630-635 documents the two-trial comparison (`--compare A B`). README.md:663-677 covers the self-tests, including the `uvx --with pytest pytest ... tests/harbor/shared/tests` command. A search of the whole README for `idle_s`, `SESSION_LOG` and `override` found nothing. The only remaining `debug` hit is README.md:514, `agent-logs/bob/ # Bob's own debug log, on Bob runs only`, which is Bob's own log and not the Spektacular debug session log. The `idle_s` mention at README.md:570 is not present; that line only refers to version 2's 'idle time' in history."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The three read-backs in .spektacular/tmp/000076_harbor-on-built-in-logs/goal-check/ each return an entry under \"content\". knowledge-harbor-agent-logs-and-artifacts.md (content, line 2): the 'Spektacular's own logs come back for every agent' paragraph describes the default level and `.spektacular/logs/` with `standalone_\u003cday\u003e.jsonl`. It mentions `SPEKTACULAR_SESSION_LOG` only as 'no longer exists', which is past-state, not a current-tense description of the override. knowledge-harbor-agent-log-fields.md (content): the 'Only tokens, models, cost, turns and briefs come from these logs now' paragraph describes the logs-through-`stats` arrangement. knowledge-testing-architecture.md (content): the epic-suite paragraph says logs are recorded 'at the default log level with no special setting' and are read through `spektacular stats` via `runlog.py`. None of the three contains 'debug session log' or an override described as current."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }

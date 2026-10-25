@@ -412,7 +412,7 @@ The self-tests are organised the same way: reader tests over canned JSON, record
 - The reference runs keep their transcripts but lose their old-format debug logs. New-format reference logs need real runs, so the log side is covered by synthetic fixtures and the integration test.
 
 **Success metrics.**
-- *The harness's shared measurement scripts shrink by at least a third from about 3,000 lines.* **Behavioural test:** a self-test counts the lines of the shared Python modules (not their tests) and requires 2,000 or fewer, so the reduction is enforced and cannot quietly regrow.
+- *The harness's shared measurement scripts shrink by at least a third from about 3,000 lines.* **Behavioural test:** a self-test counts the lines of the shared Python modules (not their tests) and requires 3,000 or fewer, so the reduction is enforced and cannot quietly regrow.
 - *For the same scenario, Claude, Codex and Bob records report the same set of steps and a helper count for every helper-starting step, with no agent-specific fields.* **Manual — captured in the implementation test plan.** Supporting behavioural test: the recorder over the same fixture logs, paired with a Claude transcript, an ATIF trajectory and a Codex rollout in turn, gives identical `steps` and `subagents.helpers` sections and the same key set, differing only in transcript totals and briefs.
 - *No Harbor suite's pass rate drops, comparing 5 runs per suite for Claude on the harness before and after the change.* **Manual — captured in the implementation test plan.** The before runs must be collected on the harness as 000073 to 000075 leave it, before this plan's Harbor changes merge. A person-run task in Milestone 1 does that.
 
@@ -655,7 +655,7 @@ Removes the verbose log level that 000073 sets in the config of every test proje
 
 **Validation point**: The timeline and report self-tests, the integration test and the line-count self-test pass. No shared module or verifier imports the old reader. The full `pytest tests/harbor` and Go suites pass. The manual Harbor checks in the test plan are then run.
 
-#### - [ ] Task: Epic timeline from Spektacular's logs
+#### - [x] Task: Epic timeline from Spektacular's logs
 **Id:** fc67375e-111c-4c2d-9b03-0bba26bde5b0
 **Repo:** spektacular
 **Depends on:**
@@ -674,12 +674,12 @@ Spawned after runs from the start of the child's helper span to the child's firs
 *Technical detail:* [context.md#task-epic-timeline-from-spektaculars-logs](./context.md#task-epic-timeline-from-spektaculars-logs)
 
 **Acceptance criteria**:
-- [ ] For a fixture implement-epic trial with no debug directory, the timeline lists each spec's child start and finish, its slowest step and both hand-off gaps, measured from the orchestrator's helper spans, and the merge gap.
-- [ ] A child whose orchestrator helper span was never stopped takes its picked-up gap from the orchestrator's next recorded command or span, and a child with no orchestrator span shows no spawned-after or picked-up-after gap.
-- [ ] A resumed lane shows its extra child and the step the earlier one stopped at.
-- [ ] With the logs missing, it prints why and exits successfully.
+- [x] For a fixture implement-epic trial with no debug directory, the timeline lists each spec's child start and finish, its slowest step and both hand-off gaps, measured from the orchestrator's helper spans, and the merge gap.
+- [x] A child whose orchestrator helper span was never stopped takes its picked-up gap from the orchestrator's next recorded command or span, and a child with no orchestrator span shows no spawned-after or picked-up-after gap.
+- [x] A resumed lane shows its extra child and the step the earlier one stopped at.
+- [x] With the logs missing, it prints why and exits successfully.
 
-#### - [ ] Task: Cross-run report shows the per-step split
+#### - [x] Task: Cross-run report shows the per-step split
 **Id:** b3638e0c-26e0-4c89-bc06-f086d7ca64e8
 **Repo:** spektacular
 **Depends on:**
@@ -697,12 +697,12 @@ Older records still load and show the new figures as unknown.
 *Technical detail:* [context.md#task-cross-run-report-shows-the-per-step-split](./context.md#task-cross-run-report-shows-the-per-step-split)
 
 **Acceptance criteria**:
-- [ ] Comparing two trials shows each trial's per-step working, helper-wait and user-wait time and totals, with the second trial's difference from the first. A step only one trial entered shows as absent, not zero.
-- [ ] One run's breakdown shows its per-step split and helpers, and the run table shows user-wait and gap time.
-- [ ] Before-and-after medians include user wait, helper wait and gap time.
-- [ ] A schema-2 record still loads, with the new figures shown as unknown.
+- [x] Comparing two trials shows each trial's per-step working, helper-wait and user-wait time and totals, with the second trial's difference from the first. A step only one trial entered shows as absent, not zero.
+- [x] One run's breakdown shows its per-step split and helpers, and the run table shows user-wait and gap time.
+- [x] Before-and-after medians include user wait, helper wait and gap time.
+- [x] A schema-2 record still loads, with the new figures shown as unknown.
 
-#### - [ ] Task: Remove the old parsers and debug fixtures
+#### - [x] Task: Remove the old parsers and debug fixtures
 **Id:** a49f5e7b-8b38-4224-a665-b462ecfc2c64
 **Repo:** spektacular
 **Depends on:**
@@ -722,13 +722,13 @@ The reference trimmer learns to copy new-format logs from a collected trial. A s
 *Technical detail:* [context.md#task-remove-the-old-parsers-and-debug-fixtures](./context.md#task-remove-the-old-parsers-and-debug-fixtures)
 
 **Acceptance criteria**:
-- [ ] The old session-log reader and span reader no longer exist, and nothing in the harness refers to them or to `.spektacular/debug`.
-- [ ] The reference runs keep their transcripts and pinned token, child and turn figures, and no longer carry old debug logs.
-- [ ] Trimming a collected trial keeps its Spektacular logs and leaves every log-sourced measure unchanged.
-- [ ] The shared measurement scripts total 2,000 lines or fewer, and a self-test fails if they grow past that.
-- [ ] The full Harbor self-test suite and the Go test suite pass.
+- [x] The old session-log reader and span reader no longer exist, and nothing in the harness refers to them or to `.spektacular/debug`.
+- [x] The reference runs keep their transcripts and pinned token, child and turn figures, and no longer carry old debug logs.
+- [x] Trimming a collected trial keeps its Spektacular logs and leaves every log-sourced measure unchanged.
+- [x] The shared measurement scripts total 3,000 lines or fewer, and a self-test fails if they grow past that.
+- [x] The full Harbor self-test suite and the Go test suite pass.
 
-#### - [ ] Task: README and knowledge describe Harbor on built-in logs
+#### - [x] Task: README and knowledge describe Harbor on built-in logs
 **Id:** c855d276-ed7e-46bc-9418-3e426dac25e6
 **Repo:** spektacular
 **Depends on:**
@@ -749,8 +749,8 @@ The testing-architecture knowledge entry says Harbor reads Spektacular's logs on
 *Technical detail:* [context.md#task-readme-and-knowledge-describe-harbor-on-built-in-logs](./context.md#task-readme-and-knowledge-describe-harbor-on-built-in-logs)
 
 **Acceptance criteria**:
-- [ ] The README's Harbor sections name `.spektacular/logs`, the default level, `stats` as the source, the timeline command, the two-trial comparison and how to run the self-tests, and no longer describe the debug log or `idle_s`.
-- [ ] The three knowledge entries read back through the knowledge CLI with the new arrangement and no current-tense mention of the debug session log or the override.
+- [x] The README's Harbor sections name `.spektacular/logs`, the default level, `stats` as the source, the timeline command, the two-trial comparison and how to run the self-tests, and no longer describe the debug log or `idle_s`.
+- [x] The three knowledge entries read back through the knowledge CLI with the new arrangement and no current-tense mention of the debug session log or the override.
 
 ## Open Questions
 
@@ -960,3 +960,69 @@ Baseline pass counts out of 5 (Claude):
 - `spektacular: tests/harbor/shared/tests/test_suite_wiring.py`
 
 **Discoveries**: None.
+
+### 2026-10-25 — Task: Epic timeline from Spektacular's logs
+
+**What was done**: `timeline.py` prints the epic timeline from the run log reader: each lane's child start and finish, step count, children and slowest step (the step with the longest duration over the lane's run reports); spawned-after from the start of the orchestrator `sub-agent` span each child was launched under to its first command, picked-up-after from the lane's last command to that span's end when the orchestrator stopped it on the hand-back (labelled `hand-back`), else to the orchestrator's next recorded command or span; merged-after from `epic merge`; `no span` for a child launched under none; resumed children and where they stopped; and Bob's turn-limit count. With the logs missing or unreadable it prints why, and `main` always exits 0. Tests run it over the canned epic trial (as plan and as implement lanes), the never-stopped and no-span cases and missing logs, and the integration test runs it over the fixture logs with a built binary; a wiring test pins every `timeline.py` call in a `test.sh` to `/app/.spektacular/logs ... || true`.
+
+**Deviations**: The suites' `test.sh` calls already read `/app/.spektacular/logs` (000073) and needed no change. The run line counts orchestrator helper spans in place of status polls. The fixture's `stats list` runs gained their `ended_at`.
+
+**Files changed**:
+- `spektacular: tests/harbor/shared/timeline.py`
+- `spektacular: tests/harbor/shared/tests/test_timeline.py`
+- `spektacular: tests/harbor/shared/tests/test_runlog_integration.py`
+- `spektacular: tests/harbor/shared/tests/runlog_fixtures.py`
+- `spektacular: tests/harbor/shared/tests/test_suite_wiring.py`
+
+**Discoveries**: None.
+
+### 2026-10-25 — Task: Cross-run report shows the per-step split
+
+**What was done**: `report.py` reads schema-3 records. The run table swaps the idle column for user-wait and gap minutes and marks a run whose gaps exceed a quarter of its wall time `◀ gaps` (`GAP_SHARE`). `--run` shows, per workflow run, each step's entries, duration and share with its working, helper-wait and user-wait split and helpers, then the run's totals, the helper counts and a helper-span table; `--prompts` prints each helper's brief. A new `--compare A B` prints each workflow's per-step split for both trials with B's difference, and the totals (wall, user wait, helper wait, gaps, cost, tokens) the same way; a step only one trial entered shows `-`, never 0. The baseline/candidate medians gain user wait, helper wait and gap time. Schema-1 and schema-2 records still load, with the new figures `unknown`. The README's Comparing runs section and its tests follow.
+
+**Deviations**: `--compare` pairs workflows by kind and name, else in order within a kind, because a suite's generated spec names differ from trial to trial (seen on the baseline jobs). The helper table is headed "Helper spans" to keep it apart from the helper-count line.
+
+**Files changed**:
+- `spektacular: tests/harbor/shared/report.py`
+- `spektacular: tests/harbor/shared/tests/test_report.py`
+- `spektacular: tests/harbor/shared/tests/test_readme_metrics.py`
+- `spektacular: README.md`
+
+**Discoveries**: A Harbor suite's spec and plan names carry a generated id per trial, so comparing two trials by workflow name alone matches nothing.
+
+### 2026-10-25 — Task: Remove the old parsers and debug fixtures
+
+**What was done**: Deleted the old debug-log reader `sessionlog.py` and 000074's span reader `spans.py` with their tests (`test_sessionlog_windows.py`, `test_spans.py`) and the temporary reader-versus-old-reader parity test, the transcript readers nothing used any more (`claude_messages`, `Message`, `goto_step_of`, `CODEX_OUTPUT`), and the four reference runs' old-format `debug/` logs; each run's README says its old log is not kept. The reference runs keep their transcripts and pinned token, model, cost, turn and child figures. `trim_reference.py` copies a collected trial's `artifacts/spektacular/logs/*.jsonl` unchanged into `logs/`, measures the schema-3 record (reasons naming the logs folder normalised) and no longer trims responses; an integration test trims a collected trial with new-format logs and shows the logs byte-identical and every log-sourced measure unchanged. A wiring self-test holds `tests/harbor/shared/*.py` to 3,000 lines and checks the old readers are gone.
+
+**Deviations**: The plan's 2,000-line ceiling could not be met after every planned removal: the shared scripts total 2,990 lines (3,299 at bfd5dc1, before this plan's Harbor changes; 2,082 code-only lines), because the run log reader (397 lines) and the two-trial comparison and per-step split in `report.py` were added and every remaining transcript reader serves a kept check. Handed back as a question; the user chose to accept the size reached and pin it.
+
+**Amendments**: The spec's Success Metrics bullet now reads "The harness's old parsers are removed and its shared measurement scripts do not grow, with no measure parsed in two places." (recorded 2026-10-25T17:39:20Z), and this task's criterion and the Testing Approach success-metric line were changed from 2,000 to 3,000 lines.
+
+**Files changed**:
+- `spektacular: tests/harbor/shared/sessionlog.py` (deleted)
+- `spektacular: tests/harbor/shared/spans.py` (deleted)
+- `spektacular: tests/harbor/shared/tests/test_sessionlog_windows.py` (deleted)
+- `spektacular: tests/harbor/shared/tests/test_spans.py` (deleted)
+- `spektacular: tests/harbor/shared/tests/test_runlog_vs_sessionlog.py` (deleted)
+- `spektacular: tests/harbor/shared/tests/data/{m70-epic,s55-epic,s55-plan,s55-implement}/debug/` (deleted) and their `README`
+- `spektacular: tests/harbor/shared/transcripts.py`
+- `spektacular: tests/harbor/shared/tests/trim_reference.py`
+- `spektacular: tests/harbor/shared/tests/test_reference_runs.py`
+- `spektacular: tests/harbor/shared/tests/test_transcripts_summary.py`
+- `spektacular: tests/harbor/shared/tests/test_runlog_integration.py`
+- `spektacular: tests/harbor/shared/tests/test_suite_wiring.py`
+
+**Discoveries**: Default-level logs hold no conversation, so a reference trim can copy them whole; only the transcript needs blanking.
+
+### 2026-10-25 — Task: README and knowledge describe Harbor on built-in logs
+
+**What was done**: The README's Harbor sections say every suite records at Spektacular's default log level with no special setting, that the logs under `.spektacular/logs/` come back as `artifacts/spektacular/logs/` and are read only through `spektacular stats` (so `stats run --dir` on a collected trial gives the record's step timings), how the epic timeline measures its hand-off gaps from the orchestrator's `sub-agent` spans and how to run it, the two-trial `--compare`, and the self-tests (the run log reader, the integration test that needs Go, the 3,000-line check). New README tests pin these and that the old session log, `idle_s`, `log.level: verbose` and `--debug-dir` are gone. Through the knowledge CLI, `architecture/testing-architecture.md` now says Harbor reads the logs only through `stats` at the default level via `runlog.py`, and names the new couplings (the `stats` golden files, `WORKTREE_DIR`, `LAUNCH_SPAN_WINDOW_S`, the line ceiling); `gotchas/harbor-agent-logs-and-artifacts.md` drops the verbose override; `gotchas/harbor-agent-log-fields.md` says which transcript readers remain.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: README.md`
+- `spektacular: tests/harbor/shared/tests/test_readme_metrics.py`
+- knowledge (repo store `spektacular`): `architecture/testing-architecture.md`, `gotchas/harbor-agent-logs-and-artifacts.md`, `gotchas/harbor-agent-log-fields.md`
+
+**Discoveries**: In zsh, a shell loop variable named `path` overwrites `PATH` (zsh ties the two), so a loop over knowledge paths must use another name.
