@@ -32,3 +32,5 @@ Orchestrated run (epic 000002). Code: spektacular worktree
 ## Task 4 (stats list/run CLI): done; Milestone 1 committed via auto_commit.
 - cmd tests: seedLogs/statsProject/stats/statsJSON helpers in cmd/stats_test.go; t.Chdir(t.TempDir()) for no-project commands (worktree guard).
 - gaps under 1 ms are not gaps.
+
+## Tasks 5-6 (compare/summary): done; Milestone 2 committed. Remaining: docs page (docs repo, needs npm ci) and README.

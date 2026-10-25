@@ -500,7 +500,7 @@ Adds `list` and `run` to the `spektacular stats` command group. Both read the pr
 
 **Validation point**: Unit tests over five fixture implement runs give the expected counts, medians and percentiles. A two-run spec comparison shows each step's values, its differences, and an absent step as `null`. `cmd` tests show both commands in both formats, with their refusals. The full Go suite passes.
 
-#### - [ ] Task: Compare and summarise runs
+#### - [x] Task: Compare and summarise runs
 **Id:** 8c6b6ead-cdbf-48a4-b7f3-ce6a3a5ac516
 **Repo:** spektacular
 **Depends on:**
@@ -512,12 +512,12 @@ Adds side-by-side comparison and multi-run summaries to the run statistics packa
 *Technical detail:* [context.md#task-compare-and-summarise-runs](./context.md#task-compare-and-summarise-runs)
 
 **Acceptance criteria**:
-- [ ] Comparing two spec runs shows each step's duration for both runs, and the second run's difference from the first in time and percentage. The totals are shown the same way.
-- [ ] A step only one run entered is shown as absent for the other, never as zero, and a difference against a zero or absent base has no percentage.
-- [ ] Summarising five implement runs shows, for each step and for the totals, a count of 5, the median and the 90th percentile.
-- [ ] A step entered by only some of the summarised runs shows how many runs entered it.
+- [x] Comparing two spec runs shows each step's duration for both runs, and the second run's difference from the first in time and percentage. The totals are shown the same way.
+- [x] A step only one run entered is shown as absent for the other, never as zero, and a difference against a zero or absent base has no percentage.
+- [x] Summarising five implement runs shows, for each step and for the totals, a count of 5, the median and the 90th percentile.
+- [x] A step entered by only some of the summarised runs shows how many runs entered it.
 
-#### - [ ] Task: Compare and summarise from the command line
+#### - [x] Task: Compare and summarise from the command line
 **Id:** d2baacfc-4bdf-4150-8660-4e6a52befcbc
 **Repo:** spektacular
 **Depends on:**
@@ -530,11 +530,11 @@ Adds `spektacular stats compare` and `spektacular stats summary`, with the same 
 *Technical detail:* [context.md#task-compare-and-summarise-from-the-command-line](./context.md#task-compare-and-summarise-from-the-command-line)
 
 **Acceptance criteria**:
-- [ ] `stats compare` with no selection compares the two most recent runs of the latest run's kind, oldest first. With two or more `--run` values, it compares exactly those, in that order.
-- [ ] `stats summary` with no selection summarises every run of the latest run's kind, and accepts the same selection as the other commands.
-- [ ] Both commands give the same figures in table and JSON form, and the JSON uses the field names in the plan's Data Structures section.
-- [ ] Asking to compare fewer than two runs is refused with a message saying how to name two.
-- [ ] Every log file is byte-identical before and after `stats compare` and `stats summary`.
+- [x] `stats compare` with no selection compares the two most recent runs of the latest run's kind, oldest first. With two or more `--run` values, it compares exactly those, in that order.
+- [x] `stats summary` with no selection summarises every run of the latest run's kind, and accepts the same selection as the other commands.
+- [x] Both commands give the same figures in table and JSON form, and the JSON uses the field names in the plan's Data Structures section.
+- [x] Asking to compare fewer than two runs is refused with a message saying how to name two.
+- [x] Every log file is byte-identical before and after `stats compare` and `stats summary`.
 
 ### Milestone 3: The run report is documented
 
@@ -704,3 +704,34 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - `spektacular: internal/runstats/gaps_test.go`
 
 **Discoveries**: `cmd` tests that run a command with no project (such as `--schema`) must `t.Chdir` to a temp directory first: run from inside a spec worktree, every command is refused with `inside_spec_worktree`. `output.Write` re-marshals the result through a map, so the JSON keys come out sorted, whatever the struct order.
+
+### 2026-10-25 — Task: Compare and summarise runs
+
+**What was done**: Added `Compare` and `Summarise` to `internal/runstats`. Both build a report per run and line the runs up by step name (the first run's steps in order, then later runs' new steps), emitting one generic row per figure: values with differences and percentages against the first run for a comparison, and count, median and nearest-rank 90th percentile for a summary. Added `RenderComparison` and `RenderSummary` text tables, with JSON and text golden files.
+
+**Deviations**: `Comparison` and `Summary` carry `gap_threshold_ms` themselves, as `Report` does. The renderers take the skipped-line count, like `RenderReport`. A figure whose first run has no value gets no difference for any run (there is no base). The comparison text also gives each run's summary line above the tables.
+
+**Files changed**:
+- `spektacular: internal/runstats/compare.go`
+- `spektacular: internal/runstats/summary.go`
+- `spektacular: internal/runstats/render.go`
+- `spektacular: internal/runstats/compare_test.go`
+- `spektacular: internal/runstats/summary_test.go`
+- `spektacular: internal/runstats/testdata/compare.golden.json`
+- `spektacular: internal/runstats/testdata/compare.golden.txt`
+- `spektacular: internal/runstats/testdata/summary.golden.json`
+- `spektacular: internal/runstats/testdata/summary.golden.txt`
+
+**Discoveries**: The nearest-rank index is computed in integers, `(9n+9)/10 - 1`, rather than with `math.Ceil(0.9*n)`, which floating point can push one rank too high.
+
+### 2026-10-25 — Task: Compare and summarise from the command line
+
+**What was done**: Added `spektacular stats compare` and `spektacular stats summary`, sharing `stats run`'s selection, logs directory, `--gap-threshold` and output formats through one `statsSelect` helper, each with `--schema`. With no selection, `compare` takes the two latest runs of the latest run's kind, oldest first, and `summary` every run of that kind; named `--run` values are used exactly, in order. Fewer than two runs to compare gives `stats_compare_needs_two`. `cmd` tests cover the defaults, named order, the refusal, the summary by kind over five implement runs, table and JSON agreement, the JSON field names and byte-identical logs.
+
+**Deviations**: The compare and summary JSON contract is documented on `statsCompareResult` in `cmd/stats.go`, so the goal reviewer could check field names without reading the plan. `stats run` now also goes through `statsSelect`, so a bad kind refusal comes from one place.
+
+**Files changed**:
+- `spektacular: cmd/stats.go`
+- `spektacular: cmd/stats_test.go`
+
+**Discoveries**: None.

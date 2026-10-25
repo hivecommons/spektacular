@@ -624,6 +624,156 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "8c6b6ead-cdbf-48a4-b7f3-ce6a3a5ac516",
+      "title": "Compare and summarise runs",
+      "checks": [
+        {
+          "at": "2026-10-25T14:39:49Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "8c6b6ead-cdbf-48a4-b7f3-ce6a3a5ac516",
+            "title": "Compare and summarise runs",
+            "criteria": [
+              "Comparing two spec runs shows each step's duration for both runs, and the second run's difference from the first in time and percentage. The totals are shown the same way.",
+              "A step only one run entered is shown as absent for the other, never as zero, and a difference against a zero or absent base has no percentage.",
+              "Summarising five implement runs shows, for each step and for the totals, a count of 5, the median and the 90th percentile.",
+              "A step entered by only some of the summarised runs shows how many runs entered it."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/compare.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/summary.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/render.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/compare_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "summary_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "testdata/compare.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "summary.golden.json"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/runstats/compare.go:43-57 Compare builds a Figure per step (stepFigures incl. duration_ms) and per total (totalFigures incl. wall_ms); newFigure (compare.go:108-126) computes Delta = value minus base and DeltaPct rounded to one decimal. render.go:192-229 RenderComparison prints each run's cell with its difference and percentage via figureCells (render.go:272-293), for both the 'Steps (duration)' and 'Totals' sections. compare_test.go:75-127 TestCompareTwoSpecRuns asserts interview 10m00s vs 12m00s (+2m00s, +20%) and wall 17m01s vs 14m01s (-3m00s, -17.6%)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "compare.go:69-96 buildTable leaves a step's value nil for each run that did not enter it (vals initialised to nil, only set when the row exists), so the JSON value is null, and render.go:279-281 prints '-' for it. compare.go:110-124 newFigure returns no Delta when the base is nil, leaves Delta nil when either side is nil, and sets DeltaPct only when base != 0. compare_test.go:98-109 checks split absent for run 2 (Values nil, Delta nil, DeltaPct nil), TestCompareStepOrderAddsLaterRunsSteps (compare_test.go:129-143) checks an absent base gives no difference or percentage, and the zero-base wait figure gets nil DeltaPct."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "summary.go:34-48 Summarise gives every total and every step figure a Stat; summary.go:50-70 newStat sets Count to the number of non-nil values, Median (middle value, or mean of the two middles) and P90 (nearest rank, index ceil(0.9n)-1). For five runs P90 is the 5th smallest value. summary_test.go:49-70 TestSummariseFiveImplementRuns asserts analyze duration Count 5, Median 30000, P90 50000, and every total Count 5 with wall_ms Median 71000 and P90 91000. render.go:233-263 RenderSummary prints a RUNS, MEDIAN and P90 row for each step and each total. summary_test.go:102-105 checks the text lines 'analyze 5 30.0s 50.0s' and 'wall_ms 5 1m11s 1m31s'."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "A step appears in a run's values only when the run's report has that step (compare.go:80-93, summary.go via buildTable). Count is the number of non-nil values (summary.go:52-57), so a step entered by only some runs gets a Count of that many. summary_test.go:59-60 asserts verify has Count 3 when entered by 3 of 5 runs, and render.go:248 prints that count in the RUNS column of the step table."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "d2baacfc-4bdf-4150-8660-4e6a52befcbc",
+      "title": "Compare and summarise from the command line",
+      "checks": [
+        {
+          "at": "2026-10-25T14:42:42Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "d2baacfc-4bdf-4150-8660-4e6a52befcbc",
+            "title": "Compare and summarise from the command line",
+            "criteria": [
+              "`stats compare` with no selection compares the two most recent runs of the latest run's kind, oldest first. With two or more `--run` values, it compares exactly those, in that order.",
+              "`stats summary` with no selection summarises every run of the latest run's kind, and accepts the same selection as the other commands.",
+              "Both commands give the same figures in table and JSON form, and the JSON uses the field names in the plan's Data Structures section.",
+              "Asking to compare fewer than two runs is refused with a message saying how to name two.",
+              "Every log file is byte-identical before and after `stats compare` and `stats summary`."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:262 calls runstats.ForCompare(c, f). internal/runstats/select.go:142-159: with two or more --run values it returns the candidates in the order given, which Candidates builds from the named order (select.go:85-100). With no selection it takes kind[1], kind[0] from the latest run's kind, which is oldest first because Candidates is newest first. cmd/stats_test.go:489-502 checks the default pair [statsPlanRun, statsOpenPlan] and the named order [statsImplRun, statsSpecRun]."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:289 calls runstats.ForSummary(c, f). select.go:165-175 returns every candidate of the latest run's kind, reversed to oldest first, or the named runs in order. Selection flags go through statsSelect (cmd/stats.go:302-317), which is shared with the other commands. cmd/stats_test.go:533-564 covers the default, --kind implement, --agent codex and the no-match refusal."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Both commands build one value and pass it to a JSON writer and a renderer: cmd/stats.go:267-270 (Comparison) and cmd/stats.go:294-297 (Summary). The renderers are internal/runstats/render.go (RenderComparison, RenderSummary) and read the same struct. JSON keys match the contract on statsCompareResult (cmd/stats.go:93-109): compare.go:20-39 has figure, values, delta, delta_pct, step, figures, gap_threshold_ms, runs, totals, steps. summary.go:9-28 has figure, count, median, p90, step, figures and the same top level. The plan's Data Structures section was not read directly (store file), so the match relies on the contract comment; cmd/stats_test.go:580-613 checks the key names and figure order."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "select.go:142-159 returns ErrTooFew for fewer than two runs. cmd/stats.go:439-441 maps it to code stats_compare_needs_two with the message 'a comparison needs at least two runs, and the selection gives fewer' and the next action 'name two runs with --run \u003cid\u003e --run \u003cid\u003e ...'. cmd/stats_test.go:519-531 exercises a single --run, a kind with one run, and a narrowed selection."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "The stats group carries the logging-exempt annotation (cmd/stats.go:21-22), so its subcommands are never logged. cmd/stats.go compare and summary only read through runstats.Load and Candidates, and the diff adds no write calls. cmd/stats_test.go:566-578 (TestStatsCompareAndSummaryLeaveTheLogsByteIdentical) takes a raw snapshot before and after six compare and summary invocations at the verbose level and requires them equal."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }
