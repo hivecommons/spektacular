@@ -9,6 +9,10 @@ description: Plan every outstanding spec of an epic in one request, running the 
 > - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
 > - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
+**Mark spans.** Before you launch a helper agent, run `spektacular trace start <helper> --type sub-agent` and put the id it prints in the helper's brief: "Your parent span is `<id>`: start any span of your own with `--parent <id>`." When the helper returns, run `spektacular trace stop <id>` (add `--status error` if it failed), chained with your next command.
+
+Before you ask the user a question, run `spektacular trace start <question> --type user-wait`, and once they answer run `spektacular trace stop <id>`, chained with your next command.
+
 > **STOP. Read this before running any command below.**
 > Planning an epic is a loop over many specs, and every spec is its own multi-step plan workflow. Starting the first child agent, or seeing the first spec finish, is **NOT** completion. Keep driving the loop below until `spektacular status <epic> --format json` reports no spec left to plan, or the run has stopped, and only then give the final report.
 
@@ -61,6 +65,7 @@ Give each child exactly what it needs, because it inherits nothing from you:
 - to **start**: run `spektacular plan new --data '{"name":"<spec>","orchestrated":true}'`;
 - to **resume**: run the same `plan new` command. It returns a resume report for the spec's lane instead of starting over; read back what the report names (the plan's working files and the lane's notes), then run the `goto` it gives, `spektacular plan goto --data '{"step":"<current_step>","name":"<spec>"}'`;
 - "Follow the `spek-plan` skill. This run is orchestrated: every `goto` carries `\"name\":\"<spec>\"`, and you never ask the user anything yourself.";
+- its parent span: the id `spektacular trace start` printed when you marked this child's launch, given as "Your parent span is `<id>`: start any span of your own with `--parent <id>`.";
 - the store-access rule above, word for word;
 - that only you write the epic's planning summary, so the child never runs `spektacular epic summary write`;
 - the hand-back contract and the definition of a genuine open question, below.
@@ -69,7 +74,7 @@ Give each child exactly what it needs, because it inherits nothing from you:
 
 A child ends every turn that stops its work with a final message whose **first line** is exactly one of:
 
-- `DONE: <spec>`, followed by the plan summary its walkthrough step prepares (in an orchestrated run the walkthrough prepares a summary instead of asking for sign-off): the approach, the milestones and tasks (naming any task a person must do), what is out of scope, the drafting assumptions, the project-wide rules it relies on or decides, one per line, and the manual checks its Testing Approach sends to the test plan (success metrics and reviews a person must make), one per line. Then any durable discovery worth saving to the knowledge base.
+- `DONE: <spec>`, followed by the plan summary its walkthrough step prepares (in an orchestrated run the walkthrough prepares a summary instead of asking for sign-off): the approach, the milestones and tasks (naming any task a person must do), what is out of scope, the drafting assumptions, the project-wide rules it relies on or decides, one per line, and the manual checks its Testing Approach sends to the test plan (success metrics and reviews a person must make), one per line. Then every knowledge entry it wrote (tier, store, path, why): a child writes durable knowledge itself through the `spek-knowledge` skill.
 - `QUESTION: <spec>`, followed by the question, the options, and the default it recommends. It then waits for your answer and carries on from the same step.
 - `FAILED: <spec>`, followed by the step it reached and the reason it cannot go on.
 
@@ -109,7 +114,7 @@ When no child is running and nothing is left to start, read the summary with `sp
 
 A change to a plan document, where `<doc>` is `plan`, `context` or `research`: read it with `spektacular plan file read <spec> <doc>`, stage the edited document under `.spektacular/tmp/`, write it back with `spektacular plan file write <spec> <doc> --from <path>`, and remove the scratch file. A change to the summary goes through `spektacular epic summary write` the same way.
 
-Offer to save any durable discovery the children reported with the `spek-knowledge` skill, and save it only if the user accepts. Close the review on a direct confirmation question.
+Report every knowledge entry the children wrote (tier, store, path, why), so the user sees how the knowledge base changed. Close the review on a direct confirmation question.
 
 Skip the review if no plan was produced in this run.
 

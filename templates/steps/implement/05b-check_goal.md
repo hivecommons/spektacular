@@ -61,11 +61,14 @@ Launch the reviewer as a separate helper agent, never as yourself:
 
 Where you can choose the helper's tools, give it read and search tools only, never a tool that writes, edits or runs commands.
 
+The reviewer is a helper agent, so every launch of it, a retry or a re-ask included, is marked as a span the way the **Mark spans** block at the end of this step says: start the span just before launching it, and keep the id it prints.
+
 Hand the reviewer exactly these, and nothing else:
 
 1. the goal block from Step 1, verbatim;
 2. the verify step's pass/fail summary, one line per command;
-3. pointers to the work: each code root, the staged `{{goal_tmp_dir}}/<repo>.diff` and `{{goal_tmp_dir}}/<repo>.status` paths, and the files the goal names.
+3. pointers to the work: each code root, the staged `{{goal_tmp_dir}}/<repo>.diff` and `{{goal_tmp_dir}}/<repo>.status` paths, and the files the goal names;
+4. the parent-span line the **Mark spans** block gives, with the reviewer's span id.
 
 Give it nothing from your own conversation: no summary of what you did, no account of your reasoning, and no claim that the work is complete or that any criterion is met. The reviewer judges the work from the files, not from you.
 
@@ -73,7 +76,7 @@ Then wait for the reviewer to return. Do not sleep, poll its output or schedule 
 
 ### Step 4: Record the verdicts
 
-Write the reviewer's reply **unchanged** to `{{goal_tmp_dir}}/reply.json` with your own file tool. Never edit, reorder, complete or summarise it. Then record it:
+Write the reviewer's reply **unchanged** to `{{goal_tmp_dir}}/reply.json` with your own file tool. Never edit, reorder, complete or summarise it. Then stop the reviewer's span, chained with recording the reply:
 
 ```
 {{config.command}} implement goal record --data '{"name":"{{plan_name}}","item":"{{{goal.item}}}"}' --from {{goal_tmp_dir}}/reply.json

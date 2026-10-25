@@ -61,3 +61,12 @@ not a `system` subtype.
 those carrying usage; harbor's own rollout-to-ATIF conversion skips them too.
 
 The readers that apply these rules live in `tests/harbor/shared/transcripts.py`.
+
+**Only tokens, models, cost, turns and briefs come from these logs now.**
+Since spec 000076, every step, helper, wait and gap figure in a Harbor
+metrics record comes from Spektacular's own logs through `spektacular
+stats`, the same way for every agent; none is taken from a transcript. What
+remains in `tests/harbor/shared/transcripts.py` reads the totals (tokens,
+models, cost, turns, model and wall time), the child agents' briefs and
+background state, the main agent's turns and wake-ups, and the launches the
+goal-check verifier checks.

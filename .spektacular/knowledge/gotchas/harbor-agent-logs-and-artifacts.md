@@ -29,15 +29,22 @@ directory holds its credentials (`/tmp/codex-home` carries Codex's
 `auth.json`, `~/.bob/settings` holds the Bob login `bob_agent.py` uploads).
 Collect only the log directory beneath it.
 
-**Spektacular's own session log comes back for every agent.** Each suite's
-Dockerfile sets `ENV SPEKTACULAR_SESSION_LOG=on`, which records every
-`spektacular` call to `.spektacular/debug/` whatever `debug.enabled` says,
-and the existing `/app/.spektacular` artifact carries it out. `=on` records
-only where a project config exists, so a call made from a repo's code
-checkout leaves no `.spektacular/` there. Each orchestrated lane gets its own
-file holding its `new`, its `goto`s and any command whose arguments name its
-spec while it runs; the shared `no-active-workflow` file holds the
-orchestrator's commands and the few a child runs without naming its spec.
+**Spektacular's own logs come back for every agent.** No suite sets a log
+level in the configuration of the project it seeds, and
+`SPEKTACULAR_SESSION_LOG` no longer exists: every run records at the
+default level (`standard`) to `.spektacular/logs/`, one
+`<started>_<agent>_<kind>_<name>.jsonl` per workflow run (each orchestrated
+lane included) and `standalone_<day>.jsonl` for commands and spans outside
+any run, such as an epic orchestrator's. The pre-built projects' seed
+scripts switch logging off while they run and back to the default as their
+last step, so the logs hold only the agent's run. The existing
+`/app/.spektacular` artifact carries them out, and Harbor reads them only
+through `spektacular stats` (`tests/harbor/shared/runlog.py`). The verifiers
+that call `spektacular` themselves switch the project's logging off first
+(`tests/harbor/shared/loglevel.py`), so their calls stay out of the logs
+they assert against. `status` is never logged, at any level, and nothing is
+logged where no project config exists, so a call from a repo's code
+checkout leaves no log there.
 
 **Regrading needs more than artifacts.** `harbor trial regrade` also needs
 the verifier to run in its own container (`environment_mode = "separate"`),

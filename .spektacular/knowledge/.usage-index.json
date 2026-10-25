@@ -1,0 +1,392 @@
+{
+  "version": 1,
+  "entries": {
+    "architecture/cli-design-for-ai-agents.md": {
+      "created": "2026-03-05T12:23:51Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "architecture/knowledge-search-ranking.md": {
+      "created": "2026-09-10T16:17:35Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "architecture/testing-architecture.md": {
+      "created": "2026-07-31T10:18:36Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 3,
+        "last": "2026-10-25T17:45:27.3482058Z",
+        "recent": [
+          {
+            "at": "2026-10-25T17:41:55.748749858Z",
+            "workflow": "implement",
+            "spec": "000076_harbor-on-built-in-logs"
+          },
+          {
+            "at": "2026-10-25T17:44:14.863875723Z",
+            "workflow": "implement",
+            "spec": "000076_harbor-on-built-in-logs"
+          },
+          {
+            "at": "2026-10-25T17:45:27.3482058Z",
+            "workflow": "implement",
+            "spec": "000076_harbor-on-built-in-logs"
+          }
+        ]
+      }
+    },
+    "architecture/workflow-steps.md": {
+      "created": "2026-03-05T12:23:51Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "architecture/working-with-files-from-steps.md": {
+      "created": "2026-03-05T12:23:51Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "conventions/error-messages-must-suggest-remediation.md": {
+      "created": "2026-08-21T11:22:30Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "conventions/plans-never-change-the-active-install.md": {
+      "created": "2026-10-02T06:49:56Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "conventions/store-files-must-be-written-through-the-cli.md": {
+      "created": "2026-09-20T18:53:09Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "conventions/tests-must-not-depend-on-order.md": {
+      "created": "2026-09-16T12:26:48Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "conventions/tests-must-pass-for-done.md": {
+      "created": "2026-08-14T12:49:19Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "decisions/ranked-or-over-boolean-and.md": {
+      "created": "2026-09-10T14:08:09Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "glossary/stage.md": {
+      "created": "2026-09-24T07:46:50Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "glossary/step.md": {
+      "created": "2026-09-24T07:46:50Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "glossary/task.md": {
+      "created": "2026-09-25T11:53:51Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "glossary/workflow.md": {
+      "created": "2026-09-24T07:46:50Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/chmod-test-sabotage-is-ignored-by-root.md": {
+      "created": "2026-09-20T19:12:49Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/claude-session-transcripts.md": {
+      "created": "2026-10-25T19:17:40.299604989Z",
+      "tracked_since": "2026-10-25T19:17:40.299604989Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/ensure-footprint-discards-your-config.md": {
+      "created": "2026-09-09T14:52:06Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/fsm-cancel-only-works-before-transition-commits.md": {
+      "created": "2026-07-02T15:53:10Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/goto-to-current-step-is-a-silent-noop.md": {
+      "created": "2026-07-02T15:53:10Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/harbor-agent-log-fields.md": {
+      "created": "2026-10-23T11:29:51Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 2,
+        "last": "2026-10-25T19:17:28.388386883Z",
+        "recent": [
+          {
+            "at": "2026-10-25T19:17:24.412097589Z"
+          },
+          {
+            "at": "2026-10-25T19:17:28.388386883Z"
+          }
+        ]
+      },
+      "retrievals": {
+        "count": 4,
+        "last": "2026-10-25T17:45:27.353734091Z",
+        "recent": [
+          {
+            "at": "2026-10-25T17:41:56.044649089Z",
+            "workflow": "implement",
+            "spec": "000076_harbor-on-built-in-logs"
+          },
+          {
+            "at": "2026-10-25T17:44:14.885165591Z",
+            "workflow": "implement",
+            "spec": "000076_harbor-on-built-in-logs"
+          },
+          {
+            "at": "2026-10-25T17:44:35.843093698Z",
+            "workflow": "implement",
+            "spec": "000076_harbor-on-built-in-logs"
+          },
+          {
+            "at": "2026-10-25T17:45:27.353734091Z",
+            "workflow": "implement",
+            "spec": "000076_harbor-on-built-in-logs"
+          }
+        ]
+      }
+    },
+    "gotchas/harbor-agent-logs-and-artifacts.md": {
+      "created": "2026-10-21T09:11:52Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 2,
+        "last": "2026-10-25T19:17:28.388386883Z",
+        "recent": [
+          {
+            "at": "2026-10-25T19:17:24.412097589Z"
+          },
+          {
+            "at": "2026-10-25T19:17:28.388386883Z"
+          }
+        ]
+      },
+      "retrievals": {
+        "count": 3,
+        "last": "2026-10-25T17:45:27.351169996Z",
+        "recent": [
+          {
+            "at": "2026-10-25T17:41:56.034668814Z",
+            "workflow": "implement",
+            "spec": "000076_harbor-on-built-in-logs"
+          },
+          {
+            "at": "2026-10-25T17:44:14.874675573Z",
+            "workflow": "implement",
+            "spec": "000076_harbor-on-built-in-logs"
+          },
+          {
+            "at": "2026-10-25T17:45:27.351169996Z",
+            "workflow": "implement",
+            "spec": "000076_harbor-on-built-in-logs"
+          }
+        ]
+      }
+    },
+    "gotchas/harbor-suites-never-load-agents-md-at-session-start.md": {
+      "created": "2026-10-21T14:27:15Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/harbor-working-files-deleted-before-inspection.md": {
+      "created": "2026-08-14T10:28:20Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/mustache-html-escaping.md": {
+      "created": "2026-10-02T06:20:36Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/remediation-needs-the-layer-that-holds-the-facts.md": {
+      "created": "2026-09-04T08:05:44Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/repoconfig-must-start-from-default.md": {
+      "created": "2026-08-14T10:28:20Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/root-codex-is-an-empty-file.md": {
+      "created": "2026-10-21T14:27:15Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/storedirs-rewrites-paths-and-forbids-outside-root.md": {
+      "created": "2026-09-20T14:21:47Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/yaml-boolean-tokens-as-config-string-values.md": {
+      "created": "2026-09-23T10:26:06Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "learnings/step-advancement-loops-are-not-a-per-agent-wrapper-bug.md": {
+      "created": "2026-07-02T15:53:10Z",
+      "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    }
+  }
+}

@@ -12,3 +12,5 @@ repos/
 worktrees/
 worktree-repos.json
 workflows/.commit.lock
+# Command logs (the `log` settings) are local to each machine.
+logs/

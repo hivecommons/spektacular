@@ -9,6 +9,10 @@ description: Create a new Plan from an approved Specification.
 > - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
 > - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
+**Mark spans.** Before you launch a helper agent, run `spektacular trace start <helper> --type sub-agent` and put the id it prints in the helper's brief: "Your parent span is `<id>`: start any span of your own with `--parent <id>`." When the helper returns, run `spektacular trace stop <id>` (add `--status error` if it failed), chained with your next command.
+
+Before you ask the user a question, run `spektacular trace start <question> --type user-wait`, and once they answer run `spektacular trace stop <id>`, chained with your next command.
+
 > **STOP. Read this before running any command below.**
 > A single successful CLI call — including the very first `plan new` — is **NOT** task completion. It is not a milestone to report back to the user. It is one step out of many in a workflow that you must keep driving, turn after turn, without stopping, until the CLI itself tells you the workflow is *finished*. If you find yourself about to say "successfully completed" or summarize results after calling `plan new` or `plan goto` even once, you are wrong — go back and read the `instruction` field you just received, do what it says, and call `goto` again.
 

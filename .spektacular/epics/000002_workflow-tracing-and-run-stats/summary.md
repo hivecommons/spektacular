@@ -12,6 +12,8 @@ created_date: "2026-10-25"
 ## Order added for shared files
 - Added: `000073_log-mode-and-logger-providers` now depends on `000072_knowledge-access-index-and-prune`. Both change `spektacular:cmd/root.go`, `spektacular:state.json`, `spektacular:internal/config/config.go`, `spektacular:internal/config/config_test.go`, `spektacular:internal/config/schema.go`, `spektacular:tests/harbor/plan-workflow/tests/test_plan_workflow.py`, `spektacular:architecture/testing-architecture.md`, `spektacular:README.md`, `docs:src/pages/configuration.mdx`.
 - Added: `000077_html-log-viewer` now depends on `000076_harbor-on-built-in-logs`. Both change `spektacular:spektacular.step`, `spektacular:cmd/stats.go`, `spektacular:README.md`, `docs:src/pages/run-stats.mdx`.
+- Added: `000078_token-use-in-run-stats` now depends on `000076_harbor-on-built-in-logs`. Both change `spektacular:internal/runstats/render.go`, `spektacular:spans.golden.json`, `spektacular:cmd/stats.go`, `spektacular:cmd/stats_test.go`, `spektacular:README.md`, `docs:src/pages/run-stats.mdx`, `spektacular:commands.golden.json`, `spektacular:config.yaml`.
+- Added: `000078_token-use-in-run-stats` now depends on `000077_html-log-viewer`. Both change `spektacular:cmd/stats.go`, `spektacular:cmd/root_test.go`, `docs:src/pages/run-stats.mdx`, `spektacular:README.md`.
 
 ## 000072_knowledge-access-index-and-prune
 ### Approach
@@ -309,3 +311,54 @@ None. All 6 tasks are agent tasks.
 - A 5,000-span page renders in under 3 s and a zoom or selection responds in under 200 ms in current Chrome and Firefox.
 - A visual review on a real implement run of the legend, colours, bands, markers, axis, details panel and summary, with no em dashes in visible text.
 - A read of the Run viewer docs page on the built site against shipped behaviour.
+
+## 000078_token-use-in-run-stats
+### Approach
+- A new read-only leaf package `internal/agentusage` reads Claude Code's session files: the main transcript and helper files (linked by `subagents/agent-<id>.meta.json`), each request's tokens counted once per response, each `Bash` call's start and end, each `Agent` launch with its brief, and Claude Code's own `cost-state` totals.
+- New pure files in `internal/runstats` attribute tokens: a transcript drove a run when the run's own `new`/`goto` records fall inside its `Bash` calls (no hook, nothing extra from the agent; resumed runs read both sessions; orchestrated children match their helper transcripts); requests go to the step and task open at the time, else "outside any step"; helpers match their `sub-agent` span by the span id in their brief, then launch order, and their tokens stay on the launching step.
+- Session overhead (Claude Code's totals minus the transcript's requests) counts inside "outside any step" only when the session drove just this run.
+- Cost comes from `stats.prices`; pace is working time per thousand output tokens.
+- Output only grows: step, task and helper rows gain a `tokens` object, the report a top-level `tokens` section, and compare and summary six figures after the existing ones; `BuildReport` keeps its signature and `Options` gains an optional `Tokens` field.
+- Rejected: an init-installed hook, Harbor's stream-json, `cost-state` alone, transcript requests alone, a separate `stats tokens` command, built-in prices.
+
+### Milestones and tasks
+- M1, one run's report shows tokens, cost and pace beside its timings: read Claude Code sessions; price table in project configuration; place tokens on steps, tasks and helpers; report and print token figures; token figures from the command line.
+- M2, comparisons and summaries weigh runs by tokens and cost: comparisons and summaries carry tokens.
+- M3, documented: documentation site (docs repo); README.
+
+### Tasks a person must do
+None. All 8 tasks are agent tasks.
+
+### Out of scope
+- Tokens in the HTML viewer; Harbor's own token reading; budgets and alerts.
+- Agents other than Claude Code (shown unknown, `agent_unsupported`); headless stream-json; the init hook fallback.
+- Built-in or fetched prices; currency conversion; separate 5-minute and 1-hour cache-write prices; model time; separately priced thinking tokens.
+- Tokens per step entry or per user wait; standalone traces; a `--no-tokens` switch; any session cache or index; touching this repo's install.
+
+### Drafting assumptions
+- No init-installed hook: command matching works without it, including for orchestrated children and pre-upgrade sessions (flagged for review).
+- Session overhead is known only when the session drove just this run and has a `cost-state` record; otherwise unknown with `several_runs`, `no_totals` or `totals_below_transcript`.
+- Sessions are read from `$CLAUDE_CONFIG_DIR/projects`, else `~/.claude/projects`, else `--sessions-dir`, filtered by files changed since the run started; project-folder naming is not relied on.
+- Only runs whose agent is `claude` or unset are looked up.
+- Price table: optional top-level `stats.prices.<model>.{input, output, cache_read, cache_write}` per million tokens, all four required, none negative; JSON field `cost`, no currency; no settings-format bump; not written by `init`.
+- Cache writes are one type with one price; a request's time is its response's first record.
+- A transcript driving several runs gives between-run requests to the next run and trailing ones to the last.
+- Token counts are integers; `cost` rounded to 6 decimals, null when tokens exist but none are priced; `working_ms_per_1k_output` integer ms, null with no output or no duration; an incomplete cost compares as its priced part; no new error codes.
+- `runstats.Figure` values widen from int64 to float64, with existing figures' JSON proven unchanged against a saved copy of 000075's golden files.
+- A persistent `--sessions-dir` flag on `stats`; `cmd`'s `TestMain` points `CLAUDE_CONFIG_DIR` at an empty temp directory.
+
+### Project-wide rules
+- Decides: an optional top-level `stats` key in `config.yaml` (`stats.prices`), no settings-format bump (following 000072's optional-key precedent; 000073's 4 → 5 stays the only bump).
+- Decides: 000075's JSON may only gain fields; existing fields, figure order and units are unchanged.
+- Decides: `runstats.Options` gains `Tokens *TokenInput`; `BuildReport`, `Compare` and `Summarise` keep their signatures; `Figure.Values` and `Delta` become float64 with unchanged JSON.
+- Decides: new leaf package `internal/agentusage` and a persistent `--sessions-dir` flag on `stats`.
+- Decides: docs `configuration.mdx` gains a `stats` ConfigKey after `log` (shared with 000072 and 000073; the later change rebases).
+- Relies on: 000075's `internal/runstats` API, golden files and `cmd/stats.go`, shared with 000076 and 000077 (the later lands rebase and keep every golden set).
+- Relies on: 000073's command attributes and logging-exempt annotation; 000074's `sub-agent` spans and composite span id in briefs.
+- Relies on: Harbor ignoring the new JSON fields; changelog via the implement workflow; no task migrating this repo's install.
+
+### Manual checks
+- For a real implement run in a Claude Code session that drove only that run, the run total including tokens outside any step matches Claude Code's own session totals within 1%.
+- The maintainer can rank a run's steps by working time per thousand output tokens and pick out the steps that were slow for the work they did.
+- `stats run`, `compare` and `summary` against this machine's real logs and sessions (a plan run with helpers, an implement run with tasks) give plausible figures and readable tables.
+- A read of the Run statistics token sections and the `stats` configuration entry on the built site against shipped behaviour.

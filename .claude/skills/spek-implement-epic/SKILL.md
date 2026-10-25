@@ -9,6 +9,10 @@ description: Implement every planned spec of an epic in one request, running the
 > - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
 > - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
+**Mark spans.** Before you launch a helper agent, run `spektacular trace start <helper> --type sub-agent` and put the id it prints in the helper's brief: "Your parent span is `<id>`: start any span of your own with `--parent <id>`." When the helper returns, run `spektacular trace stop <id>` (add `--status error` if it failed), chained with your next command.
+
+Before you ask the user a question, run `spektacular trace start <question> --type user-wait`, and once they answer run `spektacular trace stop <id>`, chained with your next command.
+
 > **STOP. Read this before running any command below.**
 > Implementing an epic is a loop over many specs, and every spec is its own multi-step implement workflow. Starting the first child agent, or seeing the first spec finish, is **NOT** completion. Keep driving the loop below until `spektacular status <epic> --format json` reports no spec left to implement, or the run has stopped, and only then give the final report.
 
@@ -76,6 +80,7 @@ Give each child exactly what it needs, because it inherits nothing from you:
 - "Never resolve a merge or git conflict yourself, and never merge, rebase or switch branches: your worktree's branch is merged by the orchestrator.";
 - "You never write the spec's text or a design document. If the spec or a design it references is wrong, propose the amendment in a `QUESTION:` hand-back, naming the document, the section, the conflict and the change you propose.";
 - "If the goal check stops your task, because its attempts ran out or it judged a criterion impossible, hand it back as a `QUESTION:` with the criteria not met or impossible and the reviewer's evidence, and the options the step offers.";
+- its parent span: the id `spektacular trace start` printed when you marked this child's launch, given as "Your parent span is `<id>`: start any span of your own with `--parent <id>`.";
 - the store-access rule above, word for word;
 - the hand-back contract and the definition of a genuine open question, below.
 
@@ -83,7 +88,7 @@ Give each child exactly what it needs, because it inherits nothing from you:
 
 A child ends every turn that stops its work with a final message whose **first line** is exactly one of:
 
-- `DONE: <spec>`, followed by the completion summary the implement workflow's finished step reports, and any durable discovery worth saving to the knowledge base.
+- `DONE: <spec>`, followed by the completion summary the implement workflow's finished step reports, and every knowledge entry it wrote (tier, store, path, why): a child writes durable knowledge itself through the `spek-knowledge` skill.
 - `QUESTION: <spec>`, followed by the question, the options, and the default it recommends. It then waits for your answer and carries on from the same step.
 - `FAILED: <spec>`, followed by the step it reached and the reason it cannot go on.
 
@@ -128,4 +133,4 @@ End every run, finished or stopped, with:
 - **Resumed after being cut off:** each spec whose child had to be restarted because it ended without a hand-back, and how many times. When there are any, say that the agent limits how long one sub-agent may run, and that raising that limit avoids the restarts (for Bob, `session.maxTurns` in `~/.bob/settings/settings.json`; `0` means no limit).
 - **Worktrees left behind:** each spec whose worktrees remain unmerged, with their paths, so the user can inspect or finish them.
 
-Offer to save any durable discovery the children reported with the `spek-knowledge` skill, and save it only if the user accepts.
+Report every knowledge entry the children wrote (tier, store, path, why), so the user sees how the knowledge base changed.

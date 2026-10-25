@@ -872,6 +872,50 @@ func TestMerge_SpektacularChangesInBothReposAreAllListed(t *testing.T) {
 	require.Contains(t, er.NextAction, "git -C "+projWT+" revert")
 }
 
+// A directory that is only named .spektacular, such as the template `init`
+// installs or a test fixture, is code: changing it merges like any other
+// file.
+func TestMerge_DirectoryNamedLikeAStoreIsCode(t *testing.T) {
+	f := newFixture(t)
+	m := f.manager(t)
+	_, _, err := m.Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+	projWT, docsWT := f.wt("alpha", "testproj"), f.wt("alpha", "docs")
+	writeFile(t, projWT, "templates/.spektacular/.gitignore", "logs/\n")
+	commitAll(t, projWT, "template change")
+	writeFile(t, docsWT, "testdata/.spektacular/config.yaml", "schema: 1\n")
+	commitAll(t, docsWT, "fixture change")
+
+	res, err := m.Merge(testSpec)
+	require.NoError(t, err)
+	require.True(t, res.Merged)
+	require.Equal(t, "logs/\n", readFile(t, filepath.Join(f.proj, "templates", ".spektacular", ".gitignore")))
+	require.Equal(t, "schema: 1\n", readFile(t, filepath.Join(f.site, "testdata", ".spektacular", "config.yaml")))
+}
+
+// A repo whose code sits in a subfolder of its checkout keeps its store
+// there too, and a change to that store is still refused, named by its path
+// in the checkout.
+func TestMerge_NestedStoreChangeIsRefused(t *testing.T) {
+	f := newFixture(t)
+	writeRepoYAML(t, filepath.Join(f.site, "site", ".spektacular"))
+	commitAll(t, f.site, "nest the docs code")
+	writeFile(t, f.proj, ".spektacular/config.yaml", strings.Replace(projectConfig(),
+		"../../website/.spektacular", "../../website/site/.spektacular", 1))
+	commitAll(t, f.proj, "point docs at its nested store")
+
+	m := f.manager(t)
+	_, _, err := m.Ensure(testSpec, []string{"testproj", "docs"})
+	require.NoError(t, err)
+	docsWT := f.wt("alpha", "docs")
+	writeFile(t, docsWT, "site/.spektacular/knowledge/x.md", "a stray entry\n")
+	commitAll(t, docsWT, "docs knowledge")
+
+	er := requireSpektacularRefusal(t, f, m)
+	require.Contains(t, er.Message, "docs: site/.spektacular/knowledge/x.md")
+	require.NoFileExists(t, filepath.Join(f.site, "site", ".spektacular", "knowledge", "x.md"))
+}
+
 func TestMerge_NoWorktreesIsRefused(t *testing.T) {
 	f := newFixture(t)
 	_, err := f.manager(t).Merge(testSpec)

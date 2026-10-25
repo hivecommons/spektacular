@@ -10,6 +10,7 @@ memory store. When you would normally write to it — a learning, convention,
 gotcha, project fact, user preference, or anything else worth remembering
 between sessions — route the write through the `spek-knowledge` skill
 instead. The skill handles tier and store selection, search-before-write, and
-propose-then-confirm.
+the write itself. Then tell the user which entry you wrote (its path), its tier
+and store, and why it is worth keeping.
 
 Outside this repository, continue using your per-user memory store as normal.

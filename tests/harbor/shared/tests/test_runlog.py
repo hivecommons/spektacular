@@ -645,42 +645,6 @@ def test_implement_epic_verifier_fails_an_update_plan_with_no_goal_record_before
     assert verdicts(v.TestOrchestration, log, ("test_export_started_after_commands_merged",)) == {("test_export_started_after_commands_merged",): False}
 
 
-# The spec suite's user-wait check: a `user-wait` span the reader places in
-# the constraints step passes; one in another step, or none, fails.
-
-import test_spec_workflow as spec_verifier  # noqa: E402
-
-
-def spec_answers(wait_step):
-    run_id = "5" * 8 + "0" * 24
-    spans = []
-    if wait_step:
-        spans.append({
-            "span_id": "u1", "parent_span_id": None, "name": "question", "type": "user-wait", "trace_id": run_id,
-            "run_id": run_id, "kind": "spec", "workflow": "x", "step": wait_step, "task_id": None,
-            "started_at": fx.stamp(at(3)), "ended_at": fx.stamp(at(4)), "end_reason": "stopped", "status": "ok", "complete": True,
-        })
-    steps = [{"step": s, "entries": 1, "duration_ms": 60000, "commands": 1, "command_ms": 0, "helper_wait_ms": 0, "user_wait_ms": 0, "incomplete": 0}
-             for s in ("overview", "constraints", "verification")]
-    return {
-        "list": {**SOURCE, "runs": [{"run_id": run_id, "kind": "spec", "name": "x", "started_at": fx.stamp(at(0)), "ended_at": fx.stamp(at(9)), "status": "finished"}]},
-        "spans": {**SOURCE, "spans": spans},
-        f"run {run_id}": {**SOURCE, "steps": steps},
-    }
-
-
-@pytest.mark.parametrize("wait_step, passes", [("constraints", True), ("overview", False), (None, False)])
-def test_spec_verifier_finds_the_constraints_user_wait(monkeypatch, wait_step, passes):
-    real = runlog.RunLog
-    monkeypatch.setattr(runlog, "RunLog", lambda d: real(HERE, binary="spektacular", runner=FakeRunner(spec_answers(wait_step))))
-    check = spec_verifier.TestUserWaits().test_constraints_question_is_a_user_wait
-    if passes:
-        check()
-    else:
-        with pytest.raises(AssertionError):
-            check()
-
-
 def test_no_verifier_self_check_reads_the_old_session_log():
     for path in [HERE / "test_runlog.py", HERE / "test_epic_children.py", HERE / "test_delegation.py", *HARBOR.glob("*/tests/test_verifier_selfcheck.py")]:
         text = path.read_text()

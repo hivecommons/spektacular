@@ -23,6 +23,8 @@ specs:
     - name: 000078_token-use-in-run-stats
       depends_on:
         - 000075_run-stats-command
+        - 000076_harbor-on-built-in-logs
+        - 000077_html-log-viewer
 sources:
     - uri: docs/workflow-performance-investigation.md
       retrieved_date: "2026-10-24"

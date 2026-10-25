@@ -32,11 +32,11 @@ python3 -c 'import sys; sys.path.insert(0, "tests/harbor/shared"); import spans;
 - **Expected**: the marked rate is at least 0.90 per suite, averaged over its runs.
 - **Who / when**: the maintainer, before release.
 
-### 3. At least 90% of questions to the scripted user are user-wait spans
+### 3. At least 90% of questions to the user are user-wait spans
 
-- **What**: in Harbor spec runs, at least 90% of questions put to the scripted user appear as user-wait spans.
-- **How**: `make harbor-test-spec` (Claude), five runs. `TestUserWaits::test_constraints_question_is_a_user_wait` checks the scripted Constraints rejection. For the rate, count the questions the agent asked the scripted user in the transcript (`agent/claude-code.txt`: assistant turns that end with a question to the user, in the interview and each section's confirmation) and the `user-wait` spans from the span reader above.
-- **Expected**: user-wait spans divided by questions asked is at least 0.90 over the five runs, and the Constraints check passes in each.
+- **What**: in real interactive sessions, at least 90% of questions the agent puts to the user appear as user-wait spans. Harbor cannot measure this: its spec suite tells the agent no one is there and that it answers its own questions, so no real wait ever happens and its user-wait check was removed (2026-10-25, during the epic implement run).
+- **How**: with the installed binary, run the spec workflow (`/spek-new <name>`) interactively in Claude Code and answer its interview and each section's confirmation yourself, rejecting at least one draft. Then run `spektacular stats run` on that run (`spektacular stats list` names it) and `spektacular stats spans --run <run id>`. Count the questions you were asked, and the `user-wait` spans in the run.
+- **Expected**: user-wait spans divided by questions asked is at least 0.90, each wait sits in the step that asked, and each span's duration covers the time you took to answer.
 - **Who / when**: the maintainer, before release.
 
 ### 4. Marking adds no more than two tool calls per plan task

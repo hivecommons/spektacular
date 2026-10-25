@@ -1,4 +1,4 @@
-schema: 4
+schema: 5
 written_by: dev
 skills_version: dev
 name: spektacular
@@ -7,8 +7,12 @@ agent: claude
 spec_trigger_threshold: moderate
 epic_split_threshold: moderate
 auto_commit: full
-debug:
-    enabled: true
+log:
+    provider: file
+    level: verbose
+    retention: 10
+    config:
+        directory: logs
 spec:
     provider: file
     id_method: counter

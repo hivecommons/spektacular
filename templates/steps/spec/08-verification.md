@@ -28,10 +28,13 @@ Stage the assembled spec to the scratch path `.spektacular/tmp/spec_template.md`
 
 **If your agent can start sub-agents, this review is done only by one.** Reviewing the staged file in your own context does not complete this step, however carefully you do it.
 
-Spawn a subagent with a **fresh context** (use your Task/Agent tool). Give it exactly two things and nothing else:
+The reviewer is a helper agent, so mark its launch as a span the way the **Mark spans** block at the end of this step says: start the span just before spawning it, and stop it when the reviewer returns.
 
-- the path to the staged spec, `.spektacular/tmp/spec_template.md`, to read; and
-- the reviewer brief below, pasted verbatim.
+Spawn a subagent with a **fresh context** (use your Task/Agent tool). Give it exactly three things and nothing else:
+
+- the path to the staged spec, `.spektacular/tmp/spec_template.md`, to read;
+- the reviewer brief below, pasted verbatim; and
+- the parent-span line the **Mark spans** block gives, with the reviewer's span id.
 
 Tell the subagent explicitly: **review only what is written in that file.** Do not read the working files, `.spektacular/working-context.md`, the conversation, or any other source; do not ask the caller for intent. Judge the spec purely as a naive reader would. Return a flat list of findings — for each: `section`, `quote` (the offending text), `issue_type` (leak / misplaced-hard-rule / duplication / missing-constraint / format / unclear / incomplete), and `suggested_fix`. If nothing is wrong, return an empty list.
 

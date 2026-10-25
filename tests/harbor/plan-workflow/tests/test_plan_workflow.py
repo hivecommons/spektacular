@@ -548,10 +548,9 @@ def find_plan_cli_calls(calls: list) -> list:
             continue
         if _is_plan_new_call(cmd):
             results.append("new")
-        elif _is_plan_goto_call(cmd):
-            m = PLAN_GOTO_STEP_RE.search(cmd)
-            if m:
-                results.append(m.group(1))
+        if _is_plan_goto_call(cmd):
+            # One command can chain several gotos; each enters its step.
+            results.extend(PLAN_GOTO_STEP_RE.findall(cmd))
     return results
 
 

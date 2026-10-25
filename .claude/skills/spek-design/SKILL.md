@@ -9,6 +9,10 @@ description: Author, bring in, revise or reference a design document.
 > - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
 > - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
+**Mark spans.** Before you launch a helper agent, run `spektacular trace start <helper> --type sub-agent` and put the id it prints in the helper's brief: "Your parent span is `<id>`: start any span of your own with `--parent <id>`." When the helper returns, run `spektacular trace stop <id>` (add `--status error` if it failed), chained with your next command.
+
+Before you ask the user a question, run `spektacular trace start <question> --type user-wait`, and once they answer run `spektacular trace stop <id>`, chained with your next command.
+
 # What this skill does
 
 This skill handles the four ways a design document enters a project: helping the user work one

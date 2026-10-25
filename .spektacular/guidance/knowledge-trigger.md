@@ -13,25 +13,19 @@ that wasn't the obvious one, a term whose meaning had to be worked out from
 context. Recognizing this moment is your job, not the user's — don't wait to
 be asked.
 
-When you recognize the moment, offer — never write to the knowledge base
-unprompted. Something like: "this looks like an undocumented convention —
-want me to save it via `spek-knowledge`?" Say briefly what you'd capture and
-why it's worth keeping, and name the tags you would propose for it, since
-those decide whether the entry is ever found again. Wait for the user's
-decision before doing anything else.
+When you recognize the moment, write the entry yourself — do not offer it
+and do not wait for a decision. Invoke the `spek-knowledge` skill, which
+chooses the tier, store, category and tags with you and writes the entry
+through `spektacular knowledge write`. Search first, and update an existing
+entry rather than writing a near-duplicate of it. Phrase the entry as the
+general lesson, not the specific edit that surfaced it.
 
-The user's response falls into one of three outcomes:
-
-- **Accept** — invoke the `spek-knowledge` skill to write the entry. The
-  skill's own propose-then-confirm flow handles tier and store selection and the
-  actual write from there.
-- **Defer** ("not now", "later", "remind me at the end") — do not invoke the
-  skill. Continue the task normally, and treat this as temporary: if the
-  work keeps surfacing related material, you may raise the offer again later
-  in the same conversation.
-- **Decline** ("no", "not worth saving") — do not invoke the skill, and do
-  not raise the offer again for this discovery for the remainder of the
-  conversation. A decline is final for that discovery, not a "not now."
+Then, in your normal reply, tell the user what you wrote: which entry
+(its path), where it lives (its tier and store), and why it is worth
+keeping. That report is how the user sees the knowledge base change, so
+never write an entry without saying so. A user who disagrees can ask for
+the entry to be changed or deleted, and the project's version history
+holds every earlier state.
 
 This is the recognition trigger only; it does not change how a knowledge
 entry gets written once you decide to write one — that is still entirely the

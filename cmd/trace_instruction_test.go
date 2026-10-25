@@ -83,6 +83,18 @@ func TestNoStepTemplateCopiesTheTraceBlock(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// A step whose own text launches a helper with a fixed brief says, at the
+// launch, that the launch is marked and that the parent-span line is part of
+// the brief, so "nothing else" never reads as leaving it out.
+func TestHelperLaunchStepsPointAtTheTraceBlock(t *testing.T) {
+	for _, p := range []string{"steps/implement/05b-check_goal.md", "steps/spec/08-verification.md"} {
+		body, err := fs.ReadFile(templates.FS, p)
+		require.NoError(t, err)
+		require.Containsf(t, string(body), "the way the **Mark spans** block at the end of this step says", "%s marks its launch", p)
+		require.Containsf(t, string(body), "the parent-span line the **Mark spans** block gives", "%s lists the parent-span line in the brief", p)
+	}
+}
+
 func TestSpawnLibrarySkillsCarryTheHelperRule(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
