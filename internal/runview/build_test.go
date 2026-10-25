@@ -520,3 +520,41 @@ func TestEmptyColumnsAreArraysNotNull(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, string(data), ":null", "no column or list is null")
 }
+
+// The page collapses a row by skipping the rows after it that are deeper:
+// that is exactly its descendants only if every row's descendants follow it
+// contiguously, each deeper than it.
+func TestBuildDescendantsAreContiguousAndDeeper(t *testing.T) {
+	for name, rs := range map[string][]tracelog.Record{
+		"tree":      treeRecords(),
+		"generated": genRun(600, 3),
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, _ := build(t, rs, 5*time.Minute)
+			rw := m.Rows
+			n := len(rw.SpanID)
+			for i := 0; i < n; i++ {
+				// The rows after i that are deeper than it, up to the first
+				// that is not.
+				end := i + 1
+				for end < n && rw.Depth[end] > rw.Depth[i] {
+					end++
+				}
+				for j := 0; j < n; j++ {
+					isDesc := false
+					for p := rw.Parent[j]; p >= 0; p = rw.Parent[p] {
+						if p == i {
+							isDesc = true
+							break
+						}
+					}
+					require.Equal(t, isDesc, j > i && j < end, "row %d under row %d", j, i)
+				}
+				if rw.Parent[i] >= 0 {
+					require.Equal(t, rw.Depth[rw.Parent[i]]+1, rw.Depth[i], "row %d is one deeper than its parent", i)
+					require.Less(t, rw.Parent[i], i, "a parent comes before its child")
+				}
+			}
+		})
+	}
+}

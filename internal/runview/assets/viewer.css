@@ -112,6 +112,63 @@ body {
   background: var(--bg-panel);
 }
 
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.controls button,
+.summary-list button {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.controls button:hover,
+.summary-list button:hover { border-color: var(--c-step); }
+
+.threshold { display: inline-flex; gap: 6px; align-items: center; }
+
+.threshold input {
+  width: 5em;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+.summary { margin-bottom: 16px; }
+.summary h2 { margin-top: 4px; }
+
+.summary-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-list button {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  padding: 3px 8px;
+}
+
+.summary-list .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.summary-list .how { flex: none; font-variant-numeric: tabular-nums; color: var(--fg-muted); }
+
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -162,6 +219,7 @@ body {
   display: block;
   width: 100%;
   cursor: default;
+  touch-action: pan-y;
 }
 
 .spacer { width: 1px; }

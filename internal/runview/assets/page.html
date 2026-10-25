@@ -16,6 +16,15 @@
   <dl id="totals" class="totals"></dl>
 </header>
 <div class="toolbar">
+  <div class="controls">
+    <button type="button" id="reset-zoom" title="Show the whole run (Escape)">Reset zoom</button>
+    <button type="button" id="expand-all">Expand all</button>
+    <button type="button" id="collapse-steps">Collapse to steps</button>
+    <label class="threshold">Gap threshold
+      <input type="number" id="gap-threshold" step="0.5" inputmode="decimal"> min
+    </label>
+    <span id="gap-summary" class="meta"></span>
+  </div>
   <div id="legend" class="legend" aria-label="Legend"></div>
 </div>
 <main class="main">
@@ -24,6 +33,12 @@
     <div id="spacer" class="spacer"></div>
   </div>
   <aside id="details" class="details" aria-live="polite">
+    <section class="summary">
+      <h2>Longest steps</h2>
+      <ol id="longest-steps" class="summary-list"></ol>
+      <h2>Longest gaps</h2>
+      <ol id="longest-gaps" class="summary-list"></ol>
+    </section>
     <h2>Details</h2>
     <p id="details-empty" class="meta">Select a bar to see its details.</p>
     <dl id="details-list" hidden></dl>

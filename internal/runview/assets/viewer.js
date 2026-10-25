@@ -43,20 +43,62 @@
   var wall = Math.max(1, data.totals.wall_ms);
   var runStart = Date.parse(data.run.started_at);
 
-  // The page's state: the zoom window (ms from the run's start), the
-  // selected row and the gap threshold.
-  var state = { from: 0, to: wall, selected: -1, threshold: data.gap_threshold_ms };
+  var MIN_SPAN = 10; // the narrowest zoom window, in ms
 
-  // visible is the list of row indexes drawn, top to bottom.
+  // The page's state: the zoom window (ms from the run's start), the
+  // collapsed rows, the selected row and the gap threshold.
+  var state = {
+    from: 0, to: wall, selected: -1, threshold: data.gap_threshold_ms,
+    collapsed: new Uint8Array(n)
+  };
+
+  // Rows are in tree order, so a row's descendants are the rows after it
+  // up to end[row], each deeper than it. worst[row] is the strongest
+  // problem among them: failed, then interrupted, abandoned, open.
+  var RANK = { "": 0, "open": 1, "abandoned": 2, "interrupted": 3, "failed": 4 };
+  var end = new Int32Array(n);
+  var worst = new Array(n);
+  (function indexTree() {
+    var stack = [];
+    for (var i = 0; i < n; i++) {
+      while (stack.length && R.depth[stack[stack.length - 1]] >= R.depth[i]) end[stack.pop()] = i;
+      stack.push(i);
+    }
+    while (stack.length) end[stack.pop()] = n;
+    for (var r = n - 1; r >= 0; r--) {
+      var best = "";
+      for (var c = r + 1; c < end[r]; c = end[c]) {
+        var own = problemName(c), deep = worst[c];
+        if (RANK[own] > RANK[best]) best = own;
+        if (RANK[deep] > RANK[best]) best = deep;
+      }
+      worst[r] = best;
+    }
+  })();
+  function hasChildren(row) { return end[row] > row + 1; }
+
+  // visible is the list of row indexes drawn, top to bottom: every row not
+  // hidden inside a collapsed one. position maps a row to its place there,
+  // or -1.
   var visible = [];
-  for (var i = 0; i < n; i++) visible.push(i);
-  // position maps a row index to its place in visible, or -1.
   var position = new Int32Array(n);
-  function indexVisible() {
+  function computeVisible() {
+    visible = [];
+    for (var i = 0; i < n;) {
+      visible.push(i);
+      i = state.collapsed[i] && hasChildren(i) ? end[i] : i + 1;
+    }
     position.fill(-1);
     for (var v = 0; v < visible.length; v++) position[visible[v]] = v;
   }
-  indexVisible();
+
+  // collapseToSteps collapses every row but the tasks, so tasks show their
+  // steps and every other row hides its children: the page's first view.
+  function collapseToSteps() {
+    for (var i = 0; i < n; i++) state.collapsed[i] = data.types[R.type[i]] === "task" ? 0 : 1;
+  }
+  collapseToSteps();
+  computeVisible();
 
   var userWaits = [];
   for (var w = 0; w < n; w++) if (R.type[w] === T["user-wait"]) userWaits.push(w);
@@ -410,10 +452,19 @@
     }
   }
 
+  function triangleX(row) { return 6 + R.depth[row] * INDENT; }
+
   function drawLabel(row, y) {
-    var x = 8 + R.depth[row] * INDENT;
+    var x = triangleX(row);
     var prob = problemName(row);
+    var mid = y + ROW_H / 2;
     ctx.textBaseline = "middle";
+    if (hasChildren(row)) {
+      ctx.fillStyle = colours["fg-muted"];
+      ctx.font = "10px system-ui, sans-serif";
+      ctx.fillText(state.collapsed[row] ? "\u25b6" : "\u25bc", x, mid);
+    }
+    x += 12;
     if (prob) {
       ctx.fillStyle = prob === "open" ? colours["fg-muted"] : colours["c-" + prob];
       ctx.font = "bold 12px system-ui, sans-serif";
@@ -421,9 +472,32 @@
       x += 14;
     }
     var typ = typeName(row);
+    // A collapsed row says how many rows it hides, and marks the strongest
+    // problem among them.
+    var suffix = "", hidden = "";
+    if (state.collapsed[row] && hasChildren(row)) {
+      suffix = " (" + (end[row] - row - 1) + ")";
+      hidden = worst[row];
+    }
+    ctx.font = "11px system-ui, sans-serif";
+    var sw = suffix ? ctx.measureText(suffix).width : 0;
+    var hw = hidden ? 14 : 0;
     ctx.font = (typ === "task" || typ === "step" ? "600 " : "") + "12px system-ui, sans-serif";
     ctx.fillStyle = typ === "command" ? colours["fg-muted"] : colours["fg"];
-    ctx.fillText(fitText(str(R.name[row]), LABEL_W - x - 8), x, y + ROW_H / 2);
+    var name = fitText(str(R.name[row]), LABEL_W - x - 8 - sw - hw);
+    ctx.fillText(name, x, mid);
+    x += ctx.measureText(name).width;
+    if (suffix) {
+      ctx.font = "11px system-ui, sans-serif";
+      ctx.fillStyle = colours["fg-muted"];
+      ctx.fillText(suffix, x, mid);
+      x += sw;
+    }
+    if (hidden) {
+      ctx.font = "bold 11px system-ui, sans-serif";
+      ctx.fillStyle = hidden === "open" ? colours["fg-muted"] : colours["c-" + hidden];
+      ctx.fillText(GLYPH[hidden], x + 4, mid);
+    }
   }
 
   function drawAxis() {
@@ -446,6 +520,14 @@
       var label = tickLabel(t, step);
       var tw = ctx.measureText(label).width;
       ctx.fillText(label, Math.min(right - tw, Math.max(left, x - tw / 2)), AXIS_H / 2 - 2);
+    }
+    if (drag && drag.moved) {
+      var da = Math.max(left, Math.min(drag.x0, drag.x1)), db = Math.min(right, Math.max(drag.x0, drag.x1));
+      ctx.save();
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = colours["c-step"];
+      ctx.fillRect(da, 0, db - da, ch);
+      ctx.restore();
     }
     ctx.fillStyle = colours["fg-muted"];
     ctx.fillText("Span", 8, AXIS_H / 2 - 2);
@@ -541,19 +623,213 @@
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
-  canvas.addEventListener("click", function (e) {
+  // ---- Collapse ----------------------------------------------------------
+
+  function relayout() {
+    computeVisible();
+    spacer.style.height = Math.max(0, contentHeight() - ch) + "px";
+    schedule();
+  }
+
+  function toggle(row) {
+    state.collapsed[row] = state.collapsed[row] ? 0 : 1;
+    relayout();
+  }
+
+  // reveal expands every row above row, so it is shown.
+  function reveal(row) {
+    for (var p = R.parent[row]; p >= 0; p = R.parent[p]) state.collapsed[p] = 0;
+    relayout();
+  }
+
+  // ---- Zoom --------------------------------------------------------------
+
+  function zoomTo(from, to) {
+    if (to - from < MIN_SPAN) {
+      var c = (from + to) / 2;
+      from = c - MIN_SPAN / 2;
+      to = c + MIN_SPAN / 2;
+    }
+    var span = Math.min(wall, to - from);
+    from = Math.max(0, Math.min(from, wall - span));
+    state.from = from;
+    state.to = from + span;
+    schedule();
+  }
+
+  function resetZoom() { zoomTo(0, wall); }
+
+  // zoomAround zooms to an interval with 5% padding either side.
+  function zoomAround(start, dur) {
+    var pad = Math.max(dur, MIN_SPAN) * 0.05;
+    zoomTo(start - pad, start + Math.max(dur, MIN_SPAN) + pad);
+  }
+
+  function msAt(x) { return state.from + (x - x0()) / (x1() - x0()) * (state.to - state.from); }
+
+  var drag = null;
+  var suppressClick = false;
+
+  canvas.addEventListener("mousedown", function (e) {
+    var p = point(e);
+    if (p.y >= AXIS_H || p.x < x0() || e.button !== 0) return;
+    drag = { x0: p.x, x1: p.x, moved: false };
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", function (e) {
+    if (!drag) return;
+    var p = point(e);
+    drag.x1 = Math.max(x0(), Math.min(x1(), p.x));
+    if (Math.abs(drag.x1 - drag.x0) > 3) drag.moved = true;
+    schedule();
+  });
+  window.addEventListener("mouseup", function () {
+    if (!drag) return;
+    var d = drag;
+    drag = null;
+    if (d.moved) {
+      suppressClick = true;
+      zoomTo(msAt(Math.min(d.x0, d.x1)), msAt(Math.max(d.x0, d.x1)));
+    }
+    schedule();
+  });
+
+  canvas.addEventListener("wheel", function (e) {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    var p = point(e);
+    var at = p.x >= x0() ? msAt(Math.min(p.x, x1())) : (state.from + state.to) / 2;
+    var factor = Math.exp(Math.max(-1, Math.min(1, e.deltaY * 0.002)));
+    zoomTo(at - (at - state.from) * factor, at + (state.to - at) * factor);
+  }, { passive: false });
+
+  canvas.addEventListener("dblclick", function (e) {
     var p = point(e);
     if (p.y < AXIS_H) return;
     var row = rowAt(p.y);
+    if (row >= 0 && p.x >= x0() && barHit(row, p.x)) {
+      zoomTo(R.start_ms[row], R.start_ms[row] + Math.max(R.duration_ms[row], 1));
+      select(row);
+    }
+  });
+
+  canvas.addEventListener("click", function (e) {
+    if (suppressClick) { suppressClick = false; return; }
+    var p = point(e);
+    if (p.y < AXIS_H) return;
+    var row = rowAt(p.y);
+    if (row >= 0 && hasChildren(row) && p.x >= triangleX(row) - 3 && p.x < triangleX(row) + 12) {
+      toggle(row);
+      return;
+    }
     if (row >= 0 && (p.x < LABEL_W || barHit(row, p.x))) select(row);
     else select(-1);
   });
 
-  function scrollToRow(row) {
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && e.target.tagName !== "INPUT") resetZoom();
+  });
+
+  // ---- Gap threshold and the side summary ---------------------------------
+
+  var thresholdInput = document.getElementById("gap-threshold");
+  var floorMin = data.gap_floor_ms / 60000;
+
+  function fmtMinutes(ms) { return String(Math.round(ms / 60000 * 1000) / 1000); }
+
+  function gapsOver() {
+    var out = [];
+    for (var g = 0; g < G.start_ms.length; g++) if (G.duration_ms[g] > state.threshold) out.push(g);
+    return out;
+  }
+
+  function summaryItem(list, what, how, onPick) {
+    var li = el("li");
+    var b = el("button");
+    b.type = "button";
+    b.appendChild(el("span", "what", what));
+    b.appendChild(el("span", "how", how));
+    b.addEventListener("click", onPick);
+    li.appendChild(b);
+    list.appendChild(li);
+  }
+
+  function fillLongestSteps() {
+    var list = document.getElementById("longest-steps");
+    if (!data.longest_steps.length) list.appendChild(el("li", "meta", "No steps recorded."));
+    data.longest_steps.forEach(function (row) {
+      summaryItem(list, str(R.name[row]), fmtMS(R.duration_ms[row]), function () {
+        reveal(row);
+        zoomAround(R.start_ms[row], R.duration_ms[row]);
+        select(row);
+        scrollToRow(row, true);
+      });
+    });
+  }
+
+  function fillGaps() {
+    var over = gapsOver();
+    var total = 0;
+    over.forEach(function (g) { total += G.duration_ms[g]; });
+    document.getElementById("gap-summary").textContent =
+      "Gaps over threshold: " + over.length + ", total " + fmtMS(total);
+    var list = document.getElementById("longest-gaps");
+    while (list.firstChild) list.removeChild(list.firstChild);
+    over.sort(function (a, b) { return G.duration_ms[b] - G.duration_ms[a] || G.start_ms[a] - G.start_ms[b]; });
+    if (!over.length) list.appendChild(el("li", "meta", "No gap is longer than the threshold."));
+    over.slice(0, 5).forEach(function (g) {
+      var step = str(G.step[g]);
+      summaryItem(list, (step ? step + ": " : "") + "after " + str(G.after[g]), fmtMS(G.duration_ms[g]), function () {
+        zoomAround(G.start_ms[g], G.duration_ms[g]);
+      });
+    });
+  }
+
+  function setThreshold(ms) {
+    state.threshold = Math.max(data.gap_floor_ms, ms);
+    fillGaps();
+    schedule();
+  }
+
+  thresholdInput.min = fmtMinutes(data.gap_floor_ms);
+  thresholdInput.value = fmtMinutes(state.threshold);
+  thresholdInput.addEventListener("input", function () {
+    var v = parseFloat(thresholdInput.value);
+    if (isFinite(v) && v >= floorMin) setThreshold(v * 60000);
+  });
+  thresholdInput.addEventListener("change", function () {
+    var v = parseFloat(thresholdInput.value);
+    if (!isFinite(v) || v < floorMin) v = floorMin;
+    thresholdInput.value = fmtMinutes(v * 60000);
+    setThreshold(v * 60000);
+  });
+
+  document.getElementById("reset-zoom").addEventListener("click", resetZoom);
+  document.getElementById("expand-all").addEventListener("click", function () {
+    state.collapsed.fill(0);
+    relayout();
+    if (state.selected >= 0) scrollToRow(state.selected);
+  });
+  document.getElementById("collapse-steps").addEventListener("click", function () {
+    collapseToSteps();
+    computeVisible();
+    if (state.selected >= 0 && position[state.selected] < 0) {
+      state.selected = -1;
+      showDetails(-1);
+    }
+    relayout();
+    if (state.selected >= 0) scrollToRow(state.selected);
+  });
+
+  // scrollToRow brings row into view: the least scroll that shows it, or,
+  // with center, the row in the middle of the view when it is out of it.
+  function scrollToRow(row, center) {
     var v = position[row];
     if (v < 0) return;
     var top = v * ROW_H, view = ch - AXIS_H;
-    if (top < wf.scrollTop) wf.scrollTop = top;
+    var out = top < wf.scrollTop || top + ROW_H > wf.scrollTop + view;
+    if (center && out) wf.scrollTop = Math.max(0, top - (view - ROW_H) / 2);
+    else if (top < wf.scrollTop) wf.scrollTop = top;
     else if (top + ROW_H > wf.scrollTop + view) wf.scrollTop = top + ROW_H - view;
   }
 
@@ -580,6 +856,8 @@
 
   fillHeader();
   fillLegend();
+  fillLongestSteps();
+  fillGaps();
   readColours();
   resize();
   draw();

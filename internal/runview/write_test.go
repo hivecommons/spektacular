@@ -264,17 +264,45 @@ func TestSamplePages(t *testing.T) {
 	}
 }
 
-func BenchmarkBuildAndWrite2000(b *testing.B) {
-	runs := runstats.Assemble(genRun(2000, 1))
+func BenchmarkBuildAndWrite2000(b *testing.B) { benchBuildAndWrite(b, 2000) }
+
+// BenchmarkBuildAndWrite5000 tracks the Go side of the large-run target: a
+// 5,000-span run built and written as a page.
+func BenchmarkBuildAndWrite5000(b *testing.B) { benchBuildAndWrite(b, 5000) }
+
+func benchBuildAndWrite(b *testing.B, n int) {
+	runs := runstats.Assemble(genRun(n, 1))
 	if len(runs) != 1 {
 		b.Fatalf("got %d runs, want 1", len(runs))
 	}
+	var size int
 	for b.Loop() {
 		m := Build(runs[0], Options{GapThreshold: 5 * time.Minute})
-		if err := Write(&bytes.Buffer{}, m); err != nil {
+		var buf bytes.Buffer
+		if err := Write(&buf, m); err != nil {
 			b.Fatal(err)
 		}
+		size = buf.Len()
 	}
+	b.ReportMetric(float64(size), "page-bytes")
+}
+
+// TestPageCarriesItsControls pins the page's interactive controls, which
+// the script looks up by id: zoom reset, expand and collapse, the gap
+// threshold, and the side summary.
+func TestPageCarriesItsControls(t *testing.T) {
+	m, _ := build(t, treeRecords(), 5*time.Minute)
+	out := string(page(t, m))
+	for _, id := range []string{"reset-zoom", "expand-all", "collapse-steps", "gap-threshold", "gap-summary",
+		"longest-steps", "longest-gaps", "details-list", "chart", "waterfall", "legend", "totals"} {
+		require.Contains(t, out, `id="`+id+`"`)
+		require.Contains(t, out, `getElementById("`+id+`")`, "the script reads #%s", id)
+	}
+	for _, label := range []string{"Reset zoom", "Expand all", "Collapse to steps", "Gap threshold", "Longest steps", "Longest gaps"} {
+		require.Contains(t, out, label)
+	}
+	require.NotContains(t, out, "\u2014", "no em dash in the page's own text")
+	require.NotContains(t, out, "—")
 }
 
 // genSteps are the implement workflow's steps, in order.
