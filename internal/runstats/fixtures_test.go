@@ -102,6 +102,11 @@ func recs(parts ...any) []tracelog.Record {
 // writeLog writes records as JSON Lines to dir/name, followed by any raw
 // lines given.
 func writeLog(t *testing.T, dir, name string, rs []tracelog.Record, raw ...string) {
+	writeLogTB(t, dir, name, rs, raw...)
+}
+
+// writeLogTB is writeLog for a test or a benchmark.
+func writeLogTB(t testing.TB, dir, name string, rs []tracelog.Record, raw ...string) {
 	t.Helper()
 	var data []byte
 	for _, r := range rs {
