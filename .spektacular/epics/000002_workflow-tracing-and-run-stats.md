@@ -20,10 +20,14 @@ specs:
       depends_on:
         - 000075_run-stats-command
         - 000076_harbor-on-built-in-logs
+    - name: 000078_token-use-in-run-stats
+      depends_on:
+        - 000075_run-stats-command
 sources:
     - uri: docs/workflow-performance-investigation.md
       retrieved_date: "2026-10-24"
 ---
+
 
 
 
@@ -44,3 +48,4 @@ The performance investigation (`docs/workflow-performance-investigation.md`) had
 - **000075_run-stats-command**: `spektacular stats` lists, reports on, compares and summarises runs from the logs. Depends on 000074.
 - **000076_harbor-on-built-in-logs**: Harbor takes its step, helper, idle and timeline measures from the logs through `stats`, keeping transcripts only for tokens, models and cost. Depends on 000075.
 - **000077_html-log-viewer**: a run rendered as a self-contained HTML waterfall. Depends on 000075.
+- **000078_token-use-in-run-stats**: token use and cost per run, step, task and helper beside the timings, with a time-per-token figure, read from the agent's session data (Claude Code first). Depends on 000075.
