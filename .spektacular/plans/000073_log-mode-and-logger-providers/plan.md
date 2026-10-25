@@ -346,7 +346,7 @@ That identifier survives an interruption and resume, changes on a `--force` rest
 
 **Validation point**: The full Go suite passes at the default level, and the `cmd` suite also passes with logging forced off through its test-only `-log-level=off` flag. Running `status` adds nothing to the logs. In a throwaway `init`ed git project, a spec workflow's commands appear in one run log with one trace id, standalone commands appear in that day's log with their own ids, and `git status` shows no log files. Migrating a format-4 throwaway project with `debug.enabled: true` yields `log.level: verbose` and an untouched `debug/` folder.
 
-#### - [ ] Task: Trace log package with the file logger
+#### - [x] Task: Trace log package with the file logger
 **Id:** df1bade8-66a7-4bb8-b261-3dda877ae82c
 **Repo:** spektacular
 **Depends on:** none
@@ -357,14 +357,14 @@ Adds the package that defines the log record the whole epic shares: an OpenTelem
 *Technical detail:* [context.md#task-trace-log-package-with-the-file-logger](./context.md#task-trace-log-package-with-the-file-logger)
 
 **Acceptance criteria**:
-- [ ] A record serialises with the field names in the plan's Data Structures section, omitting the parent span id and the error message when they are empty.
-- [ ] Trace ids are 32 and span ids 16 lowercase hex characters, never all zeros, and never repeat across many mintings.
-- [ ] A workflow run's records land in a file named from the run's start time, agent, kind and name; a standalone command's record lands in that UTC day's standalone file.
-- [ ] Writing appends exactly one line without reading the file's earlier contents, and the log directory contains a `.gitignore` that ignores everything in it.
-- [ ] Asking for the `file` logger succeeds; asking for any other name fails with an error that names the accepted loggers.
-- [ ] With an unwritable log directory, writing returns normally, with no panic and nothing printed.
+- [x] A record serialises with the field names in the plan's Data Structures section, omitting the parent span id and the error message when they are empty.
+- [x] Trace ids are 32 and span ids 16 lowercase hex characters, never all zeros, and never repeat across many mintings.
+- [x] A workflow run's records land in a file named from the run's start time, agent, kind and name; a standalone command's record lands in that UTC day's standalone file.
+- [x] Writing appends exactly one line without reading the file's earlier contents, and the log directory contains a `.gitignore` that ignores everything in it.
+- [x] Asking for the `file` logger succeeds; asking for any other name fails with an error that names the accepted loggers.
+- [x] With an unwritable log directory, writing returns normally, with no panic and nothing printed.
 
-#### - [ ] Task: Run identifier in workflow state
+#### - [x] Task: Run identifier in workflow state
 **Id:** 9057f37e-b995-499e-a5dc-867e3b219337
 **Repo:** spektacular
 **Depends on:** none
@@ -375,12 +375,12 @@ Gives every workflow run a run identifier held in its own state, the only place 
 *Technical detail:* [context.md#task-run-identifier-in-workflow-state](./context.md#task-run-identifier-in-workflow-state)
 
 **Acceptance criteria**:
-- [ ] A newly started workflow's state carries a run identifier in the same format as a trace id.
-- [ ] Reloading and advancing an existing workflow keeps its run identifier unchanged.
-- [ ] An in-progress state written without a run identifier gains one through the helper, and every other field, including keys the current code does not know, is preserved.
-- [ ] The helper leaves a finished state, a missing state and a state that already has an identifier untouched.
+- [x] A newly started workflow's state carries a run identifier in the same format as a trace id.
+- [x] Reloading and advancing an existing workflow keeps its run identifier unchanged.
+- [x] An in-progress state written without a run identifier gains one through the helper, and every other field, including keys the current code does not know, is preserved.
+- [x] The helper leaves a finished state, a missing state and a state that already has an identifier untouched.
 
-#### - [ ] Task: Log settings replace debug, with migration
+#### - [x] Task: Log settings replace debug, with migration
 **Id:** 154f3002-9b09-4cb4-aaec-f204081cee9a
 **Repo:** spektacular
 **Depends on:** none
@@ -391,14 +391,14 @@ Replaces the project's `debug` setting with a `log` section: which logger to use
 *Technical detail:* [context.md#task-log-settings-replace-debug-with-migration](./context.md#task-log-settings-replace-debug-with-migration)
 
 **Acceptance criteria**:
-- [ ] A new project's configuration has logging on at the standard level, with the file logger, retention 10 and the `logs` directory, and no `debug` section.
-- [ ] An unknown logger name, an unknown level or a retention below 1 is refused as a configuration error naming the accepted values and the key to change.
-- [ ] A relative log directory resolves from the folder holding the configuration file, and an absolute one is used as written.
-- [ ] Migrating a project with debug turned on gives the verbose level, with debug off or absent the standard level, and in every case the debug setting is gone and other settings are unchanged.
-- [ ] After `init`, and after `migrate` of an older project, the project's ignore rules include the logs folder exactly once, and a migration preview lists that change.
-- [ ] Migration never reads, moves or deletes anything in the old debug folder.
+- [x] A new project's configuration has logging on at the standard level, with the file logger, retention 10 and the `logs` directory, and no `debug` section.
+- [x] An unknown logger name, an unknown level or a retention below 1 is refused as a configuration error naming the accepted values and the key to change.
+- [x] A relative log directory resolves from the folder holding the configuration file, and an absolute one is used as written.
+- [x] Migrating a project with debug turned on gives the verbose level, with debug off or absent the standard level, and in every case the debug setting is gone and other settings are unchanged.
+- [x] After `init`, and after `migrate` of an older project, the project's ignore rules include the logs folder exactly once, and a migration preview lists that change.
+- [x] Migration never reads, moves or deletes anything in the old debug folder.
 
-#### - [ ] Task: Record every command through the configured logger
+#### - [x] Task: Record every command through the configured logger
 **Id:** dd495862-2f2e-430b-b8ae-ef5b52cb2078
 **Repo:** spektacular
 **Depends on:**
@@ -420,20 +420,20 @@ The old session-log package and its tests are replaced, and logging stays inside
 *Technical detail:* [context.md#task-record-every-command-through-the-configured-logger](./context.md#task-record-every-command-through-the-configured-logger)
 
 **Acceptance criteria**:
-- [ ] In a freshly initialised project with no settings changed, any command leaves a record of itself in the project's logs directory.
-- [ ] A `spec goto` record carries the configured agent (or `unknown` when none is set), the workflow kind and name, the step it ran in and the step it moved to.
-- [ ] A spec run's start, gotos, resume report and later gotos share one trace id; a `--force` restart gets a new one; two parallel plan lanes each keep their own constant trace id.
-- [ ] A spec workflow whose state was written by the previous version resumes without error, and every record from then on carries the same trace id.
-- [ ] Two standalone `knowledge search` commands produce two records with different trace ids in the same day's log.
-- [ ] At the standard level a record holds the command, timing, exit status and any error message but no response or state; a failed command records an error status, a non-zero exit code and its message.
-- [ ] At the verbose level a record holds the exact output and the state before and after.
-- [ ] With logging off nothing is written, and nothing is ever written outside a project. Setting `SPEKTACULAR_SESSION_LOG` to any value changes nothing.
-- [ ] At the standard and verbose levels, `status` (readable or JSON, with or without a name) adds no record, creates no log file and does not give an older run its identifier, while the next workflow command is still recorded.
-- [ ] A command marked with the logging-exempt annotation, or one whose parent is marked, is never logged; the annotation's key and value are named constants that another command group can set.
-- [ ] A custom log directory receives the records and the default one stays empty.
-- [ ] After `init` in a new git repository, and after `migrate` of an older project, running commands leaves `git status` free of log files.
-- [ ] Every command's output and exit code are identical with logging off, standard and verbose, including when the logs directory cannot be written. The full test suite passes with logging on, and the `cmd` suite also passes with logging forced off through its test-only flag.
-- [ ] Files in an old `.spektacular/debug/` folder are byte-identical after `migrate` and further commands.
+- [x] In a freshly initialised project with no settings changed, any command leaves a record of itself in the project's logs directory.
+- [x] A `spec goto` record carries the configured agent (or `unknown` when none is set), the workflow kind and name, the step it ran in and the step it moved to.
+- [x] A spec run's start, gotos, resume report and later gotos share one trace id; a `--force` restart gets a new one; two parallel plan lanes each keep their own constant trace id.
+- [x] A spec workflow whose state was written by the previous version resumes without error, and every record from then on carries the same trace id.
+- [x] Two standalone `knowledge search` commands produce two records with different trace ids in the same day's log.
+- [x] At the standard level a record holds the command, timing, exit status and any error message but no response or state; a failed command records an error status, a non-zero exit code and its message.
+- [x] At the verbose level a record holds the exact output and the state before and after.
+- [x] With logging off nothing is written, and nothing is ever written outside a project. Setting `SPEKTACULAR_SESSION_LOG` to any value changes nothing.
+- [x] At the standard and verbose levels, `status` (readable or JSON, with or without a name) adds no record, creates no log file and does not give an older run its identifier, while the next workflow command is still recorded.
+- [x] A command marked with the logging-exempt annotation, or one whose parent is marked, is never logged; the annotation's key and value are named constants that another command group can set.
+- [x] A custom log directory receives the records and the default one stays empty.
+- [x] After `init` in a new git repository, and after `migrate` of an older project, running commands leaves `git status` free of log files.
+- [x] Every command's output and exit code are identical with logging off, standard and verbose, including when the logs directory cannot be written. The full test suite passes with logging on, and the `cmd` suite also passes with logging forced off through its test-only flag.
+- [x] Files in an old `.spektacular/debug/` folder are byte-identical after `migrate` and further commands.
 
 ### Milestone 2: Old logs are trimmed automatically
 
@@ -607,3 +607,99 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - **Migrating this repository's own `.spektacular/`** (config format 5, `.spektacular/.gitignore`). No task does this, per the plans-never-change-the-active-install convention. The maintainer installs the new binary between workflows, and the next skill version check prompts a migration.
 - **Editing historical plans, test plans and changelog entries** that mention `.spektacular/debug/`. They record past intent and stay as written.
 - **Converting Harbor's checked-in reference runs to the new format.** They stay old-format and are read through the dual-format reader until spec 000076.
+
+## Changelog
+
+### 2026-10-25 — Task: Trace log package with the file logger
+
+**What was done**: Added `internal/tracelog`, a leaf package holding the OpenTelemetry-model span `Record` and `Status`, the `Run` a record belongs to, the attribute and resource key constants, trace and span id minting from `crypto/rand`, and a `Logger` interface behind a provider registry whose only entry is `file`. The file logger appends one JSON line per record to a per-run file (`<start>_<agent>_<kind>_<name>.jsonl`) or a per-UTC-day `standalone_<day>.jsonl`, writes a `*` `.gitignore` when it starts a file, and contains every failure and panic.
+
+**Deviations**: Added two small helpers beyond the plan's sketch: `Run.Standalone()` and `Resource(version)`, which builds the `service.name`/`service.version` map. The unknown-provider error also carries `WithResource(provider)`. The retention `sweep` is a no-op hook until the retention task, as planned.
+
+**Files changed**:
+- `spektacular: internal/tracelog/record.go`
+- `spektacular: internal/tracelog/ids.go`
+- `spektacular: internal/tracelog/logger.go`
+- `spektacular: internal/tracelog/file.go`
+- `spektacular: internal/tracelog/record_test.go`
+- `spektacular: internal/tracelog/ids_test.go`
+- `spektacular: internal/tracelog/logger_test.go`
+- `spektacular: internal/tracelog/file_test.go`
+
+**Discoveries**: The accepted logger names appear in the error's `next_action`, not its message. The provider pin test against `config.LogProviders` belongs to the log settings task, since that list does not exist yet.
+
+### 2026-10-25 — Task: Run identifier in workflow state
+
+**What was done**: `workflow.State` gained a top-level `run_id` (`omitempty`), minted by `workflow.New` whenever it builds fresh state, so every `new` and every orchestrated lane starts a run with its own id and a resume keeps it. Added `NewRunID` (32 lowercase hex, never all zeros) and `EnsureRunID(path)`, which gives an in-progress state written without an id one, editing the file as a generic JSON map and writing it through a temp file and rename.
+
+**Deviations**: `EnsureRunID` decodes with `UseNumber`, so numbers in the state survive exactly; key order is re-sorted by the map re-marshal, which keeps every field and value but not the original key order. The temp file keeps the original file's permissions.
+
+**Files changed**:
+- `spektacular: internal/workflow/state.go`
+- `spektacular: internal/workflow/workflow.go`
+- `spektacular: internal/workflow/workflow_test.go`
+- `spektacular: internal/workflow/state_test.go`
+
+**Discoveries**: None.
+
+### 2026-10-25 — Task: Log settings replace debug, with migration
+
+**What was done**: `config.DebugConfig` is replaced by `LogConfig` (`provider`, `level`, `retention`, `config.directory`) with defaults `file`, `standard`, `10`, `logs`, validation that refuses an unknown logger, an unknown level, a retention below 1 or an empty directory with `config_invalid` and a next action, `EffectiveLevel()`, and `Config.LogDir(projectRoot)` resolving the directory from the folder holding `config.yaml`. The project settings format is now 5. A new `project4to5` migrate step maps `debug.enabled: true` to `log.level: verbose` (false or absent to `standard`), writes the other `log` defaults without overwriting existing keys, deletes `debug`, and reports a new idempotent `ignore` action that appends `logs/` to `.spektacular/.gitignore`. `init`'s `.gitignore` template and the repo's root `.gitignore` ignore the logs folder.
+
+**Deviations**: Removing `debug` is reported as a `set` action with an empty `To` (`Key: "debug.enabled", From: "<old>"`), documented on `Action`. To keep the tree compiling before the recorder task, `cmd/root.go` temporarily treats `log.level: verbose` as the old `debug.enabled: true` (one-line bridge, replaced by the recorder task). The schema bump required updating every test fixture that writes a current-format config (`schema: 4` to `schema: 5`) across `cmd`, `internal/config`, `internal/design`, `internal/project` and `internal/migrate`, plus the migrate goldens and the synthetic extensibility step (now 5 to 6). The session-log tests' `debug.enabled` toggles became `log.level` values. Added cmd-level `migrate` tests for a format-4 project with debug on and for the dry-run preview.
+
+**Files changed**:
+- `spektacular: internal/config/config.go`
+- `spektacular: internal/config/schema.go`
+- `spektacular: internal/config/config_test.go`
+- `spektacular: internal/config/schema_test.go`
+- `spektacular: internal/config/repo_test.go`
+- `spektacular: internal/tracelog/providers_pin_test.go`
+- `spektacular: internal/migrate/steps_project.go`
+- `spektacular: internal/migrate/registry.go`
+- `spektacular: internal/migrate/engine.go`
+- `spektacular: internal/migrate/engine_test.go`
+- `spektacular: internal/migrate/steps_project_test.go`
+- `spektacular: internal/migrate/testdata/current/config.yaml`
+- `spektacular: internal/migrate/testdata/golden/legacy_single/config.yaml.golden`
+- `spektacular: internal/migrate/testdata/golden/split_unversioned/config.yaml.golden`
+- `spektacular: internal/project/init_test.go`
+- `spektacular: internal/design/design_test.go`
+- `spektacular: templates/.spektacular/.gitignore`
+- `spektacular: .gitignore`
+- `spektacular: cmd/root.go`
+- `spektacular: cmd/migrate_test.go`
+- `spektacular: cmd/gate_test.go`
+- `spektacular: cmd/format_refusal_test.go`
+- `spektacular: cmd/init_test.go`
+- `spektacular: cmd/version_test.go`
+- `spektacular: cmd/standing_rules_test.go`
+- `spektacular: cmd/root_test.go`
+- `spektacular: cmd/sessionlog_lane_test.go`
+
+**Discoveries**: A settings format bump touches every test that hand-writes a current-format `config.yaml`: the literal `schema: N` appears in about a dozen test files, and `TestCurrentProjectSchema_UnchangedByImplementSection` pins the number.
+
+### 2026-10-25 — Task: Record every command through the configured logger
+
+**What was done**: `runRoot` now logs every command run in a project through the logger `log.provider` names, at the level `log.level` sets (standard by default), replacing the debug recorder. It resolves the level from configuration alone (off outside a project, when the config does not load, or for a logging-exempt command), backfills a legacy run id with `workflow.EnsureRunID`, snapshots the state before and after, attributes the record to the run in progress after, else before, else a standalone trace, tees output only at verbose, and builds one `tracelog.Record` under a recover. The `log: exempt` cobra annotation (`logAnnotation`, `logExempt`, `logExempted` parent walk) is checked before and after the command; `status` carries it. `SPEKTACULAR_SESSION_LOG`, `isWorkflowStart`, `stateAdvanced`, `sessionLogDir` and `internal/sessionlog` are gone. The `cmd` tests gained a test-only `-log-level` flag (`forcedLogLevel`) and `useConfiguredLogLevel(t)`, and the session-log tests were rewritten onto the new log.
+
+**Deviations**: `logLevel` takes the configured level string rather than the whole config. Existing tests that snapshot a project tree across a logged command now skip `.spektacular/logs/` in their shared snapshot helpers (`snapshotDir`, `snapshotTree`, `listPaths`, `hashStore`, `addrSnapshot`), and `writeInProgressState` gives its fixture a fixed run id, since the pre-command backfill would otherwise change the fixture's bytes. Logging stays on in the default `cmd` run.
+
+**Files changed**:
+- `spektacular: cmd/root.go`
+- `spektacular: cmd/status.go`
+- `spektacular: cmd/main_test.go`
+- `spektacular: cmd/log_test.go`
+- `spektacular: cmd/log_lane_test.go`
+- `spektacular: cmd/sessionlog_lane_test.go` (removed)
+- `spektacular: cmd/root_test.go`
+- `spektacular: cmd/init_test.go`
+- `spektacular: cmd/epic_test.go`
+- `spektacular: cmd/repo_test.go`
+- `spektacular: cmd/knowledge_prune_test.go`
+- `spektacular: cmd/storefile_address_test.go`
+- `spektacular: cmd/implement_test.go`
+- `spektacular: internal/sessionlog/record.go` (removed)
+- `spektacular: internal/sessionlog/record_test.go` (removed)
+
+**Discoveries**: `init` itself is never logged, since the level is decided before the project config exists. The no-data `spec new` resume report is a refusal (exit 1, `workflow_in_progress`), so it is recorded as an error span that still shares the run's trace. Any command run while a workflow is in progress (a `knowledge search`, `skill list`) is filed under that run, not the standalone day file. In tests the pre-command exemption check reads `os.Args`, so a test that needs it must set `os.Args` (`runDebugCmd`).

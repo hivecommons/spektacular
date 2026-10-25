@@ -1,0 +1,513 @@
+{
+  "plan": "000073_log-mode-and-logger-providers",
+  "items": [
+    {
+      "item": "df1bade8-66a7-4bb8-b261-3dda877ae82c",
+      "title": "Trace log package with the file logger",
+      "checks": [
+        {
+          "at": "2026-10-25T11:57:52Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "df1bade8-66a7-4bb8-b261-3dda877ae82c",
+            "title": "Trace log package with the file logger",
+            "criteria": [
+              "A record serialises with the field names in the plan's Data Structures section, omitting the parent span id and the error message when they are empty.",
+              "Trace ids are 32 and span ids 16 lowercase hex characters, never all zeros, and never repeat across many mintings.",
+              "A workflow run's records land in a file named from the run's start time, agent, kind and name; a standalone command's record lands in that UTC day's standalone file.",
+              "Writing appends exactly one line without reading the file's earlier contents, and the log directory contains a `.gitignore` that ignores everything in it.",
+              "Asking for the `file` logger succeeds; asking for any other name fails with an error that names the accepted loggers.",
+              "With an unwritable log directory, writing returns normally, with no panic and nothing printed."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/record.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "service.name"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/ids.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "crypto/rand"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/identifier/taskid.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/logger.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/output"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/file.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/sessionlog/record.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "record.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "dir/.gitignore"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/tracelog/record.go:51-63 defines Record with json tags record, trace_id, span_id, parent_span_id,omitempty, name, kind, start_time, end_time, status, attributes, resource; Status at lines 66-69 has message,omitempty. record_test.go:39-56 (TestRecordJSONShape) pins the exact JSON and asserts parent_span_id and status.message are absent when empty; record_test.go:60-72 checks they appear when set."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "internal/tracelog/ids.go:11-15 NewTraceID uses 16 random bytes and NewSpanID 8 bytes, hex-encoded to 32 and 16 lowercase chars. newID (lines 24-42) retries rand.Read and rejects all-zero output via allZero, and the fallback path also guards against all zeros (lines 38-40). ids_test.go:18-37 mints 10000 of each, checks regex ^[0-9a-f]{32}$ / ^[0-9a-f]{16}$, not all zeros, and no duplicates."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "internal/tracelog/file.go:79-89: runFileName uses the UTC start time formatted as 20060102T150405.000000000Z, plus agent (agentOr, 'unknown' when empty), kind and name, sanitized, for workflow runs (Run.Standalone() is Kind==''); standalone runs go to standalone_\u003cUTC day\u003e.jsonl. record.go:83-84 defines Standalone. file_test.go:39-68 pins these names; file_test.go:125-141 checks two standalone writes land in standalone_20261024.jsonl."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "file.go:56-61 opens with os.O_APPEND|os.O_CREATE|os.O_WRONLY and writes a single JSON line plus '\\n' (lines 50-54); the file is never read. file.go:105-111 ensureGitignore writes gitignoreBody '*\\n' into \u003cdir\u003e/.gitignore when the run file is newly created and no .gitignore exists. file_test.go:73-101 checks earlier bytes are kept and the .gitignore content; file_test.go:103-123 seeds non-JSON content and checks the append leaves it intact."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "logger.go:36-44: New returns the constructor for 'file' (providers map at lines 30-32) and otherwise returns output.NewError('config_invalid', ...) whose NextAction reads 'set log.provider in .spektacular/config.yaml to one of: ' + Providers() joined, which is 'file' (lines 46-54). logger_test.go:12-31 checks 'file' succeeds and 'bogus' returns config_invalid with NextAction containing 'log.provider' and 'file'. Note the accepted-logger list is carried in NextAction, not the Message; the test asserts that field."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "file.go:37-38 Write defers recover() so no panic escapes; a MkdirAll failure returns at lines 44-46 and an OpenFile failure returns at lines 56-58 with no print or error return. The package never calls fmt/log to print. file_test.go:175-194 (TestWriteUnwritableDirectoryIsContained) and 196-214 check NotPanics, empty captured stdout/stderr, and no directory created; both skip when running as root."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "9057f37e-b995-499e-a5dc-867e3b219337",
+      "title": "Run identifier in workflow state",
+      "checks": [
+        {
+          "at": "2026-10-25T12:01:03Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "9057f37e-b995-499e-a5dc-867e3b219337",
+            "title": "Run identifier in workflow state",
+            "criteria": [
+              "A newly started workflow's state carries a run identifier in the same format as a trace id.",
+              "Reloading and advancing an existing workflow keeps its run identifier unchanged.",
+              "An in-progress state written without a run identifier gains one through the helper, and every other field, including keys the current code does not know, is preserved.",
+              "The helper leaves a finished state, a missing state and a state that already has an identifier untouched."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/state.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "state.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/workflow.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/workflow_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/state_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/workflow/workflow.go:111-113 sets RunID: NewRunID() when New builds fresh state. NewRunID (internal/workflow/state.go, diff hunk @@ -59 +67) returns hex.EncodeToString of 16 crypto/rand bytes, looping until not all zero, so it is 32 lowercase hex and never all zeros. workflow_test.go TestNewMintsRunIDOnFreshState (diff @@ -473) checks the regex ^[0-9a-f]{32}$ on the persisted state."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "loadState (state.go:43-54) unmarshals the whole State including run_id, and New (workflow.go:105-107) reuses the loaded state without regenerating RunID. saveState (state.go:56-69) marshals the same struct, so Next/Goto keep the field. workflow_test.go TestRunIDKeptAcrossReloadAndAdvance (diff @@ -473 hunk, lines 151-164) reloads via New, calls Goto, and asserts the id is unchanged on disk."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "state.go EnsureRunID decodes into map[string]any with UseNumber, sets m[\"run_id\"] only when the state is in progress and lacks an id, and re-marshals the whole map, so unknown keys and large numbers are kept. It writes via a temp file plus rename. state_test.go TestEnsureRunIDBackfillsLegacyStateKeepingEveryField uses a legacy body with no run_id, a future_field key and a 20-digit integer, and asserts every other field is equal after removing run_id. The file is untracked (listed in the .status) but is in the goal's allowed files."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "state.go EnsureRunID returns (\"\", nil) without writing for a missing file (os.IsNotExist branch) and for current_step \"finished\" or \"\" (step check). It returns the existing id without writing when run_id is non-empty. state_test.go covers these: TestEnsureRunIDLeavesOtherStatesUntouched compares the file bytes before and after for the existing-id, finished and empty-step cases, and TestEnsureRunIDMissingStateIsUntouched covers the missing file."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "154f3002-9b09-4cb4-aaec-f204081cee9a",
+      "title": "Log settings replace debug, with migration",
+      "checks": [
+        {
+          "at": "2026-10-25T12:10:36Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "154f3002-9b09-4cb4-aaec-f204081cee9a",
+            "title": "Log settings replace debug, with migration",
+            "criteria": [
+              "A new project's configuration has logging on at the standard level, with the file logger, retention 10 and the `logs` directory, and no `debug` section.",
+              "An unknown logger name, an unknown level or a retention below 1 is refused as a configuration error naming the accepted values and the key to change.",
+              "A relative log directory resolves from the folder holding the configuration file, and an absolute one is used as written.",
+              "Migrating a project with debug turned on gives the verbose level, with debug off or absent the standard level, and in every case the debug setting is gone and other settings are unchanged.",
+              "After `init`, and after `migrate` of an older project, the project's ignore rules include the logs folder exactly once, and a migration preview lists that change.",
+              "Migration never reads, moves or deletes anything in the old debug folder."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config/config.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config/schema.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config/config_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "providers_pin_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/migrate/steps_project.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.level"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "node.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/migrate/registry.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/migrate/engine.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "engine.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/migrate/testdata/current/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/migrate/steps_project_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/debug/x.jsonl"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "registry_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/.spektacular/.gitignore"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/project/init_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/config/config.go:536-541 sets NewDefault().Log to provider file, level standard, retention DefaultLogRetention (10), config.directory logs, and DebugConfig is removed from the Config struct. internal/config/config_test.go (TestLogDefaults_AbsentSectionAndWrittenFile) asserts the written default contains 'log:\\n    provider: file\\n    level: standard\\n    retention: 10\\n    config:\\n        directory: logs' and does not contain 'debug'. ToYAMLFile emits only the Log struct, which has no debug field."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "internal/config/config.go:589-620 LogConfig.Validate refuses an unknown provider (config_invalid, resource log.provider, message lists accepted loggers 'file', next action names the key and the values), an unknown level (lists \"off\", \"standard\", \"verbose\" and the key), and retention below 1 (resource log.retention, next action names the key). Config.Validate calls it at config.go:850. internal/config/config_test.go TestLogValidate_RefusesBadSettings covers these via FromYAMLFile and asserts the exact messages and next actions."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "internal/config/config.go:462-473 LogDir: a relative directory is joined to ProjectConfigDir(projectRoot) (the .spektacular folder holding config.yaml); an absolute one returns filepath.Clean(d). internal/config/config_test.go TestLogDir_ResolvesRelativeToConfigFolder checks the default, a '../var/logs' relative path and an absolute path."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "internal/migrate/steps_project.go:179-215 project4to5: debug.enabled true gives level verbose, anything else gives standard (lines 193-199); the debug key is deleted (lines 205-211). Other keys are untouched because setDefault only adds missing log keys. internal/migrate/steps_project_test.go TestApply_Format4DebugBecomesLogLevel covers debug on, debug off and debug absent, asserts the rewritten file byte-for-byte and that no debug key remains; TestApply_Format4KeepsExistingLogKeys covers existing log keys."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "Init: templates/.spektacular/.gitignore:15-16 adds a comment and 'logs/' once; internal/project/init.go:149-154 writes that template to .spektacular/.gitignore; internal/project/init_test.go TestInit_CreatesGitignore counts 'logs/' lines and requires exactly 1. Migrate: internal/migrate/steps_project.go:213 emits Action{Op:\"ignore\", Path: \u003c.spektacular\u003e/.gitignore, To:\"logs/\"}; internal/migrate/engine.go ensureIgnoreLine appends only when no line equals it. The preview lists it: steps_project_test.go and engine_test.go expect the ignore action in Inspect output, and cmd/migrate_test.go:123 lists the step description. TestApply_Format4IgnoresLogsFolderOnce checks a single line after repeated runs."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "Searching internal/migrate non-test code for debug references finds only settings key reads in steps_project.go:193 and :208 and an Action on the settings file; no file operation targets the debug folder. Ensure-ignore only reads and writes the .gitignore. internal/migrate/steps_project_test.go TestApply_Format4LeavesDebugFolderUntouched seeds .spektacular/debug files and asserts the same entries and bytes after Apply."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "dd495862-2f2e-430b-b8ae-ef5b52cb2078",
+      "title": "Record every command through the configured logger",
+      "checks": [
+        {
+          "at": "2026-10-25T12:30:17Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "dd495862-2f2e-430b-b8ae-ef5b52cb2078",
+            "title": "Record every command through the configured logger",
+            "criteria": [
+              "In a freshly initialised project with no settings changed, any command leaves a record of itself in the project's logs directory.",
+              "A `spec goto` record carries the configured agent (or `unknown` when none is set), the workflow kind and name, the step it ran in and the step it moved to.",
+              "A spec run's start, gotos, resume report and later gotos share one trace id; a `--force` restart gets a new one; two parallel plan lanes each keep their own constant trace id.",
+              "A spec workflow whose state was written by the previous version resumes without error, and every record from then on carries the same trace id.",
+              "Two standalone `knowledge search` commands produce two records with different trace ids in the same day's log.",
+              "At the standard level a record holds the command, timing, exit status and any error message but no response or state; a failed command records an error status, a non-zero exit code and its message.",
+              "At the verbose level a record holds the exact output and the state before and after.",
+              "With logging off nothing is written, and nothing is ever written outside a project. Setting `SPEKTACULAR_SESSION_LOG` to any value changes nothing.",
+              "At the standard and verbose levels, `status` (readable or JSON, with or without a name) adds no record, creates no log file and does not give an older run its identifier, while the next workflow command is still recorded.",
+              "A command marked with the logging-exempt annotation, or one whose parent is marked, is never logged; the annotation's key and value are named constants that another command group can set.",
+              "A custom log directory receives the records and the default one stays empty.",
+              "After `init` in a new git repository, and after `migrate` of an older project, running commands leaves `git status` free of log files.",
+              "Every command's output and exit code are identical with logging off, standard and verbose, including when the logs directory cannot be written. The full test suite passes with logging on, and the `cmd` suite also passes with logging forced off through its test-only flag.",
+              "Files in an old `.spektacular/debug/` folder are byte-identical after `migrate` and further commands."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/gate.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/status.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/sessionlog"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/sessionlog/record.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/sessionlog/record_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/logs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "state.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/testutil"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/sessionlog_lane_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/log_lane_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/main_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/root.go logLevel() returns standard when no config value is set (config.go NewDefault sets Log.Level standard, Provider file, Directory logs). cmd/log_test.go:372-390 (TestLog_FreshInitProjectLogsByDefault) runs init then `spec file list` and asserts one standalone_ record in .spektacular/logs. Caveat: `init` itself is not logged (level is computed before the project config exists), and status is exempt by design (criterion 9); both are explicit in the test and the code comments."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "cmd/root.go buildRecord (attrs AttrAgent with 'unknown' fallback, AttrWorkflowKind/Name, AttrStep, AttrStepTo) and attributeRun. cmd/log_test.go:395-427 (TestLog_GotoRecordCarriesAgentWorkflowAndSteps) asserts agent claude and unknown, kind spec, name 000001_billing, step new, step.to interview."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Run id minted in internal/workflow/workflow.go New() (RunID: NewRunID()) and kept on reload; attributeRun uses owner.RunID as TraceID. cmd/log_test.go:432-482 (TestLog_SpecRunSharesOneTraceID) checks start, gotos, resume refusal and later goto share the run_id, and that --force yields a new run_id and new file while the old file is byte-identical. cmd/log_lane_test.go:123-200 checks alpha and beta lanes each keep a constant distinct trace id and the solo run is separate."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "internal/workflow/state.go EnsureRunID backfills run_id into a legacy in-progress state as a generic JSON map, keeping other fields; runRoot calls it before the command (cmd/root.go ~line 488). cmd/log_test.go:495-522 (TestLog_LegacyStateResumesWithOneTraceID) asserts the backfilled id keeps created_at and every record carries that id."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "With no in-progress state attributeRun returns tracelog.NewTraceID() per command; standalone records go to standalone_\u003cUTC day\u003e.jsonl (internal/tracelog/file.go runFileName). cmd/log_test.go:526 (TestLog_StandaloneCommandsShareTheDayFile) covers two standalone knowledge search commands in the same day file with different trace ids."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "cmd/root.go buildRecord adds response/state attributes only when level is verbose; standard records carry command args, exit code, start/end times and Status{Error, Message} on failure (toErrorResponse(err).Message). cmd/log_test.go:331-367 (TestLog_StandardLevelRecordsSuccessAndRejection) asserts exit code 1, error status with message, and no verbose attributes."
+            },
+            {
+              "criterion": 7,
+              "verdict": "met",
+              "evidence": "cmd/root.go buildRecord sets AttrResponse (buf.String(), teed via io.MultiWriter), AttrStateBefore and AttrStateAfter at verbose. cmd/log_test.go:576 (TestLog_ResponseAndStateOnlyAtVerbose) covers the verbose branch."
+            },
+            {
+              "criterion": 8,
+              "verdict": "met",
+              "evidence": "cmd/root.go logLevel returns off when !inProject or config fails to load; recordCommand uses projectRoot() and returns on error. grep for SPEKTACULAR_SESSION_LOG in non-test code finds nothing (the only mention is a comment in root.go). cmd/log_test.go:217-231 (off writes nothing), 272-308 (both env values change nothing; outside a project nothing written), 312-325 (nothing outside a project even when forced)."
+            },
+            {
+              "criterion": 9,
+              "verdict": "met",
+              "evidence": "cmd/status.go:29-31 sets Annotations{logAnnotation: logExempt} on statusCmd; logExempted is checked in logLevel and before recording, and the before-snapshot/EnsureRunID block only runs when level is not off, so status does not backfill. cmd/log_test.go:655-689 (TestLog_StatusIsNeverLogged, standard and verbose, readable and JSON, with and without name) and 694-717 (TestLog_StatusDoesNotBackfillALegacyRun, state.json byte-identical, next goto recorded under the new id)."
+            },
+            {
+              "criterion": 10,
+              "verdict": "met",
+              "evidence": "cmd/root.go defines const logAnnotation = \"log\" and logExempt = \"exempt\" and logExempted walks c.Parent() for the annotation. cmd/log_test.go:722-744 (TestLogExempted) checks the constants and the parent walk."
+            },
+            {
+              "criterion": 11,
+              "verdict": "met",
+              "evidence": "internal/config/config.go LogDir() resolves log.config.directory (relative to the config folder, or absolute), and cmd/root.go recordCommand writes to cfg.LogDir(root). cmd/log_test.go:766-808 (TestLog_CustomDirectoryReceivesTheRecords) asserts the custom directory receives records and the default one stays empty."
+            },
+            {
+              "criterion": 12,
+              "verdict": "met",
+              "evidence": "templates/.spektacular/.gitignore adds logs/, internal/migrate/steps_project.go project4to5 adds the ignore action, and internal/tracelog/file.go ensureGitignore writes '*' into the logs directory. cmd/log_test.go:809-845 (TestLog_LogsStayOutOfGit) runs init and migrate in git repos and asserts porcelain status has no log entries."
+            },
+            {
+              "criterion": 13,
+              "verdict": "met",
+              "evidence": "cmd/root.go runs record-and-write under defer recover, and internal/tracelog/file.go Write drops every error; output is only teed at verbose and the standard path does not touch the output stream. cmd/log_test.go:953-970 (TestLog_OutputParityAcrossLevels, including an unwritable logs directory). cmd/main_test.go adds the -log-level test flag that sets forcedLogLevel. The lead's verification reports the full suite passing with logging on and the cmd suite passing with -log-level=off."
+            },
+            {
+              "criterion": 14,
+              "verdict": "met",
+              "evidence": "internal/migrate/steps_project.go project4to5 never reads, moves or deletes .spektacular/debug (it only edits config keys and the .gitignore). internal/migrate/steps_project_test.go TestApply_Format4LeavesDebugFolderUntouched and cmd/log_test.go:872 (TestLog_OldDebugFolderIsUntouched) check byte-identity after migrate and further commands."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    }
+  ]
+}
