@@ -393,3 +393,49 @@ func encodeUsageIndex(idx *UsageIndex) ([]byte, error) {
 	}
 	return append(b, '\n'), nil
 }
+
+// PruneRemoval is one entry the age rule removes, with the usage evidence that
+// put it there: when it was created, how long it has been tracked, when it was
+// last retrieved (nil for never), and how often searches surfaced it.
+type PruneRemoval struct {
+	Tier          Tier       `json:"tier"`
+	Name          string     `json:"name"`
+	Path          string     `json:"path"`
+	Created       time.Time  `json:"created"`
+	TrackedSince  time.Time  `json:"tracked_since"`
+	LastRetrieval *time.Time `json:"last_retrieval,omitempty"`
+	Discoveries   int        `json:"discoveries"`
+}
+
+// PruneCandidates applies prune's age rule to a usage report. An entry is
+// removed when it was created more than maxAge ago, has been tracked for at
+// least maxAge, and has not been retrieved within maxAge. A discovery does not
+// keep an entry: an entry searches keep surfacing but nobody reads is still
+// unused. An entry the index has not tracked yet is never removed, since its
+// tracking starts now; that is what keeps the first prune after the index
+// arrives from removing every entry that predates it. Category descriptions
+// are not entries and are never candidates.
+func PruneCandidates(usage []EntryUsage, maxAge time.Duration, now time.Time) []PruneRemoval {
+	var removals []PruneRemoval
+	for _, eu := range usage {
+		if !eu.Tracked || IsCategoryDescription(eu.Path) || IsReservedPath(eu.Path) {
+			continue
+		}
+		if now.Sub(eu.Created) <= maxAge || now.Sub(eu.TrackedSince) < maxAge {
+			continue
+		}
+		if last := eu.Retrievals.Last; last != nil && now.Sub(*last) <= maxAge {
+			continue
+		}
+		removals = append(removals, PruneRemoval{
+			Tier:          eu.Tier,
+			Name:          eu.Name,
+			Path:          eu.Path,
+			Created:       eu.Created,
+			TrackedSince:  eu.TrackedSince,
+			LastRetrieval: eu.Retrievals.Last,
+			Discoveries:   eu.Discoveries.Count,
+		})
+	}
+	return removals
+}

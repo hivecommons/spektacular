@@ -430,3 +430,40 @@ func TestSet_UsageConcurrentRecordsFromSeparateInstancesAreAllCounted(t *testing
 	require.NoError(t, err)
 	require.Equal(t, []string{filepath.Join(dir, UsageIndexFile)}, matches, "no lock or temp file is left behind")
 }
+
+// Prune criteria 1 and 2: at a 30-day age, an entry created and tracked for 40
+// days and never retrieved, or retrieved only outside the window, is removed,
+// and so is one searches keep surfacing but nobody reads, carrying its
+// discovery count as evidence. An entry retrieved within the window, a young
+// entry, an entry backfilled with an old creation date but tracked for less
+// than the age, an entry the index has not tracked yet and a category
+// description are never removed.
+func TestPruneCandidates_AgeRule(t *testing.T) {
+	now := time.Date(2026, time.October, 24, 12, 0, 0, 0, time.UTC)
+	ago := func(days int) time.Time { return now.Add(-time.Duration(days) * 24 * time.Hour) }
+	at := func(days int) *time.Time { v := ago(days); return &v }
+	tracked := func(p string, created, since int, discoveries UsageLog, retrievals UsageLog) EntryUsage {
+		return EntryUsage{
+			Tier: TierRepo, Name: "docs", Path: p, Tracked: true,
+			UsageRecord: UsageRecord{Created: ago(created), TrackedSince: ago(since), Discoveries: discoveries, Retrievals: retrievals},
+		}
+	}
+
+	usage := []EntryUsage{
+		tracked("learnings/never-read.md", 40, 40, UsageLog{}, UsageLog{}),
+		tracked("learnings/read-once.md", 40, 40, UsageLog{}, UsageLog{Count: 1, Last: at(5)}),
+		tracked("learnings/young.md", 10, 10, UsageLog{}, UsageLog{}),
+		tracked("learnings/surfaced.md", 40, 40, UsageLog{Count: 3, Last: at(2)}, UsageLog{}),
+		tracked("learnings/backfilled.md", 400, 10, UsageLog{}, UsageLog{}),
+		tracked("learnings/read-long-ago.md", 60, 60, UsageLog{}, UsageLog{Count: 2, Last: at(45)}),
+		tracked("gotchas/README.md", 40, 40, UsageLog{}, UsageLog{}),
+		{Tier: TierRepo, Name: "docs", Path: "learnings/untracked.md"},
+	}
+
+	got := PruneCandidates(usage, 30*24*time.Hour, now)
+	require.Equal(t, []PruneRemoval{
+		{Tier: TierRepo, Name: "docs", Path: "learnings/never-read.md", Created: ago(40), TrackedSince: ago(40)},
+		{Tier: TierRepo, Name: "docs", Path: "learnings/surfaced.md", Created: ago(40), TrackedSince: ago(40), Discoveries: 3},
+		{Tier: TierRepo, Name: "docs", Path: "learnings/read-long-ago.md", Created: ago(60), TrackedSince: ago(60), LastRetrieval: at(45)},
+	}, got)
+}

@@ -224,6 +224,83 @@ repos:
 	require.True(t, cfg.Implement.Worktrees)
 }
 
+// Prune age criteria 1 and 4: a current-schema project that never mentions
+// knowledge.prune loads without error or migration and reports the default
+// age of 90 days.
+func TestFromYAMLFile_AbsentKnowledgePruneAgeLoadsAsNinety(t *testing.T) {
+	yaml := `name: testproj
+repos:
+  - name: testproj
+    location: ..`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, 0, cfg.Knowledge.Prune.MaxAgeDays)
+	require.Equal(t, 90, cfg.Knowledge.PruneMaxAgeDays())
+	require.Equal(t, 90, NewDefault().Knowledge.PruneMaxAgeDays())
+}
+
+// Prune age criterion 2: a configured age is read, and survives being saved
+// and loaded again, leaving the settings format version where it was. An
+// unset age is not written at all.
+func TestToYAMLFile_KnowledgePruneAgeRoundTrips(t *testing.T) {
+	yaml := `name: testproj
+repos:
+  - name: testproj
+    location: ..
+knowledge:
+  prune:
+    max_age_days: 30`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, 30, cfg.Knowledge.PruneMaxAgeDays())
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "prune:\n        max_age_days: 30\n")
+	require.Contains(t, string(raw), "schema: 4\n")
+
+	loaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, 30, loaded.Knowledge.PruneMaxAgeDays())
+
+	fresh := NewDefault()
+	fresh.Name = "testproj"
+	fresh.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	require.NoError(t, fresh.ToYAMLFile(path))
+	raw, err = os.ReadFile(path)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "prune:", "an unset age is not written")
+}
+
+// Prune age criterion 3: a negative age is refused with config_invalid,
+// naming the key and how to fix it.
+func TestFromYAMLFile_NegativeKnowledgePruneAgeIsRefused(t *testing.T) {
+	yaml := `name: testproj
+repos:
+  - name: testproj
+    location: ..
+knowledge:
+  prune:
+    max_age_days: -1`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	_, err := FromYAMLFile(path)
+	var er *output.ErrorResponse
+	require.ErrorAs(t, err, &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Equal(t, "knowledge.prune.max_age_days must be a positive number of days, got -1", er.Message)
+	require.Equal(t, "knowledge.prune.max_age_days", er.Resource)
+	require.Equal(t, "set knowledge.prune.max_age_days in .spektacular/config.yaml to a positive number of days (or remove the key to use 90)", er.NextAction)
+}
+
 // Implement-in-worktrees criteria 2 and 3: turning worktrees off is written
 // to the settings file as the literal `worktrees: false` under `implement:`
 // and read back as false, and doing so leaves the settings format version
