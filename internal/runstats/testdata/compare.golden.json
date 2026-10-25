@@ -144,6 +144,96 @@
         0,
         10
       ]
+    },
+    {
+      "figure": "input_tokens",
+      "values": [
+        0,
+        0
+      ],
+      "delta": [
+        0,
+        0
+      ],
+      "delta_pct": [
+        null,
+        null
+      ]
+    },
+    {
+      "figure": "output_tokens",
+      "values": [
+        6000,
+        6000
+      ],
+      "delta": [
+        0,
+        0
+      ],
+      "delta_pct": [
+        0,
+        0
+      ]
+    },
+    {
+      "figure": "cache_read_tokens",
+      "values": [
+        0,
+        0
+      ],
+      "delta": [
+        0,
+        0
+      ],
+      "delta_pct": [
+        null,
+        null
+      ]
+    },
+    {
+      "figure": "cache_write_tokens",
+      "values": [
+        0,
+        0
+      ],
+      "delta": [
+        0,
+        0
+      ],
+      "delta_pct": [
+        null,
+        null
+      ]
+    },
+    {
+      "figure": "cost",
+      "values": [
+        0.06,
+        0.06
+      ],
+      "delta": [
+        0,
+        0
+      ],
+      "delta_pct": [
+        0,
+        0
+      ]
+    },
+    {
+      "figure": "working_ms_per_1k_output",
+      "values": [
+        170167,
+        130167
+      ],
+      "delta": [
+        0,
+        -40000
+      ],
+      "delta_pct": [
+        0,
+        -23.5
+      ]
     }
   ],
   "steps": [
@@ -238,6 +328,96 @@
           "delta_pct": [
             null,
             null
+          ]
+        },
+        {
+          "figure": "input_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "output_tokens",
+          "values": [
+            1000,
+            2000
+          ],
+          "delta": [
+            0,
+            1000
+          ],
+          "delta_pct": [
+            0,
+            100
+          ]
+        },
+        {
+          "figure": "cache_read_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cache_write_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cost",
+          "values": [
+            0.01,
+            0.02
+          ],
+          "delta": [
+            0,
+            0.01
+          ],
+          "delta_pct": [
+            0,
+            100
+          ]
+        },
+        {
+          "figure": "working_ms_per_1k_output",
+          "values": [
+            120000,
+            60000
+          ],
+          "delta": [
+            0,
+            -60000
+          ],
+          "delta_pct": [
+            0,
+            -50
           ]
         }
       ]
@@ -334,6 +514,96 @@
             null,
             null
           ]
+        },
+        {
+          "figure": "input_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "output_tokens",
+          "values": [
+            5000,
+            4000
+          ],
+          "delta": [
+            0,
+            -1000
+          ],
+          "delta_pct": [
+            0,
+            -20
+          ]
+        },
+        {
+          "figure": "cache_read_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cache_write_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cost",
+          "values": [
+            0.05,
+            0.04
+          ],
+          "delta": [
+            0,
+            -0.01
+          ],
+          "delta_pct": [
+            0,
+            -20
+          ]
+        },
+        {
+          "figure": "working_ms_per_1k_output",
+          "values": [
+            120000,
+            165000
+          ],
+          "delta": [
+            0,
+            45000
+          ],
+          "delta_pct": [
+            0,
+            37.5
+          ]
         }
       ]
     },
@@ -423,6 +693,96 @@
           ],
           "delta": [
             0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "input_tokens",
+          "values": [
+            0,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "output_tokens",
+          "values": [
+            0,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cache_read_tokens",
+          "values": [
+            0,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cache_write_tokens",
+          "values": [
+            0,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cost",
+          "values": [
+            0,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "working_ms_per_1k_output",
+          "values": [
+            null,
+            null
+          ],
+          "delta": [
+            null,
             null
           ],
           "delta_pct": [
@@ -519,6 +879,96 @@
           "delta": [
             0,
             0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "input_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "output_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cache_read_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cache_write_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cost",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "working_ms_per_1k_output",
+          "values": [
+            null,
+            null
+          ],
+          "delta": [
+            null,
+            null
           ],
           "delta_pct": [
             null,

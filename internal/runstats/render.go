@@ -231,6 +231,19 @@ func RenderComparison(w io.Writer, c Comparison, skipped int) error {
 		tw.Flush()
 	}
 
+	// The steps' token figures, when any run's token use is known.
+	if comparedTokens(c) {
+		for _, tf := range stepTokenTables {
+			section(b, "Steps ("+tf.title+")")
+			tw := table(b)
+			fmt.Fprintln(tw, head)
+			for _, s := range c.Steps {
+				fmt.Fprintf(tw, "%s\t%s\n", s.Step, figureCells(namedFigure(s.Figures, tf.figure)))
+			}
+			tw.Flush()
+		}
+	}
+
 	section(b, "Totals")
 	tw := table(b)
 	fmt.Fprintln(tw, "FIGURE"+strings.TrimPrefix(head, "STEP"))
@@ -263,6 +276,20 @@ func RenderSummary(w io.Writer, s Summary, skipped int) error {
 			fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n", st.Step, d.Count, statValue(d.Figure, d.Median), statValue(d.Figure, d.P90))
 		}
 		tw.Flush()
+	}
+
+	// The steps' token figures, when any run's token use is known.
+	if summarisedTokens(s) {
+		for _, tf := range stepTokenTables {
+			section(b, "Steps ("+tf.title+")")
+			tw := table(b)
+			fmt.Fprintln(tw, "STEP\tRUNS\tMEDIAN\tP90")
+			for _, st := range s.Steps {
+				d := namedStat(st.Figures, tf.figure)
+				fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n", st.Step, d.Count, statValue(d.Figure, d.Median), statValue(d.Figure, d.P90))
+			}
+			tw.Flush()
+		}
 	}
 
 	section(b, "Totals")
@@ -308,13 +335,23 @@ func figureCells(f Figure) string {
 }
 
 // isDuration reports whether a figure is in milliseconds.
-func isDuration(figure string) bool { return strings.HasSuffix(figure, "_ms") }
+func isDuration(figure string) bool {
+	return strings.HasSuffix(figure, "_ms") || figure == "working_ms_per_1k_output"
+}
 
-func figureValue(figure string, v int64) string {
-	if isDuration(figure) {
-		return fmtMS(v)
+// figureValue prints one value of a figure: a duration as a time, a token
+// count with thousands separators, a cost with 2 decimals, and any other
+// count as a number.
+func figureValue(figure string, v float64) string {
+	switch {
+	case isDuration(figure):
+		return fmtMS(int64(math.Round(v)))
+	case strings.HasSuffix(figure, "_tokens"):
+		return fmtTokens(int64(math.Round(v)))
+	case figure == "cost":
+		return strconv.FormatFloat(v, 'f', 2, 64)
 	}
-	return fmt.Sprintf("%d", v)
+	return strconv.FormatFloat(v, 'f', -1, 64)
 }
 
 // statValue prints a median or percentile, which may be fractional.
@@ -322,10 +359,48 @@ func statValue(figure string, v *float64) string {
 	if v == nil {
 		return "-"
 	}
-	if isDuration(figure) {
-		return fmtMS(int64(math.Round(*v)))
+	return figureValue(figure, *v)
+}
+
+// stepTokenTables are the step token figures a comparison or summary shows
+// beside the steps' durations.
+var stepTokenTables = []struct{ figure, title string }{
+	{"output_tokens", "output tokens"},
+	{"cost", "cost"},
+	{"working_ms_per_1k_output", "time per 1k output tokens"},
+}
+
+func namedFigure(fs []Figure, name string) Figure {
+	for _, f := range fs {
+		if f.Figure == name {
+			return f
+		}
 	}
-	return strconv.FormatFloat(*v, 'f', -1, 64)
+	return Figure{Figure: name}
+}
+
+func namedStat(fs []Stat, name string) Stat {
+	for _, f := range fs {
+		if f.Figure == name {
+			return f
+		}
+	}
+	return Stat{Figure: name}
+}
+
+// comparedTokens reports whether any compared run's token use is known.
+func comparedTokens(c Comparison) bool {
+	for _, v := range namedFigure(c.Totals, "output_tokens").Values {
+		if v != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// summarisedTokens reports whether any summarised run's token use is known.
+func summarisedTokens(s Summary) bool {
+	return namedStat(s.Totals, "output_tokens").Count > 0
 }
 
 // RenderCommands draws the command records as one table, oldest first as

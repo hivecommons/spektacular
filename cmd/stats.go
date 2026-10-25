@@ -137,7 +137,10 @@ type statsRunResult struct {
 // decimal. Total figures, in order: wall_ms, working_ms, user_wait_ms,
 // helper_wait_ms, command_ms, commands, helpers, gap_ms. Step figures, in
 // order: duration_ms, entries, commands, command_ms, helper_wait_ms,
-// user_wait_ms. count is the runs a figure applies to (for a step, the runs
+// user_wait_ms. Spec 000078 appends to both lists input_tokens,
+// output_tokens, cache_read_tokens, cache_write_tokens, cost and
+// working_ms_per_1k_output, null for a run whose token use is unknown.
+// count is the runs a figure applies to (for a step, the runs
 // that entered it); median and p90 are numbers, null when count is 0.
 type statsCompareResult struct {
 	statsSource
@@ -344,10 +347,10 @@ func statsFigureSchema(figure *schemaProp) *schemaObj {
 	return statsOutput(map[string]*schemaProp{
 		"gap_threshold_ms": {Type: "integer"},
 		"runs":             {Type: "array", Items: statsRunSummarySchema, Description: "the runs, in the order compared (the first is the base)"},
-		"totals":           {Type: "array", Items: figure, Description: "wall_ms, working_ms, user_wait_ms, helper_wait_ms, command_ms, commands, helpers, gap_ms"},
+		"totals":           {Type: "array", Items: figure, Description: "wall_ms, working_ms, user_wait_ms, helper_wait_ms, command_ms, commands, helpers, gap_ms, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost, working_ms_per_1k_output"},
 		"steps": {Type: "array", Description: "one entry per step name", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
 			"step":    {Type: "string"},
-			"figures": {Type: "array", Items: figure, Description: "duration_ms, entries, commands, command_ms, helper_wait_ms, user_wait_ms"},
+			"figures": {Type: "array", Items: figure, Description: "duration_ms, entries, commands, command_ms, helper_wait_ms, user_wait_ms, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost, working_ms_per_1k_output"},
 		}}},
 	})
 }
@@ -355,6 +358,7 @@ func statsFigureSchema(figure *schemaProp) *schemaObj {
 func statsFigureFlags() map[string]*schemaProp {
 	flags := statsSelectionFlags()
 	flags["gap-threshold"] = &schemaProp{Type: "string", Description: "a Go duration; gaps longer than it count toward gap_ms (default 5m)"}
+	flags["sessions-dir"] = statsSessionsDirFlag
 	return flags
 }
 
@@ -363,8 +367,8 @@ func runStatsCompare(cmd *cobra.Command, _ []string) error {
 		return output.Write(cmd.OutOrStdout(), commandSchema{
 			Output: statsFigureSchema(&schemaProp{Type: "object", Properties: map[string]*schemaProp{
 				"figure":    {Type: "string"},
-				"values":    {Type: "array", Items: &schemaProp{Type: "integer"}, Description: "one per run; null where it does not apply"},
-				"delta":     {Type: "array", Items: &schemaProp{Type: "integer"}, Description: "each value less the first run's; null where either is null"},
+				"values":    {Type: "array", Items: &schemaProp{Type: "number"}, Description: "one per run; null where it does not apply or token use is unknown; whole numbers except cost"},
+				"delta":     {Type: "array", Items: &schemaProp{Type: "number"}, Description: "each value less the first run's; null where either is null"},
 				"delta_pct": {Type: "array", Items: &schemaProp{Type: "number"}, Description: "delta as a percentage of the first run's value, one decimal; null when that is null or 0"},
 			}}),
 			Flags: statsFigureFlags(),
@@ -378,6 +382,7 @@ func runStatsCompare(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return statsError(err)
 	}
+	opts.Tokens = statsTokenInput(cmd, logs, runs)
 	cmp := runstats.Compare(runs, opts)
 	if format == statusFormatJSON {
 		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsCompareResult{statsSource: source(logs), Comparison: cmp})
@@ -405,6 +410,7 @@ func runStatsSummary(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return statsError(err)
 	}
+	opts.Tokens = statsTokenInput(cmd, logs, runs)
 	sum := runstats.Summarise(runs, opts)
 	if format == statusFormatJSON {
 		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsSummaryResult{statsSource: source(logs), Summary: sum})

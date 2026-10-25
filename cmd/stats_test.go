@@ -546,8 +546,11 @@ func TestStatsSummaryDefaultsAndKind(t *testing.T) {
 	// second lasts 50, 10, 20, 30 and 40 minutes.
 	require.Equal(t, map[string]any{"figure": "duration_ms", "count": float64(5), "median": float64(30 * 60000), "p90": float64(50 * 60000)},
 		figure(t, stepFigures(t, m, "second"), "duration_ms"))
-	for _, f := range m["totals"].([]any) {
+	for _, f := range m["totals"].([]any)[:8] {
 		require.Equal(t, float64(5), f.(map[string]any)["count"])
+	}
+	for _, f := range m["totals"].([]any)[8:] {
+		require.Equal(t, float64(0), f.(map[string]any)["count"], "no session drove these runs: token use is unknown, never zero")
 	}
 
 	resetRootCmd(t)
@@ -593,14 +596,16 @@ func TestStatsCompareAndSummaryFieldNames(t *testing.T) {
 		require.Equal(t, []string{"delta", "delta_pct", "figure", "values"}, dataKeys(f.(map[string]any)))
 		order = append(order, f.(map[string]any)["figure"].(string))
 	}
-	require.Equal(t, []string{"wall_ms", "working_ms", "user_wait_ms", "helper_wait_ms", "command_ms", "commands", "helpers", "gap_ms"}, order)
+	require.Equal(t, []string{"wall_ms", "working_ms", "user_wait_ms", "helper_wait_ms", "command_ms", "commands", "helpers", "gap_ms",
+		"input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cost", "working_ms_per_1k_output"}, order)
 	step := m["steps"].([]any)[0].(map[string]any)
 	require.Equal(t, []string{"figures", "step"}, dataKeys(step))
 	order = nil
 	for _, f := range step["figures"].([]any) {
 		order = append(order, f.(map[string]any)["figure"].(string))
 	}
-	require.Equal(t, []string{"duration_ms", "entries", "commands", "command_ms", "helper_wait_ms", "user_wait_ms"}, order)
+	require.Equal(t, []string{"duration_ms", "entries", "commands", "command_ms", "helper_wait_ms", "user_wait_ms",
+		"input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cost", "working_ms_per_1k_output"}, order)
 
 	resetRootCmd(t)
 	m = statsJSON(t, "summary")
@@ -1194,4 +1199,57 @@ func TestStatsRunSchemaListsTokens(t *testing.T) {
 	require.Equal(t, 0, code)
 	require.Contains(t, out, `"tokens"`)
 	require.Contains(t, out, `"sessions-dir"`)
+}
+
+// Comparisons and summaries criterion 1, 2 and 3 at the command line: the
+// token figures for both runs in both forms, the codex run absent.
+func TestStatsCompareAndSummaryCarryTokens(t *testing.T) {
+	_, sessions := tokenProject(t, tokenPrices)
+	m := statsJSON(t, "compare", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions)
+	out := figure(t, m["totals"], "output_tokens")
+	require.Equal(t, []any{float64(2853), nil}, out["values"], "the codex run's token use is unknown")
+	require.Equal(t, []any{float64(0), nil}, out["delta"])
+	require.Equal(t, []any{0.076725, nil}, figure(t, m["totals"], "cost")["values"])
+	first := figure(t, stepFigures(t, m, "first"), "output_tokens")
+	require.Equal(t, []any{float64(2401), nil}, first["values"])
+	require.Equal(t, []any{float64(224906), nil}, figure(t, stepFigures(t, m, "first"), "working_ms_per_1k_output")["values"])
+	// The timings are those of a comparison without token use.
+	require.Equal(t, []any{float64(1800000), float64(3600000)}, figure(t, m["totals"], "wall_ms")["values"])
+
+	resetRootCmd(t)
+	pretty := stats(t, "compare", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions)
+	require.Contains(t, pretty, "\nSteps (output tokens)\n")
+	require.Regexp(t, `(?m)^first\s+2,401\s+-$`, pretty)
+	require.Regexp(t, `(?m)^output_tokens\s+2,853\s+-$`, pretty)
+	require.Regexp(t, `(?m)^cost\s+0\.08\s+-$`, pretty)
+
+	resetRootCmd(t)
+	m = statsJSON(t, "summary", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions)
+	require.Equal(t, map[string]any{"figure": "output_tokens", "count": float64(1), "median": float64(2853), "p90": float64(2853)},
+		figure(t, m["totals"], "output_tokens"), "the unknown run is left out, not counted as zero")
+	require.Equal(t, float64(2), figure(t, m["totals"], "wall_ms")["count"])
+	require.Equal(t, map[string]any{"figure": "cost", "count": float64(1), "median": 0.076725, "p90": 0.076725},
+		figure(t, m["totals"], "cost"))
+
+	resetRootCmd(t)
+	pretty = stats(t, "summary", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions)
+	require.Regexp(t, `(?m)^output_tokens\s+1\s+2,853\s+2,853$`, pretty)
+	require.Regexp(t, `(?m)^first\s+1\s+2,401\s+2,401$`, pretty)
+}
+
+// Comparisons and summaries criterion 5: no log or session file changes.
+func TestStatsCompareAndSummaryLeaveTheLogsAndSessionsByteIdentical(t *testing.T) {
+	dir, sessions := tokenProject(t, tokenPrices)
+	logsBefore, sessionsBefore := rawLogSnapshot(t, logsDir(dir)), treeSnapshot(t, sessions)
+	for _, args := range [][]string{
+		{"compare", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions},
+		{"compare", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions, "--format", "json"},
+		{"summary", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions},
+		{"summary", "--sessions-dir", sessions, "--format", "json"},
+	} {
+		resetRootCmd(t)
+		stats(t, args...)
+	}
+	require.Equal(t, logsBefore, rawLogSnapshot(t, logsDir(dir)))
+	require.Equal(t, sessionsBefore, treeSnapshot(t, sessions))
 }

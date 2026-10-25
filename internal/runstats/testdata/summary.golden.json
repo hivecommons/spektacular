@@ -105,6 +105,42 @@
       "count": 5,
       "median": 0,
       "p90": 0
+    },
+    {
+      "figure": "input_tokens",
+      "count": 5,
+      "median": 0,
+      "p90": 0
+    },
+    {
+      "figure": "output_tokens",
+      "count": 5,
+      "median": 30000,
+      "p90": 50000
+    },
+    {
+      "figure": "cache_read_tokens",
+      "count": 5,
+      "median": 0,
+      "p90": 0
+    },
+    {
+      "figure": "cache_write_tokens",
+      "count": 5,
+      "median": 0,
+      "p90": 0
+    },
+    {
+      "figure": "cost",
+      "count": 5,
+      "median": 0.3,
+      "p90": 0.5
+    },
+    {
+      "figure": "working_ms_per_1k_output",
+      "count": 5,
+      "median": 3033,
+      "p90": 7100
     }
   ],
   "steps": [
@@ -146,6 +182,42 @@
           "count": 5,
           "median": 0,
           "p90": 0
+        },
+        {
+          "figure": "input_tokens",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "output_tokens",
+          "count": 5,
+          "median": 30000,
+          "p90": 50000
+        },
+        {
+          "figure": "cache_read_tokens",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "cache_write_tokens",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "cost",
+          "count": 5,
+          "median": 0.3,
+          "p90": 0.5
+        },
+        {
+          "figure": "working_ms_per_1k_output",
+          "count": 5,
+          "median": 1000,
+          "p90": 1000
         }
       ]
     },
@@ -187,6 +259,42 @@
           "count": 3,
           "median": 0,
           "p90": 0
+        },
+        {
+          "figure": "input_tokens",
+          "count": 3,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "output_tokens",
+          "count": 3,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "cache_read_tokens",
+          "count": 3,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "cache_write_tokens",
+          "count": 3,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "cost",
+          "count": 3,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "working_ms_per_1k_output",
+          "count": 0,
+          "median": null,
+          "p90": null
         }
       ]
     },
@@ -228,6 +336,42 @@
           "count": 5,
           "median": 0,
           "p90": 0
+        },
+        {
+          "figure": "input_tokens",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "output_tokens",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "cache_read_tokens",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "cache_write_tokens",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "cost",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "working_ms_per_1k_output",
+          "count": 0,
+          "median": null,
+          "p90": null
         }
       ]
     }
