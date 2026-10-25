@@ -53,7 +53,6 @@ roles: you drive the epic **and** you supply the answers the user would give.
   let that spec carry on, as the next point says.
 - This session is headless: no one replies between your turns. The answers
   above are all you will get.
-- If you are offered to save something to the knowledge base, decline.
 - Make a reasonable decision on anything else and move on.
 
 **Never end your turn waiting for a reply**: nothing will answer, and the run

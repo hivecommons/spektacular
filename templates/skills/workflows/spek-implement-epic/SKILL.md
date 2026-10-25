@@ -79,7 +79,7 @@ Give each child exactly what it needs, because it inherits nothing from you:
 
 A child ends every turn that stops its work with a final message whose **first line** is exactly one of:
 
-- `DONE: <spec>`, followed by the completion summary the implement workflow's finished step reports, and any durable discovery worth saving to the knowledge base.
+- `DONE: <spec>`, followed by the completion summary the implement workflow's finished step reports, and every knowledge entry it wrote (tier, store, path, why): a child writes durable knowledge itself through the `spek-knowledge` skill.
 - `QUESTION: <spec>`, followed by the question, the options, and the default it recommends. It then waits for your answer and carries on from the same step.
 - `FAILED: <spec>`, followed by the step it reached and the reason it cannot go on.
 
@@ -124,4 +124,4 @@ End every run, finished or stopped, with:
 - **Resumed after being cut off:** each spec whose child had to be restarted because it ended without a hand-back, and how many times. When there are any, say that the agent limits how long one sub-agent may run, and that raising that limit avoids the restarts (for Bob, `session.maxTurns` in `~/.bob/settings/settings.json`; `0` means no limit).
 - **Worktrees left behind:** each spec whose worktrees remain unmerged, with their paths, so the user can inspect or finish them.
 
-Offer to save any durable discovery the children reported with the `spek-knowledge` skill, and save it only if the user accepts.
+Report every knowledge entry the children wrote (tier, store, path, why), so the user sees how the knowledge base changed.

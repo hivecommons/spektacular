@@ -65,7 +65,7 @@ Give each child exactly what it needs, because it inherits nothing from you:
 
 A child ends every turn that stops its work with a final message whose **first line** is exactly one of:
 
-- `DONE: <spec>`, followed by the plan summary its walkthrough step prepares (in an orchestrated run the walkthrough prepares a summary instead of asking for sign-off): the approach, the milestones and tasks (naming any task a person must do), what is out of scope, the drafting assumptions, the project-wide rules it relies on or decides, one per line, and the manual checks its Testing Approach sends to the test plan (success metrics and reviews a person must make), one per line. Then any durable discovery worth saving to the knowledge base.
+- `DONE: <spec>`, followed by the plan summary its walkthrough step prepares (in an orchestrated run the walkthrough prepares a summary instead of asking for sign-off): the approach, the milestones and tasks (naming any task a person must do), what is out of scope, the drafting assumptions, the project-wide rules it relies on or decides, one per line, and the manual checks its Testing Approach sends to the test plan (success metrics and reviews a person must make), one per line. Then every knowledge entry it wrote (tier, store, path, why): a child writes durable knowledge itself through the `spek-knowledge` skill.
 - `QUESTION: <spec>`, followed by the question, the options, and the default it recommends. It then waits for your answer and carries on from the same step.
 - `FAILED: <spec>`, followed by the step it reached and the reason it cannot go on.
 
@@ -105,7 +105,7 @@ When no child is running and nothing is left to start, read the summary with `{{
 
 A change to a plan document, where `<doc>` is `plan`, `context` or `research`: read it with `{{command}} plan file read <spec> <doc>`, stage the edited document under `.spektacular/tmp/`, write it back with `{{command}} plan file write <spec> <doc> --from <path>`, and remove the scratch file. A change to the summary goes through `{{command}} epic summary write` the same way.
 
-Offer to save any durable discovery the children reported with the `spek-knowledge` skill, and save it only if the user accepts. Close the review on a direct confirmation question.
+Report every knowledge entry the children wrote (tier, store, path, why), so the user sees how the knowledge base changed. Close the review on a direct confirmation question.
 
 Skip the review if no plan was produced in this run.
 

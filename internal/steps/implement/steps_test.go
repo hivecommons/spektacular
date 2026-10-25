@@ -431,11 +431,11 @@ func TestUpdateChangelogStepBranchesOnUncheckedPhases(t *testing.T) {
 	require.NotContains(t, out, "Continue, or stop here for review?")
 }
 
-// TestUpdateChangelogStepCollectsKnowledgeCandidates asserts the
-// update_changelog step weighs the task's Discoveries entry for durable
-// knowledge but, rather than stopping the run to offer it, collects each
-// qualifying item for the finished step to offer once.
-func TestUpdateChangelogStepCollectsKnowledgeCandidates(t *testing.T) {
+// TestUpdateChangelogStepWritesDurableKnowledge asserts the update_changelog
+// step weighs the task's Discoveries entry for durable knowledge and, rather
+// than offering it, writes each qualifying item through the spek-knowledge
+// skill and lists it for the finished step to report once.
+func TestUpdateChangelogStepWritesDurableKnowledge(t *testing.T) {
 	out := renderStep(t, updateChangelog())
 	lower := strings.ToLower(out)
 
@@ -443,33 +443,47 @@ func TestUpdateChangelogStepCollectsKnowledgeCandidates(t *testing.T) {
 	require.Contains(t, lower, "beyond this one change", "update_changelog must frame durability as holding beyond the current change")
 	require.Contains(t, lower, "most tasks produce none", "update_changelog must state that most tasks produce no qualifying discovery")
 
-	require.Contains(t, out, "do not offer it now, and do not stop the run for it")
-	require.Contains(t, out, "`## Knowledge candidates` list in `.spektacular/working-context.md`")
-	require.Contains(t, out, "The run's `finished` step offers every candidate to the user at once.")
-	require.NotContains(t, out, "knowledge write", "update_changelog must not write knowledge")
+	require.Contains(t, out, "write it to the knowledge base now through the `spek-knowledge` skill")
+	require.Contains(t, out, "do not ask first, and do not stop the run for it")
+	require.Contains(t, out, "`## Knowledge written` list in `.spektacular/working-context.md`, naming the entry's tier, store, path and why it is worth keeping")
+	require.Contains(t, out, "The run's `finished` step reports every entry on that list to the user at once.")
+	require.NotContains(t, out, "Knowledge candidates")
 	require.NotContains(t, out, "skill spek-knowledge", "update_changelog must not direct the nonexistent `skill spek-knowledge` CLI invocation")
 }
 
-// TestFinishedStepOffersKnowledgeCandidates asserts the finished step offers
-// the run's collected knowledge candidates once, through the spek-knowledge
-// skill, gated on explicit acceptance with a decline being final, for both a
-// whole-plan run and a single-task run.
-func TestFinishedStepOffersKnowledgeCandidates(t *testing.T) {
+// TestUpdateChangelogStepOrchestratedWritesAndLists asserts an orchestrated
+// child writes durable knowledge itself and lists what it wrote in its
+// closing summary, instead of leaving discoveries for the orchestrator to
+// offer.
+func TestUpdateChangelogStepOrchestratedWritesAndLists(t *testing.T) {
+	out := renderStepWithData(t, updateChangelog(), map[string]any{"name": "test", "orchestrated": true})
+
+	require.Contains(t, out, "write it to the knowledge base now through the `spek-knowledge` skill")
+	require.Contains(t, out, "List each entry you wrote (tier, store, path, why) in your closing summary")
+	require.NotContains(t, out, "do not offer to save anything yourself")
+	require.NotContains(t, out, "Never offer to save knowledge")
+	require.Contains(t, out, "Write durable knowledge yourself through the `spek-knowledge` skill, and list each entry you wrote (tier, store, path, why) in your closing summary.")
+}
+
+// TestFinishedStepReportsKnowledgeWritten asserts the finished step reports
+// the knowledge entries the run wrote, once, as a report rather than a
+// question, for both a whole-plan run and a single-task run.
+func TestFinishedStepReportsKnowledgeWritten(t *testing.T) {
 	for name, out := range map[string]string{
 		"whole plan":  renderFinishedStep(t),
 		"single task": renderTaskStep(t, finished()),
 	} {
 		t.Run(name, func(t *testing.T) {
 			lower := strings.ToLower(out)
-			require.Contains(t, out, "### Offer the knowledge candidates")
-			require.Contains(t, out, "If this run collected a `## Knowledge candidates` list in `.spektacular/working-context.md`, offer its items to the user now, all in one message")
+			require.Contains(t, out, "### Report the knowledge written")
+			require.Contains(t, out, "If this run collected a `## Knowledge written` list in `.spektacular/working-context.md`, tell the user about every entry on it now, all in one message")
+			require.Contains(t, lower, "which entry was written (its path), where it lives (its tier and store), and why it is worth keeping")
+			require.Contains(t, out, "this is a report, not a question")
 			require.Contains(t, out, "use the list as you last wrote it")
-			require.Contains(t, lower, "naming what each would capture and why it is worth keeping")
-			require.Contains(t, lower, "explicit acceptance")
-			require.Contains(t, lower, "not offered again")
-			require.Contains(t, out, "spek-knowledge")
 			require.Contains(t, out, "If there is no such list, say nothing about knowledge capture.")
-			require.NotContains(t, out, "skill spek-knowledge")
+			for _, banned := range []string{"explicit acceptance", "not offered again", "Knowledge candidates", "offer its items"} {
+				require.NotContains(t, out, banned)
+			}
 		})
 	}
 }

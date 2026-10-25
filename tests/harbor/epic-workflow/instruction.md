@@ -52,7 +52,6 @@ roles: you drive the epic **and** you supply the answers the user would give.
 - At the end-of-planning review, confirm the summary without changes.
 - This session is headless: no one replies between your turns. The answers
   above are all you will get.
-- If you are offered to save something to the knowledge base, decline.
 - Make a reasonable decision on anything else, record it where the workflow
   asks, and move on.
 

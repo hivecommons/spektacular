@@ -38,7 +38,6 @@ the user would give.
   resume it.
 - When a step asks the user something, answer with the default it
   recommends, or from the spec and plan, and carry on.
-- If you are offered to save something to the knowledge base, decline.
 - Make a reasonable decision on anything else and move on.
 
 **Never end your turn waiting for a reply**: nothing will answer. Only stop

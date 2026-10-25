@@ -322,14 +322,29 @@ func TestRenderedSpekKnowledgeCaptureFlowProposesTags(t *testing.T) {
 	require.Contains(t, rendered, "is tagged `http`, never `HTTP` or `http-api`",
 		"the skill must give the worked near-duplicate example")
 
-	// Criteria 1 and 2: one gate, showing tags with tier, store name and path,
-	// before anything is written.
-	require.Contains(t, rendered, "Show the user the destination, the proposed tags, and the body before writing",
-		"the confirmation step must show the proposed tags before the write")
-	require.Contains(t, rendered, "This is one gate, not two",
-		"tags must be confirmed with everything else, not in a second gate")
-	require.Contains(t, rendered, "Only after explicit confirmation",
-		"no entry may reach a store before explicit confirmation")
+	// The entry is written without a confirmation gate, and the user is then
+	// told the tier, store name, path and tags it landed with, and why.
+	contribute := spekKnowledgeIntentSection(t, rendered, "# Intent: contribute")
+	require.Contains(t, contribute, "Write it straight away; do not ask the user first",
+		"the contribute intent must write without asking")
+	require.Contains(t, contribute, "**Then tell the user what you wrote**, in your normal reply: the **tier**, the **store name**, the **path**, the **tags**, and why the entry is worth keeping.",
+		"the contribute intent must report tier, store name, path, tags and reason")
+	for _, banned := range []string{"Only after explicit confirmation", "Wait for **explicit confirmation**", "This is one gate, not two", "before writing"} {
+		require.NotContains(t, contribute, banned, "the contribute intent must carry no confirmation gate")
+	}
+}
+
+// spekKnowledgeIntentSection returns one top-level section of the rendered
+// skill, from its heading up to the next top-level heading.
+func spekKnowledgeIntentSection(t *testing.T, rendered, heading string) string {
+	t.Helper()
+	start := strings.Index(rendered, heading)
+	require.GreaterOrEqual(t, start, 0, "the rendered skill must carry %q", heading)
+	rest := rendered[start+len(heading):]
+	if end := strings.Index(rest, "\n# "); end >= 0 {
+		rest = rest[:end]
+	}
+	return rest
 }
 
 // TestRenderedSpekKnowledgeCarriesTagFormRules asserts the three tag-form
@@ -389,8 +404,12 @@ func TestRenderedSpekKnowledgeUpdateIntentPreservesTags(t *testing.T) {
 		"the update intent must carve out revisions that are about the tags")
 	require.Contains(t, rendered, "dropping the block silently strips the entry's tags",
 		"the update intent must say why dropping the block is harmful")
-	require.Contains(t, rendered, "Show the user the tier, store name, path, tags, and proposed new body",
-		"an update must also show the tags before writing")
+	update := spekKnowledgeIntentSection(t, rendered, "# Intent: update")
+	require.Contains(t, update, "Write the revision straight away; do not ask the user first",
+		"the update intent must write without asking")
+	require.Contains(t, update, "**Then tell the user what changed**: the **tier**, the **store name**, the **path**, the **tags**, a short summary of the change against the previous body, and why.",
+		"the update intent must report what changed and where")
+	require.NotContains(t, update, "explicit confirmation", "the update intent must carry no confirmation gate")
 }
 
 // TestRenderedRetrievalSurfacesDescribeRankedMatching asserts every rendered
@@ -531,6 +550,8 @@ var knowledgeSubcommands = map[string]bool{
 	"categories":     true,
 	"always-applied": true,
 	"tags":           true,
+	"usage":          true,
+	"prune":          true,
 }
 
 // TestRenderedSpekKnowledgeAdvertisesAuditIntent asserts the audit intent is
@@ -543,7 +564,7 @@ func TestRenderedSpekKnowledgeAdvertisesAuditIntent(t *testing.T) {
 
 	require.Contains(t, rendered, "# Intent: audit",
 		"the rendered spek-knowledge skill must carry an audit intent section")
-	require.Contains(t, rendered, "picks one of five branches (lookup / contribute / update / audit / maintenance)",
+	require.Contains(t, rendered, "picks one of five branches (lookup / contribute / update / audit / prune)",
 		"the preamble must advertise five branches, or the audit intent is never reached")
 	require.Contains(t, rendered, "One skill handles all five intents",
 		"`# When to invoke` must say one skill handles all five intents")
@@ -679,8 +700,10 @@ func TestRenderedSpekKnowledgeAuditConfirmsPerEntry(t *testing.T) {
 
 	// The per-entry carve-out lives in `# Decline handling`, outside the audit
 	// section, so it is asserted against the whole rendered skill.
-	require.Contains(t, rendered, "In the audit and maintenance intents the same rule applies **per entry**",
-		"decline handling must scope the audit's and maintenance's declines per entry")
+	require.Contains(t, rendered, "In the audit intent the rule applies **per entry**",
+		"decline handling must scope the audit's declines per entry")
+	require.Contains(t, rendered, "The audit intent is the one confirmation gate left",
+		"decline handling must say the audit is the only intent that still confirms")
 	require.Contains(t, rendered, "A decline on one entry stops that entry's change and nothing else",
 		"a decline on one entry must not stop the whole review")
 	require.Contains(t, rendered, "never treat approval of an earlier entry as approval of a later one",
@@ -715,304 +738,120 @@ func TestRenderedSpekKnowledgeAuditComposesExistingPrimitives(t *testing.T) {
 	}
 }
 
-// spekKnowledgeMaintenanceSection returns the body of the rendered skill's
-// `# Intent: maintenance` section — from its heading up to the next top-level
-// heading. It mirrors spekKnowledgeAuditSection exactly; scoping assertions to
-// the section is what keeps the maintenance guards honest, since the audit
-// intent immediately above it uses much of the same vocabulary (per-entry
-// confirmation, `knowledge list`, `knowledge read`) and would otherwise satisfy
-// them from outside.
-func spekKnowledgeMaintenanceSection(t *testing.T, rendered string) string {
+// spekKnowledgePruneSection returns the body of the rendered skill's
+// `# Intent: prune` section, from its heading up to the next top-level
+// heading. Scoping assertions to the section keeps the prune guards honest,
+// since the audit intent above it uses much of the same vocabulary.
+func spekKnowledgePruneSection(t *testing.T, rendered string) string {
 	t.Helper()
-
-	const heading = "# Intent: maintenance"
-	start := strings.Index(rendered, heading)
-	require.NotEqual(t, -1, start, "the rendered spek-knowledge skill has no %q section", heading)
-
-	section := rendered[start+len(heading):]
-	if end := strings.Index(section, "\n# "); end != -1 {
-		section = section[:end]
-	}
-	return section
+	return spekKnowledgeIntentSection(t, rendered, "# Intent: prune")
 }
 
-// TestSpekKnowledgeSectionSlicingSeparatesAuditAndMaintenance asserts the two
-// section helpers each return their own intent and nothing else.
-//
-// This is not a tautology about string slicing: the audit section used to be
-// the last `# Intent:` heading in the file and so ran to the end of the
-// document. A new heading now follows it, and every pre-existing audit
-// assertion silently depends on the slice still stopping where it should. If
-// the boundary were wrong in either direction — audit swallowing maintenance,
-// or maintenance starting mid-audit — the two families of tests would pass
-// while guarding the wrong prose, so the boundary is asserted rather than
-// assumed.
-func TestSpekKnowledgeSectionSlicingSeparatesAuditAndMaintenance(t *testing.T) {
+// TestSpekKnowledgeSectionSlicingSeparatesAuditAndPrune asserts the audit and
+// prune slices each hold their own prose and neither neighbour's, so a test
+// scoped to one cannot pass on text from the other.
+func TestSpekKnowledgeSectionSlicingSeparatesAuditAndPrune(t *testing.T) {
 	rendered := renderSpekKnowledgeSkill(t)
-
 	audit := spekKnowledgeAuditSection(t, rendered)
-	maintenance := spekKnowledgeMaintenanceSection(t, rendered)
+	prune := spekKnowledgePruneSection(t, rendered)
 
-	// The audit section still holds its own prose, front to back: its opening
-	// read-and-propose claim, its middle failure modes, and its closing
-	// bug-in-execution sentence, which names only the two intents that predate
-	// it.
-	require.Contains(t, audit, "The audit **reads and proposes only**",
-		"the audit section lost its opening after another heading was added below it")
-	require.Contains(t, audit, "Unsupported tags",
-		"the audit section lost its middle after another heading was added below it")
-	require.Contains(t, audit, "exactly as it would be in the contribute and update intents",
-		"the audit section lost its closing sentence, so the slice stops too early")
-
-	// ...and none of the maintenance intent's.
-	require.NotContains(t, audit, "# Intent: maintenance",
-		"the audit slice must stop at the next top-level heading")
-	require.NotContains(t, audit, "unverifiable",
-		"the audit slice must not reach into the maintenance intent's verdicts")
-
-	// The maintenance section holds its own prose and neither neighbour's.
-	require.Contains(t, maintenance, "Maintenance **reads and proposes only**",
-		"the maintenance slice must start at its own heading")
-	require.NotContains(t, maintenance, "Unsupported tags",
-		"the maintenance slice must not reach back into the audit intent")
-	require.NotContains(t, maintenance, "# Decline handling",
-		"the maintenance slice must stop at the next top-level heading")
+	require.NotContains(t, audit, "# Intent: prune", "the audit slice must stop before the prune intent")
+	require.NotContains(t, audit, "knowledge prune", "the audit slice must not reach into the prune intent")
+	require.Contains(t, prune, "Prune is driven by", "the prune slice must start at its own heading")
+	require.NotContains(t, prune, "Unsupported tags", "the prune slice must not reach back into the audit intent")
+	require.NotContains(t, prune, "# Decline handling", "the prune slice must stop at the next top-level heading")
 }
 
-// TestRenderedSpekKnowledgeAdvertisesMaintenanceIntent asserts the maintenance
-// intent is both present and reachable. An intent the preamble never mentions
-// exists in the file and is never chosen, so the natural-language triggers and
-// the "what this skill does" summary are guarded alongside the heading itself.
-// The branch-count contract is already guarded by the audit intent's test and
-// is deliberately not repeated here.
-func TestRenderedSpekKnowledgeAdvertisesMaintenanceIntent(t *testing.T) {
+// TestRenderedSpekKnowledgeAdvertisesPruneIntent asserts the maintenance
+// review is replaced by a prune intent that the skill advertises and the
+// accuracy questions reach.
+func TestRenderedSpekKnowledgeAdvertisesPruneIntent(t *testing.T) {
 	rendered := renderSpekKnowledgeSkill(t)
 
-	require.Contains(t, rendered, "# Intent: maintenance",
-		"the rendered spek-knowledge skill must carry a maintenance intent section")
-	require.Contains(t, rendered, "read, contribute, update, audit, and maintenance operations",
-		"`# What this skill does` must list maintenance among the operations the skill orchestrates")
-
+	require.Contains(t, rendered, "# Intent: prune")
+	require.NotContains(t, rendered, "# Intent: maintenance", "the maintenance review is replaced by prune")
+	require.Contains(t, rendered, "read, contribute, update, audit, and prune operations",
+		"`# What this skill does` must list prune among the operations the skill orchestrates")
 	for _, trigger := range []string{
 		"Is the knowledge base still accurate?",
-		"Are these entries still true?",
 		"Review the knowledge base for anything out of date.",
+		"Prune the knowledge base.",
 	} {
-		require.Contains(t, rendered, trigger,
-			"`# When to invoke` must carry the natural-language maintenance trigger %q", trigger)
+		require.Contains(t, rendered, trigger, "`# When to invoke` must carry the prune trigger %q", trigger)
 	}
-
-	// The intent must distinguish itself from the audit sitting directly above
-	// it, or an agent handed "review the knowledge base" picks the wrong branch.
-	section := spekKnowledgeMaintenanceSection(t, rendered)
-	require.Contains(t, section, "not whether it is well labelled, which is the audit intent one section above",
-		"the maintenance intent must distinguish itself from the audit intent")
+	require.Contains(t, spekKnowledgePruneSection(t, rendered), "not whether it is well labelled, which is the audit intent",
+		"the prune intent must distinguish itself from the audit intent")
 }
 
-// TestRenderedSpekKnowledgeMaintenanceCarriesFourVerdicts asserts all four
-// verdicts survive with their definitions. Three of the four are what stop the
-// review collapsing into a binary keep/delete sweep: without `unverifiable` in
-// particular an agent has nowhere to put a claim it cannot check from the code,
-// and the pressure is to call it stale and propose deleting it.
-func TestRenderedSpekKnowledgeMaintenanceCarriesFourVerdicts(t *testing.T) {
-	section := spekKnowledgeMaintenanceSection(t, renderSpekKnowledgeSkill(t))
-
-	require.Contains(t, section, "Classify each entry as exactly one of four verdicts",
-		"the maintenance intent must classify each entry into exactly one of four verdicts")
-
-	verdicts := []struct {
-		needle string
-		why    string
-	}{
-		{
-			needle: "**current** — the entry still describes how the project works",
-			why:    "the current verdict must be defined by the entry still describing the project",
-		},
-		{
-			needle: "**stale** — the entry's subject no longer exists",
-			why:    "the stale verdict must be defined by the subject's disappearance",
-		},
-		{
-			needle: "**incorrect** — the subject still exists but the entry describes it wrongly",
-			why:    "the incorrect verdict must be defined by a surviving subject described wrongly",
-		},
-		{
-			needle: "**unverifiable** — the entry cannot be checked from the code",
-			why:    "the unverifiable verdict must be defined by the entry being uncheckable",
-		},
-	}
-	for _, verdict := range verdicts {
-		require.Contains(t, section, verdict.needle,
-			"the maintenance intent lost a verdict (%s): %q", verdict.why, verdict.needle)
-	}
-}
-
-// TestRenderedSpekKnowledgeMaintenanceCarriesClassificationRule asserts the
-// single rule that decides whether this review helps or harms, together with
-// its worked failure mode.
-//
-// The rule is the whole safety property of the feature. This project's
-// knowledge entries state the target and the code is what has yet to meet it,
-// so an agent applying the naive "entry disagrees with code, therefore entry is
-// stale" heuristic would propose deleting precisely the entries doing the most
-// work. The worked example is asserted alongside the rule because the abstract
-// statement on its own has repeatedly failed to stop that inference.
-func TestRenderedSpekKnowledgeMaintenanceCarriesClassificationRule(t *testing.T) {
-	section := spekKnowledgeMaintenanceSection(t, renderSpekKnowledgeSkill(t))
-
-	rule := []struct {
-		needle string
-		why    string
-	}{
-		{
-			needle: "An entry stating a standard the code has not yet met is **current**, not stale",
-			why:    "an unmet standard must be classified current, never stale",
-		},
-		{
-			needle: "an entry states the target and the code is what has yet to meet it",
-			why:    "the rule must say which of the entry and the code states the target",
-		},
-		{
-			needle: "Only an entry whose **subject no longer exists** is stale",
-			why:    "stale must be bounded to a subject that is genuinely gone",
-		},
-		{
-			needle: "an architecture entry says every store write goes through the CLI",
-			why:    "the worked failure mode is what makes the rule concrete",
-		},
-		{
-			needle: "Proposing its removal would delete the entry doing the most work",
-			why:    "the example must name the consequence of getting the rule wrong",
-		},
-		{
-			needle: "Say the code disagrees with it, and leave the entry alone",
-			why:    "the example must say what to do instead of proposing removal",
-		},
-	}
-	for _, part := range rule {
-		require.Contains(t, section, part.needle,
-			"the maintenance intent lost part of the classification rule (%s): %q", part.why, part.needle)
-	}
-}
-
-// TestRenderedSpekKnowledgeMaintenanceRequiresEvidence asserts every stale or
-// incorrect verdict has to name what actually changed, and that a verdict
-// without evidence falls back to `unverifiable` rather than to stale. Without
-// this the review degenerates into vibes about which entries look old, which is
-// unreviewable by the user and exactly the failure that makes an automated
-// knowledge sweep dangerous.
-func TestRenderedSpekKnowledgeMaintenanceRequiresEvidence(t *testing.T) {
-	section := spekKnowledgeMaintenanceSection(t, renderSpekKnowledgeSkill(t))
+// TestRenderedSpekKnowledgePruneDrivesTheCommandLoop asserts the prune intent
+// runs `knowledge prune`, offers its dry run as the preview, answers each
+// entry with `knowledge prune verdict`, keeps the verdict rules, and presents
+// the final report.
+func TestRenderedSpekKnowledgePruneDrivesTheCommandLoop(t *testing.T) {
+	command := config.NewDefault().Command
+	section := spekKnowledgePruneSection(t, renderSpekKnowledgeSkill(t))
 
 	for _, needle := range []string{
-		"State the evidence for every stale or incorrect verdict",
-		"Name the specific file, command or behaviour that changed",
-		"so the user can check the finding rather than take it on trust",
-		"A verdict you cannot attach evidence to is **unverifiable**, not stale",
-		"never classify from age or tone",
-		`"Looks old", "seems outdated" and "probably superseded" are not findings`,
+		"run `" + command + " knowledge prune --dry-run`: the dry run (the preview) produces the full report and changes nothing",
+		"Otherwise run `" + command + " knowledge prune`.",
+		command + " knowledge prune verdict --data",
+		"`knowledge.prune.max_age_days` (90 days by default)",
+		"an entry stating a standard the code has not yet met is **current**",
+		"only an entry whose subject no longer exists is deleted",
+		"every change needs evidence",
+		"Do not run `" + command + " knowledge read` or `" + command + " knowledge search` for the entry",
+		"**Present the final report.**",
+		"removed, corrected, deleted or current",
+		"Prune acts without asking; recovery from any of its changes is through the project's version history.",
+		"`--force` discards it and starts again",
 	} {
-		require.Contains(t, section, needle,
-			"the maintenance intent lost part of the evidence requirement: %q", needle)
+		require.Contains(t, section, needle, "the prune intent lost %q", needle)
 	}
 }
 
-// TestRenderedSpekKnowledgeMaintenanceReportsCategoryDrift asserts the drifted
-// category-description step survives with the commands it composes and, more
-// importantly, with its read-only boundary. Repairing drift means regenerating
-// a store's category READMEs, which is a destructive rewrite the user runs
-// deliberately; a review that silently did it would overwrite local edits on
-// the strength of nothing but having noticed a mismatch.
-func TestRenderedSpekKnowledgeMaintenanceReportsCategoryDrift(t *testing.T) {
+// TestRenderedSpekKnowledgePruneReportsCategoryDrift asserts the drifted
+// category description check survives from the maintenance review: report
+// only, with `init <agent>` as the remedy, never a repair.
+func TestRenderedSpekKnowledgePruneReportsCategoryDrift(t *testing.T) {
 	command := config.NewDefault().Command
-	section := spekKnowledgeMaintenanceSection(t, renderSpekKnowledgeSkill(t))
+	section := spekKnowledgePruneSection(t, renderSpekKnowledgeSkill(t))
 
-	require.Contains(t, section, "Report drifted category descriptions",
-		"the maintenance intent must carry the category-drift step")
-	require.Contains(t, section, "generated from the project's definition of that category",
-		"the drift step must say where a category README comes from")
-
-	for _, verb := range []string{"list", "read", "categories"} {
-		require.Contains(t, section, command+" knowledge "+verb,
-			"the drift step must compose `knowledge %s`", verb)
-	}
-	require.Contains(t, section, command+" init <agent>",
-		"the drift step must name `init <agent>` as the remedy")
-
-	require.Contains(t, section, "reports drift and never repairs it",
-		"the drift step must state that the review never repairs drift itself")
-	require.Contains(t, section, "stays something the user runs deliberately",
-		"the drift step must say why repair is left to the user")
+	require.Contains(t, section, "**Report drifted category descriptions.**")
+	require.Contains(t, section, command+" knowledge categories")
+	require.Contains(t, section, "`"+command+" init <agent>` as the remedy")
+	require.Contains(t, section, "Prune **reports drift and never repairs it**")
 }
 
-// TestRenderedSpekKnowledgeMaintenanceConfirmsPerEntry asserts the review gates
-// every write *and every delete* behind that entry's own confirmation, and that
-// `# Decline handling` carries the removal-specific carve-out.
-//
-// The generic per-entry rules shared with the audit intent are already guarded
-// by TestRenderedSpekKnowledgeAuditConfirmsPerEntry and are not repeated here.
-// What is asserted below is what maintenance adds: it is the first intent that
-// can *remove* an entry rather than only rewrite one, so a decline has to mean
-// nothing is deleted, not merely that nothing is written.
-func TestRenderedSpekKnowledgeMaintenanceConfirmsPerEntry(t *testing.T) {
-	rendered := renderSpekKnowledgeSkill(t)
-	section := spekKnowledgeMaintenanceSection(t, rendered)
-
-	require.Contains(t, section, "Propose per entry, and confirm per entry",
-		"the maintenance review must propose and confirm one entry at a time")
-	require.Contains(t, section, "verdict and the evidence for it",
-		"each proposal must show the verdict and its evidence")
-	require.Contains(t, section, "leave it, correct it, or remove it",
-		"each proposal must name the three outcomes the user is choosing between")
-	require.Contains(t, section, "Wait for **explicit confirmation for that entry**",
-		"the maintenance review must require confirmation for the entry being changed")
-	require.Contains(t, section, "Only after explicit confirmation for that entry",
-		"no entry may be written or deleted before its own confirmation")
-	require.Contains(t, section, "Accepting one entry's outcome never applies another's",
-		"accepting one entry must not silently apply another's outcome")
-	require.Contains(t, section, "at the entry's **original** tier, name and path",
-		"a corrected entry must be written back where it came from")
-	require.Contains(t, section, "delete it through the tool and never with your own file tools",
-		"a removal must go through the CLI rather than a raw file operation")
-	require.Contains(t, section, "is a bug in the skill's execution",
-		"reaching a write or delete without the per-entry gate must be called a bug")
-
-	// The decline carve-out lives in `# Decline handling`, outside the section,
-	// so it is asserted against the whole rendered skill.
-	require.Contains(t, rendered, "Maintenance is the first intent that can **remove** an entry",
-		"decline handling must call out that maintenance can remove an entry")
-	require.Contains(t, rendered, "nothing is written and, above all, nothing is deleted",
-		"a decline in maintenance must delete nothing")
-	require.Contains(t, rendered, "agreement to remove one entry is never agreement to remove another",
-		"agreement to remove one entry must never carry to another")
-}
-
-// TestRenderedSpekKnowledgeMaintenanceComposesExistingPrimitives asserts the
-// maintenance review is built from the CRUD surface the other intents already
-// use — `knowledge list`, `knowledge read`, `knowledge categories`, the
-// confirmed `knowledge write`, and the one verb it adds, `knowledge delete` —
-// and invents nothing. The negative half scans every `<command> knowledge
-// <verb>` invocation in the section and requires each verb to be one
-// cmd/knowledge.go actually registers, so a review prescribing an invented bulk
-// prune fails here rather than shipping instructions for a CLI that does not
-// exist.
-func TestRenderedSpekKnowledgeMaintenanceComposesExistingPrimitives(t *testing.T) {
+// TestRenderedSpekKnowledgePruneComposesRealSubcommands scans every
+// `<command> knowledge <verb>` invocation in the prune intent and requires
+// each verb to be one cmd/knowledge.go registers.
+func TestRenderedSpekKnowledgePruneComposesRealSubcommands(t *testing.T) {
 	command := config.NewDefault().Command
-	section := spekKnowledgeMaintenanceSection(t, renderSpekKnowledgeSkill(t))
+	section := spekKnowledgePruneSection(t, renderSpekKnowledgeSkill(t))
 
-	for _, primitive := range []string{"list", "read", "categories", "write", "delete"} {
+	for _, primitive := range []string{"prune", "write", "delete", "list", "read", "categories"} {
 		require.Contains(t, section, command+" knowledge "+primitive,
-			"the maintenance intent must compose the existing `knowledge %s` primitive", primitive)
+			"the prune intent must name the `knowledge %s` command", primitive)
 	}
-	require.Contains(t, section, "adds no bulk operation, no recursive operation and no second write path",
-		"the maintenance intent must state the operations it does not introduce")
-
 	invocation := regexp.MustCompile(regexp.QuoteMeta(command) + ` knowledge ([a-z][a-z-]*)`)
 	matches := invocation.FindAllStringSubmatch(section, -1)
-	require.NotEmpty(t, matches, "the maintenance intent invokes no knowledge command at all")
+	require.NotEmpty(t, matches)
 	for _, match := range matches {
 		require.True(t, knowledgeSubcommands[match[1]],
-			"the maintenance intent invokes %q, which cmd/knowledge.go does not register as a knowledge subcommand", match[1])
+			"the prune intent invokes %q, which cmd/knowledge.go does not register as a knowledge subcommand", match[1])
+	}
+}
+
+// TestRenderedSpekKnowledgeEveryInvocationIsARealSubcommand extends the same
+// check to the whole skill: every knowledge command it tells an agent to run
+// exists.
+func TestRenderedSpekKnowledgeEveryInvocationIsARealSubcommand(t *testing.T) {
+	command := config.NewDefault().Command
+	rendered := renderSpekKnowledgeSkill(t)
+	invocation := regexp.MustCompile(regexp.QuoteMeta(command) + ` knowledge ([a-z][a-z-]*)`)
+	for _, match := range invocation.FindAllStringSubmatch(rendered, -1) {
+		require.True(t, knowledgeSubcommands[match[1]],
+			"the skill invokes %q, which cmd/knowledge.go does not register as a knowledge subcommand", match[1])
 	}
 }
 
