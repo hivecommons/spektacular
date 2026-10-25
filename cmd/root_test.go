@@ -36,6 +36,8 @@ func resetRootCmd(t *testing.T) {
 	reset := func() {
 		resetCommandFlags(t, rootCmd)
 		rootCmd.SetArgs(nil)
+		// No test may leak a span sink into the next.
+		activeSpans = nil
 	}
 	reset()
 	t.Cleanup(reset)

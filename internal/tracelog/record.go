@@ -15,18 +15,67 @@ import "time"
 const (
 	// RecordSpan is a complete span: it started and ended in one process.
 	RecordSpan = "span"
+	// RecordSpanStart opens a span that a later command closes. It carries
+	// no end time and no status.
+	RecordSpanStart = "span_start"
+	// RecordSpanEnd closes a span opened by a RecordSpanStart. It repeats
+	// every field of the start and adds the end time, status and end
+	// reason, so it is a complete span on its own.
+	RecordSpanEnd = "span_end"
 	// KindInternal is the OpenTelemetry span kind every command span has.
 	KindInternal = "internal"
 	// TypeCommand is the spektacular.span.type of one CLI command.
 	TypeCommand = "command"
+	// TypeStep and TypeTask are the span types the workflow records by
+	// itself: a workflow step, and a plan task during implement.
+	TypeStep = "step"
+	TypeTask = "task"
+	// TypeSubAgent, TypeUserWait and TypeWork are the span types agents
+	// start: a helper agent, a wait on the user, and any other work.
+	TypeSubAgent = "sub-agent"
+	TypeUserWait = "user-wait"
+	TypeWork     = "work"
 	// StatusOK and StatusError are the span status codes.
 	StatusOK    = "ok"
 	StatusError = "error"
 )
 
-// Attribute keys a command record carries.
+// AgentTypes are the span types an agent may start, in the order they are
+// listed to it.
+var AgentTypes = []string{TypeSubAgent, TypeUserWait, TypeWork}
+
+// End reasons, the spektacular.span.end_reason of a span_end record.
+const (
+	// EndMoved: a step or task left normally.
+	EndMoved = "moved"
+	// EndFinished: the terminal step's instant span, and the step or task
+	// closed on reaching it.
+	EndFinished = "finished"
+	// EndStopped: an agent's trace stop.
+	EndStopped = "stopped"
+	// EndAbandoned: a span still open when its parent ended, its run
+	// finished, or its run was restarted.
+	EndAbandoned = "abandoned"
+	// EndInterrupted: a step left open by a stopped session, closed on
+	// resume, and the spans open under it.
+	EndInterrupted = "interrupted"
+)
+
+// ReasonStatus is the status a span closed for reason gets: an error naming
+// the reason for an abandoned or interrupted span, whose real end is
+// unknown, and ok otherwise.
+func ReasonStatus(reason string) Status {
+	if reason == EndAbandoned || reason == EndInterrupted {
+		return Status{Code: StatusError, Message: reason}
+	}
+	return Status{Code: StatusOK}
+}
+
+// Attribute keys a record carries.
 const (
 	AttrSpanType     = "spektacular.span.type"
+	AttrEndReason    = "spektacular.span.end_reason"
+	AttrTaskID       = "spektacular.task.id"
 	AttrAgent        = "spektacular.agent"
 	AttrWorkflowKind = "spektacular.workflow.kind"
 	AttrWorkflowName = "spektacular.workflow.name"
@@ -47,7 +96,9 @@ const (
 )
 
 // Record is one JSON Lines log record, following the OpenTelemetry trace
-// data model. Times are written in UTC.
+// data model. Times are written in UTC. A span_start record has no end time
+// and no status, so both are left out of its line; every span and span_end
+// record sets both.
 type Record struct {
 	Record       string         `json:"record"`
 	TraceID      string         `json:"trace_id"`
@@ -56,8 +107,8 @@ type Record struct {
 	Name         string         `json:"name"`
 	Kind         string         `json:"kind"`
 	StartTime    time.Time      `json:"start_time"`
-	EndTime      time.Time      `json:"end_time"`
-	Status       Status         `json:"status"`
+	EndTime      time.Time      `json:"end_time,omitzero"`
+	Status       Status         `json:"status,omitzero"`
 	Attributes   map[string]any `json:"attributes"`
 	Resource     map[string]any `json:"resource"`
 }

@@ -250,7 +250,7 @@ func runRepoNew(cmd *cobra.Command, _ []string) error {
 	}
 
 	st := store.NewSourceStore(root, "project")
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "repo", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory}
+	wfCfg := withSpans(workflow.Config{Command: cfg.Command, Kind: "repo", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory})
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	wf := workflow.New(reposteps.Steps(), statePath, wfCfg, st, out)
 
@@ -315,7 +315,7 @@ func runRepoGoto(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "repo", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory}
+	wfCfg := withSpans(workflow.Config{Command: cfg.Command, Kind: "repo", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory})
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	wf := workflow.New(reposteps.Steps(), repoStateFilePath(dir), wfCfg, store.NewSourceStore(root, "project"), out)
 

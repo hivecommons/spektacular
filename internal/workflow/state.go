@@ -20,12 +20,40 @@ type State struct {
 	// OpenTelemetry trace id minted when fresh state is built, kept across
 	// interruption and resume, and new on every restart. It is the only
 	// holder of the run identifier; the command log links records by it.
-	RunID          string         `json:"run_id,omitempty"`
+	RunID string `json:"run_id,omitempty"`
+	// StepSpan is the open span of the current step: the workflow opens one
+	// on every step it enters and closes it when it leaves. TaskSpan is the
+	// open span of the plan task an implement run is working on. Both are
+	// absent in state written before spans existed.
+	StepSpan       *OpenSpan      `json:"step_span,omitempty"`
+	TaskSpan       *OpenSpan      `json:"task_span,omitempty"`
 	CurrentStep    string         `json:"current_step"`
 	CompletedSteps []string       `json:"completed_steps"`
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	Data           map[string]any `json:"data"`
+}
+
+// OpenSpan is a step or task span the workflow has opened and not yet
+// closed, kept in state so the next move can close it.
+type OpenSpan struct {
+	// ID is the span id: 16 lowercase hex characters.
+	ID string `json:"id"`
+	// Name is the step name, or the task's title.
+	Name string `json:"name"`
+	// Task is a task span's task id (or phase label).
+	Task string `json:"task,omitempty"`
+	// Parent is the task span a step span inside a task nests under.
+	Parent string `json:"parent,omitempty"`
+	// Step is the step that opened a task span.
+	Step  string    `json:"step,omitempty"`
+	Start time.Time `json:"start"`
+}
+
+// RunRef identifies the run the state belongs to, for the span sink.
+func (s *State) RunRef() RunRef {
+	name, _ := s.Data["name"].(string)
+	return RunRef{RunID: s.RunID, Kind: s.Kind, Name: name, StartedAt: s.CreatedAt}
 }
 
 // InProgress reports whether the workflow has started but not yet finished.
@@ -83,6 +111,28 @@ func NewRunID() string {
 				b[i] = byte(now >> (8 * i))
 			}
 			b[15] |= 1
+		}
+		for _, c := range b {
+			if c != 0 {
+				return hex.EncodeToString(b[:])
+			}
+		}
+	}
+}
+
+// NewSpanID mints a span id in the OpenTelemetry format: 8 random bytes as 16
+// lowercase hex characters, never all zeros. Like NewRunID it mirrors the
+// tracelog package's minting, so the workflow stays independent of the
+// logger.
+func NewSpanID() string {
+	var b [8]byte
+	for {
+		if _, err := rand.Read(b[:]); err != nil {
+			now := time.Now().UnixNano()
+			for i := range 8 {
+				b[i] = byte(now >> (8 * i))
+			}
+			b[7] |= 1
 		}
 		for _, c := range b {
 			if c != 0 {

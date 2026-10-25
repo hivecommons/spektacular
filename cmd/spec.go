@@ -273,7 +273,7 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 		clearState(statePath)
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "spec", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, EpicDir: cfg.Epic.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
+	wfCfg := withSpans(workflow.Config{Command: cfg.Command, Kind: "spec", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, EpicDir: cfg.Epic.Config.Directory, AutoCommit: cfg.AutoCommitMode()})
 	steps := spec.Steps()
 
 	// A spec started in an epic joins it once the new step has written the
@@ -382,7 +382,7 @@ func runSpecGoto(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "spec", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, EpicDir: cfg.Epic.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
+	wfCfg := withSpans(workflow.Config{Command: cfg.Command, Kind: "spec", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, EpicDir: cfg.Epic.Config.Directory, AutoCommit: cfg.AutoCommitMode()})
 	return gotoWithAutoCommit(cmd, cfg, root, stateFilePath(dataDir), "spec",
 		spec.Steps(), wfCfg, input, stepVal, "")
 }

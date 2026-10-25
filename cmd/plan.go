@@ -138,7 +138,7 @@ func runPlanNew(cmd *cobra.Command, _ []string) error {
 		clearState(statePath)
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "plan", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
+	wfCfg := withSpans(workflow.Config{Command: cfg.Command, Kind: "plan", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, AutoCommit: cfg.AutoCommitMode()})
 	steps := plan.Steps()
 	out := output.New(cmd.OutOrStdout(), globalFields)
 	wf := workflow.New(steps, statePath, wfCfg, store.NewSourceStore(root, "project"), out)
@@ -221,7 +221,7 @@ func runPlanGoto(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	wfCfg := workflow.Config{Command: cfg.Command, Kind: "plan", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, AutoCommit: cfg.AutoCommitMode()}
+	wfCfg := withSpans(workflow.Config{Command: cfg.Command, Kind: "plan", DryRun: dryRun, SpecDir: cfg.Spec.Config.Directory, PlanDir: cfg.Plan.Config.Directory, AutoCommit: cfg.AutoCommitMode()})
 	return gotoWithAutoCommit(cmd, cfg, root, slot.StatePath, "plan",
 		plan.Steps(), wfCfg, input, stepVal, "no active plan found — run 'plan new' first")
 }
