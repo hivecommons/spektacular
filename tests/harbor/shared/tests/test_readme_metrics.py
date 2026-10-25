@@ -260,15 +260,26 @@ def test_comparing_runs_says_prompts_needs_run():
     assert "`--prompts`" in body and "usage error" in body
 
 
-def test_comparing_runs_describes_idle_mark():
+def test_comparing_runs_describes_the_gap_mark():
     body = section("Comparing runs")
-    assert "`◀ idle`" in body, "Comparing runs does not show the idle mark"
-    assert "quarter" in body, "Comparing runs does not say when a run is marked idle"
+    assert "`◀ gaps`" in body, "Comparing runs does not show the gap mark"
+    assert "quarter" in body and "GAP_SHARE" in body, "Comparing runs does not say when a run is marked"
+    assert "◀ idle" not in body and "idle" not in body
 
 
-def test_comparing_runs_describes_child_table():
+def test_comparing_runs_describes_the_split_and_the_helper_table():
     body = section("Comparing runs")
-    assert "child agents" in body and "nested" in body
+    for words in ("working", "helper-wait", "user-wait", "helpers", "how it ended"):
+        assert words in body, words
+    assert "child agents" not in body
+
+
+def test_comparing_runs_shows_the_two_trial_comparison():
+    body = section("Comparing runs")
+    assert re.search(r"make harbor-report ARGS='--compare \S+ \S+'", body), "no --compare example"
+    assert "`--compare A B`" in body
+    assert "`-` on the other side, never 0" in body
+    assert "user wait, helper wait, gap time" in body, "the medians do not name the new measures"
 
 
 def test_comparison_command_passes_both_sets_in_one_args():
@@ -284,3 +295,27 @@ def test_shared_self_check_command_is_present():
         for block in blocks
         for line in block.splitlines()
     )
+
+
+def harbor_text() -> str:
+    text = README.read_text()
+    return text[text.index("### End-to-end (Harbor)"):text.index("## Building from Source")]
+
+
+def test_harbor_sections_describe_the_logs_read_through_stats():
+    text = harbor_text()
+    for words in (".spektacular/logs/", "default log level", "`spektacular stats`", "SPEKTACULAR_BIN",
+                  "python3 tests/harbor/shared/timeline.py", "`--compare A B`", "`sub-agent`"):
+        assert words in text, words
+
+
+def test_harbor_sections_no_longer_describe_the_old_session_log():
+    text = harbor_text()
+    for gone in ("idle_s", "log.level: verbose", "session log", ".spektacular/debug", "--debug-dir"):
+        assert gone not in text, gone
+
+
+def test_harbor_sections_say_how_to_run_the_self_tests():
+    text = harbor_text()
+    assert "uvx --with pytest pytest --import-mode=importlib tests/harbor/shared/tests" in text
+    assert "integration test" in text and "needs Go" in text

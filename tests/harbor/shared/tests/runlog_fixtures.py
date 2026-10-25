@@ -216,8 +216,8 @@ def _span_row(first: dict, last: dict | None) -> dict:
 def stats() -> dict[str, dict]:
     """The `stats list`, `stats commands` and `stats spans` answers."""
     runs = [
-        {"run_id": TRACE_A, "kind": "plan", "name": ALPHA, "agent": "claude", "started_at": stamp(at(2)), "status": "finished"},
-        {"run_id": TRACE_B, "kind": "plan", "name": BETA, "agent": "claude", "started_at": stamp(at(2.5)), "status": "finished"},
+        {"run_id": TRACE_A, "kind": "plan", "name": ALPHA, "agent": "claude", "started_at": stamp(at(2)), "ended_at": stamp(at(15.1)), "status": "finished"},
+        {"run_id": TRACE_B, "kind": "plan", "name": BETA, "agent": "claude", "started_at": stamp(at(2.5)), "ended_at": stamp(at(16.1)), "status": "finished"},
     ]
     return _answers(records(), runs)
 

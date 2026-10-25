@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import json
 import re
-import shlex
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,7 +34,6 @@ from pathlib import Path
 AGENT_LOG_DIR = Path("/logs/agent")
 CLAUDE_TRANSCRIPT = AGENT_LOG_DIR / "claude-code.txt"
 ACP_TRAJECTORY = AGENT_LOG_DIR / "trajectory.json"
-CODEX_OUTPUT = AGENT_LOG_DIR / "codex.txt"
 CODEX_SESSIONS = AGENT_LOG_DIR / "sessions"
 
 SUBAGENT_TOOLS = ("Agent", "Task")
@@ -174,17 +172,6 @@ TOTAL_FIELDS = (
 
 
 @dataclass
-class Message:
-    """One assistant message: when it was written and how much it wrote."""
-
-    at: datetime | None  # None when the log has no timestamps (Bob)
-    chars: int
-    parent: str | None  # the launching tool call, for a Claude sub-agent's message
-    order: int
-    goto_step: str | None = None  # the step a `spektacular ... goto` in it moves to
-
-
-@dataclass
 class Child:
     """One child agent a run started, at any depth, before it is placed in a
     spec and step. None is a detail the log could not supply."""
@@ -243,39 +230,6 @@ def _mark_unknown(totals: Totals, reason: str, *names: str) -> None:
             totals.unknowns.append(Unknown(f"totals.{name}", reason))
 
 
-_STEP_IN_DATA = re.compile(r'"step"\s*:\s*"(?P<step>[^"]+)"')
-
-
-def goto_step_of(command: str) -> str | None:
-    """The step a shell command's `spektacular <kind> goto --data` moves to."""
-    if not isinstance(command, str) or "spektacular" not in command or "goto" not in command:
-        return None
-    try:
-        args = shlex.split(command)
-    except ValueError:
-        args = []
-    for i, arg in enumerate(args):
-        if arg != "goto":
-            continue
-        rest = args[i + 1 :]
-        for j, a in enumerate(rest):
-            raw = None
-            if a in ("--data", "-d") and j + 1 < len(rest):
-                raw = rest[j + 1]
-            elif a.startswith("--data="):
-                raw = a.removeprefix("--data=")
-            if raw is None:
-                continue
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                break
-            step = data.get("step") if isinstance(data, dict) else None
-            return step if isinstance(step, str) else None
-    m = _STEP_IN_DATA.search(command) if re.search(r"spektacular\s+\w+\s+goto\b", command) else None
-    return m["step"] if m else None
-
-
 def claude_summary(objs: list[dict]) -> Totals:
     """The run's totals from Claude's `result` events.
 
@@ -325,42 +279,6 @@ def claude_summary(objs: list[dict]) -> Totals:
     if totals.model is None:
         totals.unknowns.append(Unknown("run.model", "claude-code.txt names no model"))
     return totals
-
-
-def _block_chars(block: dict) -> int:
-    kind = block.get("type")
-    if kind == "text":
-        return len(block.get("text") or "")
-    if kind == "thinking":
-        return len(block.get("thinking") or "")
-    if kind == "tool_use":
-        return len(json.dumps(block.get("input") or {}))
-    return 0
-
-
-def claude_messages(objs: list[dict]) -> list[Message]:
-    """Every assistant message, main agent and sub-agent alike, with the
-    characters it wrote: text, thinking and tool-call input."""
-    out = []
-    for o in objs:
-        if o.get("type") != "assistant":
-            continue
-        content = message_of(o).get("content") or []
-        blocks = [b for b in content if isinstance(b, dict)]
-        goto = None
-        for b in blocks:
-            if b.get("type") == "tool_use":
-                goto = goto_step_of((b.get("input") or {}).get("command", "")) or goto
-        out.append(
-            Message(
-                at=parse_timestamp(o.get("timestamp")),
-                chars=sum(_block_chars(b) for b in blocks),
-                parent=o.get("parent_tool_use_id") or None,
-                order=len(out),
-                goto_step=goto,
-            )
-        )
-    return out
 
 
 # Child agents, turns and wake-ups, for the metrics record and the delegation

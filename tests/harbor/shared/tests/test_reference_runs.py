@@ -5,8 +5,9 @@ conversation is kept: m70-epic (Sonnet 4.6, epic workflow) and s55-epic,
 s55-plan, s55-implement (Sonnet 5.5). The cases here pin what the recorder
 reads from them, the child agents of the 5.5 epic run and every run's
 tokens, models and cost, with values worked out by reading the fixtures by
-hand. Their session logs predate Spektacular's run logs, so every record's
-steps, helpers and waits are unknown, never filled in from the transcript.
+hand. Their session logs predated Spektacular's run logs and are not kept,
+so every record's steps, helpers and waits are unknown, never filled in from
+the transcript.
 They also prove that each run is compact and blanked, that trim_reference.py
 regenerates every run byte for byte, that a trim never changes a value the
 recorder computes, and that the script refuses to write a trim that would.
@@ -142,9 +143,8 @@ def no_binary(monkeypatch):
 
 
 def record_of(run: Path, log_dir: Path | None = None) -> dict:
-    """The record of a reference run. Its debug/ holds the old session log,
-    not Spektacular's run logs, so by default the logs are looked for where
-    harbor leaves them in a trial, which a reference run does not have."""
+    """The record of a reference run, its logs looked for in logs/, where a
+    trim copies them; these runs predate Spektacular's run logs and have none."""
     return metrics.build_record(
         metrics.Paths(
             build_info=run / "build.json", agent_dir=run, log_dir=log_dir or run / "logs",
@@ -301,28 +301,17 @@ def test_reference_record_has_its_log_sections_unknown_and_its_briefs(name):
     assert record["schema_version"] == 3
 
 
-@pytest.mark.parametrize("name", RUNS)
-def test_old_session_log_without_a_stats_binary_fills_nothing(name, monkeypatch):
-    # Pointed at the old session log with no binary to ask, the recorder
-    # fills no log field from the files or the transcript: each is unknown
-    # with the reader's reason.
-    run = DATA / name
-    monkeypatch.delenv("SPEKTACULAR_BIN")
-    monkeypatch.setenv("PATH", "")
-    record = record_of(run, log_dir=run / "debug")
-    assert_log_sections_unknown(record, "no spektacular binary on PATH; set SPEKTACULAR_BIN to one that has `stats`")
-
-
 # Compact and free of conversation text.
 
 
 @pytest.mark.parametrize("name", RUNS)
-def test_reference_run_has_its_four_parts(name):
+def test_reference_run_has_its_three_parts_and_no_old_debug_log(name):
     run = DATA / name
-    assert sorted(p.name for p in run.iterdir()) == ["README", "build.json", "claude-code.txt", "debug"]
-    assert list((run / "debug").glob("*.jsonl"))
+    assert sorted(p.name for p in run.iterdir()) == ["README", "build.json", "claude-code.txt"]
     assert json.loads((run / "build.json").read_text()) == BUILD[name]
-    assert (run / "README").read_text().startswith(f"{name}: trimmed from harbor job ")
+    readme = (run / "README").read_text()
+    assert readme.startswith(f"{name}: trimmed from harbor job ")
+    assert "is not kept" in readme and "no logs/" in readme
 
 
 @pytest.mark.parametrize("name", RUNS)
@@ -386,19 +375,6 @@ def test_reference_run_blanks_tool_input_but_launches_and_commands(name):
                     assert set(value) <= {"x"}, (b["name"], key)
 
 
-@pytest.mark.parametrize("name", RUNS)
-def test_reference_run_session_log_keeps_only_error_code_and_step(name):
-    for path in (DATA / name / "debug").glob("*.jsonl"):
-        for line in path.read_text().splitlines():
-            event = json.loads(line)
-            assert set(event) <= {
-                "seq", "timestamp", "session_id", "command", "duration_ms", "exit_code",
-                "state_before", "state_after", "advanced", "response",
-            }
-            if "response" in event and event["command"][:2] != ["epic", "worktree"]:
-                assert set(json.loads(event["response"])) <= {"error", "code", "step"}
-
-
 # Regenerable, idempotent, and never changing a computed value.
 
 
@@ -414,12 +390,12 @@ def test_trimming_a_reference_run_again_gives_the_same_bytes(name, tmp_path, scr
 def test_trimming_never_changes_a_measured_value(name, tmp_path, scratch):
     out = tmp_path / name
     assert trim_reference.main([str(DATA / name), name, "--out", str(out)]) == 0
-    assert trim_reference.measured(out, out / "debug") == trim_reference.measured(DATA / name, DATA / name / "debug")
+    assert trim_reference.measured(out, out / "logs") == trim_reference.measured(DATA / name, DATA / name / "logs")
 
 
 # The ten-minute probe: one background child in a headless session, stopped
 # when the session closed about 600 s after the main agent ended its turn.
-# It never called spektacular, so it has no debug/.
+# It never called spektacular, so it has no logs/.
 
 PROBE = "probe-background-child"
 PROBE_CHILD = "toolu_01Sqm7X3YSdf3jFnjDYNJhVv"
@@ -432,7 +408,7 @@ PROBE_OUTCOME = (
 )
 
 
-def test_probe_has_its_parts_and_no_debug():
+def test_probe_has_its_parts_and_no_logs():
     run = DATA / PROBE
     assert sorted(p.name for p in run.iterdir()) == ["OUTCOME", "README", "build.json", "claude-code.txt"]
     assert json.loads((run / "build.json").read_text()) == {"suite": "background-child", "agent": "claude", "model": "claude-sonnet-5-5"}
@@ -471,9 +447,9 @@ def test_probe_outcome_names_the_ending_duration_date_and_version():
 def test_trimming_the_probe_again_gives_the_same_bytes_and_values(tmp_path, scratch):
     out = tmp_path / PROBE
     assert trim_reference.main([str(DATA / PROBE), PROBE, "--out", str(out)]) == 0
-    assert not (out / "debug").exists()
+    assert not (out / "logs").exists()
     assert tree(out) == {k: v for k, v in tree(DATA / PROBE).items() if k != "OUTCOME"}
-    assert trim_reference.measured(out, out / "debug") == trim_reference.measured(DATA / PROBE, DATA / PROBE / "debug")
+    assert trim_reference.measured(out, out / "logs") == trim_reference.measured(DATA / PROBE, DATA / PROBE / "logs")
     assert list(scratch.iterdir()) == []
 
 
@@ -493,8 +469,7 @@ PROMPT = "Plan the spec `20260101000000-user-auth`. Hand back DONE first."
 def synthetic_trial(root: Path) -> Path:
     agent = root / "agent"
     agent.mkdir(parents=True)
-    debug = root / "artifacts" / "spektacular" / "debug"
-    debug.mkdir(parents=True)
+    (root / "artifacts" / "spektacular").mkdir(parents=True)
     (root / "config.json").write_text(
         json.dumps({"task": {"path": "tasks/plan-workflow-claude"}, "agent": {"name": "claude-code", "model_name": "claude-sonnet-5-5"}})
     )
@@ -554,7 +529,7 @@ def test_trimming_a_collected_trial_blanks_its_text(tmp_path, scratch):
     assert objs[3]["message"]["content"] == [{"type": "text", "text": "x" * 13}]
     assert objs[5]["message"]["content"][0]["content"] == "x" * 30
     assert objs[6]["result"] == ""
-    brief = trim_reference.measured(out, out / "debug")["subagents"]["briefs"][0]
+    brief = trim_reference.measured(out, out / "logs")["subagents"]["briefs"][0]
     assert brief == {
         "id": CHILD, "parent": None, "kind": "general-purpose", "description": "Plan it",
         "models": ["claude-sonnet-5-5"], "prompt": PROMPT, "prompt_chars": 63,

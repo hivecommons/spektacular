@@ -398,3 +398,49 @@ def test_spektacular_suites_collect_their_logs(suite):
 
 def test_every_suite_but_the_probe_runs_spektacular():
     assert [s for s in SUITES if not copies_the_binary(s)] == ["background-child"]
+
+
+TIMELINE_CALL = re.compile(r"^python3 /tests/timeline\.py (\S+)(?: \S+)? \|\| true$")
+
+
+@pytest.mark.parametrize("suite", SUITES)
+def test_every_timeline_call_reads_the_logs_and_never_fails_the_run(suite):
+    lines = [line.strip() for line in (HARBOR / suite / "tests" / "test.sh").read_text().splitlines()]
+    calls = [line for line in lines if "timeline.py" in line and not line.startswith("#")]
+    for call in calls:
+        m = TIMELINE_CALL.match(call)
+        assert m, f"{suite}'s timeline call {call!r} is not `python3 /tests/timeline.py <logs> [<bob logs>] || true`"
+        assert m[1] == "/app/.spektacular/logs", f"{suite}'s timeline reads {m[1]}, not Spektacular's logs"
+
+
+def test_the_epic_suites_print_a_timeline():
+    have = [s for s in SUITES if "timeline.py" in (HARBOR / s / "tests" / "test.sh").read_text()]
+    assert sorted(have) == ["epic-workflow", "goal-check-workflow", "implement-epic-workflow", "standing-rules"]
+
+
+# --- the shared measurement scripts stay small ---------------------------------
+
+# Spec 000076 removed the old debug-log and span readers: tests/harbor/shared/*.py
+# totalled 3,299 lines at bfd5dc1 (000073 to 000075 merged) and 2,990 once
+# they were gone, with the run log reader and the two-trial comparison added.
+# The ceiling keeps them from regrowing.
+SHARED_LINE_CEILING = 3000
+
+
+def shared_script_lines() -> dict[str, int]:
+    return {p.name: len(p.read_text().splitlines()) for p in sorted((HARBOR / "shared").glob("*.py"))}
+
+
+def test_shared_scripts_stay_small():
+    lines = shared_script_lines()
+    total = sum(lines.values())
+    assert total <= SHARED_LINE_CEILING, (
+        f"tests/harbor/shared/*.py total {total} lines, over the {SHARED_LINE_CEILING} ceiling "
+        f"(3,299 at bfd5dc1 before spec 000076, 2,990 after it): {lines}"
+    )
+
+
+def test_the_old_readers_are_gone():
+    names = set(shared_script_lines())
+    assert not names & {"sessionlog.py", "spans.py"}
+    assert "runlog.py" in names

@@ -195,3 +195,43 @@ def test_the_binary_and_the_canned_answers_give_the_same_record(binary, logs, sp
     canned = record_with(log_dir, monkeypatch, lambda d, **kw: real_runlog(d, binary="spektacular", runner=CannedWithReports(answers, reports)))
     assert real["steps"]["workflows"] and real["subagents"]["helpers"]
     assert log_sections(real) == log_sections(canned)
+
+
+def test_the_timeline_over_the_binary_names_both_lanes_and_their_gaps(binary, logs):
+    import timeline
+
+    out = timeline.report(RunLog(logs, binary=binary))
+    assert f"plan {fx.ALPHA}" in out and f"plan {fx.BETA}" in out
+    hand_offs = out.split("Hand-offs between the orchestrator and each child:")[1].split("Resumed children")[0]
+    alpha = next(l for l in hand_offs.splitlines() if fx.ALPHA in l).split()
+    beta = next(l for l in hand_offs.splitlines() if l.strip().startswith(f"plan {fx.BETA}")).split()
+    # spawned after, picked up after, merged after, from the fixture's span times
+    assert alpha[2:6] == ["1m00s", "4m54s", "6m54s", "hand-back"]
+    assert beta[2:5] == ["1m00s", "0m54s", "-"]
+    assert "1 resume(s); stopped at: architecture" in out
+
+
+def test_trimming_a_collected_trial_keeps_its_logs_and_every_log_measure(binary, logs, tmp_path, monkeypatch):
+    import tempfile
+
+    import trim_reference
+
+    monkeypatch.setenv("SPEKTACULAR_BIN", binary)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    trial = tmp_path / "job" / "trial"
+    (trial / "agent").mkdir(parents=True)
+    shutil.copyfile(HERE / "data" / "s55-epic" / "claude-code.txt", trial / "agent" / "claude-code.txt")
+    (trial / "config.json").write_text(json.dumps({"task": {"path": "tasks/epic-workflow-claude"}, "agent": {"name": "claude-code", "model_name": "m"}}))
+    shutil.copytree(logs, trial / "artifacts" / "spektacular" / "logs")
+
+    out = tmp_path / "out" / "trimmed"
+    assert trim_reference.main([str(trial), "trimmed", "--out", str(out)]) == 0
+    copied = sorted(p.name for p in (out / "logs").iterdir())
+    assert copied == sorted(p.name for p in logs.iterdir())
+    for name in copied:
+        assert (out / "logs" / name).read_bytes() == (logs / name).read_bytes()
+    before = trim_reference.measured(trial / "agent", trial / "artifacts" / "spektacular" / "logs")
+    after = trim_reference.measured(out, out / "logs")
+    assert before == after
+    assert after["steps"]["workflows"], "the trimmed copy's logs still give the steps"
+    assert after["subagents"]["helpers"]

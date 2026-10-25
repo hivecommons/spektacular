@@ -28,7 +28,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from transcripts import (  # noqa: E402
     Child,
-    Message,
     SubagentLaunch,
     Totals,
     Turn,
@@ -39,13 +38,11 @@ from transcripts import (  # noqa: E402
     atif_summary,
     claude_children,
     claude_main_models,
-    claude_messages,
     claude_subagent_launches,
     claude_summary,
     claude_turns,
     claude_wakeups,
     codex_rollout_summary,
-    goto_step_of,
     parse_timestamp,
 )
 
@@ -445,7 +442,7 @@ ALL_TOTALS = (
 )
 
 
-# parse_timestamp and goto_step_of
+# parse_timestamp
 
 
 def test_parse_timestamp_reads_iso_with_z_and_rejects_the_rest():
@@ -454,14 +451,6 @@ def test_parse_timestamp_reads_iso_with_z_and_rejects_the_rest():
     assert parse_timestamp(None) is None
     assert parse_timestamp("") is None
     assert parse_timestamp("yesterday") is None
-
-
-def test_goto_step_of_reads_the_step_from_goto_data():
-    assert goto_step_of(GOTO_DISCOVERY) == "discovery"
-    assert goto_step_of("""spektacular implement goto --data='{"step":"verify","name":"x"}'""") == "verify"
-    assert goto_step_of(GOTO_HELP) is None
-    assert goto_step_of("spektacular plan status") is None
-    assert goto_step_of("ls -la") is None
 
 
 # Claude: one result event
@@ -490,14 +479,6 @@ def test_claude_one_result_missing_cost_is_unknown_not_zero():
     assert totals.cost_usd is None
     assert totals.unknowns == [Unknown("totals.cost_usd", "missing from the last result event in claude-code.txt")]
 
-
-
-def test_claude_messages_one_per_assistant_object():
-    assert claude_messages(claude_one_result()) == [
-        Message(at=at(10, 0, 0), chars=7 + 9 + LEN_GOTO_DISCOVERY, parent=None, order=0, goto_step="discovery"),
-        Message(at=at(10, 0, 5), chars=LEN_FIND_SPECS, parent=None, order=1, goto_step=None),
-        Message(at=at(10, 0, 6), chars=7 + LEN_GOTO_HELP, parent="toolu_A", order=2, goto_step=None),
-    ]
 
 
 # Claude: split by background sub-agents
