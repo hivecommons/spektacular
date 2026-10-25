@@ -58,7 +58,9 @@ func runSkill(cmd *cobra.Command, args []string) error {
 	// A library skill may include a shared partial ({{> partials/<name>}}),
 	// such as the goal reviewer's brief that the installed reviewer helpers
 	// embed too, so there is one source text for both.
-	content, err := stepkit.RenderTemplate(filename, map[string]any{})
+	// They render with the configured command, as workflow skills do, so a
+	// shared partial reads the same here as in a step instruction.
+	content, err := stepkit.RenderTemplate(filename, map[string]any{"command": traceCommand()})
 	if err != nil {
 		return err
 	}

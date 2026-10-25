@@ -491,6 +491,31 @@ class TestCrossSectionAmendment:
         )
 
 
+class TestUserWaits:
+    """Each step instruction tells the agent to mark every question it puts
+    to the user as a `user-wait` span (spec 000074). The scripted rejection
+    during Constraints makes the agent ask a follow-up question, so the
+    constraints step must hold at least one user-wait span. Reads only the
+    session log."""
+
+    def test_constraints_question_is_a_user_wait(self):
+        from spans import STEP, of_type, read_spans, user_waits
+
+        spans = read_spans(SPEK_DIR / "logs")
+        steps = [s for s in of_type(spans, STEP) if s.name == "constraints"]
+        assert steps, "the session log holds no span for the constraints step"
+        waits = user_waits(spans)
+        inside = [
+            w
+            for w in waits
+            if any(w.parent == s.span_id or (s.start <= w.start and (s.end is None or w.start <= s.end)) for s in steps)
+        ]
+        assert inside, (
+            "no user-wait span marks the follow-up question of the scripted "
+            f"Constraints rejection; user-wait spans: {[(w.name, w.start.isoformat()) for w in waits]}"
+        )
+
+
 class TestTechnicalApproachStep:
     """The agent completed the technical approach step with meaningful content."""
 

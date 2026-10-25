@@ -555,3 +555,58 @@ def test_verbose_span_resume_refusal_counts_as_a_resume(tmp_path):
     assert [e.at for e in lane.resumes] == [at(10, 30, 0)]
     assert lane.children == 2
     assert lane.finish.at == at(10, 35, 0)
+
+
+# --- 6. span starts and ends (spec 000074) are not commands ------------------------
+
+
+def span_edge(kind, clock, name, span_type="step"):
+    rec = {
+        "record": kind,
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+        "span_id": "a3ce929d0e0e4736",
+        "name": name,
+        "kind": "internal",
+        "start_time": f"2026-10-23T{clock}.000000000Z",
+        "attributes": {"spektacular.span.type": span_type, "spektacular.step": name},
+        "resource": {"service.name": "spektacular", "service.version": "0.22.0"},
+    }
+    if kind == "span_end":
+        rec["end_time"] = f"2026-10-23T{clock}.500000000Z"
+        rec["status"] = {"code": "ok"}
+        rec["attributes"]["spektacular.span.end_reason"] = "moved"
+    return rec
+
+
+def test_span_starts_and_ends_change_no_event_window_or_timeline(tmp_path):
+    commands = [
+        span_record("10:00:00", NEW, None, state("overview")),
+        span_record("10:01:00", goto("discovery"), state("overview"), state("discovery"), duration_ms=1500),
+        span_record("10:02:00", FILE_READ, state("discovery"), state("discovery")),
+        span_record("10:03:00", goto("architecture"), state("discovery"), state("architecture")),
+    ]
+    with_edges = [
+        span_edge("span_start", "10:00:00", "overview"),
+        commands[0],
+        span_edge("span_start", "10:00:30", "helper", "sub-agent"),
+        commands[1],
+        span_edge("span_end", "10:01:00", "overview"),
+        span_edge("span_start", "10:01:00", "discovery"),
+        commands[2],
+        span_edge("span_end", "10:09:00", "helper", "sub-agent"),  # after the last command
+        commands[3],
+        span_edge("span_end", "10:03:00", "discovery"),
+        span_edge("span_start", "10:03:00", "architecture"),
+    ]
+    plain_dir, edges_dir = tmp_path / "plain", tmp_path / "edges"
+    plain_dir.mkdir()
+    edges_dir.mkdir()
+    name = f"20261023T100000.000000000Z_claude_plan_{NAME}.jsonl"
+    write_lines(plain_dir / name, commands)
+    write_lines(edges_dir / name, with_edges)
+
+    assert read_events(edges_dir / name) == read_events(plain_dir / name)
+    plain, edges = SessionLog(plain_dir).lane("plan", NAME), SessionLog(edges_dir).lane("plan", NAME)
+    assert edges.step_windows() == plain.step_windows()
+    assert shape(edges.step_windows()) == [("overview", 60.0), ("discovery", 120.0), ("architecture", 0.0)]
+    assert max(e.end for e in edges.events) == max(e.end for e in plain.events)

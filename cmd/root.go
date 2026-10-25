@@ -122,8 +122,15 @@ func runRoot() int {
 	var before *stateSnapshot
 	var orig io.Writer
 	var buf *bytes.Buffer
+	var logger tracelog.Logger
 	if level != config.LogLevelOff {
 		start = time.Now()
+		// The command's workflows report their step and task spans through
+		// the same logger its own record goes to.
+		if l, ok := newCommandLogger(cfg); ok {
+			logger = l
+			activeSpans = newSpanRecorder(logger, cfg.Agent)
+		}
 		snapshotPath = snapshotStatePath(argv)
 		// A run already in progress before the upgrade has no run id: give
 		// it one now, so this command and every later one share it.
@@ -140,6 +147,7 @@ func runRoot() int {
 	}
 
 	executedCmd, err := rootCmd.ExecuteC()
+	activeSpans = nil
 
 	exitCode := 0
 	if err != nil {
@@ -159,7 +167,7 @@ func runRoot() int {
 			if buf != nil {
 				response = buf.String()
 			}
-			recordCommand(cfg, level, commandOutcome{
+			recordCommand(logger, cfg, level, commandOutcome{
 				cmd:      executedCmd,
 				argv:     argv,
 				start:    start,
@@ -233,19 +241,11 @@ type commandOutcome struct {
 	before, after *stateSnapshot
 }
 
-// recordCommand builds the command's record and hands it to the configured
-// logger. A logger that cannot be built (an unknown provider, which config
-// validation already refuses) records nothing.
-func recordCommand(cfg config.Config, level string, o commandOutcome) {
-	root, err := projectRoot()
-	if err != nil {
-		return
-	}
-	logger, err := tracelog.New(cfg.Log.Provider, tracelog.FileOptions{
-		Directory: cfg.LogDir(root),
-		Retention: cfg.Log.Retention,
-	})
-	if err != nil {
+// recordCommand builds the command's record and hands it to logger, the
+// configured logger. A logger that could not be built (an unknown provider,
+// which config validation already refuses) records nothing.
+func recordCommand(logger tracelog.Logger, cfg config.Config, level string, o commandOutcome) {
+	if logger == nil {
 		return
 	}
 	run, rec := buildRecord(cfg.Agent, level, o)
@@ -288,16 +288,17 @@ func buildRecord(agent, level string, o commandOutcome) (tracelog.Run, tracelog.
 	}
 
 	return run, tracelog.Record{
-		Record:     tracelog.RecordSpan,
-		TraceID:    run.TraceID,
-		SpanID:     tracelog.NewSpanID(),
-		Name:       commandName(o.cmd),
-		Kind:       tracelog.KindInternal,
-		StartTime:  o.start.UTC(),
-		EndTime:    o.end.UTC(),
-		Status:     status,
-		Attributes: attrs,
-		Resource:   tracelog.Resource(version),
+		Record:       tracelog.RecordSpan,
+		TraceID:      run.TraceID,
+		SpanID:       tracelog.NewSpanID(),
+		ParentSpanID: parentSpan(o.before, o.after, run),
+		Name:         commandName(o.cmd),
+		Kind:         tracelog.KindInternal,
+		StartTime:    o.start.UTC(),
+		EndTime:      o.end.UTC(),
+		Status:       status,
+		Attributes:   attrs,
+		Resource:     tracelog.Resource(version),
 	}
 }
 
@@ -335,6 +336,24 @@ func attributeRun(before, after *stateSnapshot, start time.Time, agent string) (
 	return run, step, stepTo
 }
 
+// parentSpan is the step span a command ran in, the parent of its record:
+// the step span of the state before the command when that state is in
+// progress and belongs to the record's run; otherwise the step span of the
+// state after it, when that belongs to the run (a `new` starting the run);
+// otherwise none.
+func parentSpan(before, after *stateSnapshot, run tracelog.Run) string {
+	if run.Standalone() {
+		return ""
+	}
+	if before.inProgress() && before.RunID == run.TraceID && before.StepSpan != "" {
+		return before.StepSpan
+	}
+	if after != nil && after.RunID == run.TraceID {
+		return after.StepSpan
+	}
+	return ""
+}
+
 // commandName is the command's path without the binary name, such as
 // "spec goto", or "spektacular" for the root command itself.
 func commandName(c *cobra.Command) string {
@@ -354,6 +373,9 @@ type stateSnapshotFile struct {
 	CompletedSteps []string       `json:"completed_steps"`
 	CreatedAt      time.Time      `json:"created_at"`
 	Data           map[string]any `json:"data"`
+	StepSpan       *struct {
+		ID string `json:"id"`
+	} `json:"step_span"`
 }
 
 // stateSnapshot is the small view of a workflow's persisted state taken
@@ -361,12 +383,14 @@ type stateSnapshotFile struct {
 // verbose record carries as the state before and after; a nil snapshot means
 // no workflow state existed at that point.
 type stateSnapshot struct {
-	Kind           string    `json:"kind"`
-	Name           string    `json:"name"`
-	RunID          string    `json:"run_id"`
-	CurrentStep    string    `json:"current_step"`
-	CompletedSteps []string  `json:"completed_steps"`
-	CreatedAt      time.Time `json:"-"`
+	Kind           string   `json:"kind"`
+	Name           string   `json:"name"`
+	RunID          string   `json:"run_id"`
+	CurrentStep    string   `json:"current_step"`
+	CompletedSteps []string `json:"completed_steps"`
+	// StepSpan is the id of the open step span, "" when there is none.
+	StepSpan  string    `json:"step_span,omitempty"`
+	CreatedAt time.Time `json:"-"`
 }
 
 // inProgress reports whether the snapshot is of a run that has started and
@@ -406,7 +430,7 @@ func snapshotStatePath(argv []string) string {
 	}
 	shared := stateFilePath(dir)
 
-	var kind, verb, data string
+	var kind, verb, data, parent string
 	var args []string
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
@@ -418,7 +442,15 @@ func snapshotStatePath(argv []string) string {
 			}
 		case strings.HasPrefix(a, "--data="):
 			data = strings.TrimPrefix(a, "--data=")
-		case a == "--fields" || a == "--stdin" || a == "--file":
+		case a == "--parent":
+			if i+1 < len(argv) {
+				parent = argv[i+1]
+				i++
+			}
+		case strings.HasPrefix(a, "--parent="):
+			parent = strings.TrimPrefix(a, "--parent=")
+		case a == "--fields" || a == "--stdin" || a == "--file" ||
+			a == "--type" || a == "--status" || a == "--message":
 			i++ // these take a value, which is not a subcommand
 		case strings.HasPrefix(a, "-"):
 		case kind == "":
@@ -428,6 +460,9 @@ func snapshotStatePath(argv []string) string {
 		default:
 			args = append(args, a)
 		}
+	}
+	if kind == "trace" {
+		return traceSnapshotPath(dir, verb, args, parent, shared)
 	}
 	if kind != "plan" && kind != "implement" {
 		return laneNamedByArgs(dir, kind, append([]string{verb}, args...), shared)
@@ -464,6 +499,25 @@ func snapshotStatePath(argv []string) string {
 		}
 	}
 	return laneNamedByArgs(dir, kind, args, shared)
+}
+
+// traceSnapshotPath is the state file a trace command's record follows: the
+// in-progress run its span id names (the positional id of a stop, the
+// --parent of a start), so the command's record lands in the same run file
+// as the span it writes; otherwise fallback.
+func traceSnapshotPath(dir, verb string, args []string, parent, fallback string) string {
+	id := parent
+	if verb == "stop" && len(args) > 0 {
+		id = args[0]
+	}
+	ref, err := tracelog.ParseSpanRef(id)
+	if err != nil {
+		return fallback
+	}
+	if path, _ := resolveTraceRun(dir, &ref); path != "" {
+		return path
+	}
+	return fallback
 }
 
 // laneNamedByArgs is the state file of a running lane whose spec one of args
@@ -519,7 +573,12 @@ func readStateSnapshot(path string) *stateSnapshot {
 	}
 
 	name, _ := sf.Data["name"].(string)
+	stepSpan := ""
+	if sf.StepSpan != nil {
+		stepSpan = sf.StepSpan.ID
+	}
 	return &stateSnapshot{
+		StepSpan:       stepSpan,
 		Kind:           sf.Kind,
 		Name:           name,
 		RunID:          sf.RunID,

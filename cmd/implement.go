@@ -573,6 +573,7 @@ func implementWorkflowConfig(cfg config.Config, dryRun bool, codeRoots []workflo
 		CodeRoots:    codeRoots,
 		GoalCheck:    cfg.Implement.GoalCheck.Enabled,
 		Repos:        repoNames(cfg),
+		Spans:        activeSpans,
 	}
 }
 

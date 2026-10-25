@@ -77,6 +77,12 @@ func carriesWorkingContextFooter(kind, step, next string) bool {
 	return next != "" && !footerlessSteps[kind][step]
 }
 
+// traceMarkingPartialPath is the shared fragment WriteStepResult appends to
+// every step instruction, straight after the step's own text: it tells the
+// agent to mark each helper-agent launch and each question to the user as a
+// span, naming the step's own span as the parent.
+const traceMarkingPartialPath = "partials/trace-marking.md"
+
 // orchestratedPartialPath is the shared fragment WriteStepResult appends to
 // every step of an orchestrated workflow, telling the agent to hand its
 // stops back to the orchestrator that started it rather than ask the user.
@@ -88,6 +94,10 @@ const gitCommitPartialPath = "partials/git-commit-message.md"
 
 // WriteStepResult renders the step's template, builds a workflow-specific
 // result via the supplied builder, and writes it to the output writer.
+//
+// Every step instruction gets the trace block
+// (templates/partials/trace-marking.md) appended straight after its own
+// text, naming the step's span as the parent of the spans the agent starts.
 //
 // When the step has a next step, the rendered working-context footer
 // (templates/partials/working-context-footer.md) is appended after a
@@ -146,6 +156,10 @@ func WriteStepResult(
 		// command is the spelling shared fragments use, so one fragment
 		// renders identically here and in install-time skills.
 		"command": cfg.Command,
+		// trace_parent is the composite id of this step's span, which the
+		// trace block names as the parent of the spans the agent starts. It
+		// is empty on the terminal step.
+		"trace_parent": cfg.StepSpan,
 	}
 	maps.Copy(vars, pathVars)
 	maps.Copy(vars, req.Extra)
@@ -154,6 +168,13 @@ func WriteStepResult(
 	if err != nil {
 		return err
 	}
+	// The trace block is part of what the step asks of the agent, so it
+	// comes first, before the blocks about how the step ends.
+	trace, err := RenderTemplate(traceMarkingPartialPath, vars)
+	if err != nil {
+		return err
+	}
+	instruction = strings.TrimRight(instruction, "\n") + "\n\n---\n\n" + strings.TrimRight(trace, "\n") + "\n"
 	if isOrchestrated {
 		partial, err := RenderTemplate(orchestratedPartialPath, vars)
 		if err != nil {

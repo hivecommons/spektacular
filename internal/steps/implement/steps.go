@@ -29,6 +29,11 @@ import (
 // source so a run with the check switched off goes straight there, and its
 // callback refuses until the item's goal check is settled when it is on.
 //
+// The work on one plan task runs from analyze, which starts it, through
+// update_changelog: those steps carry a task role, so the workflow keeps a
+// task span open over them and nests their step spans under it. analyze
+// names the task (see currentTask).
+//
 // A single-task run (workflow data "task") never loops. `update_changelog`
 // either continues into the feature wrap-up, when the run completed the
 // plan's last open task, or goes straight to `finished`, leaving the wrap-up
@@ -37,13 +42,13 @@ func Steps() []workflow.StepConfig {
 	return []workflow.StepConfig{
 		{Name: "new", Src: []string{"start"}, Dst: "new", Callback: newStep()},
 		{Name: "read_plan", Src: []string{"new"}, Dst: "read_plan", Callback: readPlan()},
-		{Name: "analyze", Src: []string{"read_plan", "update_changelog"}, Dst: "analyze", Callback: analyze()},
-		{Name: "implement", Src: []string{"analyze", "check_goal"}, Dst: "implement", Callback: implementStep()},
-		{Name: "test", Src: []string{"implement"}, Dst: "test", Callback: testStep()},
-		{Name: "verify", Src: []string{"test"}, Dst: "verify", Callback: verify()},
-		{Name: "check_goal", Src: []string{"verify"}, Dst: "check_goal", Callback: checkGoal()},
-		{Name: "update_plan", Src: []string{"verify", "check_goal"}, Dst: "update_plan", Callback: updatePlan()},
-		{Name: "update_changelog", Src: []string{"update_plan"}, Dst: "update_changelog", Callback: updateChangelog()},
+		{Name: "analyze", Src: []string{"read_plan", "update_changelog"}, Dst: "analyze", Callback: analyze(), Task: workflow.TaskStart},
+		{Name: "implement", Src: []string{"analyze", "check_goal"}, Dst: "implement", Callback: implementStep(), Task: workflow.TaskWithin},
+		{Name: "test", Src: []string{"implement"}, Dst: "test", Callback: testStep(), Task: workflow.TaskWithin},
+		{Name: "verify", Src: []string{"test"}, Dst: "verify", Callback: verify(), Task: workflow.TaskWithin},
+		{Name: "check_goal", Src: []string{"verify"}, Dst: "check_goal", Callback: checkGoal(), Task: workflow.TaskWithin},
+		{Name: "update_plan", Src: []string{"verify", "check_goal"}, Dst: "update_plan", Callback: updatePlan(), Task: workflow.TaskWithin},
+		{Name: "update_changelog", Src: []string{"update_plan"}, Dst: "update_changelog", Callback: updateChangelog(), Task: workflow.TaskWithin},
 		{Name: "test_plan", Src: []string{"update_changelog"}, Dst: "test_plan", Callback: testPlan()},
 		{Name: "update_feature_changelog", Src: []string{"test_plan"}, Dst: "update_feature_changelog", Callback: updateFeatureChangelog()},
 		{Name: "reconcile_spec", Src: []string{"update_feature_changelog"}, Dst: "reconcile_spec", Callback: reconcileSpec()},
@@ -103,6 +108,7 @@ func analyze() workflow.StepCallback {
 			return "", err
 		}
 		clearGoalItem(data, cfg)
+		data.Set(workflow.TaskDataKey, currentTask(data, st, cfg))
 		return "", writeStep("analyze", "implement", "steps/implement/02-analyze.md", data, out, st, cfg, extra)
 	}
 }
@@ -312,6 +318,31 @@ func taskRun(data workflow.Data, st store.Store, cfg workflow.Config) (plantask.
 		task = plantask.Task{ID: id, Title: id}
 	}
 	return task, p, true, nil
+}
+
+// currentTask is the task analyze starts, as the workflow's task span names
+// it: a map of its "id" and "title". It is the single-task run's task, or
+// otherwise the plan's current item by the goal check's rule (the first open
+// task, or legacy phase, that the goal check has not skipped). A phase is
+// titled by its title, or its label when it has none. When the plan cannot
+// be read, as in a dry-run preview, it is nil, and the span is named "task".
+// Finding the task never fails the step.
+func currentTask(data workflow.Data, st store.Store, cfg workflow.Config) map[string]any {
+	if task, _, ok, err := taskRun(data, st, cfg); err == nil && ok {
+		return taskVars(task)
+	}
+	v, err := loadGoalView(data, st, cfg)
+	if err != nil || v.missing || v.item == "" {
+		return nil
+	}
+	if t, ok := v.plan.Task(v.item); ok {
+		return taskVars(t)
+	}
+	title := v.item
+	if ph, ok := v.plan.Phase(v.item); ok && ph.Title != "" {
+		title = ph.Title
+	}
+	return map[string]any{"id": v.item, "title": title}
 }
 
 // taskExtra is the template data scoping a step to the selected task in a

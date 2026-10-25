@@ -41,6 +41,7 @@ from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import spans  # noqa: E402
 import transcripts as tx  # noqa: E402
 from sessionlog import Lane, SessionLog, StepWindow  # noqa: E402
 from transcripts import Child, Message, Subagents, SubagentLaunch, Totals, Unknown  # noqa: E402
@@ -365,6 +366,18 @@ def lane_windows(session: SessionLog | None) -> dict[tuple[str, str], list[StepW
     return {(lane.kind, lane.name): lane.step_windows() for lane in session_lanes(session)}
 
 
+def read_trace_calls(session: SessionLog | None, debug_dir: Path) -> tuple[dict, list[Unknown]]:
+    """The `spektacular trace` calls the run made (spec 000074), from the
+    session log, and their average per plan task: the run's task spans. The
+    session log records every call, chained or not, whichever agent made it.
+    With no session log both are None, as read_session already said why."""
+    if session is None:
+        return {"trace_calls": None, "trace_calls_per_task": None}, []
+    calls = sum(1 for e in session.all_events() if e.command[:1] == ["trace"])
+    tasks = len(spans.of_type(spans.read_spans(debug_dir), spans.TASK))
+    return {"trace_calls": calls, "trace_calls_per_task": round(calls / tasks, 2) if tasks else None}, []
+
+
 def read_steps(session: SessionLog | None, log: AgentLog) -> tuple[dict, list[Unknown]]:
     if session is None:  # read_session already said why
         return {"unit": "characters", "workflows": None}, []
@@ -653,6 +666,11 @@ def build_record(paths: Paths) -> dict:
     child_unknowns = [u for u in unknowns if u.field.startswith("subagents.children")]
     gather("steps.children", lambda: count_step_children(steps, session, placed, child_unknowns), None)
     idle = gather("totals.idle_s", lambda: read_idle(log, placed, session, paths.bob_logs), None)
+    trace = gather(
+        "totals.trace_calls",
+        lambda: read_trace_calls(session, paths.debug_dir),
+        {"trace_calls": None, "trace_calls_per_task": None},
+    )
 
     totals = log.totals
     return {
@@ -667,7 +685,7 @@ def build_record(paths: Paths) -> dict:
             "dirty": run.get("dirty"),
         },
         "result": {"reward": reward, "checks": checks, "groups": groups},
-        "totals": {**{name: getattr(totals, name) for name in tx.TOTAL_FIELDS}, "idle_s": idle},
+        "totals": {**{name: getattr(totals, name) for name in tx.TOTAL_FIELDS}, "idle_s": idle, **trace},
         "steps": steps,
         "subagents": {**{name: getattr(log.subagents, name) for name in SUBAGENT_FIELDS}, "children": children},
         "unknown": [{"field": u.field, "reason": u.reason} for u in unknowns],

@@ -16,6 +16,10 @@ Two record formats are read, and both become the same `Event`:
   written to `.spektacular/debug/`, still read for the checked-in reference
   runs and the offline tests, until spec 000076 replaces this reader.
 
+The same files also hold `span_start` and `span_end` records: the spans of
+workflow steps, plan tasks, helper agents and waits on the user. They are
+not commands and are skipped here; spans.py reads them.
+
 The log is written by the CLI, not read from an agent transcript, so
 everything here reads the same whichever agent drove the run.
 """
@@ -29,6 +33,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 LANE_KINDS = ("plan", "implement")
+# The record kinds of spans that open in one command and close in another
+# (spec 000074). They are not commands, so they never become Events.
+SPAN_EDGE_RECORDS = ("span_start", "span_end")
 
 
 def lane_file(kinds: tuple[str, ...] = LANE_KINDS) -> re.Pattern:
@@ -109,6 +116,11 @@ def read_events(path: Path) -> list[Event]:
         try:
             raw = json.loads(line)
         except json.JSONDecodeError:
+            continue
+        if raw.get("record") in SPAN_EDGE_RECORDS:
+            # A step, task or agent span's start or end, not a command:
+            # spans.py reads these. Skipping them keeps every window,
+            # timeline and reference value exactly as it was.
             continue
         if "trace_id" in raw:
             event = span_event(raw)

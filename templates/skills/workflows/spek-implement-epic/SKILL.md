@@ -5,6 +5,8 @@ description: Implement every planned spec of an epic in one request, running the
 
 {{> partials/version-check}}
 
+{{> partials/trace-marking}}
+
 > **STOP. Read this before running any command below.**
 > Implementing an epic is a loop over many specs, and every spec is its own multi-step implement workflow. Starting the first child agent, or seeing the first spec finish, is **NOT** completion. Keep driving the loop below until `{{command}} status <epic> --format json` reports no spec left to implement, or the run has stopped, and only then give the final report.
 
@@ -72,6 +74,7 @@ Give each child exactly what it needs, because it inherits nothing from you:
 - "Never resolve a merge or git conflict yourself, and never merge, rebase or switch branches: your worktree's branch is merged by the orchestrator.";
 - "You never write the spec's text or a design document. If the spec or a design it references is wrong, propose the amendment in a `QUESTION:` hand-back, naming the document, the section, the conflict and the change you propose.";
 - "If the goal check stops your task, because its attempts ran out or it judged a criterion impossible, hand it back as a `QUESTION:` with the criteria not met or impossible and the reviewer's evidence, and the options the step offers.";
+- its parent span: the id `{{command}} trace start` printed when you marked this child's launch, given as "Your parent span is `<id>`: start any span of your own with `--parent <id>`.";
 - the store-access rule above, word for word;
 - the hand-back contract and the definition of a genuine open question, below.
 

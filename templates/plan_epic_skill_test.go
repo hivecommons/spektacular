@@ -20,6 +20,8 @@ import (
 const (
 	planEpicSkill   = "skills/workflows/spek-plan-epic/SKILL.md"
 	versionCheckRaw = "partials/version-check.md"
+	traceMarkingRaw = "partials/trace-marking.md"
+	traceHelpersRaw = "partials/trace-helpers.md"
 )
 
 // renderPlanEpicSkill renders the skill with the given command name and
@@ -72,7 +74,8 @@ func TestPlanEpicSkillRendersLikeAnInstalledSkill(t *testing.T) {
 	// Every {{command}} in the skill and the partial renders to the command
 	// passed, and no CLI mention is left hard-coded to "spektacular".
 	raw := readTemplate(t, planEpicSkill)
-	want := strings.Count(raw, "{{command}}") + strings.Count(readTemplate(t, versionCheckRaw), "{{command}}")
+	want := strings.Count(raw, "{{command}}") + strings.Count(readTemplate(t, versionCheckRaw), "{{command}}") +
+		strings.Count(readTemplate(t, traceMarkingRaw), "{{command}}") + strings.Count(readTemplate(t, traceHelpersRaw), "{{command}}")
 	custom := renderPlanEpicSkill(t, "spekx")
 	require.Equal(t, want, strings.Count(custom, "spekx"), "every {{command}} must render to the installed command")
 	require.NotRegexp(t, "`spektacular |\\bspektacular (status|plan|spec|epic|repo|version|migrate)\\b", custom,
@@ -174,6 +177,8 @@ func TestPlanEpicSkillStopsOnlyForQuestionsAndTheReview(t *testing.T) {
 	allowed := []string{
 		"ask the user which epic they mean, but only when it is still ambiguous",
 		"you never ask the user anything yourself",
+		// The shared trace block marks each question to the user as a wait.
+		"Before you ask the user a question, run",
 		"A child never asks for approval of a section, and never asks the user to sign off its plan.",
 		"naming the spec, the options and the recommended default, then ask.",
 		"so a question the user already answered is not asked again",

@@ -60,9 +60,27 @@ func logFiles(t *testing.T, dir string) []string {
 	return matches
 }
 
-// readRecords reads every record of the log file at path, in order, and
-// requires each to be well formed.
+// readRecords reads the command records of the log file at path, in order,
+// and requires each to be well formed. The workflow's span_start and
+// span_end records beside them are left out (readSpanLog returns those).
 func readRecords(t *testing.T, path string) []tracelog.Record {
+	t.Helper()
+	var recs []tracelog.Record
+	for _, rec := range readSpanLog(t, path) {
+		if rec.Record == tracelog.RecordSpanStart || rec.Record == tracelog.RecordSpanEnd {
+			continue
+		}
+		requireWellFormed(t, rec)
+		recs = append(recs, rec)
+	}
+	return recs
+}
+
+// readSpanLog reads every record of the log file at path, in order:
+// command records, span_start and span_end. Each span_start and span_end is
+// required to be well formed (see requireWellFormedSpan); command records
+// are checked by readRecords.
+func readSpanLog(t *testing.T, path string) []tracelog.Record {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
@@ -70,10 +88,42 @@ func readRecords(t *testing.T, path string) []tracelog.Record {
 	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
 		var rec tracelog.Record
 		require.NoError(t, json.Unmarshal([]byte(line), &rec), "line %q", line)
-		requireWellFormed(t, rec)
+		if rec.Record == tracelog.RecordSpanStart || rec.Record == tracelog.RecordSpanEnd {
+			requireWellFormedSpan(t, rec)
+		}
 		recs = append(recs, rec)
 	}
 	return recs
+}
+
+// requireWellFormedSpan checks the fields every span_start and span_end
+// record carries: a span_start has no end time and no status; a span_end
+// has both and an end reason.
+func requireWellFormedSpan(t *testing.T, rec tracelog.Record) {
+	t.Helper()
+	require.Regexp(t, traceIDPattern, rec.TraceID)
+	require.Regexp(t, spanIDPattern, rec.SpanID)
+	if rec.ParentSpanID != "" {
+		require.Regexp(t, spanIDPattern, rec.ParentSpanID)
+	}
+	require.NotEmpty(t, rec.Name)
+	require.Equal(t, tracelog.KindInternal, rec.Kind)
+	require.False(t, rec.StartTime.IsZero(), "start_time")
+	require.Contains(t, rec.Attributes, tracelog.AttrSpanType)
+	require.Contains(t, rec.Attributes, tracelog.AttrAgent)
+	require.Equal(t, tracelog.ServiceName, rec.Resource[tracelog.ResourceServiceName])
+	require.Equal(t, version, rec.Resource[tracelog.ResourceServiceVersion])
+	switch rec.Record {
+	case tracelog.RecordSpanStart:
+		require.True(t, rec.EndTime.IsZero(), "a span_start has no end_time")
+		require.Equal(t, tracelog.Status{}, rec.Status, "a span_start has no status")
+		require.NotContains(t, rec.Attributes, tracelog.AttrEndReason)
+	case tracelog.RecordSpanEnd:
+		require.False(t, rec.EndTime.IsZero(), "end_time")
+		require.False(t, rec.EndTime.Before(rec.StartTime), "a span ends no earlier than it starts")
+		require.Contains(t, []string{tracelog.StatusOK, tracelog.StatusError}, rec.Status.Code)
+		require.Contains(t, rec.Attributes, tracelog.AttrEndReason)
+	}
 }
 
 // rawLogSnapshot maps every file in the log directory dir to its content.
@@ -467,7 +517,16 @@ func TestLog_SpecRunSharesOneTraceID(t *testing.T) {
 	files = logFiles(t, logsDir(dir))
 	require.Len(t, files, 2)
 	require.Contains(t, files, first)
-	require.Equal(t, firstBytes, readBytes(t, first), "the abandoned run's file is untouched")
+	// The restart only closes the abandoned run's open step span: its
+	// file keeps every line it had and gains span_end records alone.
+	after := readBytes(t, first)
+	require.True(t, bytes.HasPrefix(after, firstBytes), "the abandoned run's records are untouched")
+	tail := filepath.Join(t.TempDir(), "tail.jsonl")
+	require.NoError(t, os.WriteFile(tail, after[len(firstBytes):], 0o644))
+	for _, r := range readSpanLog(t, tail) {
+		require.Equal(t, tracelog.RecordSpanEnd, r.Record, "the restart adds only span_end records to the old run")
+		require.Equal(t, runID, r.TraceID)
+	}
 	var newest string
 	for _, f := range files {
 		if f != first {
@@ -613,13 +672,22 @@ func TestLog_ResponseAndStateOnlyAtVerbose(t *testing.T) {
 		runID, _ := readStateMap(t, dir)["run_id"].(string)
 
 		var g tracelog.Record
+		newSpan := ""
 		for _, f := range logFiles(t, logsDir(dir)) {
 			if strings.HasSuffix(f, "_spec_000001_billing.jsonl") {
 				recs := readRecords(t, f)
 				require.Len(t, recs, 2)
 				g = recs[1]
+				for _, r := range readSpanLog(t, f) {
+					if r.Record == tracelog.RecordSpanStart && r.Name == "new" {
+						newSpan = r.SpanID
+					}
+				}
 			}
 		}
+		require.Regexp(t, spanIDPattern, newSpan)
+		interviewSpan := stateStepSpan(t, dir)
+		require.Regexp(t, spanIDPattern, interviewSpan)
 		require.Equal(t, "spec goto", g.Name)
 		require.Equal(t, gotoOut, g.Attributes[tracelog.AttrResponse])
 		require.Equal(t, map[string]any{
@@ -628,6 +696,7 @@ func TestLog_ResponseAndStateOnlyAtVerbose(t *testing.T) {
 			"run_id":          runID,
 			"current_step":    "new",
 			"completed_steps": []any{},
+			"step_span":       newSpan,
 		}, stateAttr(t, g, tracelog.AttrStateBefore))
 		require.Equal(t, map[string]any{
 			"kind":            "spec",
@@ -635,6 +704,7 @@ func TestLog_ResponseAndStateOnlyAtVerbose(t *testing.T) {
 			"run_id":          runID,
 			"current_step":    "interview",
 			"completed_steps": []any{"new"},
+			"step_span":       interviewSpan,
 		}, stateAttr(t, g, tracelog.AttrStateAfter))
 	})
 }
@@ -894,6 +964,10 @@ func TestLog_OldDebugFolderIsUntouched(t *testing.T) {
 // workflow's updated_at), which differ between two otherwise identical runs.
 var timestampPattern = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z`)
 
+// spanIDPatternInText matches the step span id an instruction names in its
+// trace block, "<run id>-<span id>", which is minted afresh on every run.
+var spanIDPatternInText = regexp.MustCompile(`[0-9a-f]{32}-[0-9a-f]{16}`)
+
 // parityRun is one command's caller-visible outcome.
 type parityRun struct {
 	Args   []string
@@ -931,6 +1005,7 @@ func runParitySet(t *testing.T, level string, readOnlyLogs bool) []parityRun {
 		stdout, code := runLogged(t, args...)
 		normalised := strings.ReplaceAll(stdout, dir, "TESTDIR")
 		normalised = timestampPattern.ReplaceAllString(normalised, "TIMESTAMP")
+		normalised = spanIDPatternInText.ReplaceAllString(normalised, "SPANID")
 		runs = append(runs, parityRun{Args: args, Stdout: normalised, Code: code})
 	}
 	require.Contains(t, runs[2].Stdout, marker)

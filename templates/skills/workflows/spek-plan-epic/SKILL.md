@@ -5,6 +5,8 @@ description: Plan every outstanding spec of an epic in one request, running the 
 
 {{> partials/version-check}}
 
+{{> partials/trace-marking}}
+
 > **STOP. Read this before running any command below.**
 > Planning an epic is a loop over many specs, and every spec is its own multi-step plan workflow. Starting the first child agent, or seeing the first spec finish, is **NOT** completion. Keep driving the loop below until `{{command}} status <epic> --format json` reports no spec left to plan, or the run has stopped, and only then give the final report.
 
@@ -57,6 +59,7 @@ Give each child exactly what it needs, because it inherits nothing from you:
 - to **start**: run `{{command}} plan new --data '{"name":"<spec>","orchestrated":true}'`;
 - to **resume**: run the same `plan new` command. It returns a resume report for the spec's lane instead of starting over; read back what the report names (the plan's working files and the lane's notes), then run the `goto` it gives, `{{command}} plan goto --data '{"step":"<current_step>","name":"<spec>"}'`;
 - "Follow the `spek-plan` skill. This run is orchestrated: every `goto` carries `\"name\":\"<spec>\"`, and you never ask the user anything yourself.";
+- its parent span: the id `{{command}} trace start` printed when you marked this child's launch, given as "Your parent span is `<id>`: start any span of your own with `--parent <id>`.";
 - the store-access rule above, word for word;
 - that only you write the epic's planning summary, so the child never runs `{{command}} epic summary write`;
 - the hand-back contract and the definition of a genuine open question, below.

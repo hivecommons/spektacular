@@ -258,3 +258,37 @@ func TestMissingPartialFailsRender(t *testing.T) {
 	_, err := mustache.RenderPartials("before {{> partials/nope}} after", p, nil)
 	require.Error(t, err)
 }
+
+// traceBlock is a hand-maintained copy of the rendered
+// templates/partials/trace-marking.md for a standalone run whose step span
+// is "<run>-<span>" below.
+const traceBlock = "**Mark spans.** Before you launch a helper agent, run `spektacular trace start <helper> --type sub-agent --parent 4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7` and put the id it prints in the helper's brief: \"Your parent span is `<id>`: start any span of your own with `--parent <id>`.\" When the helper returns, run `spektacular trace stop <id>` (add `--status error` if it failed), chained with your next command.\n\n" +
+	"Before you ask the user a question, run `spektacular trace start <question> --type user-wait --parent 4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7`, and once they answer run `spektacular trace stop <id>`, chained with your next command.\n"
+
+func renderWithSpan(t *testing.T, nextStep, templatePath, stepSpan string) string {
+	t.Helper()
+	writer := &captureWriter{}
+	err := WriteStepResult(
+		StepRequest{StepName: "overview", NextStep: nextStep, TemplatePath: templatePath, Strategy: fakeStrategy{}},
+		&testData{values: map[string]any{"name": "widget"}},
+		writer, nil, workflow.Config{Command: "spektacular", StepSpan: stepSpan},
+		buildFakeResult,
+	)
+	require.NoError(t, err)
+	return writer.result.(fakeResult).Instruction
+}
+
+func TestWriteStepResultAppendsTheTraceBlockAfterTheStepText(t *testing.T) {
+	got := renderWithSpan(t, "discovery", "steps/plan/01-overview.md", "4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7")
+
+	require.Equal(t, 1, strings.Count(got, "**Mark spans.**"))
+	require.Contains(t, got, "\n\n---\n\n"+traceBlock+"\n---\n\n"+workingContextFooter,
+		"the trace block sits between the step text and the footer")
+}
+
+func TestWriteStepResultTraceBlockWithoutAStepSpanNamesNoParent(t *testing.T) {
+	got := renderWithSpan(t, "", "steps/plan/19-finished.md", "")
+	require.Contains(t, got, "**Mark spans.**")
+	require.NotContains(t, got, "--parent 4bf9", "a step with no span names none")
+	require.True(t, strings.HasSuffix(got, "chained with your next command.\n"), "the terminal step ends with the trace block")
+}
