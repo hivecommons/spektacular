@@ -16,3 +16,5 @@
 - Task 3 done (task roles; RunEnded now gets EndFinished on terminal). Task 4: sink must mark RunEnded leftovers abandoned whatever the reason.
 - Task 4 done (cmd recorder). Milestone 1 committed on loop to analyze.
 - Task 5 done (trace commands). Milestone 2 committed.
+- Task 6 done (trace partials; lead-in '**Mark spans.**'). Harbor oracle must mirror partial wording: 'trace start', '--type sub-agent', '--type user-wait'.
+- Task 7 done (Harbor). Milestone 3 committed.

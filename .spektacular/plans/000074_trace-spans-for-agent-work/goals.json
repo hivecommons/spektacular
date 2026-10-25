@@ -625,6 +625,284 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "ff62713e-af21-4cd3-8675-63444035eece",
+      "title": "Trace instructions in every step and skill",
+      "checks": [
+        {
+          "at": "2026-10-25T13:48:38Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "ff62713e-af21-4cd3-8675-63444035eece",
+            "title": "Trace instructions in every step and skill",
+            "criteria": [
+              "Every step instruction of the spec, plan, implement and repo workflows carries the trace paragraph exactly once, right after the step's own text, naming the current step's span as the parent. The last step names none.",
+              "Orchestrated plan and implement instructions carry the helper part and not the user-wait part.",
+              "Every workflow skill, including epic planning and epic implementation, carries the same paragraph, and the helper-launch library skills carry the helper part with the command name filled in.",
+              "No step template file contains a copy of the paragraph. It comes only from the shared partial."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/trace-helpers.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "gotchas/mustache-html-escaping.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/trace-marking.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/stepkit/stepkit.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "partials/trace-marking.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/skills.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/workflows/spek-plan-epic/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spek-implement-epic/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/skill_spawn-planning-agents.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/skill_spawn-implementation-agents.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/skill.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/goal_reviewer_brief_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/instruction_contract_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/stepkit/stepkit_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/trace_partial_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/skill_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/instruction_surface_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/orchestrated_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "plan_epic_skill_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "implement_epic_skill_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".claude/skills"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/stepkit/stepkit.go:171-177 renders templates/partials/trace-marking.md once and appends it after the step's own text (\"\\n\\n---\\n\\n\" + trace), before the orchestrated and git-commit blocks and the working-context footer. The paragraph names the step span via \"trace_parent\": cfg.StepSpan (stepkit.go:159-163, trace-marking.md:4 and trace-helpers.md:2 use {{#trace_parent}} --parent {{trace_parent}}{{/trace_parent}}). The terminal step gets an empty StepSpan: internal/workflow/workflow.go:371-378 (prepareSpan) sets cfg.StepSpan to \"\" when dst is the terminal step, so the paragraph names no parent there. cmd/trace_instruction_test.go:27-53 renders every step of the table, asserting one copy per step, the step span as parent, and no --parent on the terminal step. internal/stepkit/stepkit_test.go:258-293 covers placement and the empty-span case."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "templates/partials/trace-marking.md:3-5 wraps the user-wait line in {{^orchestrated}}...{{/orchestrated}}, and the helper line (trace-marking.md:2) sits outside it. stepkit.go:150 sets vars[\"orchestrated\"] = isOrchestrated, so orchestrated step instructions get the helper part only. cmd/trace_instruction_test.go:40-41 asserts an orchestrated instruction does not contain \"--type user-wait\". Epic skills (spek-plan-epic, spek-implement-epic) do include the user-wait part, but they are interactive orchestrators, not orchestrated step instructions."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "All eight workflow skills include {{\u003e partials/trace-marking}} directly after their version-check include: templates/skills/workflows/{spek-design,spek-implement,spek-knowledge,spek-manage-repos,spek-new,spek-plan,spek-plan-epic,spek-implement-epic}/SKILL.md, each at line 7-8 or 9 of the file (diff hunks show the same include). spek-plan-epic and spek-implement-epic are included in that list. The helper-launch library skills templates/skills/skill_spawn-planning-agents.md:7 and skill_spawn-implementation-agents.md:7 carry \"**Mark each launch.** {{\u003e partials/trace-helpers}}\". The {{command}} in the partial is filled by internal/agent/skills.go:53 (command passed to RenderPartials) at install time, and by cmd/skill.go (the new map{\"command\": traceCommand()} render argument) for the `skill` command. Both paths fill the command name."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "A search of the code root (excluding .spektacular/) for \"Before you launch a helper agent\", \"Before you ask the user a question\", \"parent span is\" and \"user-wait\" matches only the partials templates/partials/trace-marking.md and trace-helpers.md, the workflow skills (which use the {{\u003e partials/trace-marking}} include, plus a child-brief line in spek-plan-epic and spek-implement-epic), the spawn skills (which use the trace-helpers include), and Go test files. No file under templates/steps or any other step template contains a copy of the paragraph. The only paragraph text outside the two partials is the test-side copy in internal/stepkit/stepkit_test.go, which is a test fixture, not a template."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "3923cbea-e0d0-4215-8a86-1517ef3c0c2e",
+      "title": "Harbor reads and checks span records",
+      "checks": [
+        {
+          "at": "2026-10-25T13:57:04Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "3923cbea-e0d0-4215-8a86-1517ef3c0c2e",
+            "title": "Harbor reads and checks span records",
+            "criteria": [
+              "A run log containing span starts and ends gives the same steps, windows and timelines as one without them, and every existing pinned reference value is unchanged.",
+              "The span reader returns each run's sub-agent and user-wait spans, pairing starts and ends across lane and day logs.",
+              "The epic-planning, epic-implementation and goal-check verifiers report a helper launch with no matching sub-agent span as a failure, and the spec verifier fails when its scripted question has no user-wait span.",
+              "The metrics record shows the number of trace calls in the run and the average per plan task.",
+              "Changing the trace paragraph's command wording without updating the harness makes a Harbor self-check fail."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/sessionlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_windows.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/spans.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/delegation.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_delegation.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/trace-helpers.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "trace-marking.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_epic_children.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/tests/test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/logs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/spec-workflow/tests/test_spec_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/spec-workflow/instruction.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/report.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_suite_wiring.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spans.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/sessionlog.py (diff hunk at read_events) skips span_start/span_end records before they become Events, so windows and timelines are built from the same events. tests/harbor/shared/tests/test_sessionlog_windows.py:1073-1104 (test_span_starts_and_ends_change_no_event_window_or_timeline) asserts read_events, step_windows and the max end are equal with and without span edges. The diff does not touch test_reference_runs.py or any pinned reference value; the only pinned-value edits are the added TRACE_ZERO/TRACE_NONE keys in test_metrics.py, which are new fields, not changed reference values."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/spans.py read_spans globs every *.jsonl in the log dir (workflow lane and day files alike), pairs span_start and span_end by (trace_id, span_id), and keeps the end as the complete span (lines 75-100). tests/harbor/shared/tests/test_spans.py:73 test_starts_and_ends_pair_across_lane_and_day_files covers the cross-file pairing; lines 114-129 cover an end without a start and a missing dir. sub_agents() and user_waits() (spans.py:107-112) return the sub-agent and user-wait spans."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Epic-planning: tests/harbor/epic-workflow/tests/test_epic_workflow.py (diff, TestChildren.test_every_launch_is_a_sub_agent_span) calls delegation.unmarked_launches. Epic-implementation: tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py (TestChildren.test_every_launch_is_a_sub_agent_span) does the same. Goal-check: tests/harbor/goal-check-workflow/tests/test_goal_check.py test_reviewer_launch_is_a_sub_agent_span. unmarked_launches in tests/harbor/shared/delegation.py returns a Failure for each timed launch with no sub-agent span (match_launches, 1 span per launch, 120 s before to 5 s after). The shared test_epic_children.py test_an_unmarked_launch_fails_naming_its_step and test_a_run_with_no_spans_fails_every_launch exercise this for all verifiers. Spec: tests/harbor/spec-workflow/tests/test_spec_workflow.py class TestUserWaits asserts the constraints step holds a user-wait span inside it (or a child of it) and fails with the list of user-wait spans otherwise. Caveat: the goal-check check is skipped when the transcript is not Claude's, and the Harbor run artifacts were not present in the code root, so the live verifiers were judged from code, not run."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/metrics.py read_trace_calls counts session-log events whose command starts with 'trace' and divides by the number of TASK spans (spans.of_type(..., TASK)); build_record adds trace_calls and trace_calls_per_task to the totals (metrics.py around the gather 'totals.trace_calls' call and the totals dict). The average is None when there are no tasks. tests/harbor/shared/tests/test_metrics.py test_trace_calls_are_counted_from_the_session_log_per_task expects 3 calls over 2 tasks = 1.5."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/tests/test_delegation.py defines trace_oracle_mismatches, which checks the oracle strings TRACE_START, SUB_AGENT_TYPE and USER_WAIT_TYPE against templates/partials/trace-helpers.md and trace-marking.md, and that trace-marking.md includes the helper rule. test_the_trace_oracle_and_the_trace_partials_agree asserts no mismatch. test_changing_the_trace_wording_fails_the_tie is parametrised to fail when '--type sub-agent', '--type user-wait' or 'trace start' is reworded. Current partials: trace-helpers.md line 2 contains 'trace start' and '--type sub-agent'; trace-marking.md line 4 contains '--type user-wait' and 'trace start'. Scope note, not a criterion verdict: the diff also changes many files outside the listed scope (cmd/, internal/stepkit, templates/skills/*, templates/*_test.go), and the scope names trace-marking.md at the repo root and spans.py at the repo root, which do not exist; the real files are templates/partials/trace-marking.md and tests/harbor/shared/spans.py."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }

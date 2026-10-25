@@ -529,7 +529,7 @@ The paragraph names the current step's span as the parent. The spec, plan, imple
 
 **Validation point**: Template-contract tests show the paragraph exactly once in every rendered step instruction and in every workflow skill, and never copied into a raw template. Harbor's shared unit tests pass, with unchanged pinned reference values and new span-reader and oracle self-check cases. A real Harbor run is checked by hand (see Testing Approach).
 
-#### - [ ] Task: Trace instructions in every step and skill
+#### - [x] Task: Trace instructions in every step and skill
 **Id:** ff62713e-af21-4cd3-8675-63444035eece
 **Repo:** spektacular
 **Depends on:**
@@ -547,12 +547,12 @@ The step renderer appends it to every step instruction, naming the current step'
 *Technical detail:* [context.md#task-trace-instructions-in-every-step-and-skill](./context.md#task-trace-instructions-in-every-step-and-skill)
 
 **Acceptance criteria**:
-- [ ] Every step instruction of the spec, plan, implement and repo workflows carries the trace paragraph exactly once, right after the step's own text, naming the current step's span as the parent. The last step names none.
-- [ ] Orchestrated plan and implement instructions carry the helper part and not the user-wait part.
-- [ ] Every workflow skill, including epic planning and epic implementation, carries the same paragraph, and the helper-launch library skills carry the helper part with the command name filled in.
-- [ ] No step template file contains a copy of the paragraph. It comes only from the shared partial.
+- [x] Every step instruction of the spec, plan, implement and repo workflows carries the trace paragraph exactly once, right after the step's own text, naming the current step's span as the parent. The last step names none.
+- [x] Orchestrated plan and implement instructions carry the helper part and not the user-wait part.
+- [x] Every workflow skill, including epic planning and epic implementation, carries the same paragraph, and the helper-launch library skills carry the helper part with the command name filled in.
+- [x] No step template file contains a copy of the paragraph. It comes only from the shared partial.
 
-#### - [ ] Task: Harbor reads and checks span records
+#### - [x] Task: Harbor reads and checks span records
 **Id:** 3923cbea-e0d0-4215-8a86-1517ef3c0c2e
 **Repo:** spektacular
 **Depends on:**
@@ -565,11 +565,11 @@ Keeps the Harbor harness working now that run logs hold span records, and uses t
 *Technical detail:* [context.md#task-harbor-reads-and-checks-span-records](./context.md#task-harbor-reads-and-checks-span-records)
 
 **Acceptance criteria**:
-- [ ] A run log containing span starts and ends gives the same steps, windows and timelines as one without them, and every existing pinned reference value is unchanged.
-- [ ] The span reader returns each run's sub-agent and user-wait spans, pairing starts and ends across lane and day logs.
-- [ ] The epic-planning, epic-implementation and goal-check verifiers report a helper launch with no matching sub-agent span as a failure, and the spec verifier fails when its scripted question has no user-wait span.
-- [ ] The metrics record shows the number of trace calls in the run and the average per plan task.
-- [ ] Changing the trace paragraph's command wording without updating the harness makes a Harbor self-check fail.
+- [x] A run log containing span starts and ends gives the same steps, windows and timelines as one without them, and every existing pinned reference value is unchanged.
+- [x] The span reader returns each run's sub-agent and user-wait spans, pairing starts and ends across lane and day logs.
+- [x] The epic-planning, epic-implementation and goal-check verifiers report a helper launch with no matching sub-agent span as a failure, and the spec verifier fails when its scripted question has no user-wait span.
+- [x] The metrics record shows the number of trace calls in the run and the average per plan task.
+- [x] Changing the trace paragraph's command wording without updating the harness makes a Harbor self-check fail.
 
 ### Milestone 4: Spans are documented
 
@@ -745,3 +745,58 @@ No other implementation-time uncertainties remain. The design choices are settle
 - `spektacular: cmd/trace_test.go`
 
 **Discoveries**: `--type`, `--status`, `--message` and `--parent` are now value-taking flags in `snapshotStatePath`'s argv scan; no other command uses those names. Trace commands are refused inside a spec worktree like every other command, so agents must run them from the project root.
+
+### 2026-10-25 — Task: Trace instructions in every step and skill
+
+**What was done**: Two new partials hold the trace wording: `partials/trace-helpers.md` (mark each helper launch as a `sub-agent` span, put its id in the helper's brief as its parent, stop it chained with the next command) and `partials/trace-marking.md` (a "**Mark spans.**" lead-in, the helper rule, and, outside orchestrated runs, the same for each question to the user as a `user-wait` span). `stepkit.WriteStepResult` appends the block to every step instruction straight after its own text, naming the step's span (`Config.StepSpan`) as `--parent`; the terminal step names none. All eight workflow skills include the block after their version check, the plan-epic and implement-epic child prompts pass each child its parent span, and the two spawn library skills carry the helper rule, now rendered with the configured command.
+
+**Deviations**: The lead-in is "**Mark spans.**" rather than "**Mark helpers and questions.**", so it reads right in orchestrated runs that get only the helper rule. Tests are in a new `cmd/trace_instruction_test.go` (with a span-aware `renderAllStepInstructionsSpan` helper in `cmd/instruction_contract_test.go`) and `templates/trace_partial_test.go`, plus stepkit tests. The epic skill tests count the partials' `{{command}}`s and sanction the user-wait sentence; the cmd output-parity tests now also normalise the `<run>-<span>` id an instruction names. This repository's installed skills were not regenerated.
+
+**Files changed**:
+- `spektacular: templates/partials/trace-helpers.md`
+- `spektacular: templates/partials/trace-marking.md`
+- `spektacular: internal/stepkit/stepkit.go`
+- `spektacular: internal/stepkit/stepkit_test.go`
+- `spektacular: templates/skills/workflows/spek-new/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-plan/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-implement/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-plan-epic/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-implement-epic/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-design/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-knowledge/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-manage-repos/SKILL.md`
+- `spektacular: templates/skills/skill_spawn-planning-agents.md`
+- `spektacular: templates/skills/skill_spawn-implementation-agents.md`
+- `spektacular: cmd/skill.go`
+- `spektacular: cmd/instruction_contract_test.go`
+- `spektacular: cmd/trace_instruction_test.go`
+- `spektacular: cmd/log_test.go`
+- `spektacular: cmd/log_retention_test.go`
+- `spektacular: templates/trace_partial_test.go`
+- `spektacular: templates/plan_epic_skill_test.go`
+- `spektacular: templates/implement_epic_skill_test.go`
+
+**Discoveries**: Every instruction now embeds a fresh `<run id>-<span id>`, so any test comparing instruction text across runs must normalise that id. The output writer escapes `<` and `>` in JSON as `<`/`>`, which agents decode transparently. Rendered, the block is about 100 words.
+
+### 2026-10-25 — Task: Harbor reads and checks span records
+
+**What was done**: The Harbor session-log reader now skips `span_start` and `span_end` records, so lanes, step windows, timelines and pinned reference values are unchanged. A new shared `spans.py` reads every span in a run's log directory (lanes and standalone day files), pairing starts and ends. `delegation.py` gains the trace oracle (`TRACE_START`, `SUB_AGENT_TYPE`, `USER_WAIT_TYPE`) with a self-check tying it to the trace partials, and `unmarked_launches`/`marked_rate`, which match each timed helper launch to a sub-agent span started up to 120 s before it. The plan-epic and implement-epic `TestChildren` classes and the goal-check verifier fail on an unmarked launch; the spec verifier requires a user-wait span in the constraints step; the metrics record's totals gain `trace_calls` and `trace_calls_per_task`.
+
+**Deviations**: Trace calls are counted from the session log's `trace` command records rather than from transcript Bash calls, so they count for every agent and every chained call; the per-task average divides by the run's task spans. Both fields sit under `totals` instead of a new `tasks` section, and `report.py` is unchanged (its comparison tables are pinned; showing the field is left to the run-statistics and Harbor specs). `delegation.Run` gained a `spans` field read by `read_run`, so the verifier checks stay testable offline. No suite wiring change was needed: the Makefile copies every `shared/*.py`.
+
+**Files changed**:
+- `spektacular: tests/harbor/shared/sessionlog.py`
+- `spektacular: tests/harbor/shared/spans.py`
+- `spektacular: tests/harbor/shared/delegation.py`
+- `spektacular: tests/harbor/shared/metrics.py`
+- `spektacular: tests/harbor/shared/tests/test_sessionlog_windows.py`
+- `spektacular: tests/harbor/shared/tests/test_spans.py`
+- `spektacular: tests/harbor/shared/tests/test_delegation.py`
+- `spektacular: tests/harbor/shared/tests/test_epic_children.py`
+- `spektacular: tests/harbor/shared/tests/test_metrics.py`
+- `spektacular: tests/harbor/epic-workflow/tests/test_epic_workflow.py`
+- `spektacular: tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py`
+- `spektacular: tests/harbor/goal-check-workflow/tests/test_goal_check.py`
+- `spektacular: tests/harbor/spec-workflow/tests/test_spec_workflow.py`
+
+**Discoveries**: The spec suite's verifier reads `/app` paths, so its new `TestUserWaits` check runs only in a real Harbor trial; the matching logic it relies on is covered offline in `test_spans.py`. The epic and implement-epic reference runs under `shared/tests/data/` hold no span records, so the new launch check is exercised on the hand-built implement-epic run instead.
