@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -410,7 +411,7 @@ func TestStatsRefusals(t *testing.T) {
 
 	resetRootCmd(t)
 	er = runRefused(t, "stats")
-	require.Equal(t, "run one of: compare, list, run, summary", er.NextAction)
+	require.Equal(t, "run one of: commands, compare, list, run, spans, summary", er.NextAction)
 
 	t.Chdir(t.TempDir())
 	resetRootCmd(t)
@@ -421,7 +422,7 @@ func TestStatsRefusals(t *testing.T) {
 
 func TestStatsSchema(t *testing.T) {
 	t.Chdir(t.TempDir())
-	for _, sub := range []string{"list", "run", "compare", "summary"} {
+	for _, sub := range []string{"list", "run", "compare", "summary", "commands", "spans"} {
 		resetRootCmd(t)
 		out := runOK(t, "stats", sub, "--schema")
 		var s commandSchema
@@ -610,4 +611,235 @@ func TestStatsCompareAndSummaryFieldNames(t *testing.T) {
 	step = m["steps"].([]any)[0].(map[string]any)
 	require.Equal(t, []string{"figures", "step"}, dataKeys(step))
 	require.Equal(t, []string{"count", "figure", "median", "p90"}, dataKeys(step["figures"].([]any)[0].(map[string]any)))
+}
+
+// Records an epic orchestrator wrote outside any run, at 06:00 to 06:30:
+// an `epic order` command, a helper span it stopped, and one it never did.
+const (
+	statsOrchOrder = "6666666600000000000000000000000a"
+	statsOrchSpan  = "6666666600000000000000000000000b"
+	statsOrchOpen  = "6666666600000000000000000000000c"
+)
+
+// seedOrchestrator adds the orchestrator's day file to the logs directory.
+func seedOrchestrator(t *testing.T, dir string) {
+	t.Helper()
+	attrs := func(typ string) map[string]any {
+		return map[string]any{tracelog.AttrSpanType: typ, tracelog.AttrAgent: "claude"}
+	}
+	order := tracelog.Record{
+		Record: tracelog.RecordSpan, TraceID: statsOrchOrder, SpanID: "6666666600000001", Name: "epic order",
+		Kind: tracelog.KindInternal, StartTime: statsAt(6, 0), EndTime: statsAt(6, 1),
+		Status: tracelog.Status{Code: tracelog.StatusOK}, Attributes: attrs(tracelog.TypeCommand),
+	}
+	order.Attributes[tracelog.AttrCommandArgs] = []string{"epic", "order", "--data", `{"name":"e"}`}
+	order.Attributes[tracelog.AttrExitCode] = 0
+	start := tracelog.Record{
+		Record: tracelog.RecordSpanStart, TraceID: statsOrchSpan, SpanID: "6666666600000002", Name: "plan 000001_demo",
+		Kind: tracelog.KindInternal, StartTime: statsAt(6, 5), Attributes: attrs(tracelog.TypeSubAgent),
+	}
+	end := start
+	end.Record = tracelog.RecordSpanEnd
+	end.EndTime = statsAt(6, 30)
+	end.Status = tracelog.Status{Code: tracelog.StatusOK}
+	end.Attributes = attrs(tracelog.TypeSubAgent)
+	end.Attributes[tracelog.AttrEndReason] = tracelog.EndStopped
+	open := tracelog.Record{
+		Record: tracelog.RecordSpanStart, TraceID: statsOrchOpen, SpanID: "6666666600000003", Name: "plan 000002_other",
+		Kind: tracelog.KindInternal, StartTime: statsAt(6, 10), Attributes: attrs(tracelog.TypeSubAgent),
+	}
+	var b bytes.Buffer
+	for _, r := range []tracelog.Record{order, start, open, end} {
+		line, err := json.Marshal(r)
+		require.NoError(t, err)
+		b.Write(line)
+		b.WriteByte('\n')
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "standalone_20261024.jsonl"), b.Bytes(), 0o644))
+}
+
+// listingProject is statsProject with the orchestrator's records added.
+func listingProject(t *testing.T, level string) string {
+	t.Helper()
+	dir := statsProject(t, level)
+	seedOrchestrator(t, logsDir(dir))
+	return dir
+}
+
+func rows(t *testing.T, m map[string]any, key string) []map[string]any {
+	t.Helper()
+	var out []map[string]any
+	for _, r := range m[key].([]any) {
+		out = append(out, r.(map[string]any))
+	}
+	return out
+}
+
+func TestStatsCommandsListsEveryCommandInBothForms(t *testing.T) {
+	dir := listingProject(t, "standard")
+	m := statsJSON(t, "commands")
+	require.Equal(t, logsDir(dir), m["log_dir"])
+	require.Equal(t, float64(0), m["skipped_lines"])
+	cmds := rows(t, m, "commands")
+	// 1 orchestrator command, 1 standalone command and 3 commands in each
+	// of the four runs.
+	require.Len(t, cmds, 14)
+	order := cmds[0]
+	require.Equal(t, "epic order", order["command"])
+	require.Nil(t, order["run_id"])
+	require.Nil(t, order["step"])
+	require.Equal(t, []any{"epic", "order", "--data", `{"name":"e"}`}, order["args"])
+	require.Equal(t, float64(0), order["exit_code"])
+	require.Equal(t, float64(60000), order["duration_ms"])
+	require.Equal(t, "spec file list", cmds[1]["command"])
+	require.Equal(t, "spec new", cmds[2]["command"])
+	require.Equal(t, statsSpecRun, cmds[2]["run_id"])
+	require.Equal(t, "spec", cmds[2]["kind"])
+	require.Equal(t, "000001_demo", cmds[2]["name"])
+
+	resetRootCmd(t)
+	pretty := stats(t, "commands")
+	lines := strings.Split(strings.TrimSpace(pretty), "\n")
+	require.Len(t, lines, 15)
+	require.Equal(t, []string{"TIME", "RUN", "STEP", "COMMAND", "EXIT", "DURATION"}, strings.Fields(lines[0]))
+	require.Equal(t, []string{"2026-10-25", "06:00:00", "-", "-", "epic", "order", "0", "1m00s"}, strings.Fields(lines[1]))
+	require.Equal(t, []string{"2026-10-25", "08:00:00", "abcdef01", "-", "spec", "new", "0", "30.0s"}, strings.Fields(lines[3]))
+
+	resetRootCmd(t)
+	out := stats(t, "commands", "--format", "json", "--fields", `["commands"]`)
+	var f map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &f))
+	require.Equal(t, []string{"commands"}, dataKeys(f))
+	require.Len(t, f["commands"], 14)
+}
+
+func TestStatsSpansListsHelpersInAndOutsideRuns(t *testing.T) {
+	listingProject(t, "standard")
+	m := statsJSON(t, "spans")
+	spans := rows(t, m, "spans")
+	// The two orchestrator spans, then one helper in each of four runs.
+	require.Len(t, spans, 6)
+	stopped, open := spans[0], spans[1]
+	require.Equal(t, "plan 000001_demo", stopped["name"])
+	require.Equal(t, "sub-agent", stopped["type"])
+	require.Equal(t, statsOrchSpan, stopped["trace_id"])
+	require.Nil(t, stopped["run_id"])
+	require.Nil(t, stopped["workflow"])
+	require.Equal(t, true, stopped["complete"])
+	require.Equal(t, float64(25*60000), stopped["duration_ms"])
+	require.Equal(t, "open", open["end_reason"])
+	require.Equal(t, false, open["complete"])
+	require.Equal(t, float64(0), open["duration_ms"])
+
+	helper := spans[2]
+	require.Equal(t, statsSpecRun, helper["run_id"])
+	require.Equal(t, "spec", helper["kind"])
+	require.Equal(t, "000001_demo", helper["workflow"])
+	require.Equal(t, "research", helper["name"])
+	require.Equal(t, "first", helper["step"])
+	require.Equal(t, float64(180000), helper["duration_ms"])
+
+	resetRootCmd(t)
+	pretty := stats(t, "spans")
+	require.Regexp(t, regexp.MustCompile(`(?m)^TIME\s+RUN\s+TYPE\s+NAME\s+STEP\s+DURATION\s+END$`), pretty)
+	require.Regexp(t, regexp.MustCompile(`(?m)^2026-10-25 06:05:00\s+-\s+sub-agent\s+plan 000001_demo\s+-\s+25m00s\s+stopped$`), pretty)
+	require.Regexp(t, regexp.MustCompile(`(?m)^2026-10-25 06:10:00\s+-\s+sub-agent\s+plan 000002_other\s+-\s+0\.0s\s+open\*$`), pretty)
+	require.Regexp(t, regexp.MustCompile(`(?m)^2026-10-25 08:02:00\s+abcdef01\s+sub-agent\s+research\s+first\s+3m00s\s+stopped$`), pretty)
+
+	resetRootCmd(t)
+	out := stats(t, "spans", "--format", "json", "--fields", `["spans"]`)
+	var f map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &f))
+	require.Equal(t, []string{"spans"}, dataKeys(f))
+}
+
+func TestStatsListingsSelectionAndOutsideRuns(t *testing.T) {
+	listingProject(t, "standard")
+	cmds := rows(t, statsJSON(t, "commands", "--run", statsImplRun), "commands")
+	require.Len(t, cmds, 3)
+	for _, c := range cmds {
+		require.Equal(t, statsImplRun, c["run_id"])
+	}
+
+	resetRootCmd(t)
+	outside := rows(t, statsJSON(t, "commands", "--outside-runs"), "commands")
+	require.Len(t, outside, 2)
+	require.Equal(t, "epic order", outside[0]["command"])
+	require.Equal(t, "spec file list", outside[1]["command"])
+
+	resetRootCmd(t)
+	spans := rows(t, statsJSON(t, "spans", "--kind", "plan"), "spans")
+	require.Len(t, spans, 2)
+	for _, s := range spans {
+		require.Equal(t, "plan", s["kind"])
+	}
+
+	resetRootCmd(t)
+	spans = rows(t, statsJSON(t, "spans", "--outside-runs"), "spans")
+	require.Len(t, spans, 2)
+	for _, s := range spans {
+		require.Nil(t, s["run_id"])
+	}
+}
+
+func TestStatsListingsRefusals(t *testing.T) {
+	dir := listingProject(t, "standard")
+	for _, sub := range []string{"commands", "spans"} {
+		for _, tc := range []struct {
+			name string
+			args []string
+			code string
+		}{
+			{"selection with outside runs", []string{"--outside-runs", "--kind", "plan"}, "stats_bad_selection"},
+			{"run with outside runs", []string{"--outside-runs", "--run", statsPlanRun}, "stats_bad_selection"},
+			{"unsupported format", []string{"--format", "xml"}, "stats_format_unsupported"},
+			{"missing directory", []string{"--dir", filepath.Join(dir, "nope")}, "stats_log_dir_not_found"},
+			{"bad kind", []string{"--kind", "epic"}, "stats_bad_selection"},
+			{"unknown run id", []string{"--run", "ffffffff"}, "stats_run_not_found"},
+			{"ambiguous run id", []string{"--run", "abcdef01"}, "stats_run_ambiguous"},
+		} {
+			t.Run(sub+" "+tc.name, func(t *testing.T) {
+				resetRootCmd(t)
+				er := runRefused(t, append([]string{"stats", sub}, tc.args...)...)
+				require.Equal(t, tc.code, er.Code)
+				require.NotEmpty(t, er.NextAction)
+			})
+		}
+		resetRootCmd(t)
+		er := runRefused(t, "stats", sub, "--outside-runs", "--name", "000001_demo")
+		require.Equal(t, "use --outside-runs on its own, or drop it and select runs with --name, --kind, --agent or --run", er.NextAction)
+		require.Contains(t, er.Message, "--outside-runs")
+	}
+}
+
+func TestStatsListingsDirOnACopyGiveTheSameOutput(t *testing.T) {
+	dir := listingProject(t, "standard")
+	inProject := map[string]map[string]any{}
+	for _, sub := range []string{"commands", "spans"} {
+		resetRootCmd(t)
+		inProject[sub] = statsJSON(t, sub)
+	}
+	copied := copyLogs(t, logsDir(dir))
+	t.Chdir(t.TempDir()) // outside any project
+	for _, sub := range []string{"commands", "spans"} {
+		resetRootCmd(t)
+		got := statsJSON(t, sub, "--dir", copied)
+		require.Equal(t, copied, got["log_dir"])
+		got["log_dir"] = inProject[sub]["log_dir"]
+		require.Equal(t, inProject[sub], got, sub)
+	}
+}
+
+func TestStatsListingsLeaveTheLogsByteIdentical(t *testing.T) {
+	useConfiguredLogLevel(t)
+	dir := listingProject(t, "verbose")
+	before := rawLogSnapshot(t, logsDir(dir))
+	for _, args := range [][]string{
+		{"commands"}, {"commands", "--format", "json"}, {"commands", "--outside-runs"},
+		{"spans"}, {"spans", "--format", "json"}, {"spans", "--kind", "plan"},
+	} {
+		resetRootCmd(t)
+		stats(t, args...)
+	}
+	require.Equal(t, before, rawLogSnapshot(t, logsDir(dir)), "no file added, removed or changed")
 }

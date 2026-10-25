@@ -82,6 +82,50 @@ M70_EPIC_WALL_S = 993.223
 M70_EPIC_IDLE_S = 87.63
 
 
+# Token, model and cost figures of each reference run, as the harness
+# computed them from the transcript alone before spec 000076 changed any
+# transcript reader. Pinned before 000076; must not change. The models used
+# are the run's: every model its last result event reports usage for, which
+# the recorder joins into `model`.
+PINNED_MODELS_USED = {
+    "m70-epic": ["claude-sonnet-4-6"],
+    "s55-epic": ["claude-sonnet-5-5"],
+    "s55-plan": ["claude-sonnet-5-5"],
+    "s55-implement": ["claude-sonnet-5-5"],
+    "probe-background-child": ["claude-sonnet-5-5"],
+}
+PINNED_TOTALS = {
+    "m70-epic": {
+        "model": "claude-sonnet-4-6", "input_tokens": 220, "output_tokens": 76691,
+        "cache_read_tokens": 8874067, "cache_write_tokens": 257220, "cost_usd": 4.855505849999998,
+        "turns": 31, "model_time_s": 1384.389, "wall_time_s": 993.223,
+    },
+    "s55-epic": {
+        "model": "claude-sonnet-5-5", "input_tokens": 188, "output_tokens": 43630,
+        "cache_read_tokens": 3671430, "cache_write_tokens": 222997, "cost_usd": 1.4066310000000004,
+        "turns": 17, "model_time_s": 425.898, "wall_time_s": 1249.433,
+    },
+    "s55-plan": {
+        "model": "claude-sonnet-5-5", "input_tokens": 74, "output_tokens": 19805,
+        "cache_read_tokens": 1694392, "cache_write_tokens": 81163, "cost_usd": 0.6781967,
+        "turns": 34, "model_time_s": 191.608, "wall_time_s": 223.618,
+    },
+    "s55-implement": {
+        "model": "claude-sonnet-5-5", "input_tokens": 26, "output_tokens": 5045,
+        "cache_read_tokens": 378361, "cache_write_tokens": 27792, "cost_usd": 0.1995061,
+        "turns": 16, "model_time_s": 61.563, "wall_time_s": 61.84,
+    },
+    "probe-background-child": {
+        "model": "claude-sonnet-5-5", "input_tokens": 8, "output_tokens": 466,
+        "cache_read_tokens": 45446, "cache_write_tokens": 8345, "cost_usd": 0.0368961,
+        "turns": 2, "model_time_s": 8.269, "wall_time_s": 4.747,
+    },
+}
+# Every checked-in reference run with a transcript: the four trials and the
+# background-child probe.
+PINNED_RUNS = [*RUNS, "probe-background-child"]
+
+
 def record_of(run: Path) -> dict:
     return metrics.build_record(
         metrics.Paths(build_info=run / "build.json", agent_dir=run, debug_dir=run / "debug", bob_logs=NONE, junit=NONE, reward=NONE)
@@ -156,6 +200,35 @@ def test_s55_epic_children_endings_durations_and_background():
         assert child["parent"] is None
         assert child["kind"] == "general-purpose"
         assert child["models"] == ["claude-sonnet-5-5"]
+
+
+# Token, model and cost figures, from the transcripts alone.
+
+
+def test_every_reference_run_is_pinned():
+    assert sorted(PINNED_RUNS) == sorted(p.name for p in DATA.iterdir() if (p / "claude-code.txt").is_file())
+    assert set(PINNED_TOTALS) == set(PINNED_MODELS_USED) == set(PINNED_RUNS)
+
+
+@pytest.mark.parametrize("name", PINNED_RUNS)
+def test_reference_totals_are_pinned(name):
+    totals = transcripts.claude_summary(transcript(DATA / name))
+    for field, want in PINNED_TOTALS[name].items():
+        assert getattr(totals, field) == want, field
+    assert totals.model.split("+") == PINNED_MODELS_USED[name]
+    assert totals.unknowns == []
+
+
+@pytest.mark.parametrize("name", PINNED_RUNS)
+def test_reference_record_totals_match_the_pins_without_spektacular_logs(name):
+    run = DATA / name
+    record = metrics.build_record(
+        metrics.Paths(build_info=run / "build.json", agent_dir=run, debug_dir=NONE, bob_logs=NONE, junit=NONE, reward=NONE)
+    )
+    pinned = PINNED_TOTALS[name]
+    assert record["run"]["model"] == pinned["model"]
+    for field in transcripts.TOTAL_FIELDS:
+        assert record["totals"][field] == pinned[field], field
 
 
 # Idle time on both epic-planning runs.

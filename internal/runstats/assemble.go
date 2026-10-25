@@ -77,10 +77,14 @@ func Assemble(recs []tracelog.Record) []*Run {
 	for i, r := range recs {
 		l[i] = loaded{rec: r}
 	}
-	return assemble(l)
+	runs, _ := assemble(l)
+	return runs
 }
 
-func assemble(recs []loaded) []*Run {
+// assemble is Assemble over loaded records. Beside the runs it returns the
+// records of every trace that is not a run, in start order: the commands
+// and spans written outside any workflow, such as an epic orchestrator's.
+func assemble(recs []loaded) ([]*Run, []tracelog.Record) {
 	var order []string
 	groups := map[string][]loaded{}
 	for _, r := range recs {
@@ -92,11 +96,17 @@ func assemble(recs []loaded) []*Run {
 	}
 
 	var runs []*Run
+	var outside []tracelog.Record
 	for _, id := range order {
 		if r := buildRun(id, groups[id]); r != nil {
 			runs = append(runs, r)
+			continue
+		}
+		for _, l := range groups[id] {
+			outside = append(outside, l.rec)
 		}
 	}
+	sort.SliceStable(outside, func(i, j int) bool { return outside[i].StartTime.Before(outside[j].StartTime) })
 	markOvertaken(runs)
 	sort.SliceStable(runs, func(i, j int) bool {
 		if !runs[i].Start.Equal(runs[j].Start) {
@@ -104,7 +114,7 @@ func assemble(recs []loaded) []*Run {
 		}
 		return runs[i].ID < runs[j].ID
 	})
-	return runs
+	return runs, outside
 }
 
 // buildRun assembles one trace's records, or returns nil when the trace is
@@ -132,13 +142,30 @@ func buildRun(id string, recs []loaded) *Run {
 	}
 	run.LogFile = recs[0].file
 
+	rs := make([]tracelog.Record, len(recs))
+	for i := range recs {
+		rs[i] = recs[i].rec
+	}
+	run.Commands, run.Spans = splitTrace(rs)
+
+	run.Events = timeline(run)
+	run.Start, run.End = extent(run.Events)
+	capUnfinished(run)
+	run.Status = ownStatus(run)
+	return run
+}
+
+// splitTrace separates one trace's records, in start order, into its
+// command records and its other spans, each span_start paired with its
+// span_end, the spans in start order.
+func splitTrace(recs []tracelog.Record) (commands []tracelog.Record, spans []Span) {
 	type pair struct{ start, end *tracelog.Record }
 	var spanOrder []string
 	pairs := map[string]*pair{}
 	for i := range recs {
-		rec := &recs[i].rec
+		rec := &recs[i]
 		if rec.Record == tracelog.RecordSpan && isCommand(*rec) {
-			run.Commands = append(run.Commands, *rec)
+			commands = append(commands, *rec)
 			continue
 		}
 		key := rec.SpanID
@@ -168,20 +195,15 @@ func buildRun(id string, recs []loaded) *Run {
 
 	for _, key := range spanOrder {
 		p := pairs[key]
-		run.Spans = append(run.Spans, newSpan(p.start, p.end))
+		spans = append(spans, newSpan(p.start, p.end))
 	}
-	sort.SliceStable(run.Spans, func(i, j int) bool {
-		if !run.Spans[i].Start.Equal(run.Spans[j].Start) {
-			return run.Spans[i].Start.Before(run.Spans[j].Start)
+	sort.SliceStable(spans, func(i, j int) bool {
+		if !spans[i].Start.Equal(spans[j].Start) {
+			return spans[i].Start.Before(spans[j].Start)
 		}
-		return run.Spans[i].ID < run.Spans[j].ID
+		return spans[i].ID < spans[j].ID
 	})
-
-	run.Events = timeline(run)
-	run.Start, run.End = extent(run.Events)
-	capUnfinished(run)
-	run.Status = ownStatus(run)
-	return run
+	return commands, spans
 }
 
 // newSpan builds a span from its start and end records, either of which may

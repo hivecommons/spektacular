@@ -7,7 +7,10 @@ same totals, messages and sub-agent counts, and must report whatever a log
 does not supply as None with an Unknown, never as zero. Each reader is
 exercised here on a small hand-built log with hand-worked expected values,
 and the readers the existing verifiers already use are pinned on the same
-input so that the new code cannot have changed them.
+input so that the new code cannot have changed them. These cases also pin
+the ATIF and Codex totals readers on hand-built input, alongside the
+reference runs' Claude totals pinned in test_reference_runs.py before spec
+000076 changed any transcript reader.
 
 This file never runs in a harbor container. It lives under shared/tests/ so
 the Makefile, which copies shared/*.py into each image, leaves it out. Run it

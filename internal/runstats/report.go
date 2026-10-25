@@ -300,18 +300,7 @@ func BuildReport(r *Run, o Options) Report {
 		if s.Type != tracelog.TypeSubAgent && s.Type != tracelog.TypeUserWait {
 			continue
 		}
-		w := Wait{
-			SpanID: s.ID, ParentSpanID: optional(s.Parent), Name: s.Name,
-			Step: optional(s.Step), TaskID: taskOf(s, byID),
-			StartedAt: s.Start.UTC(), EndedAt: s.End.UTC(), DurationMS: ms(s.Duration()),
-			EndReason: s.EndReason, Status: optional(s.Status), Message: optional(s.Message), Complete: s.Complete,
-		}
-		if w.Step == nil {
-			w.Step = stepAt(steps, s.Start)
-		}
-		if w.TaskID == nil {
-			w.TaskID = taskAt(tasks, s.Start)
-		}
+		w := waitRow(s, byID, steps, tasks)
 		if s.Type == tracelog.TypeSubAgent {
 			rep.Helpers = append(rep.Helpers, w)
 		} else {
@@ -345,6 +334,25 @@ func BuildReport(r *Run, o Options) Report {
 		})
 	}
 	return rep
+}
+
+// waitRow is the row of an agent span s of a run whose spans are byID, with
+// its step and task: its own, else the step entry and task span it started
+// in.
+func waitRow(s Span, byID map[string]Span, steps, tasks []Span) Wait {
+	w := Wait{
+		SpanID: s.ID, ParentSpanID: optional(s.Parent), Name: s.Name,
+		Step: optional(s.Step), TaskID: taskOf(s, byID),
+		StartedAt: s.Start.UTC(), EndedAt: s.End.UTC(), DurationMS: ms(s.Duration()),
+		EndReason: s.EndReason, Status: optional(s.Status), Message: optional(s.Message), Complete: s.Complete,
+	}
+	if w.Step == nil {
+		w.Step = stepAt(steps, s.Start)
+	}
+	if w.TaskID == nil {
+		w.TaskID = taskAt(tasks, s.Start)
+	}
+	return w
 }
 
 // taskOf is the task id of the task span above s, through its parents.

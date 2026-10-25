@@ -57,6 +57,8 @@ spektacular stats list                     # every recorded run, newest first
 spektacular stats run [--name <spec>]      # where one run's time went: steps, tasks, helpers, waits, gaps
 spektacular stats compare                  # the two latest runs of a kind, side by side
 spektacular stats summary --kind implement # median and 90th percentile per step
+spektacular stats commands                 # every recorded command, with its step and arguments
+spektacular stats spans                    # helpers and waits, including an epic orchestrator's
 ```
 
 Every form takes the same selection (`--name`, `--kind`, `--agent`, and a repeatable `--run <id or 8+ character prefix>`), prints a readable table by default, and gives the structured report with `--format json`, whose durations are integer milliseconds and whose field names are stable. `--dir <path>` reads a logs directory copied from anywhere, such as a test run's, with no project needed. Reporting never changes a log, and `stats` commands are never logged. The figures are defined on the documentation site's [Run statistics](https://spektacular.dev/run-stats/) page.
