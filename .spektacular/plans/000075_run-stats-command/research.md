@@ -48,7 +48,7 @@ Use a single command with `--compare` and `--summary` flags.
 
 ### Option I: Let `stats` be logged like every other command
 
-**Rejected**: inside a project, each call would append to `standalone_<day>.jsonl` and could trigger the retention sweep (000073 plan, "File-logger mechanics"), breaking "Logs are unchanged by reporting". The group is exempted by annotation, the gate's pattern (`cmd/gate.go:120-135`, `cmd/init.go:21`).
+**Rejected**: inside a project, each call would append to `standalone_<day>.jsonl` and could trigger the retention sweep (000073 plan, "File-logger mechanics"), breaking "Logs are unchanged by reporting". The group is exempted by 000073's logging-exempt annotation, which follows the gate's pattern (`cmd/gate.go:120-135`, `cmd/init.go:21`).
 
 ### Option J: Float seconds for durations
 
@@ -73,9 +73,9 @@ Use float seconds, like Harbor's `duration_s`.
 ## Files examined
 
 - spektacular:cmd/root.go:42-68 — `runUnknownSubcommand`, the group-command convention.
-- spektacular:cmd/root.go:95-176 — current `runRoot` recorder (to be rewritten by 000073); executed command is known from `ExecuteC`.
+- spektacular:cmd/root.go:95-176 — current `runRoot` recorder (to be rewritten by 000073, which adds the logging-exempt check); not changed by this plan.
 - spektacular:cmd/root.go:503-528 — command registration in `init()`.
-- spektacular:cmd/gate.go:30-130 — gate behaviour and the annotation-based exemption pattern.
+- spektacular:cmd/gate.go:30-130 — gate behaviour and the annotation-based exemption pattern 000073's logging exemption follows.
 - spektacular:cmd/status.go:22-283 — `--format pretty|json`, `--schema`, error codes for a bad format.
 - spektacular:cmd/implement_goal.go:380-420,605 — second instance of the pretty/json pattern.
 - spektacular:cmd/spec.go:34-55 — `schemaProp`, `schemaObj`, `commandSchema`.
@@ -99,7 +99,7 @@ Use float seconds, like Harbor's `duration_s`.
 
 ## Prior plans / specs consulted
 
-- Plan `000073_log-mode-and-logger-providers` (plan, context) — record format, file naming, `LogDir`, `runRoot` pipeline, logging levels; the place the logging exemption hooks in.
+- Plan `000073_log-mode-and-logger-providers` (plan, context) — record format, file naming, `LogDir`, `runRoot` pipeline, logging levels, and the logging-exempt annotation the `stats` group sets.
 - Plan `000074_trace-spans-for-agent-work` (plan, context) — span kinds, types, end reasons, parents, interrupted/abandoned semantics, `Reader`/`Index` (rejected as the loader).
 - Spec `000076_harbor-on-built-in-logs` — consumer of the JSON: steps and timings, helper count with spec and step, total user wait, total gap time, per-step working/helper/user split, cross-run differences, epic timelines.
 - Spec `000077_html-log-viewer` — consumer of the loaded runs and the totals ("Totals match the report"); reuses the package's loader and pairing.
@@ -139,9 +139,9 @@ Use float seconds, like Harbor's `duration_s`.
 - **Rejected**: omitting the column (the metric could not be met); claiming it measures every tool (it does not).
 
 ### The stats commands are never logged (discovery)
-- **Decision**: the `stats` command group carries a logging-exempt annotation; `runRoot` writes no record for a command so marked.
-- **Rationale**: this spec requires every log file to be byte-identical before and after any report; a logged `stats` call appends to the day file and can trigger the retention sweep. 000073's "every command is logged" rule exists for workflow commands and already lets polling tools opt out.
-- **Rejected**: logging stats like any other command (breaks the read-only acceptance criterion); asking users to set `SPEKTACULAR_SESSION_LOG=off` (makes the guarantee depend on the caller).
+- **Decision**: the `stats` command group carries 000073's logging-exempt annotation; 000073's `runRoot` writes no record for a command so marked. This plan adds no mechanism of its own (epic review decision, 2026-10-25: the annotation and its `runRoot` check moved to 000073, which also marks `status` as never logged).
+- **Rationale**: this spec requires every log file to be byte-identical before and after any report; a logged `stats` call appends to the day file and can trigger the retention sweep. 000073's "every command is logged" rule exists for workflow commands, and its annotation is how read-only commands opt out.
+- **Rejected**: logging stats like any other command (breaks the read-only acceptance criterion); asking callers to switch logging off per call (makes the guarantee depend on the caller, and 000073 offers no per-command override); adding a second exemption mechanism in this plan (superseded by the review decision).
 
 ### A run is a trace carrying workflow attributes (discovery)
 - **Decision**: records are grouped by `trace_id` across every `*.jsonl` file; a trace is a run when any record carries `spektacular.workflow.kind`. Standalone traces (commands and spans outside a workflow) are not listed or reported.

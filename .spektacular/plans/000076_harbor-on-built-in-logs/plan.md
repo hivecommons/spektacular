@@ -37,9 +37,9 @@ Transcripts stay the source only for tokens, models and cost. Maintainers get th
 - the delegation rules (`delegation.py`) for where required helpers were started;
 - every suite verifier that today builds a `SessionLog` for argv, step and exit-code rules.
 
-`sessionlog.py` and 000074's `spans.py` are deleted. `transcripts.py` keeps only the token, model, cost and turn readers, the child records the brief and wake-up checks read, and the launch readers the goal-check verifier uses. The images stop setting `SPEKTACULAR_SESSION_LOG`, so every run records at the default `standard` level, and the logs reach each trial's artifacts through the existing `/app/.spektacular` artifact (`artifacts/spektacular/logs/`).
+`sessionlog.py` and 000074's `spans.py` are deleted. `transcripts.py` keeps only the token, model, cost and turn readers, the child records the brief and wake-up checks read, and the launch readers the goal-check verifier uses. The throwaway test projects the suites seed drop the verbose log level 000073 sets in their configs, so every run records at the default `standard` level, and the logs reach each trial's artifacts through the existing `/app/.spektacular` artifact (`artifacts/spektacular/logs/`).
 
-**What `stats` has to grow.** 000075 reports workflow runs only. Harbor also needs two things it leaves out: each command's argv, step and exit status, which the verifier rules read, and the records written outside any run, which hold the epic orchestrator's status polls, `epic` commands and `sub-agent` spans. 000075's plan hands exactly this to this spec. So `internal/runstats` and `cmd/stats.go` gain two read-only flat listings, which take the same selection flags, `--dir` and `--format`:
+**What `stats` has to grow.** 000075 reports workflow runs only. Harbor also needs two things it leaves out: each command's argv, step and exit status, which the verifier rules read, and the records written outside any run, which hold the epic orchestrator's `epic` and `trace` commands and its `sub-agent` spans. Its `status <epic>` polls are not among them: 000073 exempts `status` from logging, so they are never recorded. 000075's plan hands exactly this to this spec. So `internal/runstats` and `cmd/stats.go` gain two read-only flat listings, which take the same selection flags, `--dir` and `--format`:
 - `spektacular stats commands` lists every command record, in runs and outside them. Each carries its run, workflow, step, `step_to`, argv, times, exit code and message.
 - `spektacular stats spans` lists every agent-marked span (`sub-agent`, `user-wait`, `work`), in runs and outside them.
 
@@ -57,13 +57,23 @@ Neither changes any 000075 output shape, and both inherit the group's logging ex
   - A per-spec lane passes when an orchestrator `sub-agent` span was open when the lane's first run started.
   - The brief checks still read prompts from the transcript. A review child is tied to its span by launch time (within 120 s, as 000074's marking check does), and an epic child to its lane by the spec its prompt names.
   - All of these stay inside today's Claude-gated `TestChildren` classes, so no suite's pass or fail rules change beyond where they read their data (spec Non-Goals).
-- **Hand-off gaps keep today's definitions.** They are measured from the orchestrator's standalone command records: the last epic status poll before a child's start, the first reaction after its finish, and the `epic merge`. The epic timeline reads the same as before and stays comparable with older runs.
+- **Hand-off gaps come from the orchestrator's `sub-agent` spans.** The orchestrator starts a `sub-agent` span outside any run when it launches a child, and stops it when it handles the child's hand-back (000074). A child's span is the orchestrator `sub-agent` span that was open when the child's first command ran; a span never stopped counts as open from its start on.
+  - *Spawned after* runs from the start of the child's span to the child's first command.
+  - *Picked up after* runs from the child's last command to the end of the child's span. If the span was never stopped, it runs to the orchestrator's next recorded command or span instead.
+  - *Merged after* is unchanged: from the child's last command to the orchestrator's `epic merge` of its spec.
+
+  A child with no orchestrator span shows no spawned-after or picked-up-after gap. The epic timeline keeps its layout, but these two gaps are not comparable with runs measured from status polls.
 
 **Why this direction.** It satisfies the constraint that Harbor reads the logs through the run statistics report: the report is extended rather than bypassed, as 000075 anticipated. It also keeps one definition of every figure in Go, which is tested with golden files. A Python log reader would duplicate the span pairing and the interval rules, and would contradict the spec. Keeping verbose logging would contradict the default-level constraint. Changing `stats run` or `stats list` would break shapes 000075 pins and 000077 reuses. See `research.md#alternatives-considered-and-rejected`. The project's conventions shape the work:
 - every new `stats` refusal names its fix (error-messages-must-suggest-remediation);
 - the Python tests use fixed fixtures and their own temp directories (tests-must-not-depend-on-order);
 - the plan touches no skill, template or settings, and installs nothing (plans-never-change-the-active-install);
 - knowledge entries are updated through the CLI (store-files-must-be-written-through-the-cli).
+
+**Review decision (2026-10-25, epic end-of-planning review).** The user decided that `spektacular status` is never logged (000073 marks it logging-exempt, as `stats` is) and that `SPEKTACULAR_SESSION_LOG` is removed entirely, with Harbor's verbose level set in the seeded test projects' configs instead. This plan therefore:
+- sets those seeded configs back to the default level, rather than removing an image variable;
+- measures the epic hand-off gaps from the orchestrator's `sub-agent` spans, since the `status <epic>` polls they were measured from are no longer recorded;
+- retires the epic suite's check that the orchestrator polled `status <epic>`, the one verifier assertion the logs can no longer support.
 
 ## Component Breakdown
 
@@ -76,7 +86,7 @@ Neither changes any 000075 output shape, and both inherit the group's logging ex
 - **Run log reader (new, Harbor shared helper).** It is the harness's only route to Spektacular's logs and replaces both the debug-log reader and 000074's span reader.
   - It runs the `stats` subcommands against a logs directory and parses their JSON into small typed records: runs, run reports, commands and spans.
   - It turns any failure into one reason, for the caller to report as unknown: no binary, no directory, a `stats` refusal, a timeout, or unparsable output.
-  - It offers the views the harness needs: the runs of a workflow (a lane), its start, finish, resumes and children, the steps it entered, the orchestrator's commands outside any run, epic status polls, the orchestrator's first reaction, merges, and changelog writes per repo.
+  - It offers the views the harness needs: the runs of a workflow (a lane), its start, finish, resumes and children, the steps it entered, the orchestrator's commands and `sub-agent` spans outside any run, each child's orchestrator span, the orchestrator's next command or span after a child, merges, and changelog writes per repo.
 
   It caches each answer for the life of one reader, so a verifier asks `stats` once per question.
 - **Metrics recorder (changed, Harbor).** It writes record schema 3:
@@ -100,7 +110,7 @@ Neither changes any 000075 output shape, and both inherit the group's logging ex
   - 000074's launch-to-span marking check moves onto the run log reader.
 - **Epic timeline (changed, Harbor).** It prints the same report from the run log reader:
   - each lane's child start and finish and its slowest step (the step with the longest duration);
-  - spawned-after, picked-up-after and merged-after gaps, from the orchestrator's commands outside any run;
+  - spawned-after and picked-up-after gaps from the orchestrator's `sub-agent` spans, and merged-after gaps from its `epic merge` commands, all outside any run;
   - resumed children and where each stopped;
   - Bob's turn-limit count from Bob's own logs.
 
@@ -112,13 +122,13 @@ Neither changes any 000075 output shape, and both inherit the group's logging ex
   - The suite medians gain user wait, helper wait and gap time.
 
   Older records still load and show the new figures as unknown.
-- **Suite verifiers (changed, Harbor).** Every rule that built a session log asks the run log reader instead. These are the epic and implement-epic orchestration checks, the goal-check event rules, the plan steps-entered rule, the implement changelog-writes rule and the standing-rules command list. Their assertions are unchanged. The spec suite's user-wait check (from 000074) reads the reader's spans.
-- **Suite images and test scripts (changed, Harbor).** The images no longer set the session-log variable, so runs record at the default level. The timeline calls read `.spektacular/logs`. Every suite with a binary keeps collecting `.spektacular`, which carries the logs.
+- **Suite verifiers (changed, Harbor).** Every rule that built a session log asks the run log reader instead. These are the epic and implement-epic orchestration checks, the goal-check event rules, the plan steps-entered rule, the implement changelog-writes rule and the standing-rules command list. Their assertions are unchanged, except that the epic suite's check that the orchestrator polled `status <epic>` is removed: `status` is never logged (review decision, 2026-10-25). The spec suite's user-wait check (from 000074) reads the reader's spans.
+- **Suite images and test scripts (changed, Harbor).** The configs of the test projects the suites seed no longer set a log level, so runs record at the default level. The timeline calls read `.spektacular/logs`. Every suite with a binary keeps collecting `.spektacular`, which carries the logs.
 - **Harbor self-tests and fixtures (changed).**
   - The debug-log tests are replaced by run-log-reader tests over canned `stats` JSON (000075's golden files where they exist) and by one integration module that builds a throwaway binary and runs it over fixture logs.
   - Reference runs keep their transcripts, lose their old debug logs, and pin today's token, model and cost figures.
   - The reference trimmer copies new-format logs.
-  - The wiring and README checks follow the new schema and the dropped variable.
+  - The wiring and README checks follow the new schema and the default-level seeded configs.
 - **Documentation (changed).**
   - The README's Harbor sections describe the logs, schema 3, the split, the gaps and the two-trial comparison.
   - The docs site's Run statistics page gains the two listings.
@@ -204,8 +214,10 @@ class Lane:      # every run of one workflow (kind, name), oldest first
     commands: list[Command]
     start: Command | None    # first successful `<kind> new`
     finish: Command | None   # first successful goto to `finished`
+    last: Command | None     # the lane's last recorded command (the last child's last command)
     resumes: list[Command]   # failed `<kind> new` after the start
     children: int            # starts + resumes
+    child_starts: list[Command]  # each child's first command: the start, then each resume or restart
     stops: list[str]         # each resume's `step`
 
 class RunLog:
@@ -216,8 +228,9 @@ class RunLog:
     def spans(self) -> list[Span]                     # stats spans, cached
     def lanes(self, kinds=("plan", "implement")) -> dict[tuple[str, str], Lane]
     def outside(self) -> list[Command]                # commands with run_id None
-    def epic_polls(self) -> list[Command]
-    def orchestrator_reaction(self, lane: Lane) -> Command | None
+    def orchestrator_spans(self) -> list[Span]        # `sub-agent` spans with run_id None
+    def child_span(self, first: Command) -> Span | None   # orchestrator span open at a child's first command
+    def orchestrator_reaction(self, lane: Lane) -> Command | Span | None  # next outside command or span after lane.last
     def merge(self, spec: str) -> Command | None
     def steps_entered(self, kind: str) -> list[str]   # step_to of each successful new/goto
     def changelog_writes_by_repo(self, name: str | None = None) -> dict[str | None, int]
@@ -225,6 +238,8 @@ class RunLog:
 
 - The binary is `$SPEKTACULAR_BIN`, or `spektacular` on `PATH`.
 - Every call that cannot answer raises `Unavailable` with a reason that names the fix.
+- `child_span(first)` is the earliest orchestrator span, not already matched to another child, that was open at `first.at`. Children are matched in the order of their first commands, across every lane, so children launched together take their spans in launch order. A span that was never stopped (`complete` false) counts as open from its start on, whatever its capped end.
+- `orchestrator_reaction(lane)` is the first outside-run command, or orchestrator span start or stop, after `lane.last`. Commands naming only the lane's own spec are skipped, as today.
 
 **Metrics record, schema 3 (`verifier/metrics.json`).** Only the changed sections are shown. `run` and `result` are unchanged, and the transcript totals are unchanged.
 
@@ -283,7 +298,7 @@ It prints each workflow's per-step table (duration, working, helper wait, user w
 - what counts as a lane, a start, a finish and a resume;
 - what counts as an epic status poll or an orchestrator reaction.
 
-They stay together on the run log reader, rewritten over `stats` commands, so the verifiers keep calling `lane.start`, `lane.finish`, `lane.children`, `log.merge(spec)` and `log.epic_polls()` with the same meanings. A verifier diff is then mostly mechanical: build a `RunLog` from the logs directory instead of a `SessionLog`, and swap `state_before` for `step`. That keeps the change reviewable, and makes it plain that no assertion changed (spec Non-Goals).
+They stay together on the run log reader, rewritten over `stats` commands, so the verifiers keep calling `lane.start`, `lane.finish`, `lane.children` and `log.merge(spec)` with the same meanings. The status poll is the exception: `status` is never logged, so `epic_polls()` goes, and the hand-off gaps that started or ended at a poll move onto the orchestrator's spans, found through `child_span` (review decision, 2026-10-25). A verifier diff is then mostly mechanical: build a `RunLog` from the logs directory instead of a `SessionLog`, and swap `state_before` for `step`. That keeps the change reviewable, and makes it plain that no other assertion changed (spec Non-Goals).
 
 **The metrics recorder becomes an assembler.** Today `metrics.py` computes steps, placement and idle time itself, and branches per agent: it joins messages by timestamp for Claude, by goto order for Bob, and gives up for Codex. Afterwards, every log-sourced section is a conversion of `stats` output from milliseconds to seconds, keyed per run, with one per-step derivation (`working`), and has no agent branch at all. The transcript side shrinks to the totals readers and the brief records. The existing `gather` pattern, where each section is read on its own and its failure costs only its fields, is kept. It now has two kinds of source: transcript sections, and log sections that share one reader and one failure reason.
 
@@ -311,16 +326,16 @@ The self-tests are organised the same way: reader tests over canned JSON, record
   It extends the package and the command group with two listings. No task starts until 000075's Milestones 1 and 2 are merged. If only names differ, adapt. If a field's meaning or a figure's definition differs, STOP and ask.
 - **Upstream spec `000074_trace-spans-for-agent-work` must land first** (through 000075). This plan relies on:
   - its span records: step, task, `sub-agent` and `user-wait` spans, with parents and end reasons, and agent spans carrying `spektacular.step`;
-  - orchestrator spans being written outside any run.
+  - orchestrator spans being written outside any run: the epic orchestrator starts a `sub-agent` span when it launches a child and stops it when it handles the hand-back, which is what the hand-off gaps are measured from.
 
   It replaces 000074's Harbor additions: `shared/spans.py`, the span checks in the verifiers, and the metrics trace-call count. It moves them onto the run log reader. The trace oracle constants and their self-check stay.
 - **Upstream spec `000073_log-mode-and-logger-providers` must land first** (through 000074). This plan relies on:
   - its default-level record attributes (`process.command_args`, `process.exit_code`, `spektacular.step`, `spektacular.step.to`, status message);
   - run files and `standalone_<day>.jsonl` under `.spektacular/logs/`;
   - default retention of 10 runs;
-  - `SPEKTACULAR_SESSION_LOG`.
+  - the logging exemption it gives `status` (and `stats`), so an orchestrator's `status <epic>` polls never reach the logs.
 
-  It removes 000073's Harbor normalising reader and the `verbose` image setting.
+  It removes 000073's Harbor normalising reader and the log-level line 000073 adds to the configs of the test projects the suites seed (000073 removes `SPEKTACULAR_SESSION_LOG` entirely).
 - **Concurrent spec `000077_html-log-viewer`** (planned at the same time, not a dependency). It also extends `internal/runstats` and `cmd/stats.go`. The two plans add separate files and subcommands. Whichever lands second rebases onto the other's additions to the package and the command registration, and keeps both sets of golden files.
 - **`internal/output`, `internal/tracelog` and `cobra` (used, unchanged).** They provide the JSON envelope and errors, the record type and constants, and the subcommands.
 - **Harbor test harness (changed, Python 3, standard library only).** It covers `tests/harbor/shared/*`, every suite's verifier, `test.sh` and Dockerfile, and the shared self-tests under pytest. Its suites need Docker, the Harbor CLI and agent logins, and are not in CI.
@@ -349,7 +364,8 @@ The self-tests are organised the same way: reader tests over canned JSON, record
   - typed parsing of runs, reports, commands and spans;
   - every failure (no binary, no directory, a refusal, a timeout, bad JSON) as `Unavailable` with a reason;
   - lanes: start, finish, resumes as failed `<kind> new`, children, and stops from `step`;
-  - epic polls, the orchestrator's first reaction, merges, steps entered, and changelog writes per repo, each re-expressed from today's session-log rule tests.
+  - each child's orchestrator span (including a resumed lane's later child, children launched together, and a span never stopped);
+  - the orchestrator's next command or span after a child, merges, steps entered, and changelog writes per repo, each re-expressed from today's session-log rule tests.
 - **Python recorder tests (metrics)**, over a fake reader and hand-built transcripts:
   - schema 3 keys;
   - per-step split arithmetic, with working never negative;
@@ -363,11 +379,11 @@ The self-tests are organised the same way: reader tests over canned JSON, record
   - a per-spec lane with and without an open orchestrator span;
   - brief checks joined by launch time, and the worktree-folder brief;
   - the oracle and worktree-constant self-checks against the templates and `internal/worktree`;
-  - each suite verifier's log-reading rules re-run against fake readers, with their assertions unchanged.
+  - each suite verifier's log-reading rules re-run against fake readers, with their assertions unchanged apart from the retired status-poll check.
 - **Python characterisation tests.** Before any transcript reader changes, the reference runs' token, model and cost figures are pinned as the current code computes them. After the change, the recorder over the same collected artifacts gives identical figures.
-- **Python integration test.** It builds a throwaway binary from the working tree into a temp directory and runs the reader, the recorder and the timeline over fixture logs. Those cover a spec run with a helper and a user wait, and an epic trial with two lanes, an orchestrator outside any run and a resumed lane. It checks that:
+- **Python integration test.** It builds a throwaway binary from the working tree into a temp directory and runs the reader, the recorder and the timeline over fixture logs. Those cover a spec run with a helper and a user wait, and an epic trial with two lanes, an orchestrator's commands and `sub-agent` spans outside any run (one span never stopped) and a resumed lane. It checks that:
   - the record's steps equal `stats run` for the same directory;
-  - the epic timeline lists both lanes with their gaps;
+  - the epic timeline lists both lanes with their gaps, measured from the orchestrator's spans;
   - a copied directory gives the same answers.
 
   It skips when Go is unavailable.
@@ -378,7 +394,7 @@ The self-tests are organised the same way: reader tests over canned JSON, record
   - medians of the new measures;
   - schema-2 records still loading.
 - **Wiring tests**:
-  - no Dockerfile sets `SPEKTACULAR_SESSION_LOG`;
+  - no suite's seeded test-project config sets a log level other than the default;
   - every timeline call reads `.spektacular/logs`;
   - every suite with a binary collects `/app/.spektacular`;
   - `metrics.py` stays the last, error-ignoring step after the reward;
@@ -389,7 +405,7 @@ The self-tests are organised the same way: reader tests over canned JSON, record
 - When the logs are missing, those figures are unknown with a reason, never zero, and never filled in from transcripts.
 - Tokens, models and cost are unchanged.
 - Gathering metrics never fails a run or changes its reward.
-- No verifier assertion changes, only where it reads its data.
+- No verifier assertion changes, only where it reads its data, except the epic suite's status-poll check, retired because `status` is never logged.
 
 **Deliberate gaps.**
 - No automated Harbor suite run: the suites need Docker and paid agent logins. Their acceptance criteria are manual checks.
@@ -404,7 +420,7 @@ The self-tests are organised the same way: reader tests over canned JSON, record
 - **Manual — captured in the implementation test plan:** a Harbor implement run under Claude, Codex and Bob each yields a metrics record whose steps and step timings match `spektacular stats run` on the same trial's collected logs.
 - **Manual — captured in the implementation test plan:** a Harbor implement run under Codex that starts helpers records a non-zero helper count, with each helper placed in its spec and step.
 - **Manual — captured in the implementation test plan:** a Harbor spec run's record reports total user wait, total gap time and each step's working, helper-wait and user-wait time.
-- **Manual — captured in the implementation test plan:** the epic timeline for a Harbor implement-epic trial lists each spec's child start and finish, its slowest step and both hand-off gaps, from a trial with no debug directory.
+- **Manual — captured in the implementation test plan:** the epic timeline for a Harbor implement-epic trial lists each spec's child start and finish, its slowest step and both hand-off gaps, measured from the orchestrator's `sub-agent` spans, from a trial with no debug directory.
 - **Manual — captured in the implementation test plan:** a collected trial holds `artifacts/spektacular/logs/`, and `spektacular stats run --dir` on that copy gives the trial's step timings.
 - **Manual — captured in the implementation test plan:** removing a collected trial's logs and re-running `metrics.py` on it gives step, helper and wait measures unknown with a reason, an exit status of 0, and the same reward.
 - **Manual — captured in the implementation test plan:** `report.py --compare` over two real trials shows each trial's per-step split and totals and their differences, and reads clearly.
@@ -417,7 +433,7 @@ The self-tests are organised the same way: reader tests over canned JSON, record
 - `stats commands` lists every recorded command, with the run and step it ran in, the step it moved to, its arguments, timing, exit code and any error message;
 - `stats spans` lists every helper agent, wait on the user and other marked span, with its run, step, task and outcome.
 
-Both include what was recorded outside any workflow run, such as an epic orchestrator's status polls and the helpers it launched. 000075 left those out, and Harbor needs them for epic timelines and per-spec checks. Both take the same run selection, `--dir` and `--format json` as the other `stats` commands, and neither writes to the logs. The documentation site describes them. Before anything in Harbor changes, a maintainer records the baseline Harbor pass rates, and the reference runs' token, model and cost figures are pinned as today's code computes them.
+Both include what was recorded outside any workflow run, such as an epic orchestrator's `epic` commands and the helpers it launched. 000075 left those out, and Harbor needs them for epic timelines and per-spec checks. Both take the same run selection, `--dir` and `--format json` as the other `stats` commands, and neither writes to the logs. The documentation site describes them. Before anything in Harbor changes, a maintainer records the baseline Harbor pass rates, and the reference runs' token, model and cost figures are pinned as today's code computes them.
 
 **Validation point**: Go unit, golden and command tests for both listings pass in the full shuffled suite, and 000075's golden files are unchanged. The site builds. The baseline jobs exist for every suite. The characterisation test passes on the current harness.
 
@@ -516,7 +532,7 @@ Adds a characterisation self-test that records the token usage, models and cost 
 
 ### Milestone 2: Harbor measures and judges every run from Spektacular's own logs
 
-**What changes**: Every Harbor run's metrics record takes its workflow steps and their timings from Spektacular's own logs, for Claude, Codex and Bob alike. So do the helper agents started (with the spec and step each was started in), the total time waiting on the user, the total gap time, and each step's split into working, helper-wait and user-wait time. These replace the single longest gap. Tokens, models and cost still come from the agent's transcript, unchanged. When the logs are missing, these measures say unknown and why. Gathering metrics still never fails a run or changes its reward. The delegation checks judge whether a required helper was started, and in which spec and step, from helper spans. Every suite verifier that read the old session log reads the logs through `stats`, with its pass and fail rules unchanged. The suite images record at Spektacular's default log level with no override, and each trial's artifacts carry the logs.
+**What changes**: Every Harbor run's metrics record takes its workflow steps and their timings from Spektacular's own logs, for Claude, Codex and Bob alike. So do the helper agents started (with the spec and step each was started in), the total time waiting on the user, the total gap time, and each step's split into working, helper-wait and user-wait time. These replace the single longest gap. Tokens, models and cost still come from the agent's transcript, unchanged. When the logs are missing, these measures say unknown and why. Gathering metrics still never fails a run or changes its reward. The delegation checks judge whether a required helper was started, and in which spec and step, from helper spans. Every suite verifier that read the old session log reads the logs through `stats`, with its pass and fail rules unchanged, apart from the epic suite's status-poll check, retired because `status` is never logged. The test projects the suites seed record at Spektacular's default log level with no special setting, and each trial's artifacts carry the logs.
 
 **Validation point**: The run-log reader, recorder, rule and wiring self-tests pass under `pytest tests/harbor`, together with the integration test against a throwaway binary. That test shows the record's steps equal to `stats run` on the same logs, and a missing log giving unknown measures. The characterisation test still passes with identical token figures.
 
@@ -527,13 +543,14 @@ Adds a characterisation self-test that records the token usage, models and cost 
 - 1510a2c7-a35f-49f9-9fd4-ae8854c980dc — List commands and spans from the command line
 **Execution:** agent
 
-Adds the one shared helper through which Harbor reads Spektacular's logs. It runs the `stats` commands against a logs directory and turns their JSON into typed runs, reports, commands and spans. On top of those it offers the views the harness needs: each workflow's lane with its start, finish, resumes and children; the steps entered; the orchestrator's commands outside any run; epic status polls, reactions and merges; and changelog writes per repo. Any failure comes back as one reason the caller can report, never as an empty answer.
+Adds the one shared helper through which Harbor reads Spektacular's logs. It runs the `stats` commands against a logs directory and turns their JSON into typed runs, reports, commands and spans. On top of those it offers the views the harness needs: each workflow's lane with its start, finish, resumes and children; the steps entered; the orchestrator's commands and helper spans outside any run; the orchestrator span each child was launched under, the orchestrator's reactions and merges; and changelog writes per repo. Any failure comes back as one reason the caller can report, never as an empty answer.
 
 *Technical detail:* [context.md#task-harbor-run-log-reader](./context.md#task-harbor-run-log-reader)
 
 **Acceptance criteria**:
 - [ ] Given `stats` output for an epic trial, the reader shows each lane's start, finish, children and the step each earlier child stopped at, with a resume counted from a failed workflow start in that lane.
-- [ ] Epic status polls, the orchestrator's first reaction to a finished lane, merges, the steps a plan entered and changelog writes per repo match what the old session-log rules gave for the same run.
+- [ ] Each child is matched to the orchestrator helper span open when it began, including a resumed lane's later child, children launched together and a span never stopped, and the orchestrator's next command or span after a finished lane is found.
+- [ ] Merges, the steps a plan entered and changelog writes per repo match what the old session-log rules gave for the same run.
 - [ ] A missing binary, a missing logs directory, a `stats` refusal, a timeout or unreadable output each produce a stated reason rather than an empty result.
 - [ ] The reader reads the logs only through `stats`, and an integration test with a freshly built binary over fixture logs gives the same answers as the canned responses.
 
@@ -600,13 +617,14 @@ Moves every suite verifier that built the old session log onto the run log reade
 - the implement suite's changelog writes;
 - the standing-rules command list.
 
-The span checks 000074 added (each launch marked, the scripted question marked as a user wait) move onto the reader too.
+The span checks 000074 added (each launch marked, the scripted question marked as a user wait) move onto the reader too. The epic suite's check that the orchestrator polled `status <epic>` is removed, because `status` is never logged and the logs cannot show it (review decision, 2026-10-25).
 
 *Technical detail:* [context.md#task-suite-verifiers-read-the-logs-through-stats](./context.md#task-suite-verifiers-read-the-logs-through-stats)
 
 **Acceptance criteria**:
 - [ ] No suite verifier or verifier self-check imports the old session-log reader or reads `.spektacular/debug`.
 - [ ] Every check that read a response or a state snapshot now reads a fact recorded at the default log level, and its pass and fail outcomes are unchanged on the self-check fixtures.
+- [ ] The epic suite no longer checks for `status <epic>` polls, and no verifier reads a `status` command from the logs.
 - [ ] Each suite's self-check passes against fake readers built from canned `stats` output.
 
 #### - [ ] Task: Suite images record at the default level
@@ -617,12 +635,12 @@ The span checks 000074 added (each launch marked, the scripted question marked a
 - 251726e2-dd95-44de-ac4f-9855da375968 — Suite verifiers read the logs through stats
 **Execution:** agent
 
-Removes the session-log override from every suite image, so each run records at Spektacular's default level with no special setting. Each trial's artifacts carry the logs through the existing collection of the project's `.spektacular`. The wiring self-test pins all three: no image sets the variable, every suite that runs Spektacular collects its logs, and metrics stays the last, failure-ignoring step after the reward.
+Removes the verbose log level that 000073 sets in the config of every test project the suites seed, so each run records at Spektacular's default level with no special setting. Each trial's artifacts carry the logs through the existing collection of the project's `.spektacular`. The wiring self-test pins all three: no seeded config sets a log level other than the default, every suite that runs Spektacular collects its logs, and metrics stays the last, failure-ignoring step after the reward.
 
 *Technical detail:* [context.md#task-suite-images-record-at-the-default-level](./context.md#task-suite-images-record-at-the-default-level)
 
 **Acceptance criteria**:
-- [ ] No suite image sets the session-log variable, and the wiring self-test fails if one does.
+- [ ] No suite's seeded test-project config sets a log level other than the default, and the wiring self-test fails if one does.
 - [ ] Every suite that runs Spektacular collects the project's `.spektacular`, so its logs come back in the trial's artifacts.
 - [ ] Metrics gathering is still the last step after the reward, and its failure is ignored.
 
@@ -646,16 +664,18 @@ Removes the session-log override from every suite image, so each run records at 
 
 Rebuilds the epic timeline on the run log reader. It prints:
 - each spec's child start and finish, step count, children and slowest step;
-- the spawned-after, picked-up-after and merged-after gaps, from the orchestrator's commands outside any run;
+- the spawned-after and picked-up-after gaps, from the helper span the orchestrator started for each child and stopped when it handled the hand-back;
+- the merged-after gap, from the orchestrator's `epic merge`;
 - the resumed children and where they stopped;
 - Bob's turn-limit count.
 
-The suites' test scripts point it at `.spektacular/logs`. It reports plainly when the logs are missing, and never fails.
+Spawned after runs from the start of the child's helper span to the child's first command. Picked up after runs from the child's last command to the end of that span, or to the orchestrator's next recorded command or span when the span was never stopped. The suites' test scripts point it at `.spektacular/logs`. It reports plainly when the logs are missing, and never fails.
 
 *Technical detail:* [context.md#task-epic-timeline-from-spektaculars-logs](./context.md#task-epic-timeline-from-spektaculars-logs)
 
 **Acceptance criteria**:
-- [ ] For a fixture implement-epic trial with no debug directory, the timeline lists each spec's child start and finish, its slowest step and both hand-off gaps, and the merge gap.
+- [ ] For a fixture implement-epic trial with no debug directory, the timeline lists each spec's child start and finish, its slowest step and both hand-off gaps, measured from the orchestrator's helper spans, and the merge gap.
+- [ ] A child whose orchestrator helper span was never stopped takes its picked-up gap from the orchestrator's next recorded command or span, and a child with no orchestrator span shows no spawned-after or picked-up-after gap.
 - [ ] A resumed lane shows its extra child and the step the earlier one stopped at.
 - [ ] With the logs missing, it prints why and exits successfully.
 
@@ -720,11 +740,11 @@ The reference trimmer learns to copy new-format logs from a collected trial. A s
 Brings the project's own descriptions up to date. The README's Harbor sections describe:
 - the collected logs and the default level;
 - reading them with `stats`;
-- the epic timeline;
+- the epic timeline, with hand-off gaps from the orchestrator's helper spans;
 - the two-trial comparison;
 - the self-tests, including the integration test's need for Go.
 
-The testing-architecture knowledge entry says Harbor reads Spektacular's logs only through `stats` at the default level, and names the new hand-kept constants. The Harbor artifacts gotcha drops the session-log override. The agent-log-fields gotcha says which readers remain.
+The testing-architecture knowledge entry says Harbor reads Spektacular's logs only through `stats` at the default level, and names the new hand-kept constants. The Harbor artifacts gotcha drops the session-log override and says the seeded test projects record at the default level. The agent-log-fields gotcha says which readers remain.
 
 *Technical detail:* [context.md#task-readme-and-knowledge-describe-harbor-on-built-in-logs](./context.md#task-readme-and-knowledge-describe-harbor-on-built-in-logs)
 
@@ -741,7 +761,8 @@ The testing-architecture knowledge entry says Harbor reads Spektacular's logs on
 
   If only names differ, adapt to them. If a field's meaning or a figure's definition differs, or the default level drops an attribute listed here, STOP and ask the user. The record's measures and the verifier rules rest on them.
 - **Whether a lane resume shows in the lane's run as a failed `<kind> new` carrying its step.** This only shows once 000073's run attribution is running against a real orchestrated resume. If the refusal is filed elsewhere, or carries no step, count resumes from the lane's step entries that ended `interrupted`, and take the stop from that entry's step. If neither records a resume, STOP and ask the user before changing the one-child-per-spec checks.
-- **Whether real agents mark enough helper launches as spans for the span-judged checks to keep their pass rates.** This depends on 000074's instructions working in practice. It surfaces in the manual Harbor runs and the before-and-after pass-rate comparison. If a suite's pass rate drops because spans are missing rather than helpers, STOP and ask the user: the fix lies in 000074's instructions or in the checks' data source, and either changes a recorded decision.
+- **Whether real agents mark enough helper launches as spans for the span-judged checks to keep their pass rates.** This depends on 000074's instructions working in practice. It surfaces in the manual Harbor runs and the before-and-after pass-rate comparison. If a suite's pass rate drops because spans are missing rather than helpers, STOP and ask the user: the fix lies in 000074's instructions or in the checks' data source, and either changes a recorded decision. The epic hand-off gaps depend on the same marking: if real epic trials show children with no orchestrator span, or spans the orchestrator never stops, report it rather than adding another source for the gaps.
+- **Whether the verifiers' own CLI calls reach the logs once `SPEKTACULAR_SESSION_LOG` is gone.** The verifiers' `cli()` helpers set it to `off` today to keep their calls out of the agent's log, and 000073 removes the variable. Their `status` calls are exempt, but their other calls (such as `epic list`) would become outside-run records after the agent's last command. Follow whatever 000073's revised plan does for these calls. If they do reach the logs and change a verifier's or the timeline's answer (for example, becoming the orchestrator's next command after a child), STOP and ask the user.
 - **Whether any suite starts more than 10 workflow runs in one trial**, which would let default retention prune a run before the verifier reads it. This only shows in real runs. If a collected trial is missing a run it started, STOP and ask the user. Raising retention would be a special setting, which the spec rules out.
 - **Whether the shared scripts reach the 2,000-line ceiling.** This only becomes measurable once the rewrites exist. If the line-count self-test fails after every planned removal, STOP and ask the user before loosening the ceiling or dropping a report feature.
 
@@ -754,7 +775,7 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - **A visual view of runs.** That is spec `000077_html-log-viewer`.
 - **Tokens, models and cost from Spektacular's logs.** The logs cannot see them, so they stay with the transcripts (spec Constraints). Model time per step is not added either.
 - **Per-step output characters and transcript sub-agent counts in the metrics record.** They are dropped, not replaced, because they are transcript-based and agent-specific.
-- **Linking an orchestrator's helper span to the child's own run.** Orchestrator helpers get a spec by time only (000074 Out of Scope).
+- **Linking an orchestrator's helper span to the child's own run.** Orchestrator helpers get a spec, and each child its hand-off span, by time only (000074 Out of Scope).
 - **New-format reference runs.** Recording real trials to replace the old-format debug logs in the checked-in reference runs needs paid agent runs. The trimmer is ready for them, but none is recorded here.
 - **Regrading collected trials in a separate verifier container** (`harbor trial regrade`). The verifier still runs in the agent's container, which has the binary.
 - **Changing the run report's figures, its 5-minute gap threshold, retention or the log levels.** Those belong to 000073 to 000075. Harbor uses their defaults.

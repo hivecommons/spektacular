@@ -12,13 +12,13 @@ closed_date: "2026-10-25"
 
 **Rejected**: Rejected: the spec's Constraints require Harbor to read Spektacular's logs through the run statistics report of 000075, and a second reader would recreate the "one parser per format" problem the spec removes. It would also duplicate span pairing, capping and interval rules that `internal/runstats` (000075 plan, Architecture) defines once.
 
-### Option B: Keep `SPEKTACULAR_SESSION_LOG=verbose` in the suite images so the verifiers keep reading responses and state snapshots
+### Option B: Keep the verbose log level 000073 sets in the suites' seeded test-project configs so the verifiers keep reading responses and state snapshots
 
-**Rejected**: Rejected: the spec's Constraints say every measure must come from logs recorded at the default level with no special setting, and its Technical Approach says to drop the session-log override. At the default level a record holds argv, times, exit status and message, agent, workflow kind and name, `spektacular.step` and `spektacular.step.to`, but no response or state (000073 plan, Data Structures).
+**Rejected**: Rejected: the spec's Constraints say every measure must come from logs recorded at the default level with no special setting, and its Technical Approach says to drop the session-log override. Since the review of 2026-10-25, 000073 removes `SPEKTACULAR_SESSION_LOG` entirely and gives Harbor its verbose level through a log-level line in each seeded config, so that line is the override this plan drops. At the default level a record holds argv, times, exit status and message, agent, workflow kind and name, `spektacular.step` and `spektacular.step.to`, but no response or state (000073 plan, Data Structures).
 
-### Option C: Get the epic orchestrator's hand-off gaps from its `sub-agent` spans only
+### Option C: Keep today's command-based hand-off gaps, measured from the orchestrator's `status <epic>` polls
 
-**Rejected**: Rejected as the sole source: matching an orchestrator span to the child it launched has no recorded link (000074 plan, Out of Scope: "Linking an epic orchestrator's sub-agent span to the child's own workflow run"), and spans depend on agents marking them (000074's 90% target). The timeline keeps today's command-based definitions (`tests/harbor/shared/timeline.py:1-31`), read from the orchestrator's standalone command records, so figures stay comparable with earlier runs.
+**Rejected**: Rejected at the epic's end-of-planning review (user decision, 2026-10-25). This was the drafted choice: spawned after from the last epic status poll before a child's first command (`tests/harbor/shared/timeline.py:85-87,137-139`), picked up after to the orchestrator's first reaction, usually a poll (`tests/harbor/shared/sessionlog.py:340-378`). The user decided that `spektacular status` is never logged ("just make it not log. I don't understand why we would want it to?"), so 000073 marks it logging-exempt. Without the polls, the spawned-after gap has no start, and the picked-up-after gap would wait for the next `epic` command, overstating it. The gaps now come from the orchestrator's `sub-agent` spans, which 000074 has it start when it launches a child and stop when it handles the hand-back. Two weaknesses remain and are accepted: the span has no recorded link to the child's run (000074 Out of Scope), so it is matched by time, as orchestrator helpers' specs already are; and the spans depend on agents marking them, so a child with no span shows no gap, and a span never stopped falls back to the orchestrator's next recorded command or span. The new figures are not comparable with timelines measured from polls.
 
 ### Option D: Fold command listings into `stats run` (a `--commands` flag) and standalone spans into `stats list`
 
@@ -45,6 +45,8 @@ closed_date: "2026-10-25"
 - 000075 plan, Data Structures — `stats run` gives steps (`duration_ms`, `helper_wait_ms`, `user_wait_ms`, `entries`, `incomplete`), `step_entries`, `tasks`, `helpers` (with `step`, `task_id`, `end_reason`, `complete`), `user_waits`, `gaps`, totals; `stats list` gives run summaries; `--dir` works on a copied directory; every success response carries `log_dir` and `skipped_lines`. 000075 Out of Scope: standalone traces are not reported, "If 000076 needs orchestrator hand-off gaps from them, it extends the report."
 - 000075 context, Task "Load logs into runs" — `Assemble` groups by trace and keeps only traces with `spektacular.workflow.kind`; command records are already kept on `Run.Commands`, so a command listing needs only an exported view plus a standalone bucket.
 - 000075 plan — the `stats` group carries the logging-exempt annotation inherited by subcommands, so new subcommands never write to the logs they read.
+- `tests/harbor/shared/timeline.py:85-87,100-106,129-148` and `tests/harbor/shared/sessionlog.py:340-378` — today's spawned-after and picked-up-after gaps start or end at an epic `status` poll; `tests/harbor/epic-workflow/tests/test_epic_workflow.py:156-160` asserts the polls exist. With `status` never logged (000073, review decision 2026-10-25), both move: the gaps onto the orchestrator's `sub-agent` spans, which 000074 records outside any run from a child's launch to its hand-back, and the assertion is retired.
+- `tests/harbor/*/environment/seed/seed.sh` and `tests/harbor/implement-workflow/environment/config.yaml` — the suites seed their throwaway test projects' configs here (`spektacular init`, then edits), which is where 000073 now puts Harbor's verbose level and where this plan returns it to the default.
 - `Makefile:108,115` and every suite Dockerfile (`COPY spektacular /usr/local/bin/spektacular`) — the image's binary is built from the working tree, so `stats` (and this plan's additions) is available to the verifier, which runs in the agent's container (no `environment_mode` in any `task.toml`). `tests/harbor/background-child` has no binary: its metrics must report log measures as unknown.
 - Every suite `task.toml` except background-child collects `/app/.spektacular` → `artifacts/spektacular`, so `.spektacular/logs/` already reaches the trial artifacts once 000073 writes there.
 - `tests/harbor/shared/tests/test_suite_wiring.py:151-206` — the Makefile copies `tests/harbor/shared/*.py` non-recursively, so a new shared module ships automatically and a removed one stops shipping.
@@ -62,7 +64,9 @@ closed_date: "2026-10-25"
 - `spektacular:tests/harbor/shared/tests/*` — test_metrics (key pins 38-75), test_reference_runs (pinned idle and placement values 79-158, event-key limits 253-262), test_sessionlog_rules, test_sessionlog_windows, test_delegation, test_epic_children (AST guard 393-407), test_suite_wiring, test_readme_metrics, trim_reference.
 - `spektacular:tests/harbor/shared/tests/data/{m70-epic,s55-epic,s55-plan,s55-implement}/debug/` — old-format debug logs; `probe-background-child/` has none.
 - `spektacular:tests/harbor/*/tests/test.sh` — pytest, reward, `python3 /tests/metrics.py || true`; timeline at epic:5, goal-check:5, implement-epic:6, standing-rules:5.
-- `spektacular:tests/harbor/*/environment/Dockerfile` — `ENV SPEKTACULAR_SESSION_LOG=on` in nine images (000073 makes it `verbose`).
+- `spektacular:tests/harbor/*/environment/Dockerfile` — `ENV SPEKTACULAR_SESSION_LOG=on` in nine images (000073 removes the variable and moves the verbose level into the seeded configs).
+- `spektacular:tests/harbor/*/environment/seed/seed.sh`, `spektacular:tests/harbor/implement-workflow/environment/config.yaml` — how each suite seeds its test project's config.
+- `spektacular:tests/harbor/epic-workflow/tests/test_epic_workflow.py:156-160` — the status-poll check retired by the review decision.
 - `spektacular:tests/harbor/background-child/tests/test_background_child.py:20-120` — uses `claude_children` ending, duration, launch and end times; no binary in its image.
 - `spektacular:Makefile:24-39,89-90,100-123` — agent artifacts, build info, `harbor-report`, render targets.
 - `spektacular:README.md:469-625` — Harbor test results, session log, run metrics field table, comparing runs, self-checks.
@@ -75,8 +79,8 @@ closed_date: "2026-10-25"
 
 ## Prior plans / specs consulted
 
-- `000073_log-mode-and-logger-providers` (plan, context) — record format, default vs verbose attributes, run files and `standalone_<day>.jsonl`, retention 10, `SPEKTACULAR_SESSION_LOG` levels, its Harbor normalising reader and `verbose` images that this plan replaces.
-- `000074_trace-spans-for-agent-work` (plan, context) — span records, end reasons, parents, agent spans carry `spektacular.step`; orchestrator spans are standalone; its Harbor task adds `shared/spans.py`, trace oracle constants, `unmarked_launches` (launch-to-span match within 120 s), verifier span checks, `TestUserWaits`, and `trace_calls` in metrics.
+- `000073_log-mode-and-logger-providers` (plan, context) — record format, default vs verbose attributes, run files and `standalone_<day>.jsonl`, retention 10, its Harbor normalising reader, and (after the 2026-10-25 review) the removal of `SPEKTACULAR_SESSION_LOG`, the logging exemption for `status`, and the verbose level in the suites' seeded configs that this plan returns to the default.
+- `000074_trace-spans-for-agent-work` (plan, context) — span records, end reasons, parents, agent spans carry `spektacular.step`; orchestrator spans are standalone, started when a child is launched and stopped when its hand-back is handled; its Harbor task adds `shared/spans.py`, trace oracle constants, `unmarked_launches` (launch-to-span match within 120 s), verifier span checks, `TestUserWaits`, and `trace_calls` in metrics.
 - `000075_run-stats-command` (plan, context) — `stats list|run|compare|summary`, JSON contract and golden files, `internal/runstats` API (`Load`, `Assemble`, `Run.Commands`, `Span`), logging exemption, standalone traces out of scope.
 - Spec `000076_harbor-on-built-in-logs` — requirements, constraints, acceptance criteria, success metrics.
 
@@ -84,26 +88,33 @@ closed_date: "2026-10-25"
 
 - 000073-000075 land as planned. If only names differ, adapt; if a field meaning, the default-level attribute set, or the `stats` JSON contract differs, STOP and ask.
 - A lane resume (`<kind> new` on a lane already in progress) is recorded as a failed command in that lane's run at the default level, carrying `spektacular.step`. If it is not, resumes are counted from step entries ending `interrupted` instead; if neither shows them, STOP and ask.
-- The epic orchestrator's commands (status polls, `epic` commands) are standalone records with `process.command_args` at the default level.
+- The epic orchestrator's commands (`epic` and `trace` commands; its `status` polls are never logged) are standalone records with `process.command_args` at the default level.
+- The epic orchestrator starts a `sub-agent` span outside any run when it launches a child and stops it when it handles the hand-back, as 000074 instructs. A child with no span shows no spawned-after or picked-up-after gap; a span never stopped makes picked-up-after fall back to the orchestrator's next recorded command or span.
 - Default retention (10 runs) holds every run of one Harbor trial; no suite starts more than 10 workflow runs.
 - Agents mark helper launches and user waits as 000074 instructs; checks and measures judged from spans fail or report zero helpers when they do not.
 
 ## Drafting assumptions
 
 ### Chosen direction: Harbor reads the logs only through an extended `stats` (architecture)
-- **Decision**: one shared module, `runlog.py`, runs `spektacular stats list|run|commands|spans --dir <logs> --format json` and is Harbor's only route to Spektacular's logs; metrics, timeline, delegation and every verifier rule use it. `sessionlog.py` and 000074's `spans.py` are deleted, and `transcripts.py` is cut to tokens, models, cost, turns, child briefs and launches. Images stop setting `SPEKTACULAR_SESSION_LOG`.
+- **Decision**: one shared module, `runlog.py`, runs `spektacular stats list|run|commands|spans --dir <logs> --format json` and is Harbor's only route to Spektacular's logs; metrics, timeline, delegation and every verifier rule use it. `sessionlog.py` and 000074's `spans.py` are deleted, and `transcripts.py` is cut to tokens, models, cost, turns, child briefs and launches. The suites' seeded test-project configs drop the verbose log level 000073 gives them (revised at review, 2026-10-25: `SPEKTACULAR_SESSION_LOG` no longer exists).
 - **Rationale**: it meets the constraints (logs through the run statistics report, default level only) and keeps one Go definition of every figure, pinned by golden files.
 - **Rejected**: a Python log reader; keeping verbose logging; changing the `stats run`/`stats list` shapes (see research.md alternatives).
 
 ### Extend `spektacular stats` with two listings (discovery)
 - **Decision**: add `stats commands` (every command record, in runs and standalone, with argv, step, step_to, times, exit code and message) and `stats spans` (every agent-marked span, in runs and standalone) to the 000075 command group and `internal/runstats`.
-- **Rationale**: the spec requires Harbor to read the logs through the run statistics report; the verifier rules need argv and steps per command, and the epic timeline needs the orchestrator's standalone commands, neither of which 000075 reports. 000075's plan says 000076 extends the report for standalone traces.
+- **Rationale**: the spec requires Harbor to read the logs through the run statistics report; the verifier rules need argv and steps per command, and the epic timeline needs the orchestrator's standalone spans and commands, neither of which 000075 reports. 000075's plan says 000076 extends the report for standalone traces.
 - **Rejected**: a Python log reader (contradicts the constraint); changing `stats run`/`stats list` shapes (pinned by 000075 golden tests and reused by 000077).
 
-### Epic hand-off gaps keep today's command-based definitions (discovery)
-- **Decision**: spawned-after, picked-up-after and merged-after are computed from the orchestrator's standalone command records (status polls, `epic` commands, commands naming another spec, `epic merge`), as `timeline.py` defines them today.
-- **Rationale**: keeps figures comparable with earlier runs and does not depend on agents marking spans.
-- **Rejected**: orchestrator `sub-agent` spans alone (no recorded link to the child's run; marking is not guaranteed).
+### Epic hand-off gaps come from the orchestrator's `sub-agent` spans (discovery; revised at review, 2026-10-25)
+- **Decision**: a child's span is the earliest unmatched orchestrator `sub-agent` span outside any run that was open at the child's first command, matching children in the order of their first commands; a span never stopped counts as open from its start. Spawned after = the child's span start to the child's first command. Picked up after = the child's last command to the child's span end, or, if the span was never stopped, to the orchestrator's next recorded command or span. Merged after is unchanged: the child's last command to the orchestrator's `epic merge` of its spec.
+- **Rationale**: the user decided that `status` is never logged, so the polls today's definitions start and end at are gone. The orchestrator's span runs from launching the child to handling its hand-back, which is exactly the hand-off.
+- **Rejected**: today's command-based definitions (their polls are no longer recorded; without them picked-up-after waits for the next `epic` command); keeping `status` logged (the user's decision).
+- **Supersedes**: the drafted "Epic hand-off gaps keep today's command-based definitions, measured from the orchestrator's records outside any run".
+
+### The epic suite's status-poll check is retired (verification; review, 2026-10-25)
+- **Decision**: `test_orchestrator_polled_epic_status` in the epic verifier is deleted, and the run log reader has no `epic_polls()`.
+- **Rationale**: `status` is never logged, so no default-level record can show the polls. It is the one assertion this plan removes, a consequence of the user's decision rather than a change to the suite's scenario.
+- **Rejected**: reading the polls from agent transcripts (an agent-specific source for a check that serves every agent).
 
 ### Brief check uses the deterministic worktree folder (discovery)
 - **Decision**: the implement-epic brief check requires an implementing child's prompt to name `<root>/.spektacular/worktrees/<spec>`, a hand-kept constant tied by a self-check to `internal/worktree`'s `Dir`, instead of the repo paths parsed from `epic worktree` responses.

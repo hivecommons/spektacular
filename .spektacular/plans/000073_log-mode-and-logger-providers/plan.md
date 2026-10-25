@@ -29,7 +29,9 @@ Debug mode becomes an always-on log mode: every Spektacular command run in a pro
 
 ## Architecture & Design Decisions
 
-**Shape.** Debug mode becomes a log mode. Every Spektacular command run inside a project writes one self-contained span record to a JSON Lines file, unless logging is switched off. The single choke point stays `runRoot` in `cmd/root.go`, which today records the debug session log. It now resolves the logging settings, decides which run the command belongs to, builds one span record, and hands it to a logger chosen by name. A new leaf package, `internal/tracelog`, replaces `internal/sessionlog`. It holds three things:
+**Review decision (2026-10-25).** At the epic's end-of-planning review the user decided that `spektacular status` is never logged, exactly like the read-only `stats` commands, and that `SPEKTACULAR_SESSION_LOG` is removed entirely, with no `off`, `standard`, `verbose` or `on` values and no per-command override ("just make it not log. I don't understand why we would want it to?"). The variable's only users were the maintainer's `spek-status` mod, which polls `status` every 3 s and no longer needs it, and Harbor, whose suites now set `log.level: verbose` in the configuration of the throwaway projects they seed. The only use of logged `status` calls, an epic orchestrator's polls marking when it noticed a child finish, is replaced by 000074's sub-agent spans. This plan now owns the logging-exemption mechanism, the `log: exempt` cobra annotation checked in `runRoot`, and marks `status` with it. Spec 000075 only marks its `stats` group with the same annotation.
+
+**Shape.** Debug mode becomes a log mode. Every Spektacular command run inside a project writes one self-contained span record to a JSON Lines file, unless logging is switched off or the command is marked as never logged. The single choke point stays `runRoot` in `cmd/root.go`, which today records the debug session log. It now resolves the logging settings, checks whether the command is exempt, decides which run the command belongs to, builds one span record, and hands it to a logger chosen by name. A new leaf package, `internal/tracelog`, replaces `internal/sessionlog`. It holds three things:
 - the record format: OpenTelemetry trace data model fields (`trace_id`, `span_id`, `parent_span_id`, `name`, `kind`, `start_time`, `end_time`, `status`, `attributes`, `resource`) plus a `record` discriminator;
 - trace and span id minting;
 - a small `Logger` interface with a provider registry, whose only entry is the `file` logger.
@@ -56,14 +58,17 @@ The record carries the agent (from `agent` in config, `unknown` when empty), the
 - `retention: 10`;
 - `config.directory: logs`, relative to the folder holding `config.yaml`; an absolute path is allowed, and it is never added to the project-root-bound `storeDirs`.
 
-`config.Validate` rejects an unknown provider with a `config_invalid` error naming the accepted loggers. It rejects an unknown level or a retention below 1 the same way. At the `verbose` level the record adds the full response, captured through the existing tee, plus the before and after state snapshots under attributes. `SPEKTACULAR_SESSION_LOG` keeps its name, because the maintainer's status-polling mod sets it, and is remapped onto levels: `off`, `standard`, `verbose`, with `on` accepted as `verbose`. As today, logging happens only where a project config exists. The settings format goes from 4 to 5. A `project4to5` migration step turns `debug.enabled: true` into `log.level: verbose` and false or absent into `standard`, writes the rest of the `log` defaults, and deletes `debug`. A new idempotent `ignore` action appends `logs/` to `.spektacular/.gitignore`, and the init template gains the same line. Old `.spektacular/debug/` files are never read, moved or deleted.
+`config.Validate` rejects an unknown provider with a `config_invalid` error naming the accepted loggers. It rejects an unknown level or a retention below 1 the same way. At the `verbose` level the record adds the full response, captured through the existing tee, plus the before and after state snapshots under attributes. The level comes from configuration alone. `SPEKTACULAR_SESSION_LOG` is no longer read, and there is no per-command environment override. As today, logging happens only where a project config exists. The settings format goes from 4 to 5. A `project4to5` migration step turns `debug.enabled: true` into `log.level: verbose` and false or absent into `standard`, writes the rest of the `log` defaults, and deletes `debug`. A new idempotent `ignore` action appends `logs/` to `.spektacular/.gitignore`, and the init template gains the same line. Old `.spektacular/debug/` files are never read, moved or deleted.
+
+**Commands that are never logged.** A command is left out of the log when it, or any command above it, carries the cobra annotation `log: exempt` (constants `logAnnotation = "log"` and `logExempt = "exempt"` in `cmd/root.go`). This mirrors the upgrade gate's `gate: exempt` annotation and its parent walk. `runRoot` treats an exempt command exactly like logging off. It checks the command cobra is about to run, resolved from the same arguments the lane-by-argument state selection already reads, so an exempt command gets no run-id backfill, no snapshots and no tee. It checks again on the command that actually ran, so an exempt command never writes a record. That means no append, and no retention sweep either. `status` carries the annotation, so a tool polling it never adds to or trims the logs. 000075 sets the same annotation on its `stats` group, and every `stats` subcommand inherits it through the walk.
 
 **Harbor and docs.** Harbor keeps its reporting with the smallest change:
-- every suite's image sets `SPEKTACULAR_SESSION_LOG=verbose`;
+- every suite that drives Spektacular sets `log.level: verbose` in the configuration of the throwaway project it seeds, instead of setting an environment variable in its image. The pre-built projects switch logging off while their seed scripts run and to `verbose` as their last step, so the log holds only the agent's run. The suites whose agent runs `init` itself get a minimal pre-seeded `config.yaml` that `init` keeps. Spec 000076 later sets them back to the default level;
+- the verifiers that call `spektacular` themselves switch the project's logging off before their first call, which replaces their old `SPEKTACULAR_SESSION_LOG=off`;
 - verifiers and tools look in `.spektacular/logs`;
 - `tests/harbor/shared/sessionlog.py` turns new-format records into its existing `Event` shape and still reads the old-format reference data that backs its offline tests.
 
-On the docs site, the debugging page (constraint: that page) is rewritten to describe logging, the configuration reference swaps `debug` for `log`, and the README follows. This beats the OpenTelemetry SDK, a separate run registry, a hashed session id and a renamed variable (see `research.md#alternatives-considered-and-rejected`). Each of those either cannot carry a span across short-lived processes, contradicts the spec's "run identifier comes from the workflow state" constraint, cannot tell a restart from a resume, or silently breaks the polling caller. Conventions that drive specific choices:
+On the docs site, the debugging page (constraint: that page) is rewritten to describe logging, the configuration reference swaps `debug` for `log`, and the README follows. None of them describes an environment variable. They say instead that `status` and `stats` are never logged. This beats the OpenTelemetry SDK, a separate run registry, a hashed session id, and keeping or renaming a per-command environment override (see `research.md#alternatives-considered-and-rejected`). The first three either cannot carry a span across short-lived processes, contradict the spec's "run identifier comes from the workflow state" constraint, or cannot tell a restart from a resume. The override would keep a second switch whose only callers no longer need it. Conventions that drive specific choices:
 - every new config error carries a next action (error-messages-must-suggest-remediation);
 - the plan never migrates this repo's own `.spektacular/` and verifies the format bump in throwaway projects (plans-never-change-the-active-install);
 - the new tests are order-independent and avoid wall-clock coupling (tests-must-not-depend-on-order).
@@ -79,21 +84,23 @@ On the docs site, the debugging page (constraint: that page) is rewritten to des
   It is a new component rather than a rename-in-place because its contract changes: OTel-model records, run-keyed files, and retention. 000074 adds its start and end records here.
 - **File logger (new, inside the trace log package; evolved from the session recorder).** Writes records to one JSON Lines file per run, or one per UTC day for standalone commands. Each record is a single append. The logger creates the directory and its self-ignoring `.gitignore` when it starts a file, and runs the retention sweep only then, keeping the configured number of newest runs and, separately, of newest days. It contains every error and panic, so it can never change a command's output or exit status.
 - **Command recorder in the root command (changed, `spektacular` repo).** The one place every command's outcome converges. It now:
-  - resolves the effective level from configuration and the per-command environment variable, only where a project config exists;
+  - resolves the effective level from configuration alone, only where a project config exists;
+  - treats a command carrying the logging-exempt annotation, on itself or a parent, as logging off, checked on the command about to run and again on the command that ran;
   - backfills a run id into a legacy in-progress state before the command runs;
   - snapshots state before and after;
   - decides the record's run, step and step-moved-to;
   - tees output only at the verbose level;
   - builds the record and hands it to the configured logger.
 
-  It keeps its existing lane-by-argument state selection and its `terminalOut` handling (now set only when teeing).
+  It keeps its existing lane-by-argument state selection and its `terminalOut` handling (now set only when teeing). It owns the logging-exempt annotation (`logAnnotation`, `logExempt`) and its parent walk, which 000075 reuses for `stats`.
+- **Status command (changed, `spektacular` repo).** `status` carries the logging-exempt annotation, so it is never logged at any level, and its behaviour is otherwise unchanged. Because it is never teed in a real process, its `terminalOut` fallback stays only as a defensive path.
 - **Workflow state (changed, `spektacular` repo).** The persisted state gains a run id. The workflow engine mints it when it creates fresh state. A small helper ensures an existing in-progress state file has one, writing it atomically while keeping every other field. It is the only holder of the run id (spec constraint), and 000074 later keeps its open step-span id beside it.
 - **Project configuration (changed, `spektacular` repo).** The `debug` section is replaced by a `log` section: provider, level, retention and the provider's directory. It has defaults on `NewDefault`, validation with remediation for an unknown provider, level or bad retention, and a resolver that turns the directory into an absolute path, relative to the folder holding `config.yaml`. The settings format version rises to 5.
 - **Settings migration (changed, `spektacular` repo).** A new `4 → 5` project step converts `debug.enabled` into `log.level` (true becomes `verbose`, false or absent becomes `standard`), writes the other `log` defaults, deletes `debug`, and reports an action that adds `logs/` to the project's `.spektacular/.gitignore`. The engine gains that idempotent "ensure ignore line" action. Old debug files are never touched.
 - **Project scaffolding (changed, `spektacular` repo).** The `.spektacular/.gitignore` template that `init` installs gains `logs/`, and this repository's root `.gitignore` gains `.spektacular/logs/`, so the maintainer's checkout stays clean once the new binary is installed.
-- **Harbor session-log reader and verifiers (changed, `spektacular` repo).** The shared reader turns new-format span records into its existing event shape (time, argv, duration, exit code, state before and after, response) and still reads old-format lines, so the checked-in reference runs and offline tests keep working. Suite images set the per-command variable to `verbose`. Default log directories in the shared tools, verifiers and `test.sh` timeline calls move from `.spektacular/debug` to `.spektacular/logs`. Spec 000076 later replaces this reader.
-- **Project documentation (changed, `spektacular` repo).** The README's configuration example and Harbor sections describe `log` and `.spektacular/logs/` instead of `debug`. The Harbor knowledge entries that describe the old debug log are updated through the knowledge CLI.
-- **Documentation site (changed, `docs` repo).** The debugging page is rewritten to describe logging: levels and what each records, location, retention, switching off, the environment variable, and the record format. The configuration reference replaces the `debug` key and example lines with `log`, and the nav label is renamed to match.
+- **Harbor session-log reader and verifiers (changed, `spektacular` repo).** The shared reader turns new-format span records into its existing event shape (time, argv, duration, exit code, state before and after, response) and still reads old-format lines, so the checked-in reference runs and offline tests keep working. Each suite's seeded project sets `log.level: verbose` in its configuration, and the verifiers that call `spektacular` switch the project's logging off first, through a small shared helper. Default log directories in the shared tools, verifiers and `test.sh` timeline calls move from `.spektacular/debug` to `.spektacular/logs`. Spec 000076 later replaces this reader.
+- **Project documentation (changed, `spektacular` repo).** The README's configuration example and Harbor sections describe `log`, `.spektacular/logs/` and the seeded verbose level instead of `debug` and the environment variable. The Harbor knowledge entries that describe the old debug log are updated through the knowledge CLI.
+- **Documentation site (changed, `docs` repo).** The debugging page is rewritten to describe logging: levels and what each records, location, retention, switching off, the commands that are never logged (`status` and `stats`), and the record format. It does not mention an environment variable. The configuration reference replaces the `debug` key and example lines with `log`, and the nav label is renamed to match.
 
 ## Data Structures & Interfaces
 
@@ -197,13 +204,20 @@ var LogProviders = []string{"file"} // pinned equal to tracelog.Providers() by t
 func (c Config) LogDir(projectRoot string) string // absolute log directory
 ```
 
-**Per-command environment variable.** `SPEKTACULAR_SESSION_LOG` takes these values:
-- `off`: not recorded;
-- `standard`: recorded at the default level;
-- `verbose` (or the older `on`): recorded at the verbose level;
-- unset or anything else: the configured level applies.
+**Logging-exempt annotation.** The contract 000075 reuses for `stats`. `SPEKTACULAR_SESSION_LOG` is removed: nothing reads it, and the level comes from `log.level` alone. Nothing is ever recorded outside a project.
 
-It never records outside a project.
+```go
+// cmd/root.go
+const (
+    logAnnotation = "log"    // cobra annotation key runRoot reads
+    logExempt     = "exempt" // the command, and every command under it, is never logged
+)
+func logExempted(c *cobra.Command) bool // true when c or any parent has Annotations[logAnnotation] == logExempt
+
+// cmd/status.go
+var statusCmd = &cobra.Command{ /* ... */ Annotations: map[string]string{logAnnotation: logExempt} }
+// 000075, cmd/stats.go: statsCmd sets the same map, and its subcommands inherit it.
+```
 
 **Migration action.** `migrate.Action` gains `Op: "ignore"`, whose `Path` is the `.gitignore` file and whose `To` is the line. It is reported in previews. Apply appends the line when it is absent, creating the file if needed. It is idempotent.
 
@@ -212,13 +226,19 @@ It never records outside a project.
 **A logger behind a provider registry, kept at the edge.** The trace log package is a leaf. It knows nothing of configuration, workflows or cobra, the same boundary the session-log package keeps today. The root command builds a `Run` and a `Record` from facts it already has (argv, timing, exit code, error message, state snapshots, agent) and hands them to whichever `Logger` the configured provider name resolves to. Selecting a logger by name and refusing an unknown one with the accepted names follows the task-id provider registry. The config package keeps its own list of accepted names, pinned to the registry by a test, the way the supported-agents list is pinned today. That keeps config free of an import on the logger. A second logger later (stdout, an OTel collector) is one more registry entry, with no change to the recorder.
 
 **The recorder becomes a short pipeline in `runRoot`.** A reader of the root command sees five steps:
-1. resolve the effective level (config, then the environment override, never outside a project);
+1. resolve the effective level (configuration only, never outside a project, and off for a logging-exempt command);
 2. when logging, backfill a legacy run id, read the before-snapshot and, at verbose only, tee output;
 3. run the command;
-4. read the after-snapshot, attribute the run, and build one record;
+4. unless the command that ran is logging-exempt, read the after-snapshot, attribute the run, and build one record;
 5. write it through the logger.
 
-Each step is a small named helper with a unit test. The whole post-command block runs under a deferred recover, so a bug in logging can never alter the exit code. At the default level nothing touches the output stream. The verbose path is today's tee, and status's terminal detection follows it. The lane-by-argument state selection is reused unchanged: it already gives orchestrated children their own state file, and so their own run id.
+Each step is a small named helper with a unit test. The whole post-command block runs under a deferred recover, so a bug in logging can never alter the exit code. At the default level nothing touches the output stream. The verbose path is today's tee. Status's terminal detection still follows it, but `status` is exempt, so in a real process it is never teed. The lane-by-argument state selection is reused unchanged: it already gives orchestrated children their own state file, and so their own run id.
+
+**Never-logged commands are marked, not listed.** The exemption is a cobra annotation, `log: exempt`, read through a parent walk exactly like the upgrade gate's `gate: exempt`. A command group marks itself once and its subcommands inherit it. That keeps `runRoot` free of command names, and 000075 needs only to set the map on `stats`. The check runs twice:
+- before the command, on the target `rootCmd.Find` resolves from `os.Args[1:]`, the same argv the lane selection already reads, so an exempt command has no side effects at all, not even a run-id backfill;
+- after it, on `ExecuteC`'s executed command, which is authoritative. It is the check that makes "no record" hold in tests, where cobra parses `SetArgs` rather than `os.Args`.
+
+There is no environment override in either direction. Harbor's verbose capture moves into its seeded configuration, and polling `status` needs nothing. The only other source of a level is the `cmd` tests' unexported `forcedLogLevel`, set from a test-binary flag and unreachable from the shipped binary (see Testing Approach).
 
 **Run identity moves into the workflow state.** The engine stamps a run id on every fresh state, in the one place fresh state is built, so every way a workflow starts gets one: spec, plan and implement `new`, orchestrated lanes, dry runs (into their throwaway state). Restart and resume semantics fall out of the existing `new` flow, which clears state before starting and never writes while reporting a resume. Older states are backfilled once by a helper that edits only the one key, through a generic JSON map so unknown fields survive. It writes through a temp file and rename, so a crash cannot truncate a state file.
 
@@ -232,22 +252,22 @@ Each step is a small named helper with a unit test. The whole post-command block
 - `process.command_args` becomes `command`;
 - the exit code, response and state attributes map to their old fields.
 
-Old-format lines still parse as before, so lanes, segments, step windows, timelines and metrics keep their exact behaviour and the pinned reference-run numbers do not move. The only other Harbor edits are paths, the environment value, and comments.
+Old-format lines still parse as before, so lanes, segments, step windows, timelines and metrics keep their exact behaviour and the pinned reference-run numbers do not move. The other Harbor edits are paths, comments, and where the verbose level comes from. Each suite's seeded configuration now sets it, and seeding itself runs with logging off. The verifiers that call `spektacular` switch logging off in the project's configuration before their first call, through one shared helper, because nothing else keeps their calls out of the log they assert against. This matters most for the standing-rules suite, whose own `spec file read` would otherwise satisfy the rule it checks.
 
 ## Dependencies
 
 - **Design documents this plan was built on: none.** The spec carries no design references (`design ref list` reports none).
 - **Upstream specs: none must land first.** 000073 has no dependencies in epic `000002_workflow-tracing-and-run-stats`. Sibling `000072_knowledge-access-index-and-prune` is independent, but if it also raises the project settings format, whichever spec merges second must renumber its migration step (see Risks).
-- **Downstream specs that build on this plan's contracts:** 000074 (trace spans for agent work: start/end records, `parent_span_id`, span types, step-span id beside `run_id`), 000075 (`spektacular stats` reads the record format and the logs directory), 000076 (Harbor replaces this plan's normalising reader), 000077 (HTML viewer reads the same records). None needs a change here, but the record fields defined in Data Structures are their contract and must not drift during implementation.
+- **Downstream specs that build on this plan's contracts:** 000074 (trace spans for agent work: start/end records, `parent_span_id`, span types, step-span id beside `run_id`; its sub-agent spans replace the logged `status` polls this plan drops), 000075 (`spektacular stats` reads the record format and the logs directory, and marks its `stats` group with this plan's `logAnnotation: logExempt`), 000076 (Harbor replaces this plan's normalising reader), 000077 (HTML viewer reads the same records). None needs a change here, but the record fields defined in Data Structures are their contract and must not drift during implementation.
 - **`internal/sessionlog` (replaced).** Its behaviour moves into the new trace log package and it is deleted, with no other importer outside `cmd`.
 - **`internal/workflow` (changed).** It gains `RunID`, its minting on fresh state, and `EnsureRunID`.
 - **`internal/config` (changed).** `LogConfig` replaces `DebugConfig`, and `CurrentProjectSchema` goes from 4 to 5.
 - **`internal/migrate` (changed).** It gains the `project4to5` step and the `ignore` action.
 - **`internal/project` and `templates/.spektacular/.gitignore` (changed).** `init` installs the new ignore line.
-- **`cmd` (changed).** `runRoot`, the snapshot helpers and the status `terminalOut` handling change.
+- **`cmd` (changed).** `runRoot`, the snapshot helpers and the status `terminalOut` comments change. `runRoot` gains the logging-exempt annotation and its walk, `status` carries it, and the `cmd` tests gain a test-only `-log-level` flag.
 - **`internal/output` (used, unchanged).** `ErrorResponse.Message` is the recorded error message, and `NewError(...).WithNextAction` builds the config errors.
 - **Go standard library only (`crypto/rand`, `encoding/hex`, `encoding/json`, `os`).** No new third-party module. The OpenTelemetry SDK is deliberately not added (research.md alternative 2).
-- **Harbor test harness (changed, Python).** It covers `tests/harbor/shared/sessionlog.py`, `timeline.py`, `metrics.py`, the suite verifiers, `test.sh` files and Dockerfiles. Its unit tests run under pytest, and its suites need Docker, the Harbor CLI and agent logins.
+- **Harbor test harness (changed, Python).** It covers `tests/harbor/shared/sessionlog.py`, `timeline.py`, `metrics.py`, a new shared `loglevel.py`, the suite verifiers, `test.sh` files, Dockerfiles, seed scripts and the implement suite's seeded `config.yaml`. Its unit tests run under pytest, and its suites need Docker, the Harbor CLI and agent logins.
 - **Documentation site, `docs` repo (changed).** It covers `src/pages/debugging.mdx`, `src/pages/configuration.mdx` and `src/components/Nav.astro`, and is checked by the site build and Astro's type check.
 - **Knowledge entries (changed through the CLI):** `gotchas/harbor-agent-logs-and-artifacts.md` and `architecture/testing-architecture.md` in the `spektacular` repo store.
 - **Prior plan `000031_agent-session-debug-log`** explains why the recorder sits in `runRoot` and is the behaviour being replaced. Prior plans `000068`, `000069` and `000071` hold manual test steps that name `.spektacular/debug/`. Those are historical records and are not edited.
@@ -278,19 +298,22 @@ Old-format lines still parse as before, so lanes, segments, step windows, timeli
   - Two standalone `knowledge search` commands get two traces in one day file.
   - The default level omits a large response and state snapshots, and a failing goto records `error` status, a non-zero exit code and the message.
   - Verbose records the exact output and both snapshots. `off` writes nothing.
-  - `SPEKTACULAR_SESSION_LOG` with `off`, `standard`, `verbose` and `on` behaves as specified, and nothing is written outside a project.
+  - `status`, pretty and JSON, with and without a name, at the standard and verbose levels, adds no record and creates no log file. Run on a legacy in-progress state, it leaves `state.json` byte-identical (no run-id backfill). The next `spec goto` still writes its record.
+  - The annotation walk: a command marked `log: exempt`, and a subcommand of a marked group, are exempt; an unmarked command is not. Nothing is written outside a project.
   - An unknown provider fails commands with a config error naming `file`. A custom directory is honoured and the default one stays empty.
   - After `init` in a new git repo, and after `migrate` of a format-4 project, `git status --porcelain` shows nothing from the logs directory.
   - Retention: 12 runs leave 10; retention 3 leaves 3; standalone commands in between remove no run log.
   - An unwritable logs directory and an undeletable old log both leave stdout and the exit code identical to a logging-off run.
   - Old debug files stay untouched after `migrate` and further commands.
 
-  The existing session-log tests are rewritten onto these, not deleted without replacement.
+  The existing session-log tests are rewritten onto these, not deleted without replacement. The old environment-variable tests become the `status` exemption and annotation tests above.
+
+  **Logging off across the whole `cmd` suite.** `cmd/main_test.go` gains a test-only flag, `-log-level`, which TestMain copies into an unexported `forcedLogLevel` in `cmd`. When it is set, `runRoot` uses that level in place of the configured one. No environment variable or shipped flag reaches it. The tests that assert logging behaviour call a `useConfiguredLogLevel(t)` helper, which clears the forced level for that test and restores it afterwards, so they still test what they claim under either run. The suite runs twice: as usual with logging on, and once as `go test -shuffle=on -count=1 ./cmd/ -args -log-level=off`. No other package drives `runRoot`.
 - **Harbor Python unit tests.** New cases for the normalising reader: a new-format record maps to the same `Event` fields as its old-format twin, a mixed directory reads both, and a verbose resume refusal is still detected. The existing old-format fixtures and pinned reference-run values must pass unchanged.
 - **Docs repo.** The site build and `astro check` pass, and the MDX guard (no layout HTML in page bodies) returns nothing.
 
 **Load-bearing guarantees.**
-- One record per command, in the documented format.
+- One record per command, in the documented format, and none for `status` or any other logging-exempt command.
 - The run id follows the run, not the process.
 - Logging never changes a command's output or exit code.
 - Retention never removes workflow runs because of standalone commands.
@@ -302,13 +325,13 @@ Old-format lines still parse as before, so lanes, segments, step windows, timeli
 
 **Success metrics.**
 - *A maintainer can read each step's start, end and duration from the log alone, for a real workflow run.* **Manual — captured in the implementation test plan.** Supporting behavioural test: records carry `spektacular.step` and `spektacular.step.to` with start and end times on every step-changing command.
-- *The default level adds under 10 ms to a typical command, over 100 runs of `status` with logging on and off.* **Manual — captured in the implementation test plan.** A Go benchmark of the record-and-write path is added as supporting evidence, but the metric is a wall-time measurement of the installed binary.
+- *The default level adds under 10 ms to a typical command, over 100 runs with logging on and off.* **Manual — captured in the implementation test plan.** `status` is never logged now, so timing it would measure nothing. The measurement uses `spec file list`, a typical read-only command that is logged, with `log.level` set to `standard` and then `off`. A Go benchmark of the record-and-write path is added as supporting evidence, but the metric is a wall-time measurement of the installed binary.
 - *One complete implement run of a plan with 10 tasks produces a default-level log under 1 MB.* **Manual — captured in the implementation test plan.** A real run is needed for realistic command counts.
-- *No command's output or exit code differs between logging on and off across the full Go test suite and the Harbor workflow suites.* **Behavioural test:** an integration test runs a representative command set (success, rejection, a large output, `status` pretty and JSON) at `off`, `standard` and `verbose` and asserts byte-identical stdout and exit codes. The full Go suite must also pass with `SPEKTACULAR_SESSION_LOG=off` exported, as well as with the default. The Harbor half is **Manual — captured in the implementation test plan.**
+- *No command's output or exit code differs between logging on and off across the full Go test suite and the Harbor workflow suites.* **Behavioural test:** an integration test runs a representative command set (success, rejection, a large output, `status` pretty and JSON) at `off`, `standard` and `verbose` and asserts byte-identical stdout and exit codes. The `cmd` suite must also pass with logging forced off through its test-only flag (`go test -shuffle=on -count=1 ./cmd/ -args -log-level=off`), as well as with the default. The Harbor half is **Manual — captured in the implementation test plan.**
 
 **Manual reviews.**
 - **Manual — captured in the implementation test plan:** a Harbor workflow suite run (at least the plan suite and the epic suite) reports the same workflow steps and parallel runs as a run on the previous version, reading from `.spektacular/logs/` (spec AC "The test harness still reports sessions").
-- **Manual — captured in the implementation test plan:** a read-through of the rewritten debugging page and the configuration reference on the built site, checking every level, the location, retention, switching off and the environment variable against the shipped behaviour.
+- **Manual — captured in the implementation test plan:** a read-through of the rewritten debugging page and the configuration reference on the built site, checking every level, the location, retention, switching off and the never-logged commands against the shipped behaviour, and that no environment variable is described.
 
 ## Milestones & Tasks
 
@@ -319,9 +342,9 @@ Old-format lines still parse as before, so lanes, segments, step windows, timeli
 - which agent, workflow and step it belonged to, and the step it moved the workflow to;
 - a run identifier shared by every command of the same workflow run.
 
-That identifier survives an interruption and resume, changes on a `--force` restart, differs between epic planning's parallel lanes, and is added to a run that was already in progress when the project upgraded. The `debug` setting is gone. `migrate` turns it into the new `log` setting (`off`, `standard` or `verbose`, with a choice of logger and directory) and adds the logs folder to the project's ignore rules, as `init` now does for new projects. The verbose level keeps the full responses and state snapshots that debug mode kept. `SPEKTACULAR_SESSION_LOG` can still leave one command out, or record it verbosely. Logging can never change a command's output or exit code, and the old debug files are left where they are.
+That identifier survives an interruption and resume, changes on a `--force` restart, differs between epic planning's parallel lanes, and is added to a run that was already in progress when the project upgraded. The `debug` setting is gone. `migrate` turns it into the new `log` setting (`off`, `standard` or `verbose`, with a choice of logger and directory) and adds the logs folder to the project's ignore rules, as `init` now does for new projects. The verbose level keeps the full responses and state snapshots that debug mode kept. `spektacular status` is never logged, so a tool that polls it does not flood the log, and `SPEKTACULAR_SESSION_LOG` is gone: the level is set in the project's configuration only. Logging can never change a command's output or exit code, and the old debug files are left where they are.
 
-**Validation point**: The full Go suite passes, both with the default level and with `SPEKTACULAR_SESSION_LOG=off` exported. In a throwaway `init`ed git project, a spec workflow's commands appear in one run log with one trace id, standalone commands appear in that day's log with their own ids, and `git status` shows no log files. Migrating a format-4 throwaway project with `debug.enabled: true` yields `log.level: verbose` and an untouched `debug/` folder.
+**Validation point**: The full Go suite passes at the default level, and the `cmd` suite also passes with logging forced off through its test-only `-log-level=off` flag. Running `status` adds nothing to the logs. In a throwaway `init`ed git project, a spec workflow's commands appear in one run log with one trace id, standalone commands appear in that day's log with their own ids, and `git status` shows no log files. Migrating a format-4 throwaway project with `debug.enabled: true` yields `log.level: verbose` and an untouched `debug/` folder.
 
 #### - [ ] Task: Trace log package with the file logger
 **Id:** df1bade8-66a7-4bb8-b261-3dda877ae82c
@@ -384,14 +407,15 @@ Replaces the project's `debug` setting with a `log` section: which logger to use
 - 154f3002-9b09-4cb4-aaec-f204081cee9a — Log settings replace debug, with migration
 **Execution:** agent
 
-Rewires the place every command finishes so that it logs through the configured logger instead of the debug recorder. It does five things:
-- works out the effective level from the project settings and `SPEKTACULAR_SESSION_LOG`;
+Rewires the place every command finishes so that it logs through the configured logger instead of the debug recorder. It does six things:
+- works out the effective level from the project settings alone (`SPEKTACULAR_SESSION_LOG` is no longer read);
+- leaves out any command marked as never logged, through a cobra annotation that `status` now carries and that spec 000075 will put on `stats`;
 - gives an older run its identifier;
 - decides which run, step and next step a command belongs to;
 - captures the full response only at the verbose level;
 - writes one record.
 
-The old session-log package and its tests are replaced, and logging stays inside projects only.
+The old session-log package and its tests are replaced, and logging stays inside projects only. The `cmd` tests gain a test-only way to force logging off across the whole suite.
 
 *Technical detail:* [context.md#task-record-every-command-through-the-configured-logger](./context.md#task-record-every-command-through-the-configured-logger)
 
@@ -403,10 +427,12 @@ The old session-log package and its tests are replaced, and logging stays inside
 - [ ] Two standalone `knowledge search` commands produce two records with different trace ids in the same day's log.
 - [ ] At the standard level a record holds the command, timing, exit status and any error message but no response or state; a failed command records an error status, a non-zero exit code and its message.
 - [ ] At the verbose level a record holds the exact output and the state before and after.
-- [ ] With logging off nothing is written. `SPEKTACULAR_SESSION_LOG=off` leaves one command out, and `verbose` (or `on`) records it in full. Nothing is ever written outside a project.
+- [ ] With logging off nothing is written, and nothing is ever written outside a project. Setting `SPEKTACULAR_SESSION_LOG` to any value changes nothing.
+- [ ] At the standard and verbose levels, `status` (readable or JSON, with or without a name) adds no record, creates no log file and does not give an older run its identifier, while the next workflow command is still recorded.
+- [ ] A command marked with the logging-exempt annotation, or one whose parent is marked, is never logged; the annotation's key and value are named constants that another command group can set.
 - [ ] A custom log directory receives the records and the default one stays empty.
 - [ ] After `init` in a new git repository, and after `migrate` of an older project, running commands leaves `git status` free of log files.
-- [ ] Every command's output and exit code are identical with logging off, standard and verbose, including when the logs directory cannot be written, and the full test suite passes with logging on and with it off.
+- [ ] Every command's output and exit code are identical with logging off, standard and verbose, including when the logs directory cannot be written. The full test suite passes with logging on, and the `cmd` suite also passes with logging forced off through its test-only flag.
 - [ ] Files in an old `.spektacular/debug/` folder are byte-identical after `migrate` and further commands.
 
 ### Milestone 2: Old logs are trimmed automatically
@@ -435,9 +461,9 @@ Adds retention to the file logger. When a record starts a new run log, older run
 
 ### Milestone 3: The Harbor test harness reports from the new logs
 
-**What changes**: Harbor, the end-to-end agent test harness, keeps reporting the same workflow steps, timelines, parallel runs and metrics it reports today, now read from `.spektacular/logs/`. Every suite image records at the verbose level. The shared reader understands the new span records and still reads the old-format reference runs its offline tests rely on. Users see no change in Harbor's results. The work exists so the harness does not break, until spec 000076 moves it onto `spektacular stats`.
+**What changes**: Harbor, the end-to-end agent test harness, keeps reporting the same workflow steps, timelines, parallel runs and metrics it reports today, now read from `.spektacular/logs/`. Every suite's seeded project records the agent's run at the verbose level, set in its configuration rather than through an environment variable. Seeding and the verifiers' own calls are kept out of the log. The shared reader understands the new span records and still reads the old-format reference runs its offline tests rely on. Users see no change in Harbor's results. The work exists so the harness does not break, until spec 000076 moves it onto `spektacular stats`.
 
-**Validation point**: Harbor's Python unit tests pass, including new cases for new-format records and the unchanged pinned reference-run values. A grep of `tests/harbor` finds no `.spektacular/debug` path outside the old-format fixtures and their trimming script. A real suite run is checked by hand (see Testing Approach).
+**Validation point**: Harbor's Python unit tests pass, including new cases for new-format records and the unchanged pinned reference-run values. A grep of `tests/harbor` finds no `.spektacular/debug` path outside the old-format fixtures and their trimming script, and no `SPEKTACULAR_SESSION_LOG` anywhere. A real suite run is checked by hand (see Testing Approach).
 
 #### - [ ] Task: Harbor reader understands span records
 **Id:** 2a0cfbab-fa3b-43e3-89cc-15ac23bdca40
@@ -464,15 +490,17 @@ Teaches Harbor's shared session-log reader to read the new span records, turning
 - dd495862-2f2e-430b-b8ae-ef5b52cb2078 — Record every command through the configured logger
 **Execution:** agent
 
-Points Harbor at `.spektacular/logs/` wherever it looked in `.spektacular/debug/`: every suite verifier, the timeline and metrics tools' defaults, and the `test.sh` timeline calls. Every suite image records at the verbose level, so the responses and state snapshots Harbor reads are kept. Comments, messages and the README's Harbor sections are updated to match.
+Points Harbor at `.spektacular/logs/` wherever it looked in `.spektacular/debug/`: every suite verifier, the timeline and metrics tools' defaults, and the `test.sh` timeline calls. Every suite that drives Spektacular sets `log.level: verbose` in the configuration of the project it seeds, so the responses and state snapshots Harbor reads are kept. The images no longer set `SPEKTACULAR_SESSION_LOG`. Seed scripts run their own commands with logging off, so the log holds only the agent's run. Verifiers that call `spektacular` themselves switch logging off first, so their calls stay out of the log they check. Spec 000076 later sets the seeded level back to the default. Comments, messages and the README's Harbor sections are updated to match.
 
 *Technical detail:* [context.md#task-harbor-suites-read-the-new-logs-at-the-verbose-level](./context.md#task-harbor-suites-read-the-new-logs-at-the-verbose-level)
 
 **Acceptance criteria**:
-- [ ] Every suite image sets the per-command variable to `verbose`.
+- [ ] Every suite that drives Spektacular starts the agent's run with `log.level: verbose` in its project configuration, whether the project is pre-built or the agent runs `init` itself. No image, script or verifier sets `SPEKTACULAR_SESSION_LOG`.
+- [ ] The pre-built projects' logs directories hold no record of the seed scripts' own commands when the agent starts.
+- [ ] Every verifier that runs `spektacular` switches the project's logging off before its first call, so none of its calls appear in the session log.
 - [ ] No verifier, shared tool or `test.sh` reads `.spektacular/debug` any more, apart from the old-format test fixtures and their trimming script.
 - [ ] The metrics recorder's pinned command line in `test.sh` is unchanged and still finds the session log by default.
-- [ ] The README's Harbor sections name `.spektacular/logs/` and the verbose setting, and the Harbor shared unit tests and suite self-checks pass.
+- [ ] The README's Harbor sections name `.spektacular/logs/` and the seeded verbose level, and the Harbor shared unit tests and suite self-checks pass.
 
 ### Milestone 4: Logging is documented
 
@@ -481,11 +509,11 @@ Points Harbor at `.spektacular/logs/` wherever it looked in `.spektacular/debug/
 - where logs go and how to move them;
 - how many runs are kept;
 - how to switch logging off;
-- how `SPEKTACULAR_SESSION_LOG` leaves out or captures a single command.
+- which commands are never logged: `status`, so polling it leaves no trace, and the read-only `stats` reports.
 
-The configuration reference documents the `log` settings and no longer mentions `debug`. The project README and the knowledge base describe the new logs instead of the debug log.
+The configuration reference documents the `log` settings and no longer mentions `debug`. The project README and the knowledge base describe the new logs instead of the debug log. Nothing describes an environment variable for logging.
 
-**Validation point**: The site builds and `astro check` passes with no layout HTML in page bodies. Grepping the site, the README and the knowledge base finds no remaining `debug.enabled` or `.spektacular/debug` description of current behaviour.
+**Validation point**: The site builds and `astro check` passes with no layout HTML in page bodies. Grepping the site, the README and the knowledge base finds no remaining `debug.enabled`, `.spektacular/debug` or `SPEKTACULAR_SESSION_LOG` description of current behaviour.
 
 #### - [ ] Task: Documentation site describes logging
 **Id:** 6f66ab15-ff74-47ff-bea3-f3d5adbfb1c9
@@ -511,7 +539,7 @@ Rewrites the site's debugging page, retitled "Logging and debugging" with its ad
 3. `## What each level records`. `standard`: the command, its run, agent, workflow and step, start and end time, exit status and error message. `verbose`: adds the full response and the workflow state before and after, as debug mode did. `off`: nothing.
 4. `## Where logs go`: one file per workflow run, e.g. `20261024T090334.911373161Z_claude_plan_000008_debugging-docs.jsonl`, and one `standalone_20261024.jsonl` per day for commands outside a workflow. Explains `log.config.directory`.
 5. `## How long logs are kept`: the 10 most recent runs (`log.retention`), and as many days of standalone commands, counted separately.
-6. `## One command at a time`: `SPEKTACULAR_SESSION_LOG=off` leaves a command out (for tools that poll `status`); `verbose` records it in full; `standard` at the default level. `on` still works and means `verbose`.
+6. `## Commands that are never logged`: `spektacular status` is never logged at any level, so editors and tools that poll it do not fill the log. Commands that only report on the logs, `spektacular stats` and its forms, are never logged either, so a report never adds to or trims the logs it reads. The level is set in `config.yaml` only: there is no environment variable for it. (If `stats` has not shipped when this task runs, the section states the rule for reporting commands and names `status` only, and spec 000075's docs sentence names `stats`.)
 7. `## Reading a record`: a sample standard-level line (from the plan's Data Structures section) and a short field list: `trace_id` (one per run), `span_id`, `name`, `start_time`/`end_time`, `status`, `attributes` (`spektacular.agent`, `spektacular.workflow.kind`/`.name`, `spektacular.step`, `spektacular.step.to`, `process.command_args`, `process.exit_code`).
 8. `## Upgrading from debug mode`: `migrate` turns `debug.enabled: true` into `level: verbose` and false into `standard`, and leaves old `.spektacular/debug/` files for you to delete.
 9. CtaBanner: "The `log` key is one of several top-level sections in `.spektacular/config.yaml`" and the existing button to the Configuration page.
@@ -535,7 +563,7 @@ Rewrites the site's debugging page, retitled "Logging and debugging" with its ad
 *Technical detail:* [context.md#task-documentation-site-describes-logging](./context.md#task-documentation-site-describes-logging)
 
 **Acceptance criteria**:
-- [ ] The debugging page explains the levels and what each records, the logs location and how to change it, retention, switching logging off, and the per-command environment variable.
+- [ ] The debugging page explains the levels and what each records, the logs location and how to change it, retention, switching logging off, and that `status` and the `stats` reports are never logged; it describes no environment variable.
 - [ ] The configuration reference documents every `log` setting with its default, and no longer documents `debug` anywhere, including the example file and the key list.
 - [ ] The navigation shows the page as "Logging and debugging" at its existing address.
 - [ ] The site builds and type-checks without errors, and no page body contains layout HTML or em dashes in the new text.
@@ -549,25 +577,27 @@ Rewrites the site's debugging page, retitled "Logging and debugging" with its ad
 - 90909dbf-daa8-4bb5-a55f-571a60355636 — Harbor suites read the new logs at the verbose level
 **Execution:** agent
 
-Brings the project's own descriptions up to date. The README's configuration example shows the `log` section instead of `debug`, and the two knowledge entries that describe Harbor's use of the debug session log now describe `.spektacular/logs/` and the verbose setting. Historical plans and changelog entries are left as they are.
+Brings the project's own descriptions up to date. The README's configuration example shows the `log` section instead of `debug`, and says `status` is never logged. The two knowledge entries that describe Harbor's use of the debug session log now describe `.spektacular/logs/` and the verbose level each suite sets in its seeded project's configuration. Historical plans and changelog entries are left as they are.
 
 *Technical detail:* [context.md#task-readme-and-knowledge-describe-logging](./context.md#task-readme-and-knowledge-describe-logging)
 
 **Acceptance criteria**:
-- [ ] The README's configuration example shows the `log` section with its defaults and a one-line explanation of each key, and mentions `debug` nowhere as a current setting.
-- [ ] The Harbor knowledge entries say the session log is collected from `.spektacular/logs/` at the verbose level, and no longer mention `.spektacular/debug/` as current behaviour.
+- [ ] The README's configuration example shows the `log` section with its defaults and a one-line explanation of each key, mentions `debug` nowhere as a current setting, and describes no logging environment variable.
+- [ ] The Harbor knowledge entries say the session log is collected from `.spektacular/logs/` at the verbose level set in each suite's seeded configuration, and no longer mention `.spektacular/debug/` or `SPEKTACULAR_SESSION_LOG` as current behaviour.
 
 ## Open Questions
 
 - **Whether the default level meets the under-10 ms budget on the maintainer's machine.** This depends on the real cost of loading the configuration twice, reading the state twice and appending once, measured on the installed binary. If the manual measurement in the test plan exceeds 10 ms, STOP and ask the user before adding caching, for example passing the already-parsed configuration from the root probe into the command handlers. That would change how commands load configuration.
 - **Whether any existing `cmd` test relies on `.spektacular/` holding no extra entries after commands.** This only surfaces once logging is on by default across the suite. Adjust such a test to ignore `logs/` when the assertion is about other files. If a test asserts behaviour the spec now changes in some other way, STOP and ask.
+- **Whether a minimal pre-seeded `config.yaml` changes what the agent's `init` does in the spec, plan and repo suites.** Those suites have the agent run `init` itself, so their verbose level comes from a pre-seeded `schema: 5` file holding only `log.level: verbose`. `init` keeps an existing config and backfills the name, the colocated repo and the agent, as the implement suite's pre-seeded config already relies on. If any of those suites' verifiers or reported steps change because the config exists before `init`, STOP and ask.
 
 No other implementation-time uncertainties remain. Every design choice is settled in the Architecture & Design Decisions section and the assumption log.
 
 ## Out of Scope
 
 - **Step spans, task spans, agent-started spans and user-wait spans.** These include `goto` opening and closing step spans, implement's task spans, and `trace start`/`trace stop` for helpers and user waits. They are spec `000074_trace-spans-for-agent-work`. This plan only reserves room for them: the `record` discriminator, the `spektacular.span.type` attribute and the optional `parent_span_id`.
-- **Reading, summarising or comparing logs** (`spektacular stats`): spec `000075_run-stats-command`.
+- **Reading, summarising or comparing logs** (`spektacular stats`): spec `000075_run-stats-command`. Commands that only read the logs are never logged themselves, so a report cannot add to or trim the logs it reads. This plan owns the mechanism: the `logAnnotation: logExempt` cobra annotation, its parent walk and its check in `runRoot`. It marks `status` with it. Spec 000075 only sets the same annotation on its `stats` group (epic review decision, user-confirmed 2026-10-25).
+- **Any per-command logging override.** `SPEKTACULAR_SESSION_LOG` is removed, not remapped, and nothing replaces it (epic review decision, 2026-10-25). Dropping the variable from the maintainer's `spek-status` mod is outside this repository, and harmless if it is left in place, since nothing reads it.
 - **Replacing Harbor's transcript and session-log parsers.** These belong to spec `000076_harbor-on-built-in-logs`. This plan only keeps Harbor's existing reporting working, through a normalising reader.
 - **A visual or HTML view of a run**: spec `000077_html-log-viewer`.
 - **Loggers other than `file`**: exporting to an OpenTelemetry collector, standard output or anything else is deferred (spec Non-Goals). The provider registry is the extension point.

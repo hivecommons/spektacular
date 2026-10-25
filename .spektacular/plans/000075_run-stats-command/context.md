@@ -22,7 +22,7 @@ closed_date: "2026-10-25"
   - `--schema` uses `commandSchema` (`cmd/spec.go:34-55`).
   - JSON goes through `output.New(w, globalFields).WriteResult` (`internal/output/writer.go:22-140`), which injects `"error": false` and applies `--fields`.
   - Refusals are `output.NewError(...).WithNextAction(...)`.
-- **The gate and logging.** The gate does nothing outside a project (`cmd/gate.go:30-45`) and exempts commands by cobra annotation (`cmd/gate.go:120-135`, `cmd/init.go:21`). `runRoot` logs every command run in a project, and 000073 keeps that, so a `stats` call would append to the day's log unless exempted.
+- **The gate and logging.** The gate does nothing outside a project (`cmd/gate.go:30-45`) and exempts commands by cobra annotation (`cmd/gate.go:120-135`, `cmd/init.go:21`). `runRoot` logs every command run in a project, and 000073 keeps that, so a `stats` call would append to the day's log unless exempted. 000073 adds a logging-exempt cobra annotation, checked in `runRoot` on the executed command and its parents, and marks `status` with it (epic review decision, 2026-10-25). It also removes `SPEKTACULAR_SESSION_LOG`, so there is no per-command override.
 - **Test helpers.** `resetRootCmd` resets slice flags correctly (`cmd/root_test.go:45-62`). `runRootCmd` drives `runRoot` (`cmd/root_test.go:70-76`). `writeCurrentConfig` writes a current-format project (`cmd/root_test.go:93`).
 - **Docs.** `docs:src/pages/debugging.mdx` (rewritten by 000073 and extended by 000074) uses `Hero`, `Prose` and `CtaBanner`. `docs:src/components/Nav.astro:16-25` lists the Resources pages.
 
@@ -36,7 +36,7 @@ closed_date: "2026-10-25"
 | Structured and table output | spektacular | `cmd/stats.go`, `internal/runstats/render.go` |
 | Logs from elsewhere | spektacular | `cmd/stats.go` (`--dir`), `internal/runstats/load.go` |
 | Damaged logs do not stop the report | spektacular | `internal/runstats/load.go` |
-| The report never changes the logs | spektacular | `internal/runstats/load.go` (read-only), `cmd/root.go` (logging exemption), `cmd/stats.go` (annotation) |
+| The report never changes the logs | spektacular | `internal/runstats/load.go` (read-only), `cmd/stats.go` (000073's logging-exempt annotation on the group) |
 | Documentation describes the report | docs, spektacular | `docs:src/pages/run-stats.mdx`, `docs:src/components/Nav.astro`, `docs:src/pages/debugging.mdx`, `README.md` |
 
 ## Per-Task Technical Notes
@@ -146,14 +146,11 @@ closed_date: "2026-10-25"
 ### Task: Keep the stats commands out of the logs
 
 **File changes**
-- `cmd/root.go` (`runRoot` as 000073 rewrites it, today `:110-176`; the record write is step 5 of 000073's pipeline, `recordCommand`). Add:
-  - `const logAnnotation = "spektacular.log"` and `const logExempt = "exempt"`, beside `sessionLogEnv`;
-  - `func logExempted(c *cobra.Command) bool`, which walks `c` and its parents and returns true when any has `Annotations[logAnnotation] == logExempt`, modelled on `gateExempted` (`cmd/gate.go:120-135`).
-
-  In `runRoot`, after `executedCmd, err := rootCmd.ExecuteC()`, skip `recordCommand` when `logExempted(executedCmd)`. The verbose tee is still restored. The pre-run steps are unchanged; for an exempt command they only read state, apart from 000073's one-time idempotent legacy run-id backfill, which never touches the logs. Document the rule in the `runRoot` comment: read-only log commands are never logged.
-- `cmd/root_test.go` (extend the log tests 000073 rewrites):
-  - `TestLogExemptedWalksParents`: a throwaway cobra tree with an annotated group, where a child is exempt and a sibling outside the group is not;
-  - `TestExemptCommandWritesNoRecord`: register an annotated hidden test command on `rootCmd` for the test and remove it on cleanup, or use `stats list` once it exists. With `log.level: verbose`, running it leaves the logs directory as it was, and a following `status` still writes one record.
+- The exemption mechanism is 000073's: its logging-exempt cobra annotation, and the check in `runRoot` that skips the record for a command carrying it on itself or a parent. This task does not change `runRoot`, add an annotation key or add a walk function. 000073 names it: key `"log"`, value `"exempt"`, constants `logAnnotation` and `logExempt` with `logExempted(c *cobra.Command) bool` in `cmd/root.go`; if the shipped names differ, use those.
+- `cmd/stats.go` (new): `statsCmd` with `Use: "stats"`, `RunE: runUnknownSubcommand` (`cmd/root.go:54`) and `Annotations: map[string]string{logAnnotation: logExempt}` (000073's logging-exempt annotation). Its doc comment says the group is never logged, so a report cannot change the logs it reads. Subcommands and flags come in the next task.
+- `cmd/root.go:516-528`: `rootCmd.AddCommand(statsCmd)`. This is the only `cmd/root.go` change.
+- `cmd/stats_test.go` (new):
+  - `TestStatsWritesNoRecord`: in a project from `writeCurrentConfig` (`cmd/root_test.go:93`) with `log.level: verbose`, snapshot the logs directory (names and bytes), run a bare `stats` through `runRootCmd` (`cmd/root_test.go:70`), and assert the directory is unchanged; a following `spec file list` still writes one record (`status` is never logged either). No test sets or exports an environment variable to control logging.
 
 **Complexity**: Low
 **Token estimate**: ~8k tokens
@@ -162,9 +159,8 @@ closed_date: "2026-10-25"
 ### Task: List runs and report on one from the command line
 
 **File changes**
-- `cmd/stats.go` (new):
-  - `statsCmd` has `Use: "stats"`, `RunE: runUnknownSubcommand` (`cmd/root.go:54`) and `Annotations: {logAnnotation: logExempt}`.
-  - Subcommands `statsListCmd` and `statsRunCmd`. Persistent flags on `statsCmd`:
+- `cmd/stats.go` (extended; the previous task created `statsCmd`, already carrying 000073's logging-exempt annotation and registered on `rootCmd`):
+  - Subcommands `statsListCmd` and `statsRunCmd`, added to `statsCmd`; they inherit the annotation through the parent walk. Persistent flags on `statsCmd`:
     - `--dir`, `--format` (default `pretty`; values `pretty`/`json` as `statusFormatPretty`/`statusFormatJSON`, `cmd/status.go:22-26`), `--name`, `--kind`, `--agent`;
     - `--run`, a `StringSlice`;
     - `--gap-threshold`, a `Duration` defaulting to `5m`.
@@ -179,7 +175,6 @@ closed_date: "2026-10-25"
   - The format check copies `cmd/status.go:173-179`, with code `stats_format_unsupported`. Option checks: `--gaps < 1` or `--gap-threshold <= 0` give `stats_bad_option`.
   - The JSON response structs embed `Source{LogDir string \`json:"log_dir"\`; SkippedLines int \`json:"skipped_lines"\`}`: `listResult{Source; Runs []runstats.RunSummary}` and `runResult{Source; GapThresholdMS int64; runstats.Report}`. They are written via `output.New(cmd.OutOrStdout(), globalFields).WriteResult(v)` (`internal/output/writer.go:22`). Pretty output goes through `runstats.RenderList`/`RenderReport` to `cmd.OutOrStdout()`.
   - `--schema` uses `commandSchema` (`cmd/spec.go:50`), with an output schema listing the top-level fields and a flags map.
-- `cmd/root.go:516-528`: `rootCmd.AddCommand(statsCmd)`.
 - `internal/runstats/summary_types.go` (new) or `report.go`: `RunSummary` (the JSON shape in plan.md) and `(*Run).Summary()`.
 - `internal/runstats/render.go` (new): `RenderList(w, runs)` and `RenderReport(w, rep, skipped)`, plain text through `text/tabwriter`, with no colour.
   - The run id is shown as its first 8 characters.
@@ -187,7 +182,7 @@ closed_date: "2026-10-25"
   - The report prints a header line (kind, name, agent, run id, status, start), a totals block, then the Steps table (STEP, ENTRIES, DURATION, COMMANDS, CMD TIME, HELPER WAIT, USER WAIT, INCOMPLETE). It follows with the Tasks table (only when there are tasks), Helpers (NAME, STEP, STARTED, DURATION, END), User waits, and Gaps (DURATION, STEP, AFTER, BEFORE).
   - The last line is `Skipped lines: N` when N > 0.
   - Golden text tests: `internal/runstats/testdata/list.golden.txt` and `report.golden.txt`.
-- `cmd/stats_test.go` (new):
+- `cmd/stats_test.go` (extended):
   - The helper `seedLogs(t, dir)` writes fixture JSON Lines with fixed timestamps. It produces three finished runs (spec, plan, implement, two agents) and one in-progress plan run, in files named as 000073 names them, plus a `standalone_20261025.jsonl`.
   - A project comes from `writeCurrentConfig` (`cmd/root_test.go:93`) with the default `log` section. Every test uses `runRootCmd` (`cmd/root_test.go:70`).
   - Tests:
@@ -296,7 +291,7 @@ Every Go test runs under the shuffled `go test` (`make test`). Fixtures use fixe
   - Assembly: grouping across files, standalone exclusion, pairing, an end without a start, the abandoned end left out of the wall time, all three statuses.
   - Selection: each filter, full id and prefix, ambiguous, unknown and malformed ids, the defaults per mode.
 - **Report on one run**: interval helper tests; gap tests (20-minute pause, `--gaps 3`, 5 m and 30 m thresholds, a command never being a gap); report tests (known waits, overlapping helpers, a step entered twice, two tasks, three helpers, interrupted and unfinished work, the investigation row); the `report.golden.json` contract.
-- **Keep the stats commands out of the logs**: `cmd` tests that the annotation walk exempts a child of an annotated group, that an exempt command writes nothing at the verbose level, and that a normal command still writes one record.
+- **Keep the stats commands out of the logs**: a `cmd` test that a bare `stats`, carrying 000073's logging-exempt annotation, leaves the logs directory unchanged at the verbose level, and that a following `spec file list` still writes one record (`status` is never logged either). The annotation walk itself is 000073's and tested there.
 - **List runs and report on one from the command line**: `cmd` integration tests over a seeded fixture project.
   - List order and columns; the default report; every selection; `--fields`.
   - JSON envelope parsing, and pretty-JSON agreement.
@@ -315,7 +310,7 @@ Success metrics and manual reviews are classified in plan.md's Testing Approach.
 
 - Spec `000075_run-stats-command`, epic `000002_workflow-tracing-and-run-stats`.
 - Upstream plans:
-  - `000073_log-mode-and-logger-providers`: record format, file naming, `config.LogDir`, `runRoot` pipeline;
+  - `000073_log-mode-and-logger-providers`: record format, file naming, `config.LogDir`, `runRoot` pipeline, and the logging-exempt annotation;
   - `000074_trace-spans-for-agent-work`: span kinds, types, end reasons, parents, task ids.
 - Downstream specs: `000076_harbor-on-built-in-logs` (reads the JSON), `000077_html-log-viewer` (reuses `internal/runstats`).
 - Design documents: none.
@@ -341,7 +336,7 @@ This plan: Load logs into runs (Medium, ~30k), Report on one run (High, ~40k), K
 
 ## Migration Notes
 
-None. No settings format, state field or record field changes, and nothing is migrated. The logging exemption only stops `stats` commands from being recorded. Installing the new binary is left to the maintainer between workflows (plans-never-change-the-active-install).
+None. No settings format, state field or record field changes, and nothing is migrated. The `stats` group's use of 000073's logging-exempt annotation only stops `stats` commands from being recorded. Installing the new binary is left to the maintainer between workflows (plans-never-change-the-active-install).
 
 ## Performance Considerations
 

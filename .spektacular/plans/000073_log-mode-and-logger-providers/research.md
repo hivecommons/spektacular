@@ -42,7 +42,7 @@ Rely only on `init`/`migrate` ignore rules to keep logs out of git.
 
 Rename the per-command variable to `SPEKTACULAR_LOG`.
 
-**Rejected**: The maintainer's `spek-status` agent-host mod (`~/.claude/dev-mods/*/spek-status/hooks/register.tsx:37`) sets `SPEKTACULAR_SESSION_LOG: 'off'` on every poll. Renaming would silently flood every run's log with status polls. The spec allows keeping the variable and remapping it onto levels.
+**Rejected**: The maintainer's `spek-status` agent-host mod (`~/.claude/dev-mods/*/spek-status/hooks/register.tsx:37`) sets `SPEKTACULAR_SESSION_LOG: 'off'` on every poll. Renaming would silently flood every run's log with status polls. The spec allows keeping the variable and remapping it onto levels. **Superseded at review (2026-10-25):** the variable is now removed altogether, not renamed or remapped (Option J).
 
 ### Option G: Name each run's file by its trace id and find it with a directory scan
 
@@ -62,6 +62,44 @@ Rewrite Harbor's readers for the new format only.
 
 **Rejected**: Harbor's checked-in reference runs (`spektacular:tests/harbor/shared/tests/data/*/debug`, produced by `trim_reference.py:181-205`) are in the old format and back offline acceptance tests. Spec 000076 replaces the reader anyway, so the smallest change is to normalise new-format records into the existing `Event` shape and keep reading old ones.
 
+### Option J: Keep `SPEKTACULAR_SESSION_LOG`, remapped onto levels (`off`, `standard`, `verbose`, with `on` meaning `verbose`)
+
+Keep `SPEKTACULAR_SESSION_LOG`, remapped onto levels (`off`, `standard`, `verbose`, with `on` meaning `verbose`).
+
+**Dropped at review (2026-10-25)**: This was the plan's original choice (see the superseded drafting assumption below). At the epic's end-of-planning review the user removed the variable entirely ("just make it not log. I don't understand why we would want it to?"). It had two users:
+- the `spek-status` mod, which set `off` because it polls `status` every 3 s. `status` is now never logged, so the mod needs nothing;
+- Harbor, which set `on` in its images. Its suites now set `log.level: verbose` in the configuration of the projects they seed.
+
+The only use of logged `status` calls was an epic orchestrator's `status <epic>` polls, marking when it noticed a child finish. 000074's sub-agent spans replace that. A per-command switch would be a second, undocumented way to set the level with no remaining caller.
+
+### Option K: Keep logging `status` like any other command
+
+Keep logging `status` like any other command.
+
+**Rejected at review (2026-10-25)**: A tool polling `status` every few seconds would fill the day's standalone log, or the run's log while a workflow is in progress, and trigger retention sweeps that can push out real runs. Its only analytical use is covered by 000074's spans. The spec now requires that `status` and run statistics commands are never recorded.
+
+### Option L: Exempt commands by a list of names inside `runRoot`
+
+Exempt commands by a list of names inside `runRoot`.
+
+**Rejected**: A cobra annotation read through a parent walk is how the upgrade gate already exempts commands (`spektacular:cmd/gate.go:122-136`, `cmd/migrate.go:18-24`). With it, a command group such as 000075's `stats` marks itself once and every subcommand inherits it. A name list in `runRoot` would couple the recorder to command names and need editing for every new subcommand. The exemption is checked on the command `rootCmd.Find` resolves before the command runs, so an exempt command has no side effects, not even a run-id backfill. It is checked again on the executed command, which is authoritative and also holds in tests.
+
+### Option M: Cover "logging off" in the Go suite with a config-driven run, or by switching logging off in TestMain
+
+Cover "logging off" in the Go suite with a config-driven run, or by switching logging off in TestMain.
+
+**Rejected**: With the variable gone, the old "export `SPEKTACULAR_SESSION_LOG=off` and rerun" pass needs a replacement.
+- A config-driven run would mean every `cmd` fixture that writes a `config.yaml` (`writeSpecCommandConfig` and many others) writing `log.level: off` under some switch, which edits dozens of fixtures.
+- Switching logging off in TestMain hides any breakage logging causes in existing tests (see the drafting assumption).
+
+The chosen test-only `-log-level` flag on the `cmd` test binary sets an unexported `forcedLogLevel`. Nothing in the shipped binary sets it. The logging tests opt out with `useConfiguredLogLevel(t)`, so the same suite runs at the default and fully off.
+
+### Option N: Give Harbor's suites the verbose level through anything but their seeded configuration
+
+Give Harbor's suites the verbose level through anything but their seeded configuration.
+
+**Rejected**: With no environment override, configuration is the only lever, and the user named it: each suite sets `log.level: verbose` in the throwaway project it seeds. The suites whose agent runs `init` get a minimal pre-seeded `config.yaml`, because `init` keeps an existing config and backfills name, repos and agent (`spektacular:internal/project/init.go:35-60,130-136`, `cmd/init.go:51-75`), which the implement suite's pre-seeded config already relies on. The pre-built projects switch logging off while seeding and to `verbose` last, which keeps the old "set after seeding" guarantee. The verifiers that call `spektacular` switch logging off before their first call, replacing their old per-call `off`.
+
 ## Chosen approach — evidence
 
 - **One choke point for every command.** `spektacular:cmd/root.go:110-176` (`runRoot`) already wraps every command. It reads state before and after (`readStateSnapshot`, `root.go:348-369`), contains every failure (`sessionlog.Record` never returns an error, `internal/sessionlog/record.go:136-164`), and picks the lane by argument (`snapshotStatePath`, `root.go:247-345`). The spec says to evolve this recorder rather than start afresh.
@@ -70,9 +108,11 @@ Rewrite Harbor's readers for the new format only.
 - **The provider pattern.** `spektacular:internal/config/config.go:840-873`: every section names `provider` and validates it against the shipped set with a next action. The next-action shape follows `EpicConfig.Validate` (`config.go:862-873`), and the registry-of-names shape follows `identifier.TaskIDProviderFor` (`spektacular:internal/identifier/taskid.go:36-52`). A config-package name list is pinned to a registry by test, following `SupportedAgentNames` (`config.go:197`).
 - **Migration mechanics.** `spektacular:internal/migrate/steps_project.go:139-160` (`project3to4`) is the model for a `From: 4` step that edits the YAML tree with `getNode`/`setNode`/`deleteKey` (`internal/migrate/node.go:52-121`). `registry.go:61-68` registers it and `config/schema.go:17-20` bumps `CurrentProjectSchema`. The engine performs `create`/`remove` actions only (`engine.go:320-340`), so appending an ignore line needs a new action op.
 - **Ignore rules a project gets.** `spektacular:templates/.spektacular/.gitignore` is written by `init` (`internal/project/init.go:148-155`). `migrate` never rewrites it, which `excludeFromProject` (`internal/worktree/worktree.go:503-540`) already works around for a line added later. The template's `*.log` line does not match `.jsonl`.
-- **Status colour detection.** `spektacular:cmd/status.go:267-279`: `terminalOut` exists only because the debug tee hides the terminal. Only the verbose level needs to tee output, so at the default level it is never set.
-- **Polling caller.** `~/.claude/dev-mods/*/spek-status/hooks/register.tsx:37` sets `SPEKTACULAR_SESSION_LOG=off`.
+- **Status colour detection.** `spektacular:cmd/status.go:267-279`: `terminalOut` exists only because the debug tee hides the terminal. Only the verbose level needs to tee output, so at the default level it is never set. `status` is now logging-exempt, so in a real process it is never teed at all.
+- **Polling caller.** `~/.claude/dev-mods/*/spek-status/hooks/register.tsx:37` sets `SPEKTACULAR_SESSION_LOG=off`. Since the review decision, `status` is never logged, so the mod needs no variable.
+- **Exemption by annotation.** `spektacular:cmd/migrate.go:18-24` (`gateAnnotation = "gate"`, `gateExempt = "exempt"`) and `cmd/gate.go:122-136` (`gateExempted` walks the command and its parents) are the pattern `logAnnotation = "log"`, `logExempt = "exempt"` and `logExempted` follow. `rootCmd` has no `TraverseChildren`, so `rootCmd.Find(os.Args[1:])` resolves the command `ExecuteC` will run. The lane test sets `os.Args` to match its args (`cmd/sessionlog_lane_test.go:82-89`), which is how a pre-command decision is tested.
 - **Harbor sets the variable to `on`.** Every suite's `environment/Dockerfile:17` (spec, plan, implement, repo, epic, implement-epic) sets `ENV SPEKTACULAR_SESSION_LOG=on`. The verifiers read `response` and `state_after.current_step` (`tests/harbor/shared/sessionlog.py:95-113`, `step_after` at `:86-91`), which only the verbose level keeps.
+- **How Harbor projects are seeded.** The spec, plan and repo agents run `init` themselves (`instruction.md`). implement `COPY`s a full `config.yaml`. epic, implement-epic, goal-check and standing-rules build the project in `environment/seed/seed.sh` at image build time, running Spektacular commands (standing-rules runs `spec file read`). Those commands are unlogged today only because the variable is set after seeding. Four verifiers set `off` on their own calls (`test_epic_workflow.py:46`, `test_implement_epic_workflow.py:44`, `test_goal_check.py:266`, `test_standing_rules.py:174`). Standing-rules' own `spec file read` (`:223`) would otherwise satisfy `rule_spec_read_through_cli`.
 
 ## Files examined
 
@@ -125,6 +165,12 @@ Rewrite Harbor's readers for the new format only.
 - `spektacular:tests/harbor/shared/tests/test_reference_runs.py:185-186,253-262,359-360` — pins each reference run's directory listing (`debug`) and old key set; exact metric values come from the old-format fixtures under `data/{m70-epic,s55-epic,s55-plan,s55-implement}/debug`
 - `spektacular:tests/harbor/goal-check-workflow/tests/test_verifier_selfcheck.py:194-235` — writes old-format lane records under `debug/`
 - `spektacular:README.md:601,624` — `metrics.py --debug-dir` usage and the Harbor unit-test command `uvx --with pytest pytest --import-mode=importlib tests/harbor/shared/tests`
+- `spektacular:cmd/gate.go:122-136`, `cmd/migrate.go:18-24`, `cmd/init.go:21` — the gate's exemption annotation and parent walk, the model for the logging-exempt annotation
+- `spektacular:cmd/status.go:29-40` — `statusCmd`, which gains the logging-exempt annotation
+- `spektacular:cmd/init.go:34-75`, `internal/project/init.go:24-60,130-136` — `init` migrates and keeps an existing `config.yaml`, backfilling name, repos and agent
+- `spektacular:tests/harbor/*/environment/seed/seed.sh` — the four pre-built projects' seeding commands, run at image build time
+- `spektacular:tests/harbor/implement-workflow/environment/config.yaml` — the pre-seeded full config (no `schema` line)
+- `spektacular:tests/harbor/{spec,plan,repo}-workflow/instruction.md` — the agent runs `spektacular init {{agent}}` itself
 - `docs:src/pages/debugging.mdx:1-103` — the debugging page: Hero, one Prose block (Enabling debug logging, What gets logged, Before you enable it), CtaBanner
 - `docs:src/pages/configuration.mdx:4,44-45,105-109,200-207` — frontmatter list, example yaml, the "Seventeen top-level keys" sub, the `debug` ConfigKey
 - `docs:src/components/Nav.astro:22` — the "Debugging" nav entry under Resources
@@ -149,7 +195,9 @@ Rewrite Harbor's readers for the new format only.
 - Retention running in one process may delete the file of a run that is still active in another, once that run is older than the N most recent. The next command recreates the file, so that run's earlier records are lost. This is accepted for a count-based retention (spec Non-Goals rule out other policies).
 - `state.created_at` is written with nanosecond precision (Go `time.Time` RFC3339Nano JSON), so two runs of the same kind and name never share a file name.
 - Harbor's `SessionLog` lanes and shared events stay equivalent when commands run after a workflow has finished go to the standalone day log rather than to the finished run's file. If a Harbor suite's reported steps or parallel runs change because of this, STOP and ask.
-- The maintainer's `spek-status` mod is the only polling caller outside this repo.
+- Any caller that polls `status` is covered, because `status` is never logged. Nothing else outside this repo sets `SPEKTACULAR_SESSION_LOG`, and leaving it set is harmless because nothing reads it.
+- A minimal pre-seeded `config.yaml` (`schema: 5` and `log.level: verbose`) is kept by the agent's `init` in the spec, plan and repo suites, with the name, colocated repo and agent backfilled as for a fresh project. If a suite's verifier or reported steps change because the config exists before `init`, STOP and ask.
+- `rootCmd.Find(os.Args[1:])` resolves the same command `ExecuteC` runs in the shipped binary. If an exempt command is ever seen backfilling a run id or teeing in a real process, STOP and ask.
 
 ## Drafting assumptions
 
@@ -188,10 +236,21 @@ Rewrite Harbor's readers for the new format only.
 - **Rationale**: This is spec AC "two consecutive `knowledge search` commands produce two records with different trace identifiers, both in the same log for that day".
 - **Rejected**: One trace per day, which would make unrelated commands look like one run.
 
-### Keep `SPEKTACULAR_SESSION_LOG` as the per-command variable, remapped onto levels (discovery)
+### Keep `SPEKTACULAR_SESSION_LOG` as the per-command variable, remapped onto levels (discovery), superseded at review 2026-10-25
+- **Superseded**: The user removed the variable entirely at the epic's end-of-planning review (Option J). The text below records the original choice.
 - **Decision**: Keep the variable's name. `off` leaves the command out, `standard` records it at the default level, and `verbose` records it verbosely. `on` is still accepted as the older spelling of `verbose`, so Harbor's existing images and a user's habit keep working. Any other value leaves the level to the configuration.
 - **Rationale**: The maintainer's `spek-status` mod sets `SPEKTACULAR_SESSION_LOG=off` on every poll. A rename would silently flood every run's log with polls. The spec allows keeping the variable and remapping it.
 - **Rejected**: Renaming to `SPEKTACULAR_LOG`, which breaks the mod silently. Keeping both names, which leaves two variables to document.
+
+### `status` and `stats` are never logged, by a cobra annotation this plan owns (review, 2026-10-25)
+- **Decision**: `cmd/root.go` defines `logAnnotation = "log"` and `logExempt = "exempt"`, plus `logExempted`, which walks a command and its parents. `runRoot` treats an exempt command as logging off, checked on the target `rootCmd.Find` resolves before the command runs and again on the executed command. `statusCmd` carries the annotation. 000075 sets the same map on its `stats` group.
+- **Rationale**: This is the user's review decision. Polling `status` must not flood or trim the logs, and its one analytical use moves to 000074's spans. It follows the gate's annotation pattern. Placing the mechanism here means 000075 adds no recorder change.
+- **Rejected**: Logging `status` (Option K). A name list in `runRoot` (Option L). Checking only after the command, which would let an exempt `status` backfill a legacy run id.
+
+### Harbor's verbose level comes from its seeded configuration (review, 2026-10-25)
+- **Decision**: The images stop setting the variable. The spec, plan and repo suites pre-seed a minimal `config.yaml` with `log.level: verbose`, implement adds a `log` block to its pre-seeded config, and the pre-built projects' seed scripts switch logging off while seeding and to `verbose` last. The verifiers that call `spektacular` switch logging off first, through a shared `loglevel.py`.
+- **Rationale**: This is the user's review decision. Configuration is the only lever left, and it keeps the log holding only the agent's run.
+- **Rejected**: Leaving the seed commands logged, which would put standing-rules' own `spec file read` in the log it checks. Deleting the logs at the end of seeding, which is cruder and would leave the seeds logged at standard in between.
 
 ### Logs directory ignores itself, in addition to the init/migrate ignore rule (discovery)
 - **Decision**: When the file logger creates a log file, it also makes sure a `.gitignore` containing `*` exists in the log directory.
@@ -213,10 +272,10 @@ Rewrite Harbor's readers for the new format only.
 - **Rationale**: This honours the constraint, keeps existing links working (the site has no redirects), and tells readers the page now covers logging.
 - **Rejected**: A new `/logging/` page, which conflicts with the constraint and breaks links. An unchanged title, which hides the new content.
 
-### No global logging override in the Go test suite (tasks)
-- **Decision**: `cmd`'s TestMain does not switch logging off. The suite runs with logging on by default, and the implementer also runs it once with `SPEKTACULAR_SESSION_LOG=off` exported.
+### No global logging override in the Go test suite; a test-only flag forces logging off (tasks; revised at review, 2026-10-25)
+- **Decision**: `cmd`'s TestMain does not switch logging off by default. The suite runs with logging on, and the implementer also runs `go test -shuffle=on -count=1 ./cmd/ -args -log-level=off`. That test-only flag sets an unexported `forcedLogLevel` that `runRoot` prefers to the configured level inside a project. The logging tests call `useConfiguredLogLevel(t)` to clear it for themselves. Before the review, the second run exported `SPEKTACULAR_SESSION_LOG=off`, which no longer exists.
 - **Rationale**: The spec's success metric asks that no command's output or exit code differ between logging on and off across the full Go suite. Running it both ways is that check. The self-ignoring logs directory keeps temp git projects clean.
-- **Rejected**: Switching logging off in TestMain, which hides any breakage logging causes in existing tests.
+- **Rejected**: Switching logging off in TestMain, which hides any breakage logging causes in existing tests. A config-driven off run, which edits dozens of fixtures (Option M).
 
 ### Day rotation is covered in tracelog unit tests, not through runRoot (tasks)
 - **Decision**: The file logger takes the run's start time from its `Run` argument, so day-file rotation and day retention are tested with synthetic times in the `tracelog` package. The `cmd` tests cover run retention end to end.
@@ -233,6 +292,7 @@ Rewrite Harbor's readers for the new format only.
 
 - `spektacular spec file read 000073_log-mode-and-logger-providers`, plus 000074 and 000075 for the record-format consumers.
 - Re-read `cmd/root.go:91-400`, `internal/sessionlog/record.go`, `internal/workflow/{state,workflow,lane}.go:1-200`, `internal/config/config.go:84-900`, `internal/migrate/{registry,steps_project,engine}.go`.
-- Re-read `tests/harbor/shared/sessionlog.py` and grep `tests/harbor` for `"debug"` and `SPEKTACULAR_SESSION_LOG`.
+- Re-read `tests/harbor/shared/sessionlog.py` and grep `tests/harbor` for `"debug"` and `SPEKTACULAR_SESSION_LOG`. Re-read the seed scripts under `tests/harbor/*/environment/seed/` and the verifiers' `cli()` helpers.
+- Re-read `cmd/gate.go:122-136` and `cmd/migrate.go:18-24` for the annotation pattern, and `cmd/status.go:29` for `statusCmd`.
 - `spektacular knowledge read` for `gotchas/harbor-agent-logs-and-artifacts.md` and `architecture/testing-architecture.md` (both describe the old debug log and are updated by this plan).
 - Docs repo: `src/pages/debugging.mdx`, `src/pages/configuration.mdx`, `src/components/Nav.astro`.

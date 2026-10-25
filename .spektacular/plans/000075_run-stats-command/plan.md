@@ -27,7 +27,8 @@ It also compares runs side by side and summarises many runs with medians and 90t
 
 - **Error messages must describe the problem and suggest remediation**: every `stats` refusal is an `output.NewError(...).WithNextAction(...)` with a runnable fix. These cover an unsupported format, no project and no `--dir`, a missing directory, no matching runs, an unknown or ambiguous run id, a bad kind, fewer than two runs to compare, and a bad gap count or threshold.
 - **Tests must not depend on order**: the new `cmd` tests go through `runRootCmd`/`resetRootCmd` (the repeatable `--run` flag is a slice flag that the reset already handles). They use fixture logs with fixed timestamps in their own temp directories, never the wall clock.
-- **Passing tests are required before calling work done**: the logging exemption touches `runRoot`, which every `cmd` test drives. The full shuffled Go suite must pass.
+- **Passing tests are required before calling work done**: the new `stats` group is registered on the root command, which every `cmd` test drives. The full shuffled Go suite must pass.
+- **000073 owns the logging exemption**: spec 000073 adds the logging-exempt cobra annotation, checked in `runRoot`, and marks `spektacular status` with it. This plan only sets that annotation on the `stats` group, adds no exemption mechanism of its own and does not change `runRoot`. There is no per-command environment override to rely on: 000073 removes `SPEKTACULAR_SESSION_LOG`.
 - **A plan never changes the active skills and configuration**: the feature adds a command and touches no template, skill, managed section or settings format. No task installs the binary or touches this repo's `.spektacular/`. Manual checks run the built binary against copied or throwaway logs.
 - **Store files are written through the CLI**: the logs directory is not a store, so the report reads it directly (read-only). No task writes a store file by hand.
 - **Plans must sketch content structure, not just summarize it (docs repo)**: the new Run statistics page carries a content outline with the verified command names, flags and field names.
@@ -64,7 +65,9 @@ The analysis code is pure: no I/O, no clock and no configuration. It is tested a
 
 Comparisons and summaries key steps by name, as the spec's Technical Approach asks, so runs of different lengths line up. A step a run never entered is `null` for that run, never zero.
 
-**The report never changes the logs.** The package only opens files read-only, and it never writes, renames or deletes anything. One more change makes the guarantee hold inside a project. 000073 makes `runRoot` log every command, which for `stats` would mean an append to the day's standalone log and possibly a retention sweep. So the `stats` group carries a logging-exempt cobra annotation, the same pattern as the gate's exemption (`cmd/gate.go:127`), and `runRoot` writes no record for an exempt command. This is the one change to 000073's recorder. It is tested by comparing every log file byte for byte before and after each kind of report.
+**The report never changes the logs.** The package only opens files read-only, and it never writes, renames or deletes anything. One more change makes the guarantee hold inside a project. 000073 makes `runRoot` log every command, which for `stats` would mean an append to the day's standalone log and possibly a retention sweep. 000073 adds a logging-exempt cobra annotation, which `runRoot` checks on the command that ran and its parents, writing no record for a command so marked. The `stats` group sets 000073's logging-exempt annotation, and its subcommands inherit it. This plan adds no exemption mechanism and does not change 000073's recorder. It is tested by comparing every log file byte for byte before and after each kind of report.
+
+**Review decision (2026-10-25).** At the epic's end-of-planning review the user moved the logging-exemption mechanism (the cobra annotation and its check in `runRoot`) to spec 000073, which also marks `spektacular status` as never logged. 000073 also removes `SPEKTACULAR_SESSION_LOG`, so nothing here relies on a per-command override. This plan now only applies 000073's annotation to the `stats` group, using the annotation name 000073 ships.
 
 **Output is a contract for 000076 and 000077.** The JSON field names are fixed in this plan's Data Structures section and pinned by golden tests:
 - durations are integer milliseconds (`*_ms`);
@@ -97,8 +100,8 @@ Step entries carry `started_at` and helper launches carry the step and task they
   - input validation and every refusal, each with a next action;
   - `--schema`.
 
-  It writes results through the shared output writer (the JSON envelope and `--fields`) or through the package's text renderer. A bare `stats` returns the standard unknown-subcommand error. It carries the logging-exempt marker and is registered on the root command.
-- **Command recorder in the root command (changed, `spektacular` repo; rewritten by 000073).** It learns one rule: a command marked logging-exempt, or one whose parent is, writes no log record. That keeps every report read-only inside a project. Nothing else in 000073's pipeline changes.
+  It writes results through the shared output writer (the JSON envelope and `--fields`) or through the package's text renderer. A bare `stats` returns the standard unknown-subcommand error. It carries 000073's logging-exempt annotation and is registered on the root command.
+- **Command recorder in the root command (reused, unchanged; rewritten by 000073).** 000073's recorder already writes no record for a command carrying its logging-exempt annotation, or whose parent does. That keeps every report read-only inside a project. This plan changes nothing in 000073's pipeline.
 - **Output writer (reused, unchanged).** It provides the JSON envelope, the `"error": false` discriminant, the `--fields` filter and the error shape.
 - **Trace log package (reused, unchanged; from 000073 and 000074).** It is the source of the record type and the names the report keys on. Its per-run reader and span index are not used by the report.
 - **README (changed, `spektacular` repo).** The "How It Works" command overview gains the four `stats` forms, next to `status`.
@@ -257,7 +260,7 @@ func Summarise(runs []*Run, o Options) Summary
 func RenderList(w io.Writer, l *Logs, runs []*Run) error // and RenderReport, RenderComparison, RenderSummary
 ```
 
-`Report`, `Comparison` and `Summary` are the Go types behind the JSON above, with matching `json` tags. `cmd` adds `log_dir` and `skipped_lines`. No existing type, record field or setting changes. `cmd` gains one cobra annotation key, which marks a command as exempt from logging.
+`Report`, `Comparison` and `Summary` are the Go types behind the JSON above, with matching `json` tags. `cmd` adds `log_dir` and `skipped_lines`. No existing type, record field or setting changes. `cmd` adds no annotation key: the `stats` group uses 000073's logging-exempt annotation.
 
 ## Implementation Detail
 
@@ -293,7 +296,7 @@ A small interval helper (merge, clip, total) is the only arithmetic primitive, s
 
 Sentinel and typed errors from the package (an unknown, ambiguous or malformed run id, no runs, too few to compare) are mapped to output errors in one place in `cmd`.
 
-**Exempt from logging, by annotation.** The gate already uses a cobra annotation to let a few commands through. The root recorder gets a matching one: a command whose path carries the logging-exempt annotation is left out of the log. It is checked on the command that actually ran, so it works in tests and in production. The `stats` group sets it once, on the group, and its subcommands inherit it through the parent walk. This is the only change to code from 000073. It is a new, reusable rule: a read-only log command is never logged.
+**Exempt from logging, by annotation.** 000073 gives the root recorder a logging-exempt cobra annotation, matching the gate's: a command whose path carries it is left out of the log. It is checked on the command that actually ran, so it works in tests and in production. The `stats` group sets 000073's logging-exempt annotation once, on the group, and its subcommands inherit it through the parent walk. The implementer uses the annotation name 000073 ships. No code from 000073 is changed: a read-only log command is simply never logged.
 
 **Reading large logs cheaply.** Verbose-level lines carry full responses and can be many megabytes long. The loader:
 - reads lines with no length cap;
@@ -309,7 +312,7 @@ A benchmark over a generated ten-run directory backs the under-one-second succes
   - its record format and `internal/tracelog` record type;
   - its run-file and day-file naming in the logs directory;
   - `config.LogDir(projectRoot)`;
-  - its rewritten `runRoot`, which gains the logging exemption here.
+  - its rewritten `runRoot` and its logging-exempt annotation, which the `stats` group sets.
 
   No task starts until 000073's Milestone 1 is merged. If its names differ, adapt to them. If a record field's meaning differs from its plan, STOP and ask.
 - **Upstream spec `000074_trace-spans-for-agent-work` must land first.** It is planned but not implemented. This plan builds on:
@@ -327,7 +330,7 @@ A benchmark over a generated ten-run directory backs the under-one-second succes
   The JSON field names and the package's exported types in Data Structures are their contract and must not drift during implementation.
 - **`internal/output` (used, unchanged).** It provides the success envelope with `"error": false`, `--fields` filtering, and `NewError(...).WithNextAction` for every refusal.
 - **`internal/config` (used, unchanged after 000073).** It resolves the project's log directory.
-- **`cmd` (changed).** It gains a new `stats` group, and `runRoot` gains the logging-exempt annotation check. The `commandSchema` and `runUnknownSubcommand` conventions are reused.
+- **`cmd` (changed).** It gains a new `stats` group carrying 000073's logging-exempt annotation. `runRoot` is not changed. The `commandSchema` and `runUnknownSubcommand` conventions are reused.
 - **Go standard library only** (`bufio`, `encoding/json`, `os`, `path/filepath`, `sort`, `math`, `time`, `text/tabwriter`), plus the existing `cobra`. There is no new module.
 - **Documentation site, `docs` repo (changed).** A new page `src/pages/run-stats.mdx`, a Resources nav entry in `src/components/Nav.astro`, and one sentence in `src/pages/debugging.mdx` as 000073 and 000074 leave it. It is checked by the site build and `astro check`.
 - **`README.md` (changed).** The "How It Works" command overview.
@@ -370,7 +373,7 @@ A benchmark over a generated ten-run directory backs the under-one-second succes
   - `--dir` on a copy outside any project gives identical JSON;
   - every refusal returns its code with a next action;
   - a bare `stats` returns `unknown_subcommand`;
-  - every log file is byte-identical before and after each of the four subcommands, run inside an `init`ed project where logging is on, so the logging exemption is proven end to end.
+  - every log file is byte-identical before and after each of the four subcommands, run inside an `init`ed project where logging is on, so 000073's logging exemption is proven end to end for `stats`.
 - **Docs repo.** The site build and `astro check` pass, and the MDX guard returns nothing.
 
 **Load-bearing guarantees.**
@@ -461,13 +464,13 @@ Waits are counted once even when helpers overlap. Interrupted and unfinished wor
 **Depends on:** none
 **Execution:** agent
 
-Teaches the place every command is logged to leave out commands marked as exempt from logging. Without this, running a report inside a project would add a line to the day's log, and possibly trigger the clean-up of old logs, so the report would change the logs it reads. A command is exempt when it, or a command group above it, carries the marker. This task starts only once 000073's rewritten command recorder is merged.
+Adds the `spektacular stats` command group, with no subcommands yet, and marks it with the logging-exempt marker that spec 000073 provides, so every `stats` command inherits it. Without this, running a report inside a project would add a line to the day's log, and possibly trigger the clean-up of old logs, so the report would change the logs it reads. The marker and the rule that skips marked commands belong to 000073; this task only applies the marker and proves `stats` writes no record. This task starts only once 000073's rewritten command recorder and its logging-exempt marker are merged.
 
 *Technical detail:* [context.md#task-keep-the-stats-commands-out-of-the-logs](./context.md#task-keep-the-stats-commands-out-of-the-logs)
 
 **Acceptance criteria**:
-- [ ] A command carrying the logging-exempt marker, directly or through its group, leaves no record, even with logging at the verbose level.
-- [ ] Every other command is still logged exactly as before, and its output and exit code are unchanged.
+- [ ] Running `stats` inside a project leaves every log file as it was, even with logging at the verbose level.
+- [ ] A normal command run straight after it is still logged exactly as before, and its output and exit code are unchanged.
 
 #### - [ ] Task: List runs and report on one from the command line
 **Id:** ad0176a5-97fb-47c0-98b1-7267765659a2
@@ -478,7 +481,7 @@ Teaches the place every command is logged to leave out commands marked as exempt
 - a49a4d72-79d8-4ce2-b320-6a6b63eca363 — Keep the stats commands out of the logs
 **Execution:** agent
 
-Adds the `spektacular stats` command group with `list` and `run`. Both read the project's logs, or the directory given with `--dir`, and both take the run selection. They print readable tables by default, or the standard JSON envelope with `--format json`. `run` also takes the number of gaps to list and the gap threshold. Every mistake is refused with a message saying what to do. The group is marked as exempt from logging.
+Adds `list` and `run` to the `spektacular stats` command group. Both read the project's logs, or the directory given with `--dir`, and both take the run selection. They print readable tables by default, or the standard JSON envelope with `--format json`. `run` also takes the number of gaps to list and the gap threshold. Every mistake is refused with a message saying what to do. Both inherit the group's logging-exempt marker.
 
 *Technical detail:* [context.md#task-list-runs-and-report-on-one-from-the-command-line](./context.md#task-list-runs-and-report-on-one-from-the-command-line)
 

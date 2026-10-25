@@ -6,6 +6,13 @@ epic: 000002_workflow-tracing-and-run-stats
 sources:
     - uri: docs/workflow-performance-investigation.md
       retrieved_date: "2026-10-24"
+amendments:
+    - at: "2026-10-25T10:05:20Z"
+      sections: [Requirements, Acceptance Criteria]
+      hash: sha256:611a577a90b4cb3b6343e8e438d223c69741091c16fdfe82b9dbfc30d2ee927b
+    - at: "2026-10-25T10:17:30Z"
+      sections: [Success Metrics]
+      hash: sha256:f9d33619dcf1deeaaa8b2763eebdfa9de0a956b9f9fb5974a6ce71eb8ec7821e
 ---
 
 # Feature: 000073_log-mode-and-logger-providers
@@ -36,7 +43,7 @@ Spektacular will keep a lightweight, always-on record of every command an agent 
 ## Requirements
 
 - [ ] **Every command is logged by default**
-  The system must record every Spektacular command run inside a project, without the user turning anything on, unless the project's configuration switches logging off.
+  The system must record every Spektacular command run inside a project, without the user turning anything on, unless the project's configuration switches logging off. Commands that only report on the project or its logs (status and run statistics) are never recorded, so polling and reporting never add to or trim the logs.
 - [ ] **Each command is recorded once, linkable to its run**
   The system must record each command once, with its name, start time, end time, success or error status, and identifiers that link it to the other commands of the same run.
 - [ ] **Records identify the agent, run and step**
@@ -51,8 +58,6 @@ Spektacular will keep a lightweight, always-on record of every command an agent 
   Users can choose a verbose level that additionally records each command's full response and the workflow state before and after it, as debug mode records today.
 - [ ] **Logging can be switched off**
   Users can switch logging off in the project's configuration, after which no command is recorded.
-- [ ] **One command can be left out or made verbose**
-  A caller can leave a single command out of the log, or record it at the verbose level, through an environment setting, without editing the project's configuration, so polling tools do not flood the log and a test harness can capture a full session.
 - [ ] **The logger is chosen in configuration**
   Users can choose which logger is used in the project's configuration; a file logger is the default. An unknown logger name is reported as a configuration error that names the accepted loggers.
 - [ ] **The log location is configurable**
@@ -70,7 +75,7 @@ Spektacular will keep a lightweight, always-on record of every command an agent 
 - [ ] **The test harness keeps its session reporting**
   The project's end-to-end test harness must keep reporting the workflow steps and parallel runs it reports today, reading them from the new logs, until a later spec in this epic replaces that reporting.
 - [ ] **The documentation describes logging**
-  User documentation must describe logging (what each level records, where logs go, retention, switching it off, and the per-command environment setting), and the configuration documentation must cover the logging settings and no longer cover debug.
+  User documentation must describe logging (what each level records, where logs go, retention, switching it off, and which commands are never recorded), and the configuration documentation must cover the logging settings and no longer cover debug.
 
 
 <!--
@@ -129,8 +134,8 @@ Spektacular will keep a lightweight, always-on record of every command an agent 
   With the verbose level configured, a command's record contains its full output exactly as returned and the workflow state before and after it.
 - [ ] **Logging off records nothing**
   With logging switched off in the configuration, running several commands creates no log file and adds no record to existing ones.
-- [ ] **The per-command environment setting works**
-  With logging at the default level, a command run with the environment setting to leave it out adds no record, and a command run with the environment setting for verbose adds a record containing its full output.
+- [ ] **Status and reporting are not recorded**
+  With logging at the default level, running `status` and any run statistics command adds no record to any log.
 - [ ] **The provider setting selects the logger**
   The configuration accepts the file logger and logs are written by it; an unknown logger name is reported as a configuration error naming the accepted loggers.
 - [ ] **A custom directory is honoured**
@@ -148,7 +153,7 @@ Spektacular will keep a lightweight, always-on record of every command an agent 
 - [ ] **The test harness still reports sessions**
   A Harbor workflow suite run after this change reports the same workflow steps and parallel runs in its results as before, with no reliance on the old debug log directory.
 - [ ] **The docs describe logging**
-  The documentation site's debugging page describes the levels and what each records, the logs location, retention, switching logging off and the per-command environment setting, and the configuration reference documents the logging settings and no longer documents a debug setting; the site builds without errors.
+  The documentation site's debugging page describes the levels and what each records, the logs location, retention, switching logging off and which commands are never recorded, and the configuration reference documents the logging settings and no longer documents a debug setting; the site builds without errors.
 
 
 <!--
@@ -185,7 +190,7 @@ Spektacular will keep a lightweight, always-on record of every command an agent 
 ## Success Metrics
 
 - For a real workflow run, the maintainer can read each step's start, end and duration from the log alone (from the times of the commands that changed step), without consulting the agent's transcript.
-- Logging at the default level adds under 10 ms to a typical command's wall time, measured over 100 runs of `status` with logging on and off.
+- Logging at the default level adds under 10 ms to a typical command's wall time, measured over 100 runs of `spec file list` with logging on and off.
 - At the default level, one complete implement run of a plan with 10 tasks produces a log under 1 MB.
 - No command's output or exit code differs between logging on and off across the full Go test suite and the Harbor workflow suites.
 
@@ -210,3 +215,9 @@ Spektacular will keep a lightweight, always-on record of every command an agent 
 - Recording agent tool calls, model calls or token usage, which the CLI cannot see.
 - Retention by age or by total size; only a count is configurable.
 
+## Amendments
+
+- **2026-10-25: Requirements, Acceptance Criteria** (spek-plan-epic review of epic 000002_workflow-tracing-and-run-stats)
+  Epic end-of-planning review (user, 2026-10-25): status and run statistics commands are never logged, and the per-command environment override (SPEKTACULAR_SESSION_LOG) is removed; Harbor sets its log level in its seeded test projects config. The Technical Approach bullet about keeping or remapping the environment switch is superseded by this amendment.
+- **2026-10-25: Success Metrics** (spek-plan-epic review of epic 000002_workflow-tracing-and-run-stats)
+  Epic end-of-planning review (2026-10-25): status is no longer logged, so the overhead metric is timed on spec file list instead.
