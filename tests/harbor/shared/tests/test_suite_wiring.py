@@ -346,3 +346,55 @@ def test_plan_instruction_uses_the_verified_document_status():
         assert wording in text, wording
     for wording in STALE_PLAN_STATUS_WORDING:
         assert wording not in text, wording
+
+
+# --- Spektacular's logs: the default level, collected with the trial ---------
+
+LEVEL_SETTING = re.compile(r"(?:set_log_level|level:)\s*['\"]?(\w+)")
+ENVIRONMENT_FILES = ("seed/seed.sh", "Dockerfile", "config.yaml")
+
+
+def environment_files(suite):
+    env = HARBOR / suite / "environment"
+    return [env / rel for rel in ENVIRONMENT_FILES if (env / rel).is_file()]
+
+
+def log_levels_set(text: str) -> list[str]:
+    """Every log level a seed script, Dockerfile or seeded config sets, but
+    the `off` a seed switches to while it seeds."""
+    code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    return [m[1] for m in LEVEL_SETTING.finditer(code) if m[1] not in ("off", "level")]
+
+
+@pytest.mark.parametrize("suite", SUITES)
+def test_seeded_configs_use_the_default_level(suite):
+    for path in environment_files(suite):
+        levels = log_levels_set(path.read_text())
+        assert set(levels) <= {"standard"}, f"{path.relative_to(ROOT)} sets log level {levels}, not the default"
+        assert "SPEKTACULAR_SESSION_LOG" not in path.read_text(), path
+
+
+def test_a_seeded_verbose_level_is_caught():
+    assert log_levels_set("set_log_level verbose\n") == ["verbose"]
+    assert log_levels_set("printf 'schema: 5\\nlog:\\n    level: verbose\\n'") == ["verbose"]
+    assert log_levels_set("log:\n    level: verbose\n") == ["verbose"]
+    assert log_levels_set("set_log_level off\nset_log_level standard\n") == ["standard"]
+    assert log_levels_set("# set_log_level rewrites log.level\n") == []
+
+
+def copies_the_binary(suite) -> bool:
+    return "COPY spektacular /usr/local/bin/spektacular" in (HARBOR / suite / "environment" / "Dockerfile").read_text()
+
+
+@pytest.mark.parametrize("suite", SUITES)
+def test_spektacular_suites_collect_their_logs(suite):
+    if not copies_the_binary(suite):
+        pytest.skip(f"{suite} runs no spektacular, so it has no logs")
+    toml = (HARBOR / suite / "task.toml").read_text()
+    assert re.search(r'\[\[artifacts\]\]\s*\nsource = "/app/\.spektacular"', toml), (
+        f"{suite}'s task.toml does not collect /app/.spektacular, so its logs would not reach the trial's artifacts"
+    )
+
+
+def test_every_suite_but_the_probe_runs_spektacular():
+    assert [s for s in SUITES if not copies_the_binary(s)] == ["background-child"]

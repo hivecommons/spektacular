@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-from sessionlog import SessionLog, changelog_writes_by_repo
+from runlog import RunLog
 
 
 # ---------------------------------------------------------------------------
@@ -44,7 +44,7 @@ DOCS_REPO_SPEK_DIR = PROJECT_DIR / "repos" / "docs" / ".spektacular"
 EXTERNAL_REPO_SOURCE = Path("/opt/docs-repo")
 
 TRANSCRIPT = Path("/logs/agent/claude-code.txt")
-DEBUG_DIR = PROJECT_SPEK_DIR / "logs"
+LOG_DIR = PROJECT_SPEK_DIR / "logs"
 
 # Constants pinned from the environment: project name from config.yaml,
 # plan name from state.json's data.name, member names from config.yaml's
@@ -329,7 +329,7 @@ def changelog_writes() -> dict:
     """Successful `changelog file write <plan>` calls by repo, from the CLI's
     session log: what ran, however the command was written (in a loop, with
     flags reordered or continued over lines)."""
-    return changelog_writes_by_repo(SessionLog(DEBUG_DIR, kinds=("implement",)).all_events(), PLAN_NAME)
+    return RunLog(LOG_DIR).changelog_writes_by_repo(PLAN_NAME)
 
 
 def test_project_level_changelog_was_committed_via_cli():

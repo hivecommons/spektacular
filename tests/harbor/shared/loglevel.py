@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Sets log.level in a Spektacular project's config.yaml.
 
-A suite's seeded project records the agent's run at the verbose level. A
-verifier that runs `spektacular` itself switches the project's logging off
-first, so its own calls stay out of the session log it asserts against:
-nothing else keeps them out, since the level comes from the project's
-configuration alone.
+A suite's seeded project records the agent's run at the default level
+(standard); its seed switches logging off while it seeds and back to the
+default at the end. A verifier that runs `spektacular` itself switches the
+project's logging off first, so its own calls stay out of the logs it
+asserts against: nothing else keeps them out, since the level comes from the
+project's configuration alone.
 
 Only the `level:` line under the top-level `log:` block is rewritten; every
 other byte of the file is kept. A config without that line is an error, so a

@@ -5,12 +5,13 @@ require: the steps whose instructions require a child (REQUIRED), those that
 only suggest one (SUGGESTED, never enforced), what an epic child and a spec
 review child must be told, and that the main agent sets no timed wake-up
 while a child of its own is running. The cases here build small runs by hand
-under tmp_path (a Claude stream-json transcript and Spektacular's session
-log, in the shapes the neighbouring self-checks use), read them with
-`read_run` exactly as a verifier does, and assert the named failures with
-hand-written expected values. They also pin the rules on the two epic
-reference runs under data/, and tie the hand-kept oracle to the step
-templates' delegation wording, so the two cannot drift apart unnoticed.
+(a Claude stream-json transcript under tmp_path, and what `spektacular stats`
+answers for Spektacular's logs: lanes, step entries and helper spans), read
+them with `read_run` exactly as a verifier does, and assert the named
+failures with hand-written expected values. They also pin the transcript
+rules on the two epic reference runs under data/, and tie the hand-kept
+oracle and the worktree folder to the step templates and internal/worktree,
+so they cannot drift apart unnoticed.
 
 This file never runs in a harbor container. It lives under shared/tests/ so
 the Makefile, which copies shared/*.py into each image, leaves it out. Run it
@@ -31,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 import delegation  # noqa: E402
-from sessionlog import SessionLog  # noqa: E402
+import runlog  # noqa: E402
 from delegation import (  # noqa: E402
     REQUIRED,
     SUGGESTED,
@@ -46,7 +47,7 @@ from delegation import (  # noqa: E402
     read_run,
     review_context_gaps,
     wakeups_while_children_run,
-    worktree_paths,
+    worktree_folder,
 )
 
 DATA = HERE / "data"
@@ -84,11 +85,11 @@ STEPS = {"spec": SPEC_STEPS, "plan": PLAN_STEPS, "implement": IMPLEMENT_STEPS}
 
 STAGED = ".spektacular/tmp/spec_template.md"
 REVIEW_PROMPT = f"Read {STAGED} and review only what is written in that file."
-WT1 = "/srv/wt/storage/cli"
-WT2 = "/srv/wt/storage/docs"
+WT1 = f"/app/.spektacular/worktrees/{NAME}/cli"
+WT2 = f"/app/.spektacular/worktrees/{NAME}/docs"
 
 
-# --- the session log ------------------------------------------------------------
+# --- Spektacular's logs, as `spektacular stats` answers for them ----------------------
 
 
 def m(minute: int, second: int = 0) -> str:
@@ -100,57 +101,69 @@ def cli_ts(clock: str) -> str:
     return f"2026-10-23T{clock}.000000000Z"
 
 
-def state(kind, name, step):
-    return {"kind": kind, "name": name, "current_step": step}
-
-
-def record(clock, command, before, after, *, exit_code=0, response=None):
-    rec = {
-        "timestamp": cli_ts(clock),
-        "command": command,
-        "duration_ms": 0,
-        "exit_code": exit_code,
-        "state_before": before,
-        "state_after": after,
-    }
-    if response is not None:
-        rec["response"] = response
-    return rec
-
-
-def new(kind, name):
-    return [kind, "new", "--data", json.dumps({"name": name})]
-
-
-def goto(kind, name, step):
-    return [kind, "goto", "--data", json.dumps({"step": step, "name": name})]
-
-
 def walk(kind, name, steps, first=0):
-    """A lane that enters each step a minute after the last, from 10:<first>:00."""
-    records = [record(m(first), new(kind, name), None, state(kind, name, steps[0]))]
-    for i, (before, after) in enumerate(zip(steps, steps[1:]), start=first + 1):
-        records.append(record(m(i), goto(kind, name, after), state(kind, name, before), state(kind, name, after)))
-    return records
+    """A lane entering each step a minute after the last, from 10:<first>:00:
+    its step entries as (step, start, end, end_reason). The last step is the
+    one the lane ended on."""
+    entries = []
+    for i, step in enumerate(steps, start=first):
+        last = i == first + len(steps) - 1
+        end = m(i) if step == "finished" else m(i if last else i + 1)
+        entries.append((step, m(i), end, "finished" if step == "finished" else ("open" if last else "moved")))
+    return entries
 
 
-def write_jsonl(path: Path, objs) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("".join(json.dumps(o) + "\n" for o in objs))
+def trace_of(kind, name) -> str:
+    return f"{abs(hash((kind, name))) % 16**8:08x}" + "0" * 24
 
 
-def write_lane(debug: Path, kind, name, records, started="100000") -> None:
-    write_jsonl(debug / f"20261023T{started}.903970323Z_claude_{kind}_{name}.jsonl", records)
+class Canned:
+    """Answers `spektacular stats` for hand-built lanes and spans."""
+
+    def __init__(self, lanes, spans):
+        self.answers = {"list": {"runs": []}, "commands": {"commands": []}, "spans": {"spans": list(spans)}}
+        for kind, name, entries in lanes:
+            run_id = trace_of(kind, name)
+            self.answers["list"]["runs"].append({
+                "run_id": run_id, "kind": kind, "name": name,
+                "started_at": cli_ts(entries[0][1]), "ended_at": cli_ts(entries[-1][2]), "status": "finished",
+            })
+            self.answers["commands"]["commands"].append({
+                "run_id": run_id, "kind": kind, "name": name, "span_id": f"n{run_id}", "command": f"{kind} new",
+                "args": [kind, "new", "--data", json.dumps({"name": name})], "step": None, "step_to": entries[0][0],
+                "started_at": cli_ts(entries[0][1]), "ended_at": cli_ts(entries[0][1]), "exit_code": 0, "message": None,
+            })
+            self.answers[f"run {run_id}"] = {"step_entries": [
+                {"step": step, "started_at": cli_ts(start), "ended_at": cli_ts(end), "end_reason": reason, "complete": reason != "open"}
+                for step, start, end, reason in entries
+            ]}
+
+    def __call__(self, argv, **kwargs):
+        sub = argv[2]
+        key = f"run {argv[argv.index('--run') + 1]}" if sub == "run" else sub
+        return type("Done", (), {"stdout": json.dumps({"error": False, **self.answers[key]})})()
 
 
-def write_shared(debug: Path, records) -> None:
-    write_jsonl(debug / "20261023T095900.903970323Z_claude_no-active-workflow.jsonl", records)
+def helper(kind, name, step, clock, *, span_id=None, parent=None, outside=False, end=None, complete=True):
+    """A `sub-agent` span row, started at `clock` in a lane's step, or the
+    orchestrator's outside any run."""
+    start = cli_ts(clock)
+    return {
+        "span_id": span_id or f"h{clock}{step}", "parent_span_id": parent, "name": f"helper {step}", "type": "sub-agent",
+        "trace_id": "t", "run_id": None if outside else trace_of(kind, name), "kind": None if outside else kind,
+        "workflow": None if outside else name, "step": None if outside else step, "task_id": None,
+        "started_at": start, "ended_at": cli_ts(end) if end else start, "end_reason": "stopped" if complete else "open",
+        "status": "ok" if complete else None, "complete": complete,
+    }
 
 
-def worktree_record(clock, spec, paths, *, data_spec=None, exit_code=0, raw=None):
-    response = raw if raw is not None else json.dumps({"spec": spec, "repos": [{"name": p.rsplit("/", 1)[-1], "path": p} for p in paths]})
-    data = {"spec": data_spec or spec}
-    return record(clock, ["epic", "worktree", "--data", json.dumps(data)], None, None, exit_code=exit_code, response=response)
+def orchestrator(clock, end=None, *, span_id=None):
+    """An epic orchestrator's helper span outside any run; never stopped when `end` is None."""
+    return helper(None, None, None, clock, span_id=span_id, outside=True, end=end, complete=end is not None)
+
+
+def reader(tmp_path, lanes, spans=()) -> runlog.RunLog:
+    return runlog.RunLog(tmp_path, binary="spektacular", runner=Canned(lanes, spans))
 
 
 # --- the Claude transcript --------------------------------------------------------
@@ -225,29 +238,37 @@ def transcript(*parts):
     return objs + [{"type": "result", "subtype": "success", "num_turns": 1}]
 
 
-def run_of(tmp_path, lanes, objs, shared=()):
-    """Writes the session log (lanes: (kind, name, records)) and the
-    transcript under tmp_path, and reads them back as a verifier does."""
-    debug = tmp_path / "debug"
-    debug.mkdir()
-    for n, (kind, name, records) in enumerate(lanes):
-        write_lane(debug, kind, name, records, started=f"1000{n:02d}")
-    if shared:
-        write_shared(debug, list(shared))
+def run_of(tmp_path, lanes, objs, spans=()):
+    """Writes the transcript under tmp_path and reads it back with the
+    canned logs (lanes: (kind, name, entries)), as a verifier does."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / "claude-code.txt"
     write_jsonl(path, objs)
-    return read_run(path, debug)
+    real = delegation.runlog.RunLog
+    delegation.runlog.RunLog = lambda log_dir: real(log_dir, binary="spektacular", runner=Canned(lanes, spans))
+    try:
+        return read_run(path, tmp_path)
+    finally:
+        delegation.runlog.RunLog = real
 
 
-def step_children(kind, steps, skip=(), parent=None):
-    """A child launched half a minute into each REQUIRED step of a lane
-    walked from 10:00, except those in `skip`."""
-    out = []
-    for i, step in enumerate(steps):
-        if (kind, step) in REQUIRED and step not in skip:
-            prompt = REVIEW_PROMPT if kind == "spec" else f"Do the {step} step."
-            out.append(child(f"toolu_{step}", m(i, 30), prompt, ended=m(i, 50), parent=parent))
-    return out
+def write_jsonl(path: Path, objs) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(o) + "\n" for o in objs))
+
+
+def required(run):
+    return missing_required(run.log, run.lanes, run.spans)
+
+
+def step_helpers(kind, steps, skip=(), first=0, name=NAME):
+    """A helper span started half a minute into each REQUIRED step of a lane
+    walked from 10:<first>:00, except those in `skip`."""
+    return [
+        helper(kind, name, step, m(i, 30), end=m(i, 50))
+        for i, step in enumerate(steps, start=first)
+        if (kind, step) in REQUIRED and step not in skip
+    ]
 
 
 def missing(kind, step, attempt=None):
@@ -255,59 +276,59 @@ def missing(kind, step, attempt=None):
     return Failure("missing_child", f"{kind}:{NAME}:{step}{suffix}", f"the {step} step completed without a child agent started in it")
 
 
-def lane_steps(run):
-    return {k: [w.step for w in ws] for k, ws in run.windows.items()}
-
-
-# --- required steps (criterion 1) ------------------------------------------------
+# --- required steps (criterion 1), judged from helper spans -------------------------
 
 
 @pytest.mark.parametrize("entry", sorted(REQUIRED), ids=lambda e: f"{e[0]}-{e[1]}")
-def test_required_step_without_a_child_fails_naming_that_step(tmp_path, entry):
+def test_required_step_without_a_helper_span_fails_naming_that_step(tmp_path, entry):
     kind, step = entry
-    run = run_of(tmp_path, [(kind, NAME, walk(kind, NAME, STEPS[kind]))], transcript(*step_children(kind, STEPS[kind], skip={step})))
-    assert missing_required(run.placed, run.windows) == [missing(kind, step)]
+    run = run_of(tmp_path, [(kind, NAME, walk(kind, NAME, STEPS[kind]))], transcript(), step_helpers(kind, STEPS[kind], skip={step}))
+    assert required(run) == [missing(kind, step)]
 
 
 @pytest.mark.parametrize("entry", sorted(REQUIRED), ids=lambda e: f"{e[0]}-{e[1]}")
-def test_required_step_with_a_child_launched_in_it_passes(tmp_path, entry):
+def test_required_step_with_a_helper_span_started_in_it_passes(tmp_path, entry):
     kind, step = entry
-    run = run_of(tmp_path, [(kind, NAME, walk(kind, NAME, STEPS[kind]))], transcript(*step_children(kind, STEPS[kind])))
-    assert [p.step for p in run.placed if p.child.id == f"toolu_{step}"] == [step]
-    assert missing_required(run.placed, run.windows) == []
+    run = run_of(tmp_path, [(kind, NAME, walk(kind, NAME, STEPS[kind]))], transcript(), step_helpers(kind, STEPS[kind]))
+    assert required(run) == []
 
 
-def test_a_child_launched_in_another_step_does_not_satisfy_a_required_one(tmp_path):
+def test_a_helper_started_in_another_step_does_not_satisfy_a_required_one(tmp_path):
     # the goal check's reviewer is launched in the verify step before it
-    objs = transcript(child("toolu_early", m(4, 30), "Check the goal."), *step_children("implement", IMPLEMENT_STEPS, skip={"check_goal"}))
-    run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, IMPLEMENT_STEPS))], objs)
-    assert missing_required(run.placed, run.windows) == [missing("implement", "check_goal")]
+    spans = [helper("implement", NAME, "verify", m(4, 30)), *step_helpers("implement", IMPLEMENT_STEPS, skip={"check_goal"})]
+    run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, IMPLEMENT_STEPS))], transcript(), spans)
+    assert required(run) == [missing("implement", "check_goal")]
 
 
-def test_a_nested_child_satisfies_a_required_step(tmp_path):
-    # An orchestrator's child works the lane; the step children are its own.
-    objs = transcript(
-        child("toolu_W", "09:59:30", f"Implement {NAME}."),
-        *step_children("implement", IMPLEMENT_STEPS, parent="toolu_W"),
-    )
-    run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, IMPLEMENT_STEPS))], objs)
-    assert {p.child.id: p.child.parent for p in run.placed if p.child.parent} == {
-        "toolu_check_goal": "toolu_W",
-    }
-    assert missing_required(run.placed, run.windows) == []
+def test_a_helper_of_another_lane_does_not_satisfy_a_required_step(tmp_path):
+    lanes = [("implement", NAME, walk("implement", NAME, IMPLEMENT_STEPS)), ("implement", NAME_B, walk("implement", NAME_B, IMPLEMENT_STEPS))]
+    run = run_of(tmp_path, lanes, transcript(), step_helpers("implement", IMPLEMENT_STEPS, name=NAME_B))
+    assert required(run) == [missing("implement", "check_goal")]
+
+
+def test_an_orchestrators_helper_does_not_satisfy_a_required_step(tmp_path):
+    run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, IMPLEMENT_STEPS))], transcript(), [orchestrator("09:59:00", m(9))])
+    assert required(run) == [missing("implement", "check_goal")]
+
+
+def test_a_nested_helper_satisfies_a_required_step(tmp_path):
+    # The spec's own child works the lane; the reviewer span nests under its span.
+    spans = [helper("implement", NAME, "check_goal", m(5, 30), parent="worker", end=m(5, 50))]
+    run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, IMPLEMENT_STEPS))], transcript(), spans)
+    assert required(run) == []
 
 
 def test_the_step_a_lane_ended_on_is_not_judged(tmp_path):
     steps = ["read_plan", "analyze", "implement", "test", "verify", "check_goal"]  # cut off in check_goal
     run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, steps))], transcript())
-    assert missing_required(run.placed, run.windows) == []
+    assert required(run) == []
 
 
 def test_the_same_step_once_moved_on_from_is_judged(tmp_path):
     steps = ["read_plan", "analyze", "implement", "test", "verify", "check_goal", "update_plan"]
-    objs = transcript(child("toolu_late", m(6, 30), "Do it.", ended=m(6, 50)))
-    run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, steps))], objs)
-    assert missing_required(run.placed, run.windows) == [missing("implement", "check_goal")]
+    spans = [helper("implement", NAME, "update_plan", m(6, 30))]
+    run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, steps))], transcript(), spans)
+    assert required(run) == [missing("implement", "check_goal")]
 
 
 RETRIED = ["read_plan", "implement", "test", "verify", "check_goal", "implement", "test", "verify", "check_goal", "update_plan", "finished"]
@@ -321,41 +342,52 @@ RETRIED = ["read_plan", "implement", "test", "verify", "check_goal", "implement"
     ],
 )
 def test_a_retried_step_is_judged_per_attempt(tmp_path, childless, expected):
-    objs = transcript(
-        *[child(f"toolu_{i}", m(i, 30), "Do it.", ended=m(i, 50)) for i, s in enumerate(RETRIED) if ("implement", s) in REQUIRED and i != childless]
-    )
-    run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, RETRIED))], objs)
-    assert lane_steps(run)[("implement", NAME)] == RETRIED
-    assert missing_required(run.placed, run.windows) == [expected]
+    spans = [helper("implement", NAME, s, m(i, 30)) for i, s in enumerate(RETRIED) if ("implement", s) in REQUIRED and i != childless]
+    run = run_of(tmp_path, [("implement", NAME, walk("implement", NAME, RETRIED))], transcript(), spans)
+    assert required(run) == [expected]
 
 
 def resumed_lane():
-    """An implement lane whose check_goal step a second child resumed at
-    10:04: two windows at check_goal, 10:02-10:03 and 10:04-10:05."""
-    kind = "implement"
+    """An implement lane whose check_goal step a second child resumed: two
+    entries at check_goal, 10:02-10:03 (interrupted) and 10:04-10:05."""
     return [
-        record(m(0), new(kind, NAME), None, state(kind, NAME, "read_plan")),
-        record(m(1), goto(kind, NAME, "verify"), state(kind, NAME, "read_plan"), state(kind, NAME, "verify")),
-        record(m(2), goto(kind, NAME, "check_goal"), state(kind, NAME, "verify"), state(kind, NAME, "check_goal")),
-        record(m(3), [kind, "file", "read", NAME], state(kind, NAME, "check_goal"), state(kind, NAME, "check_goal")),
-        record(m(4), new(kind, NAME), state(kind, NAME, "check_goal"), None, exit_code=1, response='{"error":"workflow_in_progress"}'),
-        record(m(5), goto(kind, NAME, "update_plan"), state(kind, NAME, "check_goal"), state(kind, NAME, "update_plan")),
-        record(m(6), goto(kind, NAME, "update_changelog"), state(kind, NAME, "update_plan"), state(kind, NAME, "update_changelog")),
-        record(m(7), goto(kind, NAME, "finished"), state(kind, NAME, "update_changelog"), state(kind, NAME, "finished")),
+        ("read_plan", m(0), m(1), "moved"),
+        ("verify", m(1), m(2), "moved"),
+        ("check_goal", m(2), m(3), "interrupted"),
+        ("check_goal", m(4), m(5), "moved"),
+        ("update_plan", m(5), m(6), "moved"),
+        ("update_changelog", m(6), m(7), "moved"),
+        ("finished", m(7), m(7), "finished"),
     ]
 
 
-@pytest.mark.parametrize("launched", [m(4, 30), m(2, 30)], ids=["resumed-window", "first-window"])
-def test_a_child_in_either_window_of_a_resumed_step_satisfies_it(tmp_path, launched):
-    objs = transcript(child("toolu_goal", launched, "Check the goal.", ended=m(4, 50)))
-    run = run_of(tmp_path, [("implement", NAME, resumed_lane())], objs)
-    assert lane_steps(run)[("implement", NAME)] == ["read_plan", "verify", "check_goal", "check_goal", "update_plan", "update_changelog", "finished"]
-    assert missing_required(run.placed, run.windows) == []
+@pytest.mark.parametrize("launched", [m(4, 30), m(2, 30)], ids=["resumed-entry", "first-entry"])
+def test_a_helper_in_either_entry_of_a_resumed_step_satisfies_it(tmp_path, launched):
+    spans = [helper("implement", NAME, "check_goal", launched)]
+    run = run_of(tmp_path, [("implement", NAME, resumed_lane())], transcript(), spans)
+    assert required(run) == []
 
 
-def test_a_resumed_step_without_a_child_fails_once(tmp_path):
+def test_a_resumed_step_without_a_helper_fails_once(tmp_path):
     run = run_of(tmp_path, [("implement", NAME, resumed_lane())], transcript())
-    assert missing_required(run.placed, run.windows) == [missing("implement", "check_goal")]
+    assert required(run) == [missing("implement", "check_goal")]
+
+
+def test_attempts_group_consecutive_entries_of_one_step():
+    entries = [("r", {"step": s}) for s in ["a", "b", "b", "c", "b"]]
+    assert [(step, len(group)) for step, group in delegation.attempts(entries)] == [("a", 1), ("b", 2), ("c", 1), ("b", 1)]
+
+
+def test_unreadable_logs_fail_the_span_rules_naming_why(tmp_path, monkeypatch):
+    monkeypatch.delenv("SPEKTACULAR_BIN", raising=False)
+    monkeypatch.setattr(runlog.shutil, "which", lambda name: None)
+    path = tmp_path / "claude-code.txt"
+    write_jsonl(path, transcript())
+    run = read_run(path, tmp_path / "missing")
+    assert run.unavailable == f"no Spektacular logs at {tmp_path / 'missing'}" or "SPEKTACULAR_BIN" in run.unavailable
+    for failures in (required(run), missing_spec_children(run.log, run.lanes, run.spans)):
+        assert [f.rule for f in failures] == ["logs_unavailable"]
+        assert failures[0].detail == run.unavailable
 
 
 # --- suggested steps (criterion 2) -----------------------------------------------
@@ -372,29 +404,20 @@ def orchestrated_prompt(name, *extra):
 
 def test_a_run_whose_suggested_steps_used_no_child_passes_every_rule(tmp_path):
     # An epic run: a plan lane and an implement lane, each worked by its own
-    # child. No child in discovery, analyze or update_changelog.
+    # child. No helper in discovery, analyze or update_changelog.
     objs = transcript(
         child("toolu_P", "09:59:00", orchestrated_prompt(NAME_B), ended=m(5)),
         child("toolu_I", "09:59:10", orchestrated_prompt(NAME, f"Your code is at {WT1} and {WT2}."), ended=m(9)),
-        *step_children("implement", IMPLEMENT_STEPS, parent="toolu_I"),
     )
-    shared = [worktree_record("09:58:00", NAME, [WT1, WT2])]
-    run = run_of(
-        tmp_path,
-        [("plan", NAME_B, walk("plan", NAME_B, PLAN_STEPS)), ("implement", NAME, walk("implement", NAME, IMPLEMENT_STEPS))],
-        objs,
-        shared,
-    )
-    steps = lane_steps(run)
-    # every suggested step was completed, so it was judged
-    assert steps[("plan", NAME_B)][:-1].count("discovery") == 1
-    assert {"analyze", "update_changelog"} <= set(steps[("implement", NAME)][:-1])
-    assert [(p.child.id, p.step) for p in run.placed if p.step in {"discovery", "analyze", "update_changelog"}] == []
-    assert missing_required(run.placed, run.windows) == []
-    assert missing_spec_children(run.placed, list(run.session.lanes)) == []
-    assert epic_context_gaps(run.placed, run.session.lanes, worktrees=worktree_paths(run.session)) == []
-    assert review_context_gaps(run.placed) == []
-    assert wakeups_while_children_run(run.wakeups, run.placed, run.end) == []
+    spans = [orchestrator("09:58:50", m(5)), orchestrator("09:59:05", m(9)), *step_helpers("implement", IMPLEMENT_STEPS)]
+    lanes = [("plan", NAME_B, walk("plan", NAME_B, PLAN_STEPS)), ("implement", NAME, walk("implement", NAME, IMPLEMENT_STEPS))]
+    run = run_of(tmp_path, lanes, objs, spans)
+    assert sorted(s.step for s in run.spans if s.run_id) == ["check_goal"]
+    assert required(run) == []
+    assert missing_spec_children(run.log, run.lanes, run.spans) == []
+    assert epic_context_gaps(run.children, run.lanes) == []
+    assert review_context_gaps(run.children, run.spans) == []
+    assert wakeups_while_children_run(run.wakeups, run.children, run.end) == []
 
 
 # --- epic children's context (criterion 3) ---------------------------------------
@@ -403,7 +426,7 @@ PARTS = {
     "spec": f"Plan spec {NAME}.",
     "root": "The project is at /app.",
     "orchestrated": 'Start it with --data \'{"orchestrated": true}\'.',
-    "worktrees": f"Your code is at {WT1} and {WT2}.",
+    "worktrees": f"Your code is at {WT1} and {WT2}.",  # both under the worktree folder
     "resume": "Resume the spec's earlier run.",
 }
 
@@ -413,16 +436,14 @@ def prompt(omit=(), **replace):
     return " ".join(v for k, v in parts.items() if k not in omit)
 
 
-def epic_lane(tmp_path, kind, prompts, worktrees=(WT1, WT2)):
-    """One epic lane worked by a child per prompt, the orchestrator having
-    asked for the spec's worktrees first."""
+def epic_lane(tmp_path, kind, prompts):
+    """One epic lane worked by a child per prompt."""
     objs = transcript(*[child(f"toolu_C{n}", f"09:5{n}:00", p, ended=f"09:5{n}:30") for n, p in enumerate(prompts, start=1)])
-    shared = [worktree_record("09:50:00", NAME, list(worktrees))] if worktrees else []
-    return run_of(tmp_path, [(kind, NAME, walk(kind, NAME, STEPS[kind]))], objs, shared)
+    return run_of(tmp_path, [(kind, NAME, walk(kind, NAME, STEPS[kind]))], objs)
 
 
 def gaps(run):
-    return epic_context_gaps(run.placed, run.session.lanes, worktrees=worktree_paths(run.session))
+    return epic_context_gaps(run.children, run.lanes)
 
 
 def gap(child_id, what):
@@ -445,8 +466,14 @@ def test_an_epic_child_given_everything_passes(tmp_path, kind):
 @pytest.mark.parametrize("kind", ["plan", "implement"])
 @pytest.mark.parametrize("item", ["spec", "root", "orchestrated"])
 def test_an_epic_child_missing_an_item_fails_naming_the_child_and_the_item(tmp_path, kind, item):
-    run = epic_lane(tmp_path, kind, [prompt(omit={item})])
-    assert gaps(run) == [gap("toolu_C1", ITEM_DETAIL[item])]
+    # The worktree folder names both the spec and the project root, so a
+    # child missing either is given no worktree folder either.
+    omit = {item} | ({"worktrees"} if item in ("spec", "root") else set())
+    run = epic_lane(tmp_path, kind, [prompt(omit=omit)])
+    expected = [gap("toolu_C1", ITEM_DETAIL[item])]
+    if kind == "implement" and "worktrees" in omit:
+        expected.append(gap("toolu_C1", f"its worktree folder /app/.spektacular/worktrees/{NAME}"))
+    assert gaps(run) == expected
 
 
 @pytest.mark.parametrize(
@@ -470,25 +497,46 @@ def test_other_mentions_of_orchestrated_are_not(tmp_path, words):
     assert gaps(run) == [gap("toolu_C1", ITEM_DETAIL["orchestrated"])]
 
 
-def test_an_implementing_child_missing_a_worktree_path_fails_naming_it(tmp_path):
+def test_an_implementing_child_naming_one_worktree_under_the_folder_passes(tmp_path):
     run = epic_lane(tmp_path, "implement", [prompt(worktrees=f"Your code is at {WT2}.")])
-    assert gaps(run) == [gap("toolu_C1", f"its code location {WT1}")]
+    assert gaps(run) == []
 
 
-def test_an_implementing_child_missing_every_worktree_path_fails_once_per_path(tmp_path):
+def test_an_implementing_child_missing_its_worktree_folder_fails_naming_it(tmp_path):
     run = epic_lane(tmp_path, "implement", [prompt(omit={"worktrees"})])
-    assert gaps(run) == [gap("toolu_C1", f"its code location {WT1}"), gap("toolu_C1", f"its code location {WT2}")]
+    assert gaps(run) == [gap("toolu_C1", f"its worktree folder /app/.spektacular/worktrees/{NAME}")]
 
 
-def test_a_planning_child_is_not_given_worktree_paths(tmp_path):
+def test_an_implementing_child_given_another_specs_folder_fails(tmp_path):
+    run = epic_lane(tmp_path, "implement", [prompt(worktrees=f"Your code is at /app/.spektacular/worktrees/{NAME_B}/cli.")])
+    assert gaps(run) == [gap("toolu_C1", f"its worktree folder /app/.spektacular/worktrees/{NAME}")]
+
+
+def test_a_planning_child_is_not_given_a_worktree_folder(tmp_path):
     run = epic_lane(tmp_path, "plan", [prompt(omit={"worktrees"})])
     assert gaps(run) == []
 
 
-def test_worktree_paths_are_not_checked_without_a_worktree_response(tmp_path):
-    run = epic_lane(tmp_path, "implement", [prompt(omit={"worktrees"})], worktrees=())
-    assert worktree_paths(run.session) == {}
-    assert gaps(run) == []
+def test_the_worktree_folder_is_the_specs_under_the_project_root():
+    assert worktree_folder(NAME) == f"/app/.spektacular/worktrees/{NAME}"
+    assert worktree_folder(NAME, "/srv/p") == f"/srv/p/.spektacular/worktrees/{NAME}"
+
+
+def test_worktree_dir_matches_go():
+    go = (Path(__file__).resolve().parents[4] / "internal" / "worktree" / "worktree.go").read_text()
+    import re
+
+    m_ = re.search(r'^const Dir = "([^"]+)"', go, re.M)
+    assert m_, "internal/worktree/worktree.go no longer declares `const Dir`"
+    assert delegation.WORKTREE_DIR == ".spektacular/" + m_[1]
+
+
+def test_a_drifted_worktree_dir_fails_the_tie(tmp_path, monkeypatch):
+    monkeypatch.setattr(delegation, "WORKTREE_DIR", ".spektacular/trees")
+    import pytest as _pytest
+
+    with _pytest.raises(AssertionError):
+        test_worktree_dir_matches_go()
 
 
 @pytest.mark.parametrize("kind", ["plan", "implement"])
@@ -509,99 +557,133 @@ def test_every_missing_item_is_named(tmp_path):
         gap("toolu_C2", ITEM_DETAIL["spec"]),
         gap("toolu_C2", ITEM_DETAIL["root"]),
         gap("toolu_C2", ITEM_DETAIL["orchestrated"]),
-        gap("toolu_C2", f"its code location {WT1}"),
-        gap("toolu_C2", f"its code location {WT2}"),
+        gap("toolu_C2", f"its worktree folder /app/.spektacular/worktrees/{NAME}"),
         gap("toolu_C2", "the instruction to resume the spec's earlier run"),
     ]
-
-
-def test_worktree_paths_read_only_successful_epic_worktree_responses(tmp_path):
-    debug = tmp_path / "debug"
-    write_shared(
-        debug,
-        [
-            worktree_record("09:50:00", NAME, [WT1, WT2]),
-            worktree_record("09:50:10", NAME_B, ["/srv/wt/failed"], exit_code=1),
-            # the response names no spec: the command's data does
-            worktree_record("09:50:20", "", ["/srv/wt/commands"], data_spec="x-spec", raw=json.dumps({"repos": [{"path": "/srv/wt/x"}]})),
-            worktree_record("09:50:30", "y-spec", [], raw="not json"),
-        ],
-    )
-    assert worktree_paths(SessionLog(debug)) == {NAME: [WT1, WT2], "x-spec": ["/srv/wt/x"]}
 
 
 # --- spec review children (criterion 3) ------------------------------------------
 
 
-def review_run(tmp_path, review_prompt, step="verification"):
+def review_run(tmp_path, review_prompt, step="verification", span_step=None, kind="spec"):
+    """A spec lane whose `step` launched a child at half a minute in, its
+    helper span started ten seconds before the launch."""
     i = SPEC_STEPS.index(step)
     objs = transcript(child("toolu_R", m(i, 30), review_prompt, ended=m(i, 50)))
-    return run_of(tmp_path, [("spec", NAME, walk("spec", NAME, SPEC_STEPS))], objs)
+    spans = [helper(kind, NAME, span_step or step, m(i, 20))]
+    return run_of(tmp_path, [(kind, NAME, walk(kind, NAME, SPEC_STEPS))], objs, spans)
 
 
 @pytest.mark.parametrize("words", [REVIEW_PROMPT, f"Read {STAGED}. Judge it Exactly As Written, nothing more."])
 def test_a_review_child_given_the_staged_spec_and_told_to_review_only_it_passes(tmp_path, words):
     run = review_run(tmp_path, words)
-    assert [p.step for p in run.placed] == ["verification"]
-    assert review_context_gaps(run.placed) == []
+    assert delegation.match_spans(run.children, run.spans)["toolu_R"].step == "verification"
+    assert review_context_gaps(run.children, run.spans) == []
 
 
 def test_a_review_child_not_given_the_staged_spec_fails_naming_it(tmp_path):
     run = review_run(tmp_path, "Read the spec and review only what is written in that file.")
-    assert review_context_gaps(run.placed) == [
+    assert review_context_gaps(run.children, run.spans) == [
         Failure("context_gap", f"child toolu_R ({NAME})", f"its prompt does not give the staged spec to read ({STAGED})")
     ]
 
 
 def test_a_review_child_not_told_to_review_only_what_is_written_fails_naming_it(tmp_path):
     run = review_run(tmp_path, f"Read {STAGED} and review it.")
-    assert review_context_gaps(run.placed) == [
+    assert review_context_gaps(run.children, run.spans) == [
         Failure("context_gap", f"child toolu_R ({NAME})", "its prompt does not give the instruction to review only what is written")
     ]
 
 
 def test_a_child_outside_the_spec_verification_step_is_not_a_reviewer(tmp_path):
     run = review_run(tmp_path, "Look around.", step="requirements")
-    assert review_context_gaps(run.placed) == []
+    assert review_context_gaps(run.children, run.spans) == []
+
+
+def test_a_child_with_no_span_is_not_joined_to_a_step(tmp_path):
+    i = SPEC_STEPS.index("verification")
+    objs = transcript(child("toolu_R", m(i, 30), "Look around.", ended=m(i, 50)))
+    # the only span started three minutes before the launch: too early
+    run = run_of(tmp_path, [("spec", NAME, walk("spec", NAME, SPEC_STEPS))], objs, [helper("spec", NAME, "verification", m(i - 3, 30))])
+    assert delegation.match_spans(run.children, run.spans) == {}
+    assert review_context_gaps(run.children, run.spans) == []
 
 
 # --- one child per epic spec ------------------------------------------------------
 
 
-def two_plan_lanes(tmp_path, *children_):
-    lanes = [("plan", NAME, walk("plan", NAME, PLAN_STEPS)), ("plan", NAME_B, walk("plan", NAME_B, PLAN_STEPS))]
-    return run_of(tmp_path, lanes, transcript(*children_))
+def two_plan_lanes(tmp_path, *spans):
+    """Two plan lanes, the first started at 10:00 and the second at 10:10."""
+    lanes = [("plan", NAME, walk("plan", NAME, PLAN_STEPS)), ("plan", NAME_B, walk("plan", NAME_B, PLAN_STEPS, first=10))]
+    return run_of(tmp_path, lanes, transcript(), spans)
 
 
-def test_each_epic_spec_worked_by_its_own_child_passes(tmp_path):
-    run = two_plan_lanes(tmp_path, child("toolu_A", "09:59:00", orchestrated_prompt(NAME)), child("toolu_B", "09:59:10", orchestrated_prompt(NAME_B)))
-    assert missing_spec_children(run.placed, list(run.session.lanes)) == []
+def spec_children_of(run):
+    return missing_spec_children(run.log, run.lanes, run.spans)
+
+
+def test_each_epic_spec_started_under_an_orchestrator_span_passes(tmp_path):
+    run = two_plan_lanes(tmp_path, orchestrator("09:59:00", m(5)), orchestrator("10:09:30", m(15)))
+    assert spec_children_of(run) == []
 
 
 def missing_b():
     return [Failure("missing_spec_child", f"plan:{NAME_B}", f"no child of the orchestrator was started for spec {NAME_B}")]
 
 
-def test_an_epic_spec_no_child_worked_fails_naming_it(tmp_path):
-    run = two_plan_lanes(tmp_path, child("toolu_A", "09:59:00", orchestrated_prompt(NAME)))
-    assert missing_spec_children(run.placed, list(run.session.lanes)) == missing_b()
+def test_an_epic_spec_started_with_no_orchestrator_span_open_fails_naming_it(tmp_path):
+    run = two_plan_lanes(tmp_path, orchestrator("09:59:00", m(5)))
+    assert spec_children_of(run) == missing_b()
 
 
-def test_a_nested_child_naming_a_spec_does_not_work_it_for_the_orchestrator(tmp_path):
-    run = two_plan_lanes(
-        tmp_path,
-        child("toolu_A", "09:59:00", orchestrated_prompt(NAME)),
-        child("toolu_N", m(1, 30), f"Look at {NAME_B} too.", parent="toolu_A"),
-    )
-    assert [(p.child.id, p.spec) for p in run.placed] == [("toolu_A", NAME), ("toolu_N", NAME_B)]
-    assert missing_spec_children(run.placed, list(run.session.lanes)) == missing_b()
+def test_a_span_never_stopped_counts_as_open_from_its_start(tmp_path):
+    run = two_plan_lanes(tmp_path, orchestrator("09:59:00"), orchestrator("10:09:00"))
+    assert spec_children_of(run) == []
 
 
-def test_a_spec_lane_needs_no_child_of_its_own():
-    assert missing_spec_children([], [("spec", NAME)]) == []
-    assert missing_spec_children([], [("implement", NAME)]) == [
+def test_two_lanes_need_a_span_each(tmp_path):
+    # one span, never stopped, open at both starts: the first lane takes it
+    run = two_plan_lanes(tmp_path, orchestrator("09:59:00"))
+    assert spec_children_of(run) == missing_b()
+
+
+def test_a_span_started_after_the_lane_does_not_count(tmp_path):
+    run = two_plan_lanes(tmp_path, orchestrator("09:59:00", m(5)), orchestrator("10:10:30", m(15)))
+    assert spec_children_of(run) == missing_b()
+
+
+def test_a_helper_inside_a_run_does_not_work_a_spec_for_the_orchestrator(tmp_path):
+    run = two_plan_lanes(tmp_path, orchestrator("09:59:00", m(5)), helper("plan", NAME, "verification", "10:09:30", end=m(12)))
+    assert spec_children_of(run) == missing_b()
+
+
+def test_a_spec_lane_needs_no_child_of_its_own(tmp_path):
+    run = run_of(tmp_path / "spec", [("spec", NAME, walk("spec", NAME, SPEC_STEPS))], transcript())
+    assert spec_children_of(run) == []
+    run = run_of(tmp_path / "implement", [("implement", NAME, walk("implement", NAME, IMPLEMENT_STEPS))], transcript())
+    assert spec_children_of(run) == [
         Failure("missing_spec_child", f"implement:{NAME}", f"no child of the orchestrator was started for spec {NAME}")
     ]
+
+
+def test_epic_children_are_found_by_the_spec_their_prompt_names():
+    a = delegation.Child("a", None, None, None, None, None, None, None, None, None, None, f"plan {NAME} then {NAME_B}")
+    b = delegation.Child("b", None, None, None, None, None, None, None, None, None, None, f"plan {NAME_B}")
+    n = delegation.Child("n", "a", None, None, None, None, None, None, None, None, None, f"look at {NAME_B}")
+    names = [NAME, NAME_B]
+    assert [c.id for c in delegation.spec_children([a, b, n], ("plan", NAME), names)] == ["a"]
+    assert [c.id for c in delegation.spec_children([a, b, n], ("plan", NAME_B), names)] == ["b"]
+    # a run that worked one spec alone: every top-level child is its
+    assert [c.id for c in delegation.spec_children([a, b, n], ("plan", NAME), [NAME])] == ["a", "b"]
+
+
+def test_lane_for_takes_the_spec_the_prompt_names_first():
+    assert delegation.lane_for(f"plan {NAME_B}, after {NAME}", [NAME, NAME_B]) == NAME_B
+    assert delegation.lane_for("look around", [NAME, NAME_B]) is None
+
+
+def test_lane_for_takes_the_longer_name_where_one_contains_another():
+    assert delegation.lane_for(f"plan {NAME}-api", [NAME, f"{NAME}-api"]) == f"{NAME}-api"
 
 
 # --- wake-ups while children run (criterion 4) ------------------------------------
@@ -624,7 +706,7 @@ def wakeup_run(tmp_path, ended=m(5)):
 
 def test_wakeups_set_while_a_child_runs_fail_naming_each(tmp_path):
     run = wakeup_run(tmp_path)
-    assert wakeups_while_children_run(run.wakeups, run.placed, run.end) == [
+    assert wakeups_while_children_run(run.wakeups, run.children, run.end) == [
         Failure("wakeup_while_children_run", "ScheduleWakeup delaySeconds=60", "set at 2026-10-23T10:00:10+00:00 while a child was running"),
         Failure("wakeup_while_children_run", "Bash sleep 60", "set at 2026-10-23T10:02:00+00:00 while a child was running"),
     ]
@@ -634,14 +716,14 @@ def test_a_child_without_an_end_runs_until_the_run_ends(tmp_path):
     run = wakeup_run(tmp_path, ended=None)
     assert run.end == datetime.fromisoformat("2026-10-23T10:06:00+00:00")
     subjects = ["ScheduleWakeup delaySeconds=60", "Bash sleep 60", "CronCreate */5 * * * *"]
-    assert [f.subject for f in wakeups_while_children_run(run.wakeups, run.placed, run.end)] == subjects
-    assert [f.subject for f in wakeups_while_children_run(run.wakeups, run.placed)] == subjects
+    assert [f.subject for f in wakeups_while_children_run(run.wakeups, run.children, run.end)] == subjects
+    assert [f.subject for f in wakeups_while_children_run(run.wakeups, run.children)] == subjects
 
 
 def test_a_wakeup_with_no_child_running_passes(tmp_path):
     objs = transcript(assistant("10:00:05", tool_use("w0", "ScheduleWakeup", {"delaySeconds": 30})))
     run = run_of(tmp_path, [("plan", NAME, walk("plan", NAME, PLAN_STEPS))], objs)
-    assert wakeups_while_children_run(run.wakeups, run.placed, run.end) == []
+    assert wakeups_while_children_run(run.wakeups, run.children, run.end) == []
 
 
 # --- how epic children run, as the background-child probe settled ------------------
@@ -676,8 +758,10 @@ def epic_children_run(tmp_path, *, background):
 def test_the_epic_children_runs_read_back_as_built(tmp_path):
     fg = epic_children_run(tmp_path / "fg", background=False)
     bg = epic_children_run(tmp_path / "bg", background=True)
-    assert [(p.child.id, p.spec, p.child.background) for p in fg.placed] == [("toolu_A", NAME, False), ("toolu_B", NAME_B, False)]
-    assert [(p.child.id, p.spec, p.child.background) for p in bg.placed] == [("toolu_A", NAME, True), ("toolu_B", NAME_B, True)]
+    names = [NAME, NAME_B]
+    for run, background in ((fg, False), (bg, True)):
+        assert [(c.id, c.background) for c in delegation.spec_children(run.children, ("plan", NAME), names)] == [("toolu_A", background)]
+        assert [(c.id, c.background) for c in delegation.spec_children(run.children, ("plan", NAME_B), names)] == [("toolu_B", background)]
     at = lambda clock: datetime.fromisoformat(f"2026-10-23T{clock}+00:00")  # noqa: E731
     assert [(t.ended_at, t.woken_by) for t in fg.turns] == [(at("10:05:10"), "start")]
     assert [(t.ended_at, t.woken_by) for t in bg.turns] == [(at("10:00:10"), "start"), (at("10:05:10"), "task-notification")]
@@ -685,13 +769,13 @@ def test_the_epic_children_runs_read_back_as_built(tmp_path):
 
 def test_foreground_children_held_inside_the_turn_pass_the_foreground_rule(tmp_path):
     run = epic_children_run(tmp_path, background=False)
-    assert epic_children_foreground_together(run.placed, run.turns, PLAN_LANES) == []
+    assert epic_children_foreground_together(run.children, run.turns, PLAN_LANES) == []
 
 
 def test_background_children_fail_the_foreground_rule_naming_each_child(tmp_path):
     run = epic_children_run(tmp_path, background=True)
     turn_end = "a turn ended at 2026-10-23T10:00:10+00:00 while it was running"
-    assert epic_children_foreground_together(run.placed, run.turns, PLAN_LANES) == [
+    assert epic_children_foreground_together(run.children, run.turns, PLAN_LANES) == [
         Failure("child_in_background", f"child toolu_A ({NAME})", "it was started in the background"),
         Failure("turn_ended_while_child_ran", f"child toolu_A ({NAME})", turn_end),
         Failure("child_in_background", f"child toolu_B ({NAME_B})", "it was started in the background"),
@@ -701,12 +785,12 @@ def test_background_children_fail_the_foreground_rule_naming_each_child(tmp_path
 
 def test_background_children_woken_by_their_notice_pass_the_background_rule(tmp_path):
     run = epic_children_run(tmp_path, background=True)
-    assert epic_children_backgrounded(run.placed, run.turns, PLAN_LANES) == []
+    assert epic_children_backgrounded(run.children, run.turns, PLAN_LANES) == []
 
 
 def test_foreground_children_fail_the_background_rule(tmp_path):
     run = epic_children_run(tmp_path, background=False)
-    assert epic_children_backgrounded(run.placed, run.turns, PLAN_LANES) == [
+    assert epic_children_backgrounded(run.children, run.turns, PLAN_LANES) == [
         Failure("child_in_foreground", f"child toolu_A ({NAME})", "it was started in the foreground"),
         Failure("child_in_foreground", f"child toolu_B ({NAME_B})", "it was started in the foreground"),
         Failure("no_turn_ended_while_children_ran", "orchestrator", "no turn ended while a child was running"),
@@ -716,19 +800,19 @@ def test_foreground_children_fail_the_background_rule(tmp_path):
 
 def test_spec_lanes_are_not_judged_by_either_epic_children_rule(tmp_path):
     run = epic_children_run(tmp_path, background=True)
-    assert epic_children_foreground_together(run.placed, run.turns, [("spec", NAME)]) == []
-    assert epic_children_backgrounded(run.placed, run.turns, [("spec", NAME)]) == []
+    assert epic_children_foreground_together(run.children, run.turns, [("spec", NAME)]) == []
+    assert epic_children_backgrounded(run.children, run.turns, [("spec", NAME)]) == []
 
 
 def test_the_settled_rule_follows_the_probe_outcome(tmp_path, monkeypatch):
     fg = epic_children_run(tmp_path / "fg", background=False)
     bg = epic_children_run(tmp_path / "bg", background=True)
     monkeypatch.setattr(delegation, "PROBE_OUTCOME", "stopped")
-    assert epic_children_run_as_settled(fg.placed, fg.turns, PLAN_LANES) == []
-    assert {f.rule for f in epic_children_run_as_settled(bg.placed, bg.turns, PLAN_LANES)} == {"child_in_background", "turn_ended_while_child_ran"}
+    assert epic_children_run_as_settled(fg.children, fg.turns, PLAN_LANES) == []
+    assert {f.rule for f in epic_children_run_as_settled(bg.children, bg.turns, PLAN_LANES)} == {"child_in_background", "turn_ended_while_child_ran"}
     monkeypatch.setattr(delegation, "PROBE_OUTCOME", "completed")
-    assert epic_children_run_as_settled(bg.placed, bg.turns, PLAN_LANES) == []
-    assert {f.rule for f in epic_children_run_as_settled(fg.placed, fg.turns, PLAN_LANES)} == {
+    assert epic_children_run_as_settled(bg.children, bg.turns, PLAN_LANES) == []
+    assert {f.rule for f in epic_children_run_as_settled(fg.children, fg.turns, PLAN_LANES)} == {
         "child_in_foreground",
         "no_turn_ended_while_children_ran",
         "no_notice_woken_turn",
@@ -743,29 +827,36 @@ def test_the_probe_outcome_matches_the_recorded_probe():
 # --- the reference runs (criterion 4) ---------------------------------------------
 
 
+REFERENCE_LANES = [("plan", "20260101000001-storage"), ("plan", "20260101000002-commands"), ("plan", "20260101000003-help")]
+
+
 def reference(name):
-    return read_run(DATA / name / "claude-code.txt", DATA / name / "debug")
+    """A reference run's transcript rules. Its Spektacular logs predate the
+    format `stats` reads, so its lanes are given by hand."""
+    run = read_run(DATA / name / "claude-code.txt", DATA / name / "missing-logs")
+    run.lanes = dict.fromkeys(REFERENCE_LANES)
+    return run
 
 
 def test_the_55_epic_run_fails_the_wakeup_rule_naming_the_scheduled_wakeup():
     run = reference("s55-epic")
-    failures = wakeups_while_children_run(run.wakeups, run.placed, run.end)
+    failures = wakeups_while_children_run(run.wakeups, run.children, run.end)
     assert [(f.rule, f.subject) for f in failures] == [("wakeup_while_children_run", "ScheduleWakeup delaySeconds=1200")]
 
 
 def test_the_46_epic_run_passes_the_wakeup_rule():
     run = reference("m70-epic")
-    assert wakeups_while_children_run(run.wakeups, run.placed, run.end) == []
+    assert wakeups_while_children_run(run.wakeups, run.children, run.end) == []
 
 
 def test_the_46_epic_run_passes_the_settled_children_rule():
     run = reference("m70-epic")
-    assert epic_children_run_as_settled(run.placed, run.turns, list(run.windows)) == []
+    assert epic_children_run_as_settled(run.children, run.turns, REFERENCE_LANES) == []
 
 
 def test_the_55_epic_run_fails_the_settled_children_rule_naming_its_background_children():
     run = reference("s55-epic")
-    failures = epic_children_run_as_settled(run.placed, run.turns, list(run.windows))
+    failures = epic_children_run_as_settled(run.children, run.turns, REFERENCE_LANES)
     storage = "child toolu_01LsCrL1DDkTZGc6kMPVwn5D (20260101000001-storage)"
     help_ = "child toolu_01Fcx3c9hqXdQYxakexacWST (20260101000003-help)"
     assert [(f.rule, f.subject) for f in failures] == [
@@ -779,16 +870,12 @@ def test_the_55_epic_run_fails_the_settled_children_rule_naming_its_background_c
 
 
 @pytest.mark.parametrize("name", ["s55-epic", "m70-epic"])
-def test_both_epic_reference_runs_pass_the_other_rules(name):
+def test_both_epic_reference_runs_pass_the_other_transcript_rules(name):
     run = reference(name)
-    # plan epics: three plan lanes, one top-level child each, no worktrees
-    assert sorted(run.session.lanes) == [("plan", "20260101000001-storage"), ("plan", "20260101000002-commands"), ("plan", "20260101000003-help")]
-    assert len([p for p in run.placed if p.child.parent is None]) == 3
-    assert worktree_paths(run.session) == {}
-    assert missing_required(run.placed, run.windows) == []
-    assert missing_spec_children(run.placed, list(run.session.lanes)) == []
-    assert epic_context_gaps(run.placed, run.session.lanes, worktrees=worktree_paths(run.session)) == []
-    assert review_context_gaps(run.placed) == []
+    # plan epics: three plan lanes, one top-level child each
+    names = [n for _, n in REFERENCE_LANES]
+    assert [len(delegation.spec_children(run.children, lane, names)) for lane in REFERENCE_LANES] == [1, 1, 1]
+    assert epic_context_gaps(run.children, run.lanes) == []
 
 
 # --- the oracle tied to the step templates (criterion 5) -------------------------
@@ -952,42 +1039,39 @@ def test_changing_the_trace_wording_fails_the_tie(tmp_path, rel, old, new, expec
 # --- helper launches marked by sub-agent spans -------------------------------------
 
 
-def placed_child(cid, clock, step="check_goal", spec=NAME):
+def launched(cid, clock):
     from transcripts import Child
 
-    c = Child(
+    return Child(
         id=cid, parent=None, kind="general-purpose", description=f"child {cid}", background=False,
         launched_at=datetime.fromisoformat(f"2026-10-23T{clock}+00:00"), ended_at=None, duration_s=None,
-        ending=None, hand_back=None, models=None, output=None, prompt=None,
+        ending=None, hand_back=None, models=None, prompt=None,
     )
-    return delegation.PlacedChild(c, ("implement", spec), 0, spec, step)
 
 
 def sub_agent(span_id, clock, span_type="sub-agent"):
-    import spans as sp
-
-    return sp.Span(
-        trace_id="t", span_id=span_id, parent=None, name=span_id, type=span_type,
-        start=datetime.fromisoformat(f"2026-10-23T{clock}+00:00"), end=None, status=None,
-        end_reason=None, step=None, lane="x",
+    at = datetime.fromisoformat(f"2026-10-23T{clock}+00:00")
+    return runlog.Span(
+        span_id=span_id, parent=None, type=span_type, name=span_id, run_id="r", kind="implement", spec=NAME,
+        step="check_goal", task_id=None, start=at, end=at, end_reason="open", complete=False,
     )
 
 
 def test_each_launch_needs_its_own_sub_agent_span_just_before_it():
-    placed = [placed_child("a", "10:05:00"), placed_child("b", "10:05:00"), placed_child("c", "10:20:00")]
+    children = [launched("a", "10:05:00"), launched("b", "10:05:00"), launched("c", "10:20:00")]
     spans = [
         sub_agent("s1", "10:04:30"),  # 30 s before both a and b: marks one of them
         sub_agent("s2", "10:05:03"),  # within the slack after a launch
         sub_agent("w1", "10:19:50", "user-wait"),  # not a sub-agent span
         sub_agent("s3", "10:10:00"),  # ten minutes before c: too early
     ]
-    marked, unmarked = delegation.match_launches(placed, spans)
-    assert [p.child.id for p in marked] == ["a", "b"]
-    assert [p.child.id for p in unmarked] == ["c"]
-    assert [str(f) for f in delegation.unmarked_launches(placed, spans)] == [
-        f"unmarked_launch {NAME}: child child c launched at 10:20:00 in step check_goal has no sub-agent span (`trace start <helper> --type sub-agent`)"
+    assert sorted(delegation.match_spans(children, spans)) == ["a", "b"]
+    assert [c.id for c in delegation.unmarked(children, spans)] == ["c"]
+    assert [str(f) for f in delegation.unmarked_launches(children, spans)] == [
+        "unmarked_launch child c: child child c launched at 10:20:00 has no sub-agent span (`trace start <helper> --type sub-agent`)"
     ]
-    assert delegation.marked_rate(placed, spans) == 2 / 3
+    assert delegation.marked_rate(children, spans) == 2 / 3
+    assert delegation.LAUNCH_SPAN_WINDOW_S == 120
 
 
 def test_no_timed_launches_has_no_rate():

@@ -49,7 +49,7 @@ from pathlib import Path
 import pytest
 
 from loglevel import set_log_level
-from sessionlog import SessionLog, plan_steps_entered
+from runlog import RunLog
 
 # ---------------------------------------------------------------------------
 # Paths and constants
@@ -57,7 +57,7 @@ from sessionlog import SessionLog, plan_steps_entered
 
 PROJECT_DIR = Path("/app")
 SPEK_DIR = PROJECT_DIR / ".spektacular"
-DEBUG_DIR = SPEK_DIR / "logs"
+LOG_DIR = SPEK_DIR / "logs"
 AGENT_LOG_DIR = Path("/logs/agent")
 TRANSCRIPT = AGENT_LOG_DIR / "claude-code.txt"
 # Agents run through harbor's ACP agent, such as Bob, leave no Claude
@@ -484,7 +484,13 @@ def extract_builtin_file_edits() -> list:
 
 
 def extract_tool_results() -> dict:
-    """Return a map of tool_use_id → result text extracted from user turns."""
+    """Return a map of tool_use_id → result text extracted from user turns.
+
+    This reads the agent's own transcript (what the CLI printed back to the
+    agent), never Spektacular's logs: it holds no response or state
+    snapshot recorded by Spektacular, so it needs no verbose log level. Every
+    fact this verifier takes from Spektacular's logs comes through
+    `spektacular stats` (RunLog) and is recorded at the default level."""
     if is_acp_run():
         return _acp_tool_results()
     results: dict = {}
@@ -1387,10 +1393,8 @@ class TestInstructionNextStepValidity:
         The step names are hand-maintained oracle values, not derived from
         the state machine.
         """
-        session = SessionLog(DEBUG_DIR, kinds=("plan",))
-        events = [e for lane in session.lanes.values() for e in lane.events]
-        assert events, f"no plan workflow commands in the session log under {DEBUG_DIR}"
-        entered = plan_steps_entered(events)
+        entered = RunLog(LOG_DIR).steps_entered("plan")
+        assert entered, f"no plan workflow commands in the Spektacular logs under {LOG_DIR}"
         assert "walkthrough" in entered, f"The workflow never entered walkthrough (steps entered: {entered})"
         assert "finished" in entered, f"The workflow never entered finished (steps entered: {entered})"
         assert entered.index("walkthrough") < entered.index("finished"), (

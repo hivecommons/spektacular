@@ -16,12 +16,9 @@ WORKDIR /app
 
 RUN mkdir -p /app/.spektacular/specs
 
-# Record the agent's run at the verbose level, so .spektacular/logs/ keeps
-# every response and state snapshot the verifier and tools read; it comes
-# back with the .spektacular artifact. The agent's own `spektacular init`
-# keeps an existing config, backfilling the name, the colocated repo and the
-# agent, so pre-seeding only the log level is safe.
-RUN mkdir -p /app/.spektacular && printf 'schema: 5\nlog:\n    level: verbose\n' > /app/.spektacular/config.yaml
+# The agent's run is recorded at Spektacular's default log level, with no
+# special setting, under .spektacular/logs/, which comes back with the
+# .spektacular artifact.
 COPY 20260101000000-user-auth.md /app/.spektacular/specs/20260101000000-user-auth.md
 
 # Seed a distinctive always-apply convention relevant to the JWT auth spec so

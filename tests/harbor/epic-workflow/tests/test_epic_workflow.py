@@ -20,10 +20,10 @@ from pathlib import Path
 
 import pytest
 
-from sessionlog import SessionLog
+from runlog import RunLog
 
 PROJECT_DIR = Path("/app")
-DEBUG_DIR = PROJECT_DIR / ".spektacular" / "logs"
+LOG_DIR = PROJECT_DIR / ".spektacular" / "logs"
 
 STORAGE = "20260101000001-storage"
 COMMANDS = "20260101000002-commands"
@@ -82,8 +82,8 @@ def status(epic) -> dict:
 
 
 @pytest.fixture(scope="session")
-def log() -> SessionLog:
-    return SessionLog(DEBUG_DIR)
+def log() -> RunLog:
+    return RunLog(LOG_DIR)
 
 
 # ---------------------------------------------------------------------------
@@ -124,9 +124,8 @@ class TestEverySpecPlanned:
 class TestOrchestration:
     def test_session_log_recorded(self, log):
         assert not log.empty, (
-            f"no session log under {DEBUG_DIR}: the seeded project's log.level: verbose "
-            "did not reach the agent's spektacular calls"
-        )
+            f"no Spektacular logs under {LOG_DIR}, or `spektacular stats` could not read them: "
+            "the agent ran no logged spektacular command")
 
     @pytest.mark.parametrize("spec", SPECS)
     def test_spec_planned_in_orchestrated_lane(self, log, spec):
@@ -135,7 +134,7 @@ class TestOrchestration:
             f"{spec} was never started in an orchestrated plan lane; the skill "
             "starts each spec with `plan new` carrying \"orchestrated\": true"
         )
-        assert lane.start.data().get("orchestrated") is True, lane.start.command
+        assert lane.start.data().get("orchestrated") is True, lane.start.args
 
     @pytest.mark.parametrize("spec", SPECS)
     def test_lane_reached_finished(self, log, spec):
@@ -172,7 +171,7 @@ class TestOrchestration:
     # what they showed.
 
     def test_epic_order_run(self, log, epic):
-        runs = [e for e in log.shared if e.is_verb("epic", "order") and epic in e.command and e.ok]
+        runs = [e for e in log.outside() if e.is_verb("epic", "order") and epic in e.args and e.ok]
         assert runs, "`spektacular epic order <epic>` was never run after planning"
 
 
@@ -190,7 +189,7 @@ def children_run():
 
     if not dl.is_claude():
         pytest.skip("only a Claude transcript shows where a child agent was started")
-    return dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, DEBUG_DIR)
+    return dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, LOG_DIR)
 
 
 def failed(failures: list) -> str:
@@ -201,19 +200,19 @@ class TestChildren:
     def test_every_spec_has_its_own_child(self, children_run):
         import delegation as dl
 
-        failures = dl.missing_spec_children(children_run.placed, list(children_run.windows))
+        failures = dl.missing_spec_children(children_run.log, children_run.lanes, children_run.spans)
         assert not failures, failed(failures)
 
     def test_children_are_given_their_context(self, children_run):
         import delegation as dl
 
-        failures = dl.epic_context_gaps(children_run.placed, children_run.session.lanes)
+        failures = dl.epic_context_gaps(children_run.children, children_run.lanes)
         assert not failures, failed(failures)
 
     def test_no_wakeup_while_children_run(self, children_run):
         import delegation as dl
 
-        failures = dl.wakeups_while_children_run(children_run.wakeups, children_run.placed, children_run.end)
+        failures = dl.wakeups_while_children_run(children_run.wakeups, children_run.children, children_run.end)
         assert not failures, failed(failures)
 
     def test_children_run_as_the_probe_settled(self, children_run):
@@ -222,7 +221,7 @@ class TestChildren:
         runs in the foreground and no turn ends while one is running."""
         import delegation as dl
 
-        failures = dl.epic_children_run_as_settled(children_run.placed, children_run.turns, list(children_run.windows))
+        failures = dl.epic_children_run_as_settled(children_run.children, children_run.turns, list(children_run.lanes))
         assert not failures, failed(failures)
 
     def test_every_launch_is_a_sub_agent_span(self, children_run):
@@ -231,7 +230,7 @@ class TestChildren:
         (spec 000074), so every launch has a sub-agent span."""
         import delegation as dl
 
-        failures = dl.unmarked_launches(children_run.placed, children_run.spans)
+        failures = dl.unmarked_launches(children_run.children, children_run.spans)
         assert not failures, failed(failures)
 
 

@@ -556,45 +556,35 @@ reason. It is never written as zero.
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | The record's shape, currently `2`. Version 2 added each child agent, the per-step child count and the idle time; the report still reads version-1 records |
+| `schema_version` | The record's shape, currently `3`. Version 3 takes every step, helper, wait and gap from Spektacular's logs, in place of version 2's transcript-based step output, child placement and idle time; the report still reads version-1 and version-2 records |
 | `run` | `suite`, `scenario`, `agent`, `model`, `spektacular_version` (`git describe`), `commit`, and `dirty` (the tree had uncommitted changes when the suite was built) |
 | `result` | `reward` as written to `reward.txt`. `checks` holds `passed`, `total` and `score` (passed over total, skipped tests excluded). `groups` gives the same per group, under its `name`: the test class, or the test module for suites written as plain functions |
-| `totals` | `wall_time_s`, `model_time_s` (time spent in model calls, summed across sub-agents, so it can exceed the wall time), `turns`, `cost_usd`, `input_tokens` (uncached), `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, and `idle_s`, the longest stretch with no activity from the agent, its children or Spektacular |
-| `steps` | `unit` (`characters`), then one entry in `workflows` per spec, plan or implement workflow the run drove: its `kind` and `name`, and in `steps` each step it entered, in order, with its `step` name, `started_at`, `duration_s`, `output`, the characters the agent wrote there (text, thinking and tool-call input), and `children`, how many child agents were started in it, nested ones included. `workflows` is `null` when the run left no session log. A Claude run that drove several workflows at once also has `orchestrator_output`, the characters written outside every workflow |
-| `subagents` | `started`, `completed`, `failed` and `stopped`, and `durations_s` for each sub-agent that reported one, kept for version-1 readers. `children` lists every child agent the run started, nested ones included, each with: `id` (its launching call), `parent` (the child that started it, `null` for the main agent), `kind`, `description`, `background` (as it actually ran), `spec`, `step` (`null` when it was started outside any workflow step, such as an epic orchestrator's own children, unless `unknown` lists it), `launched_at`, `ended_at`, `duration_s` (the agent's own report of its run time), `ending` (`completed`, `failed`, `stopped` or `no_hand_back`), `hand_back` (the first line it handed back), `models`, `output` (characters of its own messages), `prompt` (the full context it was given) and `prompt_chars` |
+| `totals` | From the agent's log: `wall_time_s`, `model_time_s` (time spent in model calls, summed across sub-agents, so it can exceed the wall time), `turns`, `cost_usd`, `input_tokens` (uncached), `output_tokens`, `cache_read_tokens` and `cache_write_tokens`. From Spektacular's logs: `trace_calls` and `trace_calls_per_task` (the run's `spektacular trace` calls, and their average per plan task), and, summed over every workflow run, `user_wait_s` (time waiting on the user), `helper_wait_s` (time a helper agent was running), `gap_s` and `gaps` (the time in, and the number of, stretches with no recorded event longer than `gap_threshold_s`, 300 by default) |
+| `steps` | One entry in `workflows` per workflow run in Spektacular's logs, in start order: its `run_id`, `kind`, `name`, `status`, `wall_s`, `user_wait_s`, `helper_wait_s`, `gap_s` and `gaps`, and in `steps` each step it entered, in order of first entry, with its `step` name, `started_at`, `entries`, `duration_s` (over every entry), its split into `working_s`, `helper_wait_s` and `user_wait_s` (which add up to its duration), `commands`, `helpers` (how many helper agents were started in it) and `incomplete` (entries that did not finish). `workflows` is `null` when the logs are missing or hold no workflow run |
+| `subagents` | From Spektacular's logs: `started`, `completed`, `failed`, `unfinished` (not stopped, or cut off), `durations_s` for each helper that finished, and `helpers`, every `sub-agent` span: `span_id`, `parent`, `name`, `spec`, `kind`, `step`, `task_id`, `outside_run` (an epic orchestrator's helper, started outside any run, whose `spec` is the lane of the child launched under it and whose `step` is `null`), `started_at`, `ended_at`, `duration_s`, `end_reason`, `status` and `complete`. From the agent's log: `briefs`, every child agent the run started, nested ones included, with its `id` (its launching call), `parent`, `kind`, `description`, `models`, `prompt` (the full context it was given) and `prompt_chars` |
 | `unknown` | One `{field, reason}` per measure the record could not fill |
 
-Step durations come from Spektacular's own session log, so they mean the same for every agent. A
-step runs from the command that moved the workflow onto it (the workflow's `new`, or a `goto`) to
-the one that moved it on; the last step ends at the workflow's last command, and a child that
-resumes a workflow opens a fresh window, so the hand-off is not counted. The agent's setup before
-the workflow starts falls outside every step, so one workflow's steps add up to less than the wall
-time. Workflows driven at once run in parallel, so steps summed across them can exceed it.
-
-Idle time is measured from every timestamped message, main agent and children alike, every
-child's start and end, and every Spektacular command's start and end, so time an agent spends
-thinking between commands is not counted as idle. The report flags a run idle for more than a
-quarter of its wall time; the threshold is `IDLE_SHARE` at the top of `report.py`.
-
-A child is placed in the spec its own launch prompt names first, else in the spec of the child
-that started it, and in the step whose window holds its launch time. A step whose instructions
-only suggest a child, such as plan discovery, shows whether it used one through its `children`
-count. In a Claude run, a child started by another child streams none of its own messages, so its
-`models` and `output` are unknown.
+Everything but tokens, models, cost and briefs comes from the logs Spektacular keeps under
+`.spektacular/logs/`, recorded at the default log level, which reach the trial's artifacts with
+the project's `.spektacular`. The recorder reads them only through `spektacular stats` (`list`,
+`run`, `commands` and `spans`), never by parsing them, so every step, helper and wait figure means
+the same for every agent, and `spektacular stats run --dir <trial>/artifacts/spektacular/logs` on a
+collected trial gives the same numbers. A step's figures add up over every entry into it, and a
+resumed child's hand-off is not inside any step. When the logs are missing, or `stats` cannot read
+them, every log-sourced field is `null` and listed under `unknown` with the reason, and none is
+filled in from the agent's transcript.
 
 Claude's totals come from the `result` summary at the end of its transcript, with tokens summed over
 every model it used. When background sub-agents split a Claude run into several summaries, turns are
 summed, cost, tokens and model time come from the last summary, and wall time is the span from the
-transcript's first message to its last. The other agents report less:
+transcript's first message to its last. The other agents report less, but only in the transcript's
+fields: steps, helpers and waits are the same for every agent.
 
 | Agent | Unknown in its record |
 |---|---|
-| Bob | Tokens, cost, model time, model, and every sub-agent measure but `started`. Each child carries only its `kind`, `description` and `prompt` (and so `prompt_chars`); every other child field is unknown. Its wall time and idle time come from Bob's own shell logs, and its characters and children are placed by its `goto` calls, so in a run that drove several workflows at once each child's `step`, and every step's `children`, are unknown |
-| Codex | Every sub-agent measure, `children` included (`null`), model time and cache writes. Cost too, unless Harbor can price the model. When Harbor left no `trajectory.json` and the record falls back to Codex's own rollout, cost and every step's `output` are unknown as well |
-| Oracle (no agent) | Every agent total, the idle time, the model, every sub-agent measure, `children` included, and every step's `output` and `children`. Wall time comes from the session log |
-
-A Bob or Codex run that drove several workflows at once has its per-step `output` unknown, because
-their logs cannot split it between workflows.
+| Bob | Tokens, cost, model time and model. Each brief carries only its `kind`, `description` and `prompt` (and so `prompt_chars`); its `models` are unknown. Its wall time comes from Bob's own shell logs |
+| Codex | `briefs` (`null`: Codex's log shows no helpers), model time and cache writes. Cost too, unless Harbor can price the model |
+| Oracle (no agent) | Every agent total, the model and `briefs`. Wall time comes from Spektacular's logs |
 
 #### Comparing runs
 
@@ -636,7 +626,7 @@ Suites present in only one set are listed as unmatched. The thresholds are const
 `report.py`.
 
 The recorder can also be run by hand on a collected trial, for example to re-record it:
-`python3 tests/harbor/shared/metrics.py --agent-dir <trial>/agent --debug-dir <trial>/artifacts/spektacular/logs --bob-logs <trial>/artifacts/agent-logs/bob --junit <trial>/verifier/junit.xml --reward <trial>/verifier/reward.txt --build-info <build.json> --out <file>`.
+`python3 tests/harbor/shared/metrics.py --agent-dir <trial>/agent --log-dir <trial>/artifacts/spektacular/logs --bob-logs <trial>/artifacts/agent-logs/bob --junit <trial>/verifier/junit.xml --reward <trial>/verifier/reward.txt --build-info <build.json> --out <file>`.
 Reading `agent/` there needs the same permissions as the files Harbor left in it.
 
 The repo-workflow suite is the one whose assertions are about the conversation rather than the

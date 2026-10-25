@@ -20,7 +20,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent.parent / "shared"))
 
 import test_goal_check as gc  # noqa: E402
-from sessionlog import Event  # noqa: E402
+from runlog import Command  # noqa: E402
 from transcripts import SubagentLaunch, claude_main_models, claude_subagent_launches  # noqa: E402
 
 T0 = datetime(2026, 10, 21, 12, 0, 0)
@@ -47,7 +47,11 @@ def event(seconds, *command, data=None):
         import json
 
         cmd += ["--data", json.dumps(data)]
-    return Event(at=T0 + timedelta(seconds=seconds), command=cmd, duration_ms=10, exit_code=0, state_before=None, state_after=None)
+    at = T0 + timedelta(seconds=seconds)
+    return Command(
+        run_id="r", kind="implement", name=gc.PLAN, command=" ".join(cmd[:3]), args=cmd,
+        step=None, step_to=None, at=at, end=at + timedelta(milliseconds=10), exit_code=0,
+    )
 
 
 def goto(seconds, step):
@@ -180,10 +184,12 @@ def test_cheaper_reviewer_from_a_claude_transcript():
 
 
 # Each goal check, including the one its retry runs again, starts a child
-# agent; the test and verify steps the retry runs in between need none. A small Claude run is built under tmp_path: the
-# implement lane of Spektacular's session log and a stream-json transcript
-# whose children are launched half a minute into a step, and it is read back
-# with delegation.read_run exactly as the verifier reads the real one.
+# agent; the test and verify steps the retry runs in between need none. A
+# small Claude run is built: the implement lane as `spektacular stats`
+# answers for it (its step entries and the sub-agent spans started in them),
+# and a stream-json transcript whose children are launched half a minute
+# into a step, each marked by its span; it is read back with
+# delegation.read_run exactly as the verifier reads the real one.
 
 import json  # noqa: E402
 
@@ -191,26 +197,34 @@ import delegation  # noqa: E402
 
 RETRY_STEPS = ["check_goal", "implement", "test", "verify", "check_goal", "update_plan"]
 CHILD_AT = {0: "toolu_goal1", 2: "toolu_test", 3: "toolu_verify", 4: "toolu_goal2"}
+RUN_ID = "12345678" + "0" * 24
 
 
-def lane_record(minute, command, before, after):
-    state = lambda step: step and {"kind": "implement", "name": gc.PLAN, "current_step": step}  # noqa: E731
+def ts(minute, second=0):
+    return f"2026-10-23T12:{minute:02d}:{second:02d}.000000000Z"
+
+
+def stats_answers(without):
+    entries = [
+        {"step": step, "started_at": ts(i), "ended_at": ts(i + 1), "end_reason": "moved", "complete": True}
+        for i, step in enumerate(RETRY_STEPS)
+    ]
+    spans = [
+        {"span_id": tid, "parent_span_id": None, "name": tid, "type": "sub-agent", "trace_id": RUN_ID, "run_id": RUN_ID,
+         "kind": "implement", "workflow": gc.PLAN, "step": RETRY_STEPS[minute], "task_id": None,
+         "started_at": ts(minute, 25), "ended_at": ts(minute, 50), "end_reason": "stopped", "status": "ok", "complete": True}
+        for minute, tid in CHILD_AT.items()
+        if tid not in without
+    ]
+    new = {"run_id": RUN_ID, "kind": "implement", "name": gc.PLAN, "span_id": "n", "command": "implement new",
+           "args": ["implement", "new", "--data", json.dumps({"name": gc.PLAN})], "step": None, "step_to": RETRY_STEPS[0],
+           "started_at": ts(0), "ended_at": ts(0), "exit_code": 0, "message": None}
     return {
-        "seq": minute + 1,
-        "timestamp": f"2026-10-23T12:{minute:02d}:00.000000000Z",
-        "command": command,
-        "duration_ms": 10,
-        "exit_code": 0,
-        "state_before": state(before),
-        "state_after": state(after),
+        "list": {"runs": [{"run_id": RUN_ID, "kind": "implement", "name": gc.PLAN, "started_at": ts(0), "ended_at": ts(6), "status": "in_progress"}]},
+        "commands": {"commands": [new]},
+        "spans": {"spans": spans},
+        f"run {RUN_ID}": {"step_entries": entries},
     }
-
-
-def lane_records():
-    records = [lane_record(0, ["implement", "new", "--data", json.dumps({"name": gc.PLAN})], None, RETRY_STEPS[0])]
-    for i, (before, after) in enumerate(zip(RETRY_STEPS, RETRY_STEPS[1:]), start=1):
-        records.append(lane_record(i, ["implement", "goto", "--data", json.dumps({"step": after, "name": gc.PLAN})], before, after))
-    return records
 
 
 def launched(minute, tid):
@@ -229,10 +243,7 @@ def launched(minute, tid):
 
 
 def claude_run(tmp_path, without=()):
-    debug = tmp_path / "debug"
-    debug.mkdir(parents=True)
-    lines = lane_records()
-    (debug / f"20261023T120000.000000000Z_claude_implement_{gc.PLAN}.jsonl").write_text("".join(json.dumps(o) + "\n" for o in lines))
+    tmp_path.mkdir(parents=True, exist_ok=True)
     objs = [{"type": "system", "subtype": "init", "model": "claude-sonnet-4-6"}]
     for minute, tid in CHILD_AT.items():
         if tid not in without:
@@ -240,19 +251,31 @@ def claude_run(tmp_path, without=()):
     objs.append({"type": "result", "subtype": "success", "num_turns": 1})
     path = tmp_path / "claude-code.txt"
     path.write_text("".join(json.dumps(o) + "\n" for o in objs))
-    return delegation.read_run(path, debug)
+    answers = stats_answers(without)
+
+    def runner(argv, **kwargs):
+        sub = argv[2]
+        key = f"run {argv[argv.index('--run') + 1]}" if sub == "run" else sub
+        return type("Done", (), {"stdout": json.dumps({"error": False, **answers[key]})})()
+
+    real = delegation.runlog.RunLog
+    delegation.runlog.RunLog = lambda log_dir: real(log_dir, binary="spektacular", runner=runner)
+    try:
+        return delegation.read_run(path, tmp_path)
+    finally:
+        delegation.runlog.RunLog = real
 
 
 def test_required_children_with_a_child_in_each_required_step(tmp_path):
     run = claude_run(tmp_path)
-    assert [w.step for w in run.windows[("implement", gc.PLAN)]] == RETRY_STEPS
-    assert {p.child.id: p.step for p in run.placed} == {
+    assert {s.span_id: s.step for s in run.spans} == {
         "toolu_goal1": "check_goal",
         "toolu_test": "test",
         "toolu_verify": "verify",
         "toolu_goal2": "check_goal",
     }
     assert gc.rule_required_children(run) == []
+    assert [str(f) for f in delegation.unmarked_launches(run.children, run.spans)] == []
 
 
 def test_required_children_test_and_verify_done_inline_on_the_retry(tmp_path):

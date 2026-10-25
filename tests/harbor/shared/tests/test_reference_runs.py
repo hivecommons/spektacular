@@ -3,9 +3,11 @@
 Four real harbor trials from 2026-10-23 are checked in, trimmed so that no
 conversation is kept: m70-epic (Sonnet 4.6, epic workflow) and s55-epic,
 s55-plan, s55-implement (Sonnet 5.5). The cases here pin what the recorder
-reads from them, the child agents of the 5.5 epic run and the idle time of
-both epic runs, with values worked out by reading the fixtures by hand. They
-also prove that each run is compact and blanked, that trim_reference.py
+reads from them, the child agents of the 5.5 epic run and every run's
+tokens, models and cost, with values worked out by reading the fixtures by
+hand. Their session logs predate Spektacular's run logs, so every record's
+steps, helpers and waits are unknown, never filled in from the transcript.
+They also prove that each run is compact and blanked, that trim_reference.py
 regenerates every run byte for byte, that a trim never changes a value the
 recorder computes, and that the script refuses to write a trim that would.
 
@@ -29,6 +31,7 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
 
 import metrics  # noqa: E402
+import runlog  # noqa: E402
 import transcripts  # noqa: E402
 import trim_reference  # noqa: E402
 
@@ -76,10 +79,16 @@ S55_CHILDREN = [
         "hand_back": "DONE: 20260101000002-commands",
     },
 ]
-S55_EPIC_WALL_S = 1249.433
-S55_EPIC_IDLE_S = 942.167
-M70_EPIC_WALL_S = 993.223
-M70_EPIC_IDLE_S = 87.63
+# A spektacular binary that is never there, so a record's log sections are
+# unknown for the same reason whatever is on PATH.
+NO_BINARY = "/nonexistent/spektacular"
+# Every log-sourced field of the record, by hand from metrics.py.
+LOG_FIELDS = [
+    "steps", "subagents.started", "subagents.helpers",
+    "totals.user_wait_s", "totals.helper_wait_s", "totals.gap_s", "totals.trace_calls",
+]
+LOG_TOTALS = ["trace_calls", "trace_calls_per_task", "user_wait_s", "helper_wait_s", "gap_s", "gaps", "gap_threshold_s"]
+HELPER_COUNTS = ["started", "completed", "failed", "unfinished", "durations_s", "helpers"]
 
 
 # Token, model and cost figures of each reference run, as the harness
@@ -126,10 +135,36 @@ PINNED_TOTALS = {
 PINNED_RUNS = [*RUNS, "probe-background-child"]
 
 
-def record_of(run: Path) -> dict:
+@pytest.fixture(autouse=True)
+def no_binary(monkeypatch):
+    """Points the run log reader at a binary that is never there."""
+    monkeypatch.setenv("SPEKTACULAR_BIN", NO_BINARY)
+
+
+def record_of(run: Path, log_dir: Path | None = None) -> dict:
+    """The record of a reference run. Its debug/ holds the old session log,
+    not Spektacular's run logs, so by default the logs are looked for where
+    harbor leaves them in a trial, which a reference run does not have."""
     return metrics.build_record(
-        metrics.Paths(build_info=run / "build.json", agent_dir=run, debug_dir=run / "debug", bob_logs=NONE, junit=NONE, reward=NONE)
+        metrics.Paths(
+            build_info=run / "build.json", agent_dir=run, log_dir=log_dir or run / "logs",
+            bob_logs=NONE, junit=NONE, reward=NONE,
+        )
     )
+
+
+def log_unknowns(record: dict) -> dict[str, str]:
+    """The record's unknowns for its log-sourced fields, by field."""
+    return {u["field"]: u["reason"] for u in record["unknown"] if u["field"] in LOG_FIELDS}
+
+
+def assert_log_sections_unknown(record: dict, reason: str) -> None:
+    """Every step, helper and wait measure is null and unknown with reason,
+    and none was filled in from the transcript."""
+    assert record["steps"] == {"workflows": None}
+    assert {k: record["subagents"][k] for k in HELPER_COUNTS} == dict.fromkeys(HELPER_COUNTS)
+    assert {k: record["totals"][k] for k in LOG_TOTALS} == dict.fromkeys(LOG_TOTALS)
+    assert log_unknowns(record) == dict.fromkeys(LOG_FIELDS, reason)
 
 
 def transcript(run: Path) -> list[dict]:
@@ -151,12 +186,31 @@ def tree(root: Path) -> dict[str, bytes]:
     return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
 
 
+class NoStats:
+    """A run log reader that can never answer, for the same fixed reason
+    wherever the logs are, so a trim's before and after records compare
+    equal whatever `spektacular` is or is not on PATH."""
+
+    REASON = "stats unavailable in the trim self-checks"
+
+    def __init__(self, log_dir, *args, **kwargs):
+        self.log_dir = log_dir
+
+    def __getattr__(self, name):
+        def unavailable(*args, **kwargs):
+            raise runlog.Unavailable(self.REASON)
+
+        return unavailable
+
+
 @pytest.fixture
 def scratch(tmp_path, monkeypatch) -> Path:
-    """Keeps the script's staging directory under tmp_path."""
+    """Keeps the script's staging directory under tmp_path, and the run log
+    reader's answer fixed."""
     staging = tmp_path / "staging"
     staging.mkdir()
     monkeypatch.setattr(tempfile, "tempdir", str(staging))
+    monkeypatch.setattr(metrics.runlog, "RunLog", NoStats)
     return staging
 
 
@@ -165,41 +219,46 @@ def scratch(tmp_path, monkeypatch) -> Path:
 
 def test_s55_epic_child_count_matches_the_transcripts_own():
     run = DATA / "s55-epic"
-    spawned = [o for o in transcript(run) if o.get("type") == "result"][-1]["subagent_stats"]["spawned"]
-    sub = record_of(run)["subagents"]
+    objs = transcript(run)
+    spawned = [o for o in objs if o.get("type") == "result"][-1]["subagent_stats"]["spawned"]
+    children, _ = transcripts.claude_children(objs)
+    record = record_of(run)
     assert spawned == 3
-    assert sub["started"] == spawned
-    assert len(sub["children"]) == spawned
-    assert sub["completed"] == 3
-    assert sub["failed"] == 0
-    assert sub["stopped"] == 0
+    assert len(children) == spawned
+    assert len(record["subagents"]["briefs"]) == spawned
+    # the helper counts come only from Spektacular's logs, which this run lacks
+    assert record["subagents"]["started"] is None
+    assert "subagents.started" in log_unknowns(record)
 
 
 def test_s55_epic_contexts_are_the_launch_prompts():
     run = DATA / "s55-epic"
     calls = launches(transcript(run))
-    children = record_of(run)["subagents"]["children"]
-    assert [c["id"] for c in children] == [c["id"] for c in S55_CHILDREN]
-    for child, want in zip(children, S55_CHILDREN):
-        prompt = calls[child["id"]]["input"]["prompt"]
-        assert child["prompt"] == prompt
-        assert child["prompt_chars"] == len(prompt)
-        assert child["prompt_chars"] == want["prompt_chars"]
+    briefs = record_of(run)["subagents"]["briefs"]
+    assert [b["id"] for b in briefs] == [c["id"] for c in S55_CHILDREN]
+    for brief, want in zip(briefs, S55_CHILDREN):
+        prompt = calls[brief["id"]]["input"]["prompt"]
+        assert brief["prompt"] == prompt
+        assert brief["prompt_chars"] == len(prompt)
+        assert brief["prompt_chars"] == want["prompt_chars"]
         assert f"`{want['spec']}`" in prompt
-        assert child["spec"] == want["spec"]
+        assert brief["kind"] == "general-purpose"
+        assert brief["parent"] is None
+        assert brief["models"] == ["claude-sonnet-5-5"]
 
 
 def test_s55_epic_children_endings_durations_and_background():
-    children = record_of(DATA / "s55-epic")["subagents"]
-    assert children["durations_s"] == [109.605, 111.142, 145.246]
-    for child, want in zip(children["children"], S55_CHILDREN):
-        assert child["ending"] == "completed"
-        assert child["hand_back"] == want["hand_back"]
-        assert child["duration_s"] == want["duration_s"]
-        assert child["background"] is want["background"]
-        assert child["parent"] is None
-        assert child["kind"] == "general-purpose"
-        assert child["models"] == ["claude-sonnet-5-5"]
+    children, _ = transcripts.claude_children(transcript(DATA / "s55-epic"))
+    assert [c.duration_s for c in children] == [109.605, 111.142, 145.246]
+    for child, want in zip(children, S55_CHILDREN):
+        assert child.id == want["id"]
+        assert child.ending == "completed"
+        assert child.hand_back == want["hand_back"]
+        assert child.duration_s == want["duration_s"]
+        assert child.background is want["background"]
+        assert child.parent is None
+        assert child.kind == "general-purpose"
+        assert child.models == ["claude-sonnet-5-5"]
 
 
 # Token, model and cost figures, from the transcripts alone.
@@ -221,32 +280,37 @@ def test_reference_totals_are_pinned(name):
 
 @pytest.mark.parametrize("name", PINNED_RUNS)
 def test_reference_record_totals_match_the_pins_without_spektacular_logs(name):
-    run = DATA / name
-    record = metrics.build_record(
-        metrics.Paths(build_info=run / "build.json", agent_dir=run, debug_dir=NONE, bob_logs=NONE, junit=NONE, reward=NONE)
-    )
+    record = record_of(DATA / name, log_dir=NONE)
     pinned = PINNED_TOTALS[name]
     assert record["run"]["model"] == pinned["model"]
     for field in transcripts.TOTAL_FIELDS:
         assert record["totals"][field] == pinned[field], field
+    assert_log_sections_unknown(record, f"no Spektacular logs at {NONE}")
 
 
-# Idle time on both epic-planning runs.
+@pytest.mark.parametrize("name", PINNED_RUNS)
+def test_reference_record_has_its_log_sections_unknown_and_its_briefs(name):
+    # A reference run holds no Spektacular run logs: every step, helper and
+    # wait measure is unknown with the reader's reason, while tokens, models,
+    # cost and briefs still come from the transcript.
+    run = DATA / name
+    record = record_of(run)
+    assert_log_sections_unknown(record, f"no Spektacular logs at {run / 'logs'}")
+    children, _ = transcripts.claude_children(transcript(run))
+    assert [b["id"] for b in record["subagents"]["briefs"]] == [c.id for c in children]
+    assert record["schema_version"] == 3
 
 
-def test_s55_epic_records_at_least_15_minutes_idle():
-    totals = record_of(DATA / "s55-epic")["totals"]
-    assert totals["wall_time_s"] == S55_EPIC_WALL_S
-    assert totals["idle_s"] == S55_EPIC_IDLE_S
-    assert totals["idle_s"] >= 900
-    assert totals["idle_s"] / totals["wall_time_s"] > 0.25
-
-
-def test_m70_epic_records_less_than_a_quarter_of_its_wall_time_idle():
-    totals = record_of(DATA / "m70-epic")["totals"]
-    assert totals["wall_time_s"] == M70_EPIC_WALL_S
-    assert totals["idle_s"] == M70_EPIC_IDLE_S
-    assert totals["idle_s"] / totals["wall_time_s"] < 0.25
+@pytest.mark.parametrize("name", RUNS)
+def test_old_session_log_without_a_stats_binary_fills_nothing(name, monkeypatch):
+    # Pointed at the old session log with no binary to ask, the recorder
+    # fills no log field from the files or the transcript: each is unknown
+    # with the reader's reason.
+    run = DATA / name
+    monkeypatch.delenv("SPEKTACULAR_BIN")
+    monkeypatch.setenv("PATH", "")
+    record = record_of(run, log_dir=run / "debug")
+    assert_log_sections_unknown(record, "no spektacular binary on PATH; set SPEKTACULAR_BIN to one that has `stats`")
 
 
 # Compact and free of conversation text.
@@ -490,10 +554,11 @@ def test_trimming_a_collected_trial_blanks_its_text(tmp_path, scratch):
     assert objs[3]["message"]["content"] == [{"type": "text", "text": "x" * 13}]
     assert objs[5]["message"]["content"][0]["content"] == "x" * 30
     assert objs[6]["result"] == ""
-    child = trim_reference.measured(out, out / "debug")["subagents"]["children"][0]
-    assert child["output"] == 13
-    assert child["prompt"] == PROMPT
-    assert child["prompt_chars"] == 63
+    brief = trim_reference.measured(out, out / "debug")["subagents"]["briefs"][0]
+    assert brief == {
+        "id": CHILD, "parent": None, "kind": "general-purpose", "description": "Plan it",
+        "models": ["claude-sonnet-5-5"], "prompt": PROMPT, "prompt_chars": 63,
+    }
     assert list(scratch.iterdir()) == []
 
 
@@ -505,7 +570,7 @@ def test_trim_writes_nothing_when_the_trim_would_change_a_value(tmp_path, scratc
         trimmed = real(objs)
         for o in trimmed:
             if o.get("type") == "assistant" and o.get("parent_tool_use_id") == CHILD:
-                o["message"]["content"].append({"type": "text", "text": "x"})
+                o["message"]["model"] = "claude-haiku-4-5"  # changes the child's brief
         return trimmed
 
     monkeypatch.setattr(trim_reference, "trim_transcript", corrupting)

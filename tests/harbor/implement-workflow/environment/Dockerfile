@@ -21,10 +21,9 @@ WORKDIR /app
 # project config and the repo config live under the same .spektacular/
 # directory, which is what happens naturally when a repo is a member of a
 # project that shares its working tree. init preserves an existing
-# config.yaml/repo.yaml, so pre-seeding here is safe. The config sets
-# log.level: verbose, which the agent's init keeps when it migrates the file,
-# so .spektacular/logs/ records the agent's run with every response and state
-# snapshot; it comes back with the .spektacular artifact.
+# config.yaml/repo.yaml, so pre-seeding here is safe. The config sets no log
+# level, so .spektacular/logs/ records the agent's run at the default level;
+# it comes back with the .spektacular artifact.
 RUN mkdir -p /app/.spektacular/specs /app/.spektacular/plans/20260101000000-jwt-auth
 COPY config.yaml /app/.spektacular/config.yaml
 COPY repo.yaml /app/.spektacular/repo.yaml
