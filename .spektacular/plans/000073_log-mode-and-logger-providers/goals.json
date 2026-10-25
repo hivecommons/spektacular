@@ -584,6 +584,604 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "2a0cfbab-fa3b-43e3-89cc-15ac23bdca40",
+      "title": "Harbor reader understands span records",
+      "checks": [
+        {
+          "at": "2026-10-25T12:35:43Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "2a0cfbab-fa3b-43e3-89cc-15ac23bdca40",
+            "title": "Harbor reader understands span records",
+            "criteria": [
+              "A new-format record and its old-format equivalent produce identical events.",
+              "A directory mixing both formats is read in full, with lanes and shared events split by file name as before.",
+              "A verbose resume refusal in the new format is still detected as a resume.",
+              "All existing Harbor shared unit tests, including the pinned reference-run values, pass unchanged."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/sessionlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_windows.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "standalone_20261024.jsonl"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/tests/test_sessionlog_windows.py (new section 5, added in the staged diff) defines span_record() as the twin of record() and test_span_record_reads_as_the_same_event_as_its_old_twin writes the same five TWINS lines in both formats and asserts `new_events == old_events` (Event is a dataclass, so field-wise equality). The span shape matches internal/tracelog/record.go Record (record, trace_id, span_id, name, kind, start_time, end_time, status, attributes, resource) and the attribute keys match the Attr* constants there. sessionlog.py span_event() (lines 132-150) maps it onto the same Event fields. Note: the twin test covers the verbose level; the standard-level case is covered separately by test_span_record_at_the_standard_level_has_no_response_or_state."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "test_sessionlog_windows.py test_mixed_directory_reads_both_formats writes an old-format lane file (write_lane, 20261023T100000...Z_claude_plan_\u003cNAME\u003e.jsonl), a new-format lane file for another plan (20261023T110000.000000000Z_claude_plan_\u003cother\u003e.jsonl) and a new-format standalone_20261023.jsonl, then asserts lane keys, per-lane events, step windows, shared events and total event count. sessionlog.py SessionLog.__init__ (lines 336-352) is unchanged and splits by LANE_FILE name as before. The file-name format matches file.go runFileTimestampFormat and standalonePrefix."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "test_sessionlog_windows.py test_verbose_span_resume_refusal_counts_as_a_resume writes a span-format NEW record with exit_code=1, response=RESUME_RESPONSE (contains workflow_in_progress) and status error, then asserts lane.resumes has the 10:30 event, children == 2 and finish is found. sessionlog.py Lane.resumes (line 187-193) filters on is_verb(kind,'new'), not ok and RESUME_REFUSAL in e.response, and span_event carries response from spektacular.response (line 149), so the new format is detected."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The staged diff touches only tests/harbor/shared/sessionlog.py (adds the span branch in read_events and span_event, plus docstring) and tests/harbor/shared/tests/test_sessionlog_windows.py (adds the datetime timedelta import, the sessionlog import of read_events/span_event, and appends section 5 after the existing tests; no existing assertion or fixture is edited). test_reference_runs.py, the tests/harbor/shared/tests/data/ fixtures and test_metrics.py are not in the diff. The old-format branch of read_events is unchanged, and the verification run reports 511 passed for tests/harbor/shared/tests. I did not re-run the suite."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "90909dbf-daa8-4bb5-a55f-571a60355636",
+      "title": "Harbor suites read the new logs at the verbose level",
+      "checks": [
+        {
+          "at": "2026-10-25T12:44:06Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "90909dbf-daa8-4bb5-a55f-571a60355636",
+            "title": "Harbor suites read the new logs at the verbose level",
+            "criteria": [
+              "Every suite that drives Spektacular starts the agent's run with `log.level: verbose` in its project configuration, whether the project is pre-built or the agent runs `init` itself. No image, script or verifier sets `SPEKTACULAR_SESSION_LOG`.",
+              "The pre-built projects' logs directories hold no record of the seed scripts' own commands when the agent starts.",
+              "Every verifier that runs `spektacular` switches the project's logging off before its first call, so none of its calls appear in the session log.",
+              "No verifier, shared tool or `test.sh` reads `.spektacular/debug` any more, apart from the old-format test fixtures and their trimming script.",
+              "The metrics recorder's pinned command line in `test.sh` is unchanged and still finds the session log by default.",
+              "The README's Harbor sections name `.spektacular/logs/` and the seeded verbose level, and the Harbor shared unit tests and suite self-checks pass."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/project/init.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/init.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "environment/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.level"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "environment/seed/seed.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "/app/.spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/loglevel.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_loglevel.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_suite_wiring.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/tests/test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-workflow/tests/test_implement_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/standing-rules/tests/test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/spec-workflow/tests/test_spec_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/trim_reference.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_loglevel.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Pre-built projects: spec-workflow, plan-workflow and repo-workflow Dockerfiles pre-seed `schema: 5` plus `log: level: verbose` (tests/harbor/{spec,plan,repo}-workflow/environment/Dockerfile, the printf RUN lines). implement-workflow COPYs environment/config.yaml, which ends `log:` / `    level: verbose` (that file, lines 24-25). Agent-init suites: epic-workflow, goal-check-workflow, standing-rules and implement-epic-workflow seed.sh run init, set log.level off, then set `set_log_level verbose` as their last step (e.g. goal-check seed.sh:60 and :119, standing-rules seed.sh:43 and :67, epic seed.sh:43 and end, implement-epic seed.sh end). Init keeps the level per the verification run. A grep of tests/harbor (excluding jobs/.build) finds no SPEKTACULAR_SESSION_LOG anywhere, and no Dockerfile sets it."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The pre-built Dockerfiles (spec, plan, repo, implement-workflow) run no spektacular command at build time, only printf/COPY. In the seeds that run spektacular, every call happens after logging is switched off: epic seed.sh calls set_log_level off (line ~43) before its `spec file write` and `status` calls, and verbose only at the end; implement-epic seed.sh is off before `spec file write`/`epic write`/`status` and goes verbose last; goal-check seed.sh:59 init runs first but cmd/root.go:118 calls logLevel with projectConfigExists(), and no .spektacular exists in /app before that init (goal-check Dockerfile only copies app/ and git-inits), so init is not logged; the off switch at line 60 precedes all later calls. standing-rules seed.sh:42 init has the same no-config-yet property, off at line 43 precedes `spec file write` at line 51. The throwaway inits run in /tmp/todo-app, which is removed."
+            },
+            {
+              "criterion": 3,
+              "verdict": "not_met",
+              "evidence": "Verifiers that run spektacular and switch logging off before their first call: epic-workflow test_epic_workflow.py (logging_off() in cli), goal-check test_goal_check.py (cli), implement-epic test_implement_epic_workflow.py (cli), standing-rules test_standing_rules.py (cli_bytes). Not met: plan-workflow tests/harbor/plan-workflow/tests/test_plan_workflow.py:1174-1177 runs `spektacular status \u003cname\u003e --format json` through subprocess.run with no logging-off switch anywhere in that file (grep for logging_off/set_log_level/loglevel finds nothing there). The outcome is nearly harmless because status is never logged (cmd/root.go logExempt), but the criterion as written requires the switch before the first call. spec-workflow, repo-workflow and implement-workflow verifiers run no spektacular call (grep for the CLI invocation pattern found none)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Grep of tests/harbor (excluding jobs, .build, shared/tests/data) for .spektacular/debug, spektacular/debug and \"debug\" paths: the only hits outside the shared/tests fixtures and trim_reference.py are a docstring at tests/harbor/shared/sessionlog.py:16 describing the old format, and a comment at shared/tests/test_sessionlog_windows.py:504. trim_reference.py:185-186 reads debug only as the fallback for old-format trials, which is the allowed trimming script. Verifiers, timeline.py (DEFAULT_DIR = /app/.spektacular/logs, timeline.py:43) and metrics.py (DEBUG_DIR = /app/.spektacular/logs, metrics.py:53) use logs/. All test.sh timeline calls point at .spektacular/logs."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "Every tests/harbor/*/tests/test.sh has the line `python3 /tests/metrics.py || true` (e.g. standing-rules/tests/test.sh:18, epic-workflow/tests/test.sh:18), and the diff does not touch that line. With no --debug-dir, metrics.py uses DEBUG_DIR = Path(\"/app/.spektacular/logs\") (tests/harbor/shared/metrics.py:53), so it finds the session log by default."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "README.md:507-515 describes the Harbor suites: the seeded `log.level: verbose` in .spektacular/config.yaml, and `artifacts/spektacular/logs/` for each run, plus the timeline command on `artifacts/spektacular/logs`. README.md:47 says the artifact's `spektacular/` is the project's .spektacular with logs/, and line 612 gives the metrics command with --debug-dir .../spektacular/logs. The literal string `.spektacular/logs/` does not appear, only the artifact path that mirrors it, so this is a judgement call. The shared unit tests (516 passed) and the suite self-checks (14, 31, 38) pass per the verification summary, which I did not rerun."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T12:47:06Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "90909dbf-daa8-4bb5-a55f-571a60355636",
+            "title": "Harbor suites read the new logs at the verbose level",
+            "criteria": [
+              "Every suite that drives Spektacular starts the agent's run with `log.level: verbose` in its project configuration, whether the project is pre-built or the agent runs `init` itself. No image, script or verifier sets `SPEKTACULAR_SESSION_LOG`.",
+              "The pre-built projects' logs directories hold no record of the seed scripts' own commands when the agent starts.",
+              "Every verifier that runs `spektacular` switches the project's logging off before its first call, so none of its calls appear in the session log.",
+              "No verifier, shared tool or `test.sh` reads `.spektacular/debug` any more, apart from the old-format test fixtures and their trimming script.",
+              "The metrics recorder's pinned command line in `test.sh` is unchanged and still finds the session log by default.",
+              "The README's Harbor sections name `.spektacular/logs/` and the seeded verbose level, and the Harbor shared unit tests and suite self-checks pass."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/project/init.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/init.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "environment/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.level"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "environment/seed/seed.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "/app/.spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/loglevel.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_loglevel.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_suite_wiring.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/tests/test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-workflow/tests/test_implement_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/standing-rules/tests/test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/spec-workflow/tests/test_spec_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/trim_reference.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_loglevel.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Pre-built projects set verbose: tests/harbor/spec-workflow/environment/Dockerfile, plan-workflow/environment/Dockerfile and repo-workflow/environment/Dockerfile each RUN printf 'schema: 5\\nlog:\\n    level: verbose\\n' into /app/.spektacular/config.yaml; implement-workflow/environment/config.yaml adds log: level: verbose and its Dockerfile COPYs it; epic-workflow, implement-epic-workflow, goal-check-workflow and standing-rules seed.sh end with set_log_level verbose. The agent's own init keeps the level (diff comments; the goal's own migration check passed). A grep of tests/harbor (excluding jobs) finds no SPEKTACULAR_SESSION_LOG anywhere, and no ENV line remains in any Dockerfile."
+            },
+            {
+              "criterion": 2,
+              "verdict": "not_met",
+              "evidence": "Two pre-built projects still log a seed command. goal-check-workflow/environment/seed/seed.sh:59 runs `spektacular init \"$AGENT\"` in /app, and set_log_level off only follows at line 60. standing-rules/environment/seed/seed.sh:42 runs `spektacular init {{agent}}` in /app, and set_log_level off only follows at line 43. Until then the config is the default level, which is standard (internal/config/config.go:542 NewDefault sets Level: LogLevelStandard), so the init call is logged into /app/.spektacular/logs/ before logging is switched off. The epic and implement-epic seeds avoid this by running their init in a throwaway /tmp/todo-app that is deleted. The spec, plan and repo images run no seed command. I did not execute the seed to confirm the record is written; this is judged from the code and the default level. Fix: switch logging off before the init, or write the config with level off first."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Every verifier that runs spektacular via subprocess now calls logging_off() or set_log_level(..., \"off\") before its first call: epic-workflow/tests/test_epic_workflow.py (cli() calls logging_off() first, env override removed), implement-epic-workflow/tests/test_implement_epic_workflow.py (cli()), goal-check-workflow/tests/test_goal_check.py (cli()), standing-rules/tests/test_standing_rules.py (cli_bytes()), and plan-workflow/tests/test_plan_workflow.py:1178 (set_log_level before its only spektacular subprocess.run at :1179). implement-workflow, spec-workflow and repo-workflow verifiers contain no subprocess call to spektacular (grep). The environment/app test_cli.py has no spektacular reference."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Grep of tests/harbor for .spektacular/debug and DEBUG paths: the verifiers' DEBUG_DIR now points at .spektacular/logs (epic, implement-epic, goal-check, standing-rules, implement-workflow, plan-workflow, spec via SPEK_DIR/'logs'); timeline.py DEFAULT_DIR=/app/.spektacular/logs; metrics.py DEBUG_DIR=/app/.spektacular/logs; test.sh timeline calls use /app/.spektacular/logs. The only remaining 'debug' hits are trim_reference.py:185-186 (the trimming script, allowed), the old-format tests in shared/tests, and sessionlog.py:15-16, a docstring that describes the old record format. sessionlog.py's reader takes any directory passed in and hard-codes no debug path. Judged as met on that basis."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "tests/harbor/*/tests/test.sh lines still read `python3 /tests/metrics.py || true` with no arguments, and the diff does not touch those lines. metrics.py:53 now sets DEBUG_DIR = Path(\"/app/.spektacular/logs\"), and the --debug-dir default at metrics.py:709 is DEBUG_DIR, so the default run finds the session log."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "README.md:487 names artifacts/spektacular/logs/ (\"logs/ command logs\"). README.md:58-62 states every suite seeds log.level: verbose in .spektacular/config.yaml and that the logs live in .spektacular/logs/, and README.md:67-69 gives the timeline command with .../spektacular/logs. The shared unit tests and self-checks are not re-run here; the supplied verification output reports 516 passed in tests/harbor/shared/tests and the self-checks passing (14, 31, 38), and I did not run them myself."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T12:50:40Z",
+          "round": 1,
+          "attempt": 3,
+          "goal": {
+            "item": "90909dbf-daa8-4bb5-a55f-571a60355636",
+            "title": "Harbor suites read the new logs at the verbose level",
+            "criteria": [
+              "Every suite that drives Spektacular starts the agent's run with `log.level: verbose` in its project configuration, whether the project is pre-built or the agent runs `init` itself. No image, script or verifier sets `SPEKTACULAR_SESSION_LOG`.",
+              "The pre-built projects' logs directories hold no record of the seed scripts' own commands when the agent starts.",
+              "Every verifier that runs `spektacular` switches the project's logging off before its first call, so none of its calls appear in the session log.",
+              "No verifier, shared tool or `test.sh` reads `.spektacular/debug` any more, apart from the old-format test fixtures and their trimming script.",
+              "The metrics recorder's pinned command line in `test.sh` is unchanged and still finds the session log by default.",
+              "The README's Harbor sections name `.spektacular/logs/` and the seeded verbose level, and the Harbor shared unit tests and suite self-checks pass."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/project/init.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/init.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "environment/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.level"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "environment/seed/seed.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "/app/.spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/loglevel.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_loglevel.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_suite_wiring.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/tests/test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-workflow/tests/test_implement_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/standing-rules/tests/test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/spec-workflow/tests/test_spec_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/trim_reference.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_loglevel.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Pre-built suites write log.level verbose before the agent's run: spec-workflow/environment/Dockerfile:22, repo-workflow/environment/Dockerfile:32, plan-workflow/environment/Dockerfile:24 (printf 'schema: 5\\nlog:\\n    level: verbose\\n' \u003e /app/.spektacular/config.yaml), and implement-workflow/environment/config.yaml:23-24 (log: level: verbose, copied by its Dockerfile). Seeded suites end their seed with set_log_level verbose: epic-workflow/environment/seed/seed.sh (last line), implement-epic-workflow seed.sh (last line), goal-check-workflow seed.sh (last line), standing-rules seed.sh:~66 before git init. Agent init keeps the level: the diff's Dockerfile comments and the verification run (schema 5 config with only log.level, init keeps verbose) support this. grep for SESSION_LOG over tests/harbor (excluding jobs and .build) returns no files, and the Makefile has no SESSION_LOG or log.level line."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The four seeded suites run init or spektacular commands before setting logging off, then check the logs before the final verbose step: epic-workflow seed.sh (set_log_level off right after the cp of the config, line ~43; later spec writes are logged off), goal-check seed.sh:63-64 (init in /app with no prior config is not logged per the CLI rule; set_log_level off follows), implement-epic seed.sh (init in /tmp/todo-app, then set_log_level off before the sed and spec writes), standing-rules seed.sh:45-46 (init then set_log_level off). Each ends with `if compgen -G \"/app/.spektacular/logs/*.jsonl\"` ... exit 1 before set_log_level verbose. The pre-built Dockerfiles (spec, repo, plan, implement) contain no RUN that calls spektacular, only chmod and mkdir/printf, so their logs start empty."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Every verifier that runs spektacular via subprocess switches logging off first: epic-workflow/tests/test_epic_workflow.py:37-57 (logging_off() called from cli() before subprocess.run of [\"spektacular\", ...]); implement-epic-workflow/tests/test_implement_epic_workflow.py:40-59 (same pattern); goal-check-workflow/tests/test_goal_check.py:263-282 (same); standing-rules/tests/test_standing_rules.py:166-186 (cli_bytes calls logging_off first); plan-workflow/tests/test_plan_workflow.py:1178 (set_log_level(SPEK_DIR/'config.yaml','off') directly before the `spektacular status` subprocess call at 1179-1180, which is the only spektacular call in that file). The other subprocess calls in those files are git and python -m todo, not spektacular. The spec, repo and implement verifiers do not import subprocess and run no spektacular."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Grep for debug path use across tests/harbor (excluding jobs and .build) finds no verifier, shared tool or test.sh that reads .spektacular/debug. The verifiers and shared tools use .spektacular/logs: test_epic_workflow.py:193, test_goal_check.py:359, test_implement_epic_workflow.py:488, test_implement_workflow.py:584, test_plan_workflow.py:630, test_spec_workflow.py:1084, test_standing_rules.py:1207, timeline.py:43, metrics.py:729 (DEBUG_DIR = /app/.spektacular/logs). Remaining 'debug' matches are old-format fixtures under shared/tests/data and test_*.py fixtures (test_reference_runs.py, test_sessionlog_rules.py, test_delegation.py, test_epic_children.py), and the trim script trim_reference.py:178-186, which falls back to debug/ only for old trials. The one non-fixture mention is a docstring in shared/sessionlog.py:16 that describes the old format's location; the code has no debug path constant, so this is a description, not a read."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "The pinned command in every tests/harbor/*/tests/test.sh (e.g. standing-rules/tests/test.sh:18, epic-workflow/tests/test.sh:18) is `python3 /tests/metrics.py || true`, unchanged and not in the diff. metrics.py:729 sets DEBUG_DIR = Path(\"/app/.spektacular/logs\"), so the default run finds the session log without flags. The README and metrics.py docstring were updated to logs/ as well."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "README.md diff lines 484-508: the artifact tree names logs/ command logs; the Harbor section says every suite seeds its project with log.level: verbose in .spektacular/config.yaml and that the project's .spektacular/logs/ is collected as artifacts/spektacular/logs/; the timeline command is updated to .../artifacts/spektacular/logs. The shared unit tests and self-checks are reported passing in the verification summary (516 passed in shared/tests; 14, 31, 38 in the three selfcheck files). I did not rerun them, since that would write cache files; the pass result is taken from the verification summary, and the test files were not read for their assertions."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 3,
+      "state": "accepted"
     }
   ]
 }

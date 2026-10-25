@@ -465,7 +465,7 @@ Adds retention to the file logger. When a record starts a new run log, older run
 
 **Validation point**: Harbor's Python unit tests pass, including new cases for new-format records and the unchanged pinned reference-run values. A grep of `tests/harbor` finds no `.spektacular/debug` path outside the old-format fixtures and their trimming script, and no `SPEKTACULAR_SESSION_LOG` anywhere. A real suite run is checked by hand (see Testing Approach).
 
-#### - [ ] Task: Harbor reader understands span records
+#### - [x] Task: Harbor reader understands span records
 **Id:** 2a0cfbab-fa3b-43e3-89cc-15ac23bdca40
 **Repo:** spektacular
 **Depends on:**
@@ -477,12 +477,12 @@ Teaches Harbor's shared session-log reader to read the new span records, turning
 *Technical detail:* [context.md#task-harbor-reader-understands-span-records](./context.md#task-harbor-reader-understands-span-records)
 
 **Acceptance criteria**:
-- [ ] A new-format record and its old-format equivalent produce identical events.
-- [ ] A directory mixing both formats is read in full, with lanes and shared events split by file name as before.
-- [ ] A verbose resume refusal in the new format is still detected as a resume.
-- [ ] All existing Harbor shared unit tests, including the pinned reference-run values, pass unchanged.
+- [x] A new-format record and its old-format equivalent produce identical events.
+- [x] A directory mixing both formats is read in full, with lanes and shared events split by file name as before.
+- [x] A verbose resume refusal in the new format is still detected as a resume.
+- [x] All existing Harbor shared unit tests, including the pinned reference-run values, pass unchanged.
 
-#### - [ ] Task: Harbor suites read the new logs at the verbose level
+#### - [x] Task: Harbor suites read the new logs at the verbose level
 **Id:** 90909dbf-daa8-4bb5-a55f-571a60355636
 **Repo:** spektacular
 **Depends on:**
@@ -495,12 +495,12 @@ Points Harbor at `.spektacular/logs/` wherever it looked in `.spektacular/debug/
 *Technical detail:* [context.md#task-harbor-suites-read-the-new-logs-at-the-verbose-level](./context.md#task-harbor-suites-read-the-new-logs-at-the-verbose-level)
 
 **Acceptance criteria**:
-- [ ] Every suite that drives Spektacular starts the agent's run with `log.level: verbose` in its project configuration, whether the project is pre-built or the agent runs `init` itself. No image, script or verifier sets `SPEKTACULAR_SESSION_LOG`.
-- [ ] The pre-built projects' logs directories hold no record of the seed scripts' own commands when the agent starts.
-- [ ] Every verifier that runs `spektacular` switches the project's logging off before its first call, so none of its calls appear in the session log.
-- [ ] No verifier, shared tool or `test.sh` reads `.spektacular/debug` any more, apart from the old-format test fixtures and their trimming script.
-- [ ] The metrics recorder's pinned command line in `test.sh` is unchanged and still finds the session log by default.
-- [ ] The README's Harbor sections name `.spektacular/logs/` and the seeded verbose level, and the Harbor shared unit tests and suite self-checks pass.
+- [x] Every suite that drives Spektacular starts the agent's run with `log.level: verbose` in its project configuration, whether the project is pre-built or the agent runs `init` itself. No image, script or verifier sets `SPEKTACULAR_SESSION_LOG`.
+- [x] The pre-built projects' logs directories hold no record of the seed scripts' own commands when the agent starts.
+- [x] Every verifier that runs `spektacular` switches the project's logging off before its first call, so none of its calls appear in the session log.
+- [x] No verifier, shared tool or `test.sh` reads `.spektacular/debug` any more, apart from the old-format test fixtures and their trimming script.
+- [x] The metrics recorder's pinned command line in `test.sh` is unchanged and still finds the session log by default.
+- [x] The README's Harbor sections name `.spektacular/logs/` and the seeded verbose level, and the Harbor shared unit tests and suite self-checks pass.
 
 ### Milestone 4: Logging is documented
 
@@ -716,3 +716,62 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - `spektacular: cmd/log_retention_test.go`
 
 **Discoveries**: None.
+
+### 2026-10-25 — Task: Harbor reader understands span records
+
+**What was done**: `tests/harbor/shared/sessionlog.py`'s `read_events` recognises a new-format line by its `trace_id` and maps it through a new `span_event` onto the existing `Event`: `start_time` as `at`, end minus start as `duration_ms`, `process.command_args`, `process.exit_code` (falling back to the status code), the verbose state snapshots and response. Old-format lines read exactly as before; a new-format line without a start time is skipped. The module docstring describes both formats, `.spektacular/logs/` and the `standalone_<day>.jsonl` shared file.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: tests/harbor/shared/sessionlog.py`
+- `spektacular: tests/harbor/shared/tests/test_sessionlog_windows.py`
+
+**Discoveries**: Harbor's lane-file pattern (`<ts>_<agent>_<kind>_<name>.jsonl`) already matches the new run file names, so no lane or shared-event code changed.
+
+### 2026-10-25 — Task: Harbor suites read the new logs at the verbose level
+
+**What was done**: Harbor reads `.spektacular/logs/` everywhere it read `.spektacular/debug/` (every verifier's `DEBUG_DIR`, `timeline.py` and `metrics.py` defaults, the `test.sh` timeline calls), and no image sets `SPEKTACULAR_SESSION_LOG`. Each suite's project records the agent's run at `log.level: verbose`: spec, plan and repo images pre-seed a `schema: 5` config holding only that level, which the agent's `init` keeps; the implement suite's `config.yaml` carries it; the four pre-built projects' seeds switch logging off right after the project config exists, fail the image build if any seed command reached the log, and set verbose as their last step. A new shared `loglevel.py` (with `test_loglevel.py`) lets the verifiers that run `spektacular` switch logging off before their first call. Comments, the Makefile's Harbor notes and the README's Harbor sections were updated, and `trim_reference.py` reads a new trial's `logs/` as well as an old one's `debug/`.
+
+**Deviations**:
+- The epic suite's `test_orchestrator_polled_epic_status` was removed: `status` is never logged, so the orchestrator's polls can no longer be seen in the session log (spec 000074's sub-agent spans replace them). The README's timeline paragraph says the time to start each child is no longer shown.
+- The spec, plan and repo verifiers' "init was run" checks now also require `skills_version` in `config.yaml`, since the pre-seeded config exists before `init`.
+- The plan-workflow verifier's one `status` call also switches logging off first (goal check retry), although `status` is never logged.
+- The goal check's second attempt judged that the goal-check and standing-rules seeds' `init` would be logged; it is not (a command is logged only where a config exists when it starts), and the seeds now say so and assert an empty log before turning verbose on.
+
+**Files changed**:
+- `spektacular: tests/harbor/shared/loglevel.py`
+- `spektacular: tests/harbor/shared/tests/test_loglevel.py`
+- `spektacular: tests/harbor/shared/timeline.py`
+- `spektacular: tests/harbor/shared/metrics.py`
+- `spektacular: tests/harbor/shared/tests/trim_reference.py`
+- `spektacular: tests/harbor/background-child/environment/Dockerfile`
+- `spektacular: tests/harbor/epic-workflow/environment/Dockerfile`
+- `spektacular: tests/harbor/epic-workflow/environment/seed/seed.sh`
+- `spektacular: tests/harbor/epic-workflow/tests/test.sh`
+- `spektacular: tests/harbor/epic-workflow/tests/test_epic_workflow.py`
+- `spektacular: tests/harbor/implement-epic-workflow/environment/Dockerfile`
+- `spektacular: tests/harbor/implement-epic-workflow/environment/seed/seed.sh`
+- `spektacular: tests/harbor/implement-epic-workflow/tests/test.sh`
+- `spektacular: tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py`
+- `spektacular: tests/harbor/goal-check-workflow/environment/Dockerfile`
+- `spektacular: tests/harbor/goal-check-workflow/environment/seed/seed.sh`
+- `spektacular: tests/harbor/goal-check-workflow/tests/test.sh`
+- `spektacular: tests/harbor/goal-check-workflow/tests/test_goal_check.py`
+- `spektacular: tests/harbor/standing-rules/environment/Dockerfile`
+- `spektacular: tests/harbor/standing-rules/environment/seed/seed.sh`
+- `spektacular: tests/harbor/standing-rules/tests/test.sh`
+- `spektacular: tests/harbor/standing-rules/tests/test_standing_rules.py`
+- `spektacular: tests/harbor/implement-workflow/environment/Dockerfile`
+- `spektacular: tests/harbor/implement-workflow/environment/config.yaml`
+- `spektacular: tests/harbor/implement-workflow/tests/test_implement_workflow.py`
+- `spektacular: tests/harbor/plan-workflow/environment/Dockerfile`
+- `spektacular: tests/harbor/plan-workflow/tests/test_plan_workflow.py`
+- `spektacular: tests/harbor/repo-workflow/environment/Dockerfile`
+- `spektacular: tests/harbor/repo-workflow/tests/test_repo_workflow.py`
+- `spektacular: tests/harbor/spec-workflow/environment/Dockerfile`
+- `spektacular: tests/harbor/spec-workflow/tests/test_spec_workflow.py`
+- `spektacular: Makefile`
+- `spektacular: README.md`
+
+**Discoveries**: The first `init` of a project is never logged, so a seed that runs `init` in `/app` needs logging switched off only after it. Harbor's epic timeline can no longer show when the orchestrator spawned each child, since that came from its `status` polls. A real suite run was not possible here (Docker and agent logins); it stays a manual check in the test plan.

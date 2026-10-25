@@ -13,11 +13,12 @@
     "update_changelog"
   ],
   "created_at": "2026-10-25T11:53:25.613888408Z",
-  "updated_at": "2026-10-25T12:33:40.62037368Z",
+  "updated_at": "2026-10-25T12:51:03.097537832Z",
   "data": {
     "committed_milestones": [
       1,
-      2
+      2,
+      3
     ],
     "goal_item": "",
     "name": "000073_log-mode-and-logger-providers",
