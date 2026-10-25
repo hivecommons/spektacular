@@ -39,27 +39,27 @@ Spektacular's end-to-end test harness, Harbor, measures each test run's step tim
 -->
 ## Requirements
 
-- [ ] **Step timings come from Spektacular's logs**
+- [x] **Step timings come from Spektacular's logs**
   Each Harbor run's metrics record must take its workflow steps and their timings from Spektacular's own logs, for every agent the harness runs.
-- [ ] **Helper agents come from Spektacular's logs**
+- [x] **Helper agents come from Spektacular's logs**
   Each run's metrics record must take the number of helper agents started, and the spec and step each was started in, from Spektacular's own logs, for every agent, including agents whose transcript shows no helper agents.
-- [ ] **Idle and user-wait time are reported in full**
+- [x] **Idle and user-wait time are reported in full**
   Each run's metrics record must report total time waiting on the user, total gap time and each step's split into working, helper-wait and user-wait time, in place of the single longest gap reported today.
-- [ ] **Epic run timelines come from Spektacular's logs**
+- [x] **Epic run timelines come from Spektacular's logs**
   The harness's report on where an orchestrated epic run spent its time (when each spec's child started and finished, its slowest step, and the hand-off gaps between child and orchestrator) must be built from Spektacular's own logs.
-- [ ] **Delegation checks judge from spans**
+- [x] **Delegation checks judge from spans**
   The harness's checks that a step's required helper agent was started, and in which spec and step, must judge from Spektacular's own logs. Checks on what a helper's brief contained may keep reading the transcript.
-- [ ] **Tokens, models and cost still come from transcripts**
+- [x] **Tokens, models and cost still come from transcripts**
   The metrics record must keep reporting token usage, models used and cost, unchanged.
-- [ ] **The old parsers are removed**
+- [x] **The old parsers are removed**
   The harness's debug-log reader and its transcript-based step, helper-placement and idle measures must be removed once replaced, leaving one source for each measure.
-- [ ] **Trial artifacts carry the logs**
+- [x] **Trial artifacts carry the logs**
   Each Harbor trial must collect the project's Spektacular logs into its artifacts in place of the old debug output, so a run can be reported on after the fact.
-- [ ] **Missing data stays explicit**
+- [x] **Missing data stays explicit**
   When a run's logs are missing or a measure cannot be read, the metrics record must report it as unknown with the reason, never as zero, as today.
-- [ ] **Measuring never fails a run**
+- [x] **Measuring never fails a run**
   Gathering metrics must never fail a test run or change its reward, as today.
-- [ ] **Cross-run reports use the new measures**
+- [x] **Cross-run reports use the new measures**
   The harness's cross-run report must show the new per-step split and totals for each run, and the difference in each per-step figure and total between runs.
 
 
@@ -102,17 +102,17 @@ Spektacular's end-to-end test harness, Harbor, measures each test run's step tim
   The epic timeline report for a Harbor implement-epic trial lists each spec's child start and finish, its slowest step and both hand-off gaps, and is produced correctly for a trial that has no old debug directory.
 - [ ] **Delegation checks pass from spans**
   A Harbor run in which a required helper agent was started passes the delegation checks, and a run in which it was not fails them naming the step, judged from sub-agent spans.
-- [ ] **Token figures are unchanged**
+- [x] **Token figures are unchanged**
   Running the old and new metrics gathering over the same collected trial artifacts gives identical token usage, models and cost.
-- [ ] **Measures come from one source**
+- [x] **Measures come from one source**
   With the old debug directory absent, a trial still produces full step, helper and idle measures; with Spektacular's logs removed, those measures are unknown and none is filled in from transcripts.
 - [ ] **Artifacts hold the logs**
   A collected Harbor trial contains the project's Spektacular logs, and the run statistics report run against that copy gives the trial's step timings.
-- [ ] **Missing logs are unknown**
+- [x] **Missing logs are unknown**
   A trial whose Spektacular logs were removed produces a metrics record with step, helper and wait measures set to unknown with a reason, and still exits successfully.
-- [ ] **Rewards are untouched**
+- [x] **Rewards are untouched**
   A trial's reward is identical whether metrics gathering succeeds or fails.
-- [ ] **The cross-run report shows the split**
+- [x] **The cross-run report shows the split**
   The cross-run report over two trials shows each trial's per-step split and totals and their differences.
 - [ ] **Harbor self-tests pass**
   The harness's local self-tests (`pytest tests/harbor`, which cover every requirement above that the harness can check without an agent) pass after the change.
