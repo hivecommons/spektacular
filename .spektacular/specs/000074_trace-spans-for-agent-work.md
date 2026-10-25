@@ -35,31 +35,31 @@ A run's time is spent on more than the commands an agent sends: in each workflow
 -->
 ## Requirements
 
-- [ ] **Workflow steps are recorded without agent action**
+- [x] **Workflow steps are recorded without agent action**
   The system must record each workflow step of a run as a span that begins when the workflow enters the step and ends when it leaves it (moves to another step, finishes, or is restarted), without the agent doing anything beyond moving the workflow as it does today.
-- [ ] **Commands nest under their step**
+- [x] **Commands nest under their step**
   Each command recorded during a step must be linked to that step's span as its parent, so a run reads as steps containing the commands sent in them.
-- [ ] **Interrupted steps are closed on resume**
+- [x] **Interrupted steps are closed on resume**
   When a run is resumed after its session stopped mid-step, the step left open must be closed, marked as interrupted, at the time of the last command recorded in it (or at its own start if none was), together with any span still open under it, and the resumed step recorded as a new span. A step left open when a run is restarted from scratch is closed, marked as abandoned.
-- [ ] **Plan tasks are recorded without agent action**
+- [x] **Plan tasks are recorded without agent action**
   When implementing a plan, the system must record each plan task as a span covering every step of that task's work, without the agent marking it. A task span belongs directly to the run, and the step spans for that task's work nest under it; outside a task, step spans belong directly to the run.
-- [ ] **Agents can start and stop a span**
+- [x] **Agents can start and stop a span**
   Agents can start a span with a name and a type and receive its identifier, then stop it by that identifier with a success or error status.
-- [ ] **Spans nest under a chosen parent**
+- [x] **Spans nest under a chosen parent**
   A span an agent starts must be linked to the current step's span by default, or to any other open span the agent names, so the spans of several helper agents running at the same time each nest under the span that launched them. Naming a parent that is unknown or already closed reports an error and records nothing.
-- [ ] **Span types are distinguishable**
+- [x] **Span types are distinguishable**
   Every span must carry a type: step, task, sub-agent, user wait, or general work.
-- [ ] **Waits on the user are their own type**
+- [x] **Waits on the user are their own type**
   Time the agent spends waiting for the user to answer must be recordable as a user-wait span, distinct from every other type, so it can be counted separately from or left out of the run's working time.
-- [ ] **Instructions tell agents what to mark**
+- [x] **Instructions tell agents what to mark**
   The instructions Spektacular gives agents for every workflow (spec, plan, implement, epic planning and epic implementation) must tell the agent to mark each helper-agent launch as a sub-agent span and each question put to the user as a user-wait span, and must give helper agents the parent span to nest their own spans under.
-- [ ] **Unclosed spans are closed with their parent**
+- [x] **Unclosed spans are closed with their parent**
   A span still open when its parent span ends, or when its run finishes, must be closed then, marked as abandoned.
-- [ ] **Trace commands are safe**
+- [x] **Trace commands are safe**
   Starting or stopping a span must never change the workflow's state or step; stopping an unknown or already stopped span reports an error that names the problem and changes nothing.
-- [ ] **Trace commands respect log mode**
+- [x] **Trace commands respect log mode**
   Starting and stopping spans must follow the project's logging settings: with logging switched off they succeed and record nothing.
-- [ ] **The documentation describes spans**
+- [x] **The documentation describes spans**
   User documentation for logging must describe the span types, which spans Spektacular records itself, and the commands agents use to start and stop spans.
 
 
@@ -91,43 +91,43 @@ A run's time is spent on more than the commands an agent sends: in each workflow
 -->
 ## Acceptance Criteria
 
-- [ ] **Steps appear as spans**
+- [x] **Steps appear as spans**
   After a spec workflow moves through `new`, `interview` and `overview`, the run's log holds a step span for each of `new` and `interview`, each ending when the next began, and an open span for `overview`; the agent ran no command other than the usual workflow commands.
-- [ ] **A finished run closes its last step**
+- [x] **A finished run closes its last step**
   After a workflow reaches `finished`, no step span of that run is left open.
-- [ ] **A restart closes the old run's step**
+- [x] **A restart closes the old run's step**
   Running `spec new --force` while a run is mid-step closes that run's open step span, marked abandoned.
-- [ ] **Commands are children of their step**
+- [x] **Commands are children of their step**
   Every command recorded while a run is on a step carries that step's span identifier as its parent.
-- [ ] **Interrupted steps are marked on resume**
+- [x] **Interrupted steps are marked on resume**
   Stopping a session mid-step, with a helper span still open, and resuming the run produces a closed span for the interrupted step, marked interrupted and ending at the time of its last recorded command, the helper span closed and marked interrupted, and a new span for the resumed step.
-- [ ] **Tasks appear as spans in implement**
+- [x] **Tasks appear as spans in implement**
   After implementing a plan with two tasks, the run's log holds one task span per task, each naming its task, with the step spans of that task's work as its children, and no trace command run by the agent.
-- [ ] **An agent-started span is recorded**
+- [x] **An agent-started span is recorded**
   Starting a span of type sub-agent named `test-writer` returns an identifier; stopping it with that identifier records a span of type sub-agent named `test-writer` with a start, an end and a success status.
-- [ ] **A failed span records its error**
+- [x] **A failed span records its error**
   Stopping a span with an error status records the span with an error status.
-- [ ] **Default parent is the current step**
+- [x] **Default parent is the current step**
   A span started without naming a parent carries the current step's span identifier as its parent.
-- [ ] **Concurrent children nest correctly**
+- [x] **Concurrent children nest correctly**
   Two sub-agent spans started at the same time, each naming a different parent span, are recorded with their own parents, and spans started by each helper with its parent's identifier nest under the right one.
-- [ ] **User waits are typed**
+- [x] **User waits are typed**
   A span started with the user-wait type is recorded with the user-wait type, and no other span type is recorded as user wait.
-- [ ] **Unclosed spans are abandoned**
+- [x] **Unclosed spans are abandoned**
   A span started during a step and never stopped is closed, marked abandoned, when the workflow moves to the next step; a span started in the last step and never stopped is closed, marked abandoned, when the workflow reaches `finished`.
-- [ ] **A bad parent is refused**
+- [x] **A bad parent is refused**
   Starting a span that names an unknown parent, or one already closed, returns an error naming the problem and records no span.
-- [ ] **Trace commands leave the workflow alone**
+- [x] **Trace commands leave the workflow alone**
   Starting and stopping spans leaves the workflow's current step and completed steps unchanged.
-- [ ] **Bad stops are reported**
+- [x] **Bad stops are reported**
   Stopping an identifier that was never started, or one already stopped, returns an error naming the problem, and the log holds no new span end for it.
-- [ ] **Logging off records no spans**
+- [x] **Logging off records no spans**
   With logging switched off, starting and stopping a span succeed and no record is written.
-- [ ] **Instructions name the spans**
+- [x] **Instructions name the spans**
   Every workflow step instruction or skill that launches a helper agent tells the agent to mark the launch as a sub-agent span and passes the parent span to the helper, and every one that asks the user a question tells the agent to mark the wait as a user-wait span.
 - [ ] **Harbor runs show helper and user spans**
   In one run each of the Harbor agent test harness's implement, plan-epic and implement-epic suites, every helper-agent launch appears in the log as a sub-agent span; in one run of its spec suite, every question put to the scripted user appears as a user-wait span. (Success Metrics track the rate over repeated runs.)
-- [ ] **The docs describe spans**
+- [x] **The docs describe spans**
   The documentation site's logging page describes the span types, the spans recorded automatically, and the start and stop commands; the site builds without errors.
 
 
