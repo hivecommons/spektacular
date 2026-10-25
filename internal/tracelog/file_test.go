@@ -223,3 +223,158 @@ func TestWriteUnmarshalableRecordIsContained(t *testing.T) {
 		newFileLogger(FileOptions{Directory: dir, Retention: 10}).Write(workflowRun(time.Now()), rec)
 	})
 }
+
+// writeRun writes one record for a workflow run that started at started.
+func writeRun(l Logger, name string, started time.Time) {
+	l.Write(Run{TraceID: NewTraceID(), Kind: "spec", Name: name, StartedAt: started, Agent: "claude"}, sampleRecord())
+}
+
+// jsonlNames lists the .jsonl entries of dir, sorted.
+func jsonlNames(t *testing.T, dir string) []string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	require.NoError(t, err)
+	names := make([]string, 0, len(matches))
+	for _, m := range matches {
+		names = append(names, filepath.Base(m))
+	}
+	return names
+}
+
+var retentionBase = time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+
+// TestSweepKeepsTheNewestRuns checks 12 runs leave the 10 newest with the
+// default retention, and a smaller retention keeps that many.
+func TestSweepKeepsTheNewestRuns(t *testing.T) {
+	for _, tc := range []struct {
+		retention int
+		want      []string
+	}{
+		{retention: 10, want: []string{
+			"20261001T110000.000000000Z_claude_spec_r02.jsonl",
+			"20261001T120000.000000000Z_claude_spec_r03.jsonl",
+			"20261001T130000.000000000Z_claude_spec_r04.jsonl",
+			"20261001T140000.000000000Z_claude_spec_r05.jsonl",
+			"20261001T150000.000000000Z_claude_spec_r06.jsonl",
+			"20261001T160000.000000000Z_claude_spec_r07.jsonl",
+			"20261001T170000.000000000Z_claude_spec_r08.jsonl",
+			"20261001T180000.000000000Z_claude_spec_r09.jsonl",
+			"20261001T190000.000000000Z_claude_spec_r10.jsonl",
+			"20261001T200000.000000000Z_claude_spec_r11.jsonl",
+		}},
+		{retention: 3, want: []string{
+			"20261001T180000.000000000Z_claude_spec_r09.jsonl",
+			"20261001T190000.000000000Z_claude_spec_r10.jsonl",
+			"20261001T200000.000000000Z_claude_spec_r11.jsonl",
+		}},
+	} {
+		dir := t.TempDir()
+		l := newFileLogger(FileOptions{Directory: dir, Retention: tc.retention})
+		for i := range 12 {
+			writeRun(l, "r"+twoDigits(i), retentionBase.Add(time.Duration(i)*time.Hour))
+		}
+		require.Equal(t, tc.want, jsonlNames(t, dir), "retention %d", tc.retention)
+	}
+}
+
+func twoDigits(i int) string {
+	return string([]byte{byte('0' + i/10), byte('0' + i%10)})
+}
+
+// TestSweepCountsDaysSeparatelyFromRuns checks standalone commands on many
+// days keep the newest day files and never remove a workflow run's log.
+func TestSweepCountsDaysSeparatelyFromRuns(t *testing.T) {
+	dir := t.TempDir()
+	l := newFileLogger(FileOptions{Directory: dir, Retention: 10})
+	for i := range 10 {
+		writeRun(l, "r"+twoDigits(i), retentionBase.Add(time.Duration(i)*time.Hour))
+	}
+	for d := range 15 {
+		l.Write(Run{TraceID: NewTraceID(), StartedAt: retentionBase.AddDate(0, 0, d)}, sampleRecord())
+	}
+
+	var runs, days []string
+	for _, n := range jsonlNames(t, dir) {
+		if strings.HasPrefix(n, standalonePrefix) {
+			days = append(days, n)
+		} else {
+			runs = append(runs, n)
+		}
+	}
+	require.Len(t, runs, 10, "standalone commands remove no run log")
+	require.Equal(t, "standalone_20261006.jsonl", days[0])
+	require.Equal(t, "standalone_20261015.jsonl", days[len(days)-1])
+	require.Len(t, days, 10)
+}
+
+// TestSweepNeverDeletesTheFileItWrote checks a run whose start time sorts it
+// among the oldest (a run started long ago) keeps its own new file.
+func TestSweepNeverDeletesTheFileItWrote(t *testing.T) {
+	dir := t.TempDir()
+	l := newFileLogger(FileOptions{Directory: dir, Retention: 3})
+	for i := range 3 {
+		writeRun(l, "new"+twoDigits(i), retentionBase.Add(time.Duration(i)*time.Hour))
+	}
+	writeRun(l, "legacy", retentionBase.AddDate(-1, 0, 0))
+
+	names := jsonlNames(t, dir)
+	require.Len(t, names, 3)
+	require.Contains(t, names, "20251001T090000.000000000Z_claude_spec_legacy.jsonl")
+	require.Equal(t, 1, len(readRecordLines(t, filepath.Join(dir, "20251001T090000.000000000Z_claude_spec_legacy.jsonl"))))
+}
+
+// TestSweepOnlyOnNewFile checks appending to an existing run file does not
+// sweep, so a directory over retention is trimmed only when a new run
+// starts.
+func TestSweepOnlyOnNewFile(t *testing.T) {
+	dir := t.TempDir()
+	for i := range 5 {
+		name := retentionBase.Add(time.Duration(i)*time.Hour).Format(runFileTimestampFormat) + "_claude_spec_r" + twoDigits(i) + ".jsonl"
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("{}\n"), 0o644))
+	}
+	l := newFileLogger(FileOptions{Directory: dir, Retention: 2})
+	writeRun(l, "r04", retentionBase.Add(4*time.Hour))
+	require.Len(t, jsonlNames(t, dir), 5, "an append to an existing run file sweeps nothing")
+
+	writeRun(l, "r05", retentionBase.Add(5*time.Hour))
+	require.Equal(t, []string{
+		"20261001T130000.000000000Z_claude_spec_r04.jsonl",
+		"20261001T140000.000000000Z_claude_spec_r05.jsonl",
+	}, jsonlNames(t, dir))
+}
+
+// TestSweepSkipsALogThatCannotBeDeleted checks an old log that cannot be
+// removed (here a non-empty directory named like one) is skipped: the write
+// returns normally, prints nothing, the others are still trimmed, and the
+// new record is written.
+func TestSweepSkipsALogThatCannotBeDeleted(t *testing.T) {
+	dir := t.TempDir()
+	stuck := filepath.Join(dir, "20260101T000000.000000000Z_claude_spec_stuck.jsonl")
+	require.NoError(t, os.MkdirAll(filepath.Join(stuck, "inner"), 0o755))
+	l := newFileLogger(FileOptions{Directory: dir, Retention: 2})
+	for i := range 3 {
+		writeRun(l, "r"+twoDigits(i), retentionBase.Add(time.Duration(i)*time.Hour))
+	}
+
+	printed := captureStd(t, func() {
+		require.NotPanics(t, func() { writeRun(l, "r03", retentionBase.Add(3*time.Hour)) })
+	})
+	require.Empty(t, printed)
+	require.DirExists(t, stuck)
+	require.Equal(t, []string{
+		"20260101T000000.000000000Z_claude_spec_stuck.jsonl",
+		"20261001T110000.000000000Z_claude_spec_r02.jsonl",
+		"20261001T120000.000000000Z_claude_spec_r03.jsonl",
+	}, jsonlNames(t, dir))
+}
+
+// TestSweepNonPositiveRetentionUsesTheDefault checks a retention below 1
+// keeps the default number of runs rather than deleting everything.
+func TestSweepNonPositiveRetentionUsesTheDefault(t *testing.T) {
+	dir := t.TempDir()
+	l := newFileLogger(FileOptions{Directory: dir, Retention: 0})
+	for i := range 12 {
+		writeRun(l, "r"+twoDigits(i), retentionBase.Add(time.Duration(i)*time.Hour))
+	}
+	require.Len(t, jsonlNames(t, dir), defaultRetention)
+}

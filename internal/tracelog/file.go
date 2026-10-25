@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -66,11 +67,53 @@ func (l *fileLogger) Write(run Run, rec Record) {
 	l.sweep(created, path)
 }
 
-// sweep trims old logs when a write created a new file. Retention is added
-// by a later task; until then it keeps everything.
+// defaultRetention is the number of runs kept when the logger is given no
+// usable retention. Configuration validation refuses one below 1, so this is
+// only a defensive fallback.
+const defaultRetention = 10
+
+// sweep trims old logs, only when a write created a new file. Run files and
+// day files are counted separately, so standalone commands never push out a
+// workflow run: in the group the new file belongs to, all but the newest
+// retention files are deleted, newest by their sortable start prefix. The
+// file just written is never deleted, even when its start time sorts it
+// among the oldest. Every entry named like a log is a candidate, whatever
+// its type; one that cannot be removed (already gone, a non-empty
+// directory, no permission) is skipped.
 func (l *fileLogger) sweep(created bool, current string) {
-	_ = created
-	_ = current
+	if !created {
+		return
+	}
+	keep := l.retention
+	if keep < 1 {
+		keep = defaultRetention
+	}
+	entries, err := os.ReadDir(l.dir)
+	if err != nil {
+		return
+	}
+	currentName := filepath.Base(current)
+	currentDay := strings.HasPrefix(currentName, standalonePrefix)
+
+	var group []string
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".jsonl") || name == currentName {
+			continue
+		}
+		if strings.HasPrefix(name, standalonePrefix) == currentDay {
+			group = append(group, name)
+		}
+	}
+	// The file just written counts as one of the kept files.
+	keep--
+	if len(group) <= keep {
+		return
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(group)))
+	for _, name := range group[keep:] {
+		_ = os.Remove(filepath.Join(l.dir, name))
+	}
 }
 
 // runFilePath is the file a run's records go to. A workflow run's file is
