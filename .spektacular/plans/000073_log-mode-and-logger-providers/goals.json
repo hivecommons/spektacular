@@ -508,6 +508,82 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "d1f4fa2f-933e-4a13-b19d-a2af3f910e2d",
+      "title": "Keep only the most recent runs and days",
+      "checks": [
+        {
+          "at": "2026-10-25T12:33:29Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "d1f4fa2f-933e-4a13-b19d-a2af3f910e2d",
+            "title": "Keep only the most recent runs and days",
+            "criteria": [
+              "With the default retention, after 12 separate workflow runs the logs directory holds the logs of the 10 most recent runs only.",
+              "With retention set to 3, it holds the 3 most recent runs' logs.",
+              "Many standalone commands run on different days in between remove no workflow run's log, and only the configured number of most recent day logs is kept.",
+              "The log being written to is never deleted by its own sweep.",
+              "When an old log cannot be deleted, the command's output and exit code are identical to a run with logging off."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/file.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/sessionlog/record.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/file_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/tracelog/file.go:87-115 keeps the newest (retention-1) prior run files plus the new one, deleting the rest. cmd/root.go:246 passes cfg.Log.Retention, and config.DefaultLogRetention (internal/config/config.go:96) is the default, which the migrate goldens show as 10. cmd/log_retention_test.go:56-68 (TestLogRetention_DefaultKeepsTheTenMostRecentRuns) runs 12 real spec runs and asserts the last 10 ids remain. Scope note: cmd/log_retention_test.go is not in the goal's file list, though it holds the command-level tests."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "cmd/log_retention_test.go:71-83 (TestLogRetention_ConfiguredRetentionIsHonoured) sets log.retention: 3, runs 6 workflow runs and asserts exactly the 3 newest ids remain. internal/tracelog/file_test.go:101-131 (TestSweepKeepsTheNewestRuns, retention 3 case) checks the same at unit level."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Run files and day files are grouped separately: file.go:95-107 uses strings.HasPrefix(name, standalonePrefix) == currentDay, so a day write only considers day files. file_test.go:137-161 (TestSweepCountsDaysSeparatelyFromRuns) writes 10 runs then 15 day files and asserts all 10 runs remain and 10 day files remain (standalone_20261006 to standalone_20261015). cmd/log_retention_test.go:87-110 covers 20 standalone commands after real runs with retention 3, asserting every run log survives."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "file.go:101 skips name == currentName, so the file just written is never a deletion candidate; see also the comment at file.go:78-80. file_test.go:163-177 (TestSweepNeverDeletesTheFileItWrote) writes a run that sorts oldest with retention 3 and asserts its file survives with its record."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "file.go:115 ignores the os.Remove error (_ = os.Remove), and the sweep returns silently on other errors. Write also recovers panics (file.go:39). file_test.go:199-222 (TestSweepSkipsALogThatCannotBeDeleted) uses a non-empty directory named like an old log and asserts no printed output, no panic, and the new record written. cmd/log_retention_test.go:115-142 compares stdout and exit code with a logging-off run and checks the undeletable log is left in place."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }

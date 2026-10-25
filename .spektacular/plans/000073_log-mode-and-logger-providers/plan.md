@@ -441,7 +441,7 @@ The old session-log package and its tests are replaced, and logging stays inside
 
 **Validation point**: Integration tests show that 12 runs leave 10 logs, retention 3 leaves 3, standalone commands in between remove no run log, and an undeletable old log leaves the command's output and exit code unchanged.
 
-#### - [ ] Task: Keep only the most recent runs and days
+#### - [x] Task: Keep only the most recent runs and days
 **Id:** d1f4fa2f-933e-4a13-b19d-a2af3f910e2d
 **Repo:** spektacular
 **Depends on:**
@@ -453,11 +453,11 @@ Adds retention to the file logger. When a record starts a new run log, older run
 *Technical detail:* [context.md#task-keep-only-the-most-recent-runs-and-days](./context.md#task-keep-only-the-most-recent-runs-and-days)
 
 **Acceptance criteria**:
-- [ ] With the default retention, after 12 separate workflow runs the logs directory holds the logs of the 10 most recent runs only.
-- [ ] With retention set to 3, it holds the 3 most recent runs' logs.
-- [ ] Many standalone commands run on different days in between remove no workflow run's log, and only the configured number of most recent day logs is kept.
-- [ ] The log being written to is never deleted by its own sweep.
-- [ ] When an old log cannot be deleted, the command's output and exit code are identical to a run with logging off.
+- [x] With the default retention, after 12 separate workflow runs the logs directory holds the logs of the 10 most recent runs only.
+- [x] With retention set to 3, it holds the 3 most recent runs' logs.
+- [x] Many standalone commands run on different days in between remove no workflow run's log, and only the configured number of most recent day logs is kept.
+- [x] The log being written to is never deleted by its own sweep.
+- [x] When an old log cannot be deleted, the command's output and exit code are identical to a run with logging off.
 
 ### Milestone 3: The Harbor test harness reports from the new logs
 
@@ -703,3 +703,16 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - `spektacular: internal/sessionlog/record_test.go` (removed)
 
 **Discoveries**: `init` itself is never logged, since the level is decided before the project config exists. The no-data `spec new` resume report is a refusal (exit 1, `workflow_in_progress`), so it is recorded as an error span that still shares the run's trace. Any command run while a workflow is in progress (a `knowledge search`, `skill list`) is filed under that run, not the standalone day file. In tests the pre-command exemption check reads `os.Args`, so a test that needs it must set `os.Args` (`runDebugCmd`).
+
+### 2026-10-25 — Task: Keep only the most recent runs and days
+
+**What was done**: The file logger's `sweep` now runs whenever a write creates a new file. It lists the `*.jsonl` entries, splits run files from `standalone_` day files, and in the new file's group keeps the newest `log.retention` files (the new one counted among them) by their sortable start prefix, deleting the rest; the file just written is never a candidate, a retention below 1 falls back to 10, and any entry that cannot be removed is skipped.
+
+**Deviations**: Every entry named like a log is a deletion candidate whatever its type, so the tests simulate an undeletable old log with a non-empty directory of that name (a permission-based setup would also stop the new file being written). The cmd-level retention tests live in a new `cmd/log_retention_test.go`, beside `cmd/log_test.go`, rather than in `cmd/root_test.go`.
+
+**Files changed**:
+- `spektacular: internal/tracelog/file.go`
+- `spektacular: internal/tracelog/file_test.go`
+- `spektacular: cmd/log_retention_test.go`
+
+**Discoveries**: None.
