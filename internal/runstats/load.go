@@ -28,6 +28,10 @@ type Logs struct {
 	Runs []*Run
 	// Skipped counts the lines that could not be read as records.
 	Skipped int
+	// Outside are the records of traces with no workflow attributes, in
+	// start order: the commands and spans written outside any run, such as
+	// an epic orchestrator's. Only the listings read them.
+	Outside []tracelog.Record
 }
 
 // loaded is one record and the base name of the file it was read from.
@@ -70,7 +74,7 @@ func Load(dir string) (*Logs, error) {
 			recs = append(recs, loaded{rec: r, file: name})
 		}
 	}
-	logs.Runs = assemble(recs)
+	logs.Runs, logs.Outside = assemble(recs)
 	return logs, nil
 }
 

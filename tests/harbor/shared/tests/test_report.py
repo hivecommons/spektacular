@@ -40,23 +40,42 @@ B2 = "plan-workflow__b2Lm4"  # no result.json: no started_at, record reward
 C3 = "plan-workflow__c3Np8"  # no metrics record: skipped
 D4 = "spec-workflow__d4Rt7"  # second suite, no scenario
 
+def step(name, started_at, duration, helper=0.0, user=0.0, entries=1, commands=2, helpers=0, incomplete=0):
+    """A schema-3 step row, its split adding up to its duration."""
+    return {
+        "step": name, "started_at": started_at, "entries": entries, "duration_s": duration,
+        "working_s": round(max(0.0, duration - helper - user), 3), "helper_wait_s": helper, "user_wait_s": user,
+        "commands": commands, "helpers": helpers, "incomplete": incomplete,
+    }
+
+
 # The reference plan run's steps: wall 948.39 s, assemble 368.8 s (39%).
 REFERENCE_STEPS = {
-    "unit": "characters",
     "workflows": [
         {
-            "kind": "plan",
-            "name": NAME,
+            "run_id": "4bf92f3577b34da6a3ce929d0e0e4736", "kind": "plan", "name": NAME, "status": "finished",
+            "wall_s": 900.0, "user_wait_s": 30.0, "helper_wait_s": 80.0, "gap_s": 0.0, "gaps": 0,
             "steps": [
-                {"step": "discovery", "started_at": "2026-10-20T10:00:05Z", "duration_s": 120.0, "output": 4210},
-                {"step": "architecture", "started_at": "2026-10-20T10:02:05Z", "duration_s": 210.5, "output": 9876},
-                {"step": "assemble", "started_at": "2026-10-20T10:05:36Z", "duration_s": 368.8, "output": 31502},
-                {"step": "verification", "started_at": "2026-10-20T10:11:44Z", "duration_s": 45.3, "output": None},
+                step("discovery", "2026-10-20T10:00:05Z", 120.0, helper=80.0, helpers=1),
+                step("architecture", "2026-10-20T10:02:05Z", 210.5, user=30.0, entries=2),
+                step("assemble", "2026-10-20T10:05:36Z", 368.8, commands=7),
+                step("verification", "2026-10-20T10:11:44Z", 45.3, incomplete=1),
             ],
         }
     ],
-    "orchestrator_output": 1500,
 }
+REFERENCE_HELPERS = [
+    {"span_id": "h1", "parent": "s1", "name": "research", "spec": NAME, "kind": "plan", "step": "discovery", "task_id": None,
+     "outside_run": False, "started_at": "2026-10-20T10:00:20Z", "ended_at": "2026-10-20T10:01:40Z", "duration_s": 80.0,
+     "end_reason": "stopped", "status": "ok", "complete": True},
+    {"span_id": "h2", "parent": None, "name": "plan alpha", "spec": NAME, "kind": None, "step": None, "task_id": None,
+     "outside_run": True, "started_at": "2026-10-20T09:59:00Z", "ended_at": "2026-10-20T09:59:00Z", "duration_s": 0.0,
+     "end_reason": "open", "status": None, "complete": False},
+]
+REFERENCE_BRIEFS = [
+    {"id": "toolu_01AbCdEfGh", "parent": None, "kind": "general-purpose", "description": "Research the codebase",
+     "models": [SONNET], "prompt": "Find every caller of the auth module.", "prompt_chars": 37},
+]
 
 NULL_TOTALS = dict.fromkeys(
     [
@@ -86,7 +105,7 @@ def make_record(
 ):
     """A full record in metrics.py's shape, with a few fields overridden."""
     return {
-        "schema_version": 1,
+        "schema_version": 3,
         "run": {
             "suite": suite,
             "scenario": scenario,
@@ -113,16 +132,21 @@ def make_record(
             "cache_read_tokens": 500000,
             "cache_write_tokens": 20000,
         },
-        "steps": steps if steps is not None else {"unit": "characters", "workflows": []},
+        "steps": steps if steps is not None else {"workflows": []},
         "subagents": subagents
         if subagents is not None
-        else {"started": 0, "completed": 0, "failed": 0, "stopped": 0, "durations_s": []},
+        else {"started": 0, "completed": 0, "failed": 0, "unfinished": 0, "durations_s": [], "helpers": [], "briefs": []},
         "unknown": unknown if unknown is not None else [],
     }
 
 
-def totals(wall, turns, out, cache_read, cost):
+def totals(wall, turns, out, cache_read, cost, user=0.0, helper=0.0, gap=0.0, gaps=0):
     return {
+        "user_wait_s": user,
+        "helper_wait_s": helper,
+        "gap_s": gap,
+        "gaps": gaps,
+        "gap_threshold_s": 300.0,
         "wall_time_s": wall,
         "model_time_s": None,
         "turns": turns,
@@ -165,9 +189,10 @@ def standard_jobs(tmp_path: Path) -> Path:
         make_record(
             reward=1.0,
             checks={"passed": 11, "total": 12, "score": 0.9167},
-            totals=totals(948.39, 87, 41230, 1234567, 4.12),
+            totals=totals(948.39, 87, 41230, 1234567, 4.12, user=30.0, helper=80.0),
             steps=REFERENCE_STEPS,
-            subagents={"started": 3, "completed": 2, "failed": 1, "stopped": 0, "durations_s": [12.5, 40.0, 7.3]},
+            subagents={"started": 2, "completed": 1, "failed": 0, "unfinished": 1, "durations_s": [80.0],
+                       "helpers": REFERENCE_HELPERS, "briefs": REFERENCE_BRIEFS},
         ),
         started_at="2026-10-20T10:00:00Z",
         reward=1.0,
@@ -179,7 +204,7 @@ def standard_jobs(tmp_path: Path) -> Path:
         make_record(
             reward=0.0,
             checks={"passed": 6, "total": 12, "score": 0.5},
-            totals=totals(1500.0, 120, 60000, 2000000, 7.0),
+            totals=totals(1500.0, 120, 60000, 2000000, 7.0, user=120.0, gap=600.0, gaps=1),
         ),
         result=False,
     )
@@ -215,18 +240,18 @@ def standard_jobs(tmp_path: Path) -> Path:
 
 PLAN_GROUP = """\
 == plan-workflow (default) ==
-trial                 agent        model              wall m   idle m  turns  out tok  cache-read tok  cost $  checks        result
---------------------  -----------  -----------------  ------  -------  -----  -------  --------------  ------  ------------  ------
-plan-workflow__e5Qk2  bob          claude-haiku-4-5     10.0  unknown     40    9,000         500,000    0.50  12/12 (1.00)  pass
-plan-workflow__a1Xy9  claude-code  claude-sonnet-4-6    15.8  unknown     87   41,230       1,234,567    4.12  11/12 (0.92)  pass
-plan-workflow__b2Lm4  claude-code  claude-sonnet-4-6    25.0  unknown    120   60,000       2,000,000    7.00  6/12 (0.50)   fail
+trial                 agent        model              wall m  user wait m  gap m  turns  out tok  cache-read tok  cost $  checks        result
+--------------------  -----------  -----------------  ------  -----------  -----  -----  -------  --------------  ------  ------------  ------
+plan-workflow__e5Qk2  bob          claude-haiku-4-5     10.0          0.0    0.0     40    9,000         500,000    0.50  12/12 (1.00)  pass
+plan-workflow__a1Xy9  claude-code  claude-sonnet-4-6    15.8          0.5    0.0     87   41,230       1,234,567    4.12  11/12 (0.92)  pass
+plan-workflow__b2Lm4  claude-code  claude-sonnet-4-6    25.0          2.0   10.0    120   60,000       2,000,000    7.00  6/12 (0.50)   fail  ◀ gaps
 """
 
 SPEC_GROUP = """\
 == spec-workflow ==
-trial                 agent  model             wall m   idle m  turns  out tok  cache-read tok  cost $  checks      result
---------------------  -----  ----------------  ------  -------  -----  -------  --------------  ------  ----------  ------
-spec-workflow__d4Rt7  bob    claude-haiku-4-5     5.5  unknown     22    3,100          75,000    0.25  4/8 (0.50)  fail
+trial                 agent  model             wall m  user wait m  gap m  turns  out tok  cache-read tok  cost $  checks      result
+--------------------  -----  ----------------  ------  -----------  -----  -----  -------  --------------  ------  ----------  ------
+spec-workflow__d4Rt7  bob    claude-haiku-4-5     5.5          0.0    0.0     22    3,100          75,000    0.25  4/8 (0.50)  fail
 """
 
 A1_BREAKDOWN = """\
@@ -234,20 +259,22 @@ A1_BREAKDOWN = """\
 plan-workflow (default), claude-code on claude-sonnet-4-6, pass
 wall 15.8 m, turns 87, cost $4.12, checks 11/12 (0.92)
 
-plan 20260101000000-user-auth
-  step          seconds  share  characters
-  ------------  -------  -----  ----------
-  discovery       120.0    13%       4,210
-  architecture    210.5    22%       9,876
-  assemble        368.8    39%      31,502  ◀ dominant
-  verification     45.3     5%     unknown
+plan 20260101000000-user-auth: wall 900.0 s, user wait 30.0 s, helper wait 80.0 s, gaps 0.0 s
+  step          entries  seconds  share  working  helper wait  user wait  helpers
+  ------------  -------  -------  -----  -------  -----------  ---------  -------
+  discovery           1    120.0    13%     40.0         80.0        0.0        1
+  architecture        2    210.5    22%    180.5          0.0       30.0        0
+  assemble            1    368.8    39%    368.8          0.0        0.0        0  ◀ dominant
+  verification        1     45.3     5%     45.3          0.0        0.0        0
 
-Orchestrator output, outside every lane: 1,500 characters
+Totals: wall 948.4 s, user wait 30.0 s, helper wait 80.0 s, gaps over 300.0 s: 0.0 s (0), 0% of wall
+Helpers: started 2, completed 1, failed 0, unfinished 1; durations (s): 80.0
 
-Sub-agents: started 3, completed 2, failed 1, stopped 0; durations (s): 12.5, 40.0, 7.3
-Idle: unknown s of 948.4 s
-
-Children: not recorded (schema 1)
+Helper spans:
+  helper      spec                      step             seconds  end
+  ----------  ------------------------  ---------------  -------  -------
+  research    20260101000000-user-auth  discovery           80.0  stopped
+  plan alpha  20260101000000-user-auth  outside any run      0.0  open*
 """
 
 
@@ -549,9 +576,10 @@ def test_unknown_wall_time_uses_the_sum_of_step_durations():
     assert dominant_steps(run)[0][2] == pytest.approx(0.6)
     text = breakdown(run)
     assert "wall unknown m, turns 5, cost $1.00, checks 12/12 (1.00)" in text
-    assert "  overview         60.0    60%         100  ◀ dominant" in text
-    assert "  requirements     30.0    30%         200\n" in text
-    assert "  discovery     10.0    10%         300\n" in text
+    # a version-1 record: no entries or split, which print as unknown
+    assert "  overview      unknown     60.0    60%  unknown      unknown    unknown  unknown  ◀ dominant" in text
+    assert "  requirements  unknown     30.0    30%  unknown      unknown    unknown  unknown\n" in text
+    assert "  discovery  unknown     10.0    10%  unknown      unknown    unknown  unknown\n" in text
 
 
 # 4. Unknown values.
@@ -564,17 +592,15 @@ def null_record():
         checks={"passed": None, "total": None, "score": None},
         totals=NULL_TOTALS,
         steps={
-            "unit": "characters",
             "workflows": [
                 {
                     "kind": "plan",
                     "name": NAME,
-                    "steps": [{"step": "discovery", "started_at": None, "duration_s": None, "output": None}],
+                    "steps": [dict.fromkeys(["step", "started_at", "entries", "duration_s", "working_s", "helper_wait_s", "user_wait_s", "commands", "helpers", "incomplete"]) | {"step": "discovery"}],
                 }
             ],
-            "orchestrator_output": None,
         },
-        subagents=dict.fromkeys(["started", "completed", "failed", "stopped", "durations_s"]),
+        subagents=dict.fromkeys(["started", "completed", "failed", "unfinished", "durations_s", "helpers", "briefs"]),
         unknown=[{"field": "totals", "reason": "no agent log"}],
     )
 
@@ -584,17 +610,15 @@ NULL_BREAKDOWN = """\
 plan-workflow (default), claude-code on unknown, unknown
 wall unknown m, turns unknown, cost $unknown, checks unknown
 
-plan 20260101000000-user-auth
-  step       seconds    share  characters
-  ---------  -------  -------  ----------
-  discovery  unknown  unknown     unknown
+plan 20260101000000-user-auth: wall unknown s, user wait unknown s, helper wait unknown s, gaps unknown s
+  step       entries  seconds    share  working  helper wait  user wait  helpers
+  ---------  -------  -------  -------  -------  -----------  ---------  -------
+  discovery  unknown  unknown  unknown  unknown      unknown    unknown  unknown
 
-Orchestrator output, outside every lane: unknown characters
+Totals: wall unknown s, user wait unknown s, helper wait unknown s, gaps over unknown s: unknown s (unknown)
+Helpers: started unknown, completed unknown, failed unknown, unfinished unknown; durations (s): unknown
 
-Sub-agents: started unknown, completed unknown, failed unknown, stopped unknown; durations (s): unknown
-Idle: unknown s of unknown s
-
-Children: not recorded (schema 1)
+Helper spans: unknown (see below)
 
 Unknown:
   totals: no agent log
@@ -610,7 +634,7 @@ def test_unknown_values_print_as_unknown_in_the_table(tmp_path, capsys):
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == "== plan-workflow (default) =="
     assert lines[3] == (
-        "plan-workflow__n0Ul1  claude-code  unknown  unknown  unknown  unknown  unknown"
+        "plan-workflow__n0Ul1  claude-code  unknown  unknown      unknown  unknown  unknown  unknown"
         "         unknown  unknown  unknown  unknown"
     )
     assert "0.0" not in lines[3] and " 0 " not in lines[3]
@@ -626,7 +650,7 @@ def test_unknown_values_print_as_unknown_in_the_breakdown(tmp_path, capsys):
 
 
 def test_null_checks_section_and_unknown_workflows_print_as_unknown():
-    record = make_record(steps={"unit": "characters", "workflows": None})
+    record = make_record(steps={"workflows": None})
     record["result"]["checks"] = None
     record["unknown"] = [{"field": "steps", "reason": "no session log"}]
 
@@ -639,17 +663,18 @@ def test_null_checks_section_and_unknown_workflows_print_as_unknown():
 
 
 def test_null_subagent_durations_alone_print_as_unknown_and_empty_as_none():
-    record = make_record(subagents={"started": 2, "completed": 2, "failed": 0, "stopped": 0, "durations_s": None})
+    record = make_record(subagents={"started": 2, "completed": 2, "failed": 0, "unfinished": 0, "durations_s": None, "helpers": [], "briefs": []})
     assert (
-        "Sub-agents: started 2, completed 2, failed 0, stopped 0; durations (s): unknown\n"
+        "Helpers: started 2, completed 2, failed 0, unfinished 0; durations (s): unknown\n"
         in breakdown(run_of(record))
     )
 
-    record = make_record()  # no sub-agents: an empty list, which is known
+    record = make_record()  # no helpers: an empty list, which is known
     assert (
-        "Sub-agents: started 0, completed 0, failed 0, stopped 0; durations (s): none\n"
+        "Helpers: started 0, completed 0, failed 0, unfinished 0; durations (s): none\n"
         in breakdown(run_of(record))
     )
+    assert "Helper spans: none\n" in breakdown(run_of(record))
     assert "Steps: the run entered no workflow\n" in breakdown(run_of(record))
 
 
@@ -692,7 +717,7 @@ def test_report_runs_as_a_normal_user_over_unreadable_agent_files(tmp_path, caps
 
 def test_thresholds_are_the_documented_values():
     assert report.DOMINANT_STEP_SHARE == 1 / 3
-    assert report.IDLE_SHARE == 0.25
+    assert report.GAP_SHARE == 0.25
 
 
 def test_comparison_thresholds_are_the_documented_values():
@@ -742,14 +767,17 @@ def comparison_jobs(tmp_path: Path) -> tuple[Path, Path]:
 
 FULL_COMPARISON = """\
 == plan-workflow (default) ==  baseline 3 run(s), candidate 3 run(s)
-median       baseline  candidate          change
------------  --------  ---------  --------------
-wall m           11.0       22.0   +11.0 (x2.00)  ◀ regression
-turns              11         12      +1 (x1.09)
-out tok         1,100        900    -200 (x0.82)
-total tok      12,200     10,600  -1,600 (x0.87)
-cost $           1.10       2.00   +0.90 (x1.82)
-check score      0.90       0.80           -0.10  ◀ regression
+median         baseline  candidate          change
+-------------  --------  ---------  --------------
+wall m             11.0       22.0   +11.0 (x2.00)  ◀ regression
+user wait m         0.0        0.0            +0.0
+helper wait m       0.0        0.0            +0.0
+gap m               0.0        0.0            +0.0
+turns                11         12      +1 (x1.09)
+out tok           1,100        900    -200 (x0.82)
+total tok        12,200     10,600  -1,600 (x0.87)
+cost $             1.10       2.00   +0.90 (x1.82)
+check score        0.90       0.80           -0.10  ◀ regression
 
 Unmatched, in one set only:
   spec-workflow: baseline only
@@ -854,10 +882,10 @@ def test_check_score_drop_of_a_tenth_or_more_is_flagged(base, cand, flagged):
 def test_check_score_line_shows_the_signed_change():
     # The change column is as wide as "+0.00 (x1.00)", the other rows' change.
     text = report.compare(score_runs(1.0), score_runs(0.9))
-    assert text.endswith("check score      1.00       0.90          -0.10  ◀ regression\n")
+    assert text.endswith("check score        1.00       0.90          -0.10  ◀ regression\n")
 
     text = report.compare(score_runs(0.5), score_runs(1.0))
-    assert text.endswith("check score      0.50       1.00          +0.50\n")
+    assert text.endswith("check score        0.50       1.00          +0.50\n")
 
 
 def test_score_median_is_over_the_runs_of_each_set():
@@ -869,14 +897,17 @@ def test_score_median_is_over_the_runs_of_each_set():
 
 UNKNOWN_BASELINE = """\
 == plan-workflow (default) ==  baseline 3 run(s), candidate 3 run(s)
-median       baseline  candidate   change
------------  --------  ---------  -------
-wall m        unknown       10.0  unknown
-turns         unknown         40  unknown
-out tok       unknown      9,000  unknown
-total tok     unknown    530,000  unknown
-cost $        unknown       0.50  unknown
-check score   unknown       1.00  unknown
+median         baseline  candidate   change
+-------------  --------  ---------  -------
+wall m          unknown       10.0  unknown
+user wait m     unknown    unknown  unknown
+helper wait m   unknown    unknown  unknown
+gap m           unknown    unknown  unknown
+turns           unknown         40  unknown
+out tok         unknown      9,000  unknown
+total tok       unknown    530,000  unknown
+cost $          unknown       0.50  unknown
+check score     unknown       1.00  unknown
 """
 
 
@@ -925,14 +956,17 @@ def mixed_run(trial, score, wall, turns, inp, out, cost) -> Run:
 
 MIXED_BASELINE = """\
 == plan-workflow (default) ==  baseline 3 run(s), candidate 3 run(s)
-median       baseline  candidate          change
------------  --------  ---------  --------------
-wall m           10.8       20.8   +10.0 (x1.92)
-turns              20         20      +0 (x1.00)
-out tok         1,000      1,000      +0 (x1.00)
-total tok       2,000      4,000  +2,000 (x2.00)  ◀ regression
-cost $           2.00       2.00   +0.00 (x1.00)
-check score      0.90       0.90           +0.00
+median         baseline  candidate          change
+-------------  --------  ---------  --------------
+wall m             10.8       20.8   +10.0 (x1.92)
+user wait m     unknown    unknown         unknown
+helper wait m   unknown    unknown         unknown
+gap m           unknown    unknown         unknown
+turns                20         20      +0 (x1.00)
+out tok           1,000      1,000      +0 (x1.00)
+total tok         2,000      4,000  +2,000 (x2.00)  ◀ regression
+cost $             2.00       2.00   +0.00 (x1.00)
+check score        0.90       0.90           +0.00
 """
 
 
@@ -961,14 +995,17 @@ def test_mixed_known_and_unknown_runs_take_the_median_of_the_known_ones():
 
 ZERO_BASELINE = """\
 == plan-workflow (default) ==  baseline 1 run(s), candidate 1 run(s)
-median       baseline  candidate    change
------------  --------  ---------  --------
-wall m            0.0       10.0     +10.0
-turns               0         40       +40
-out tok             0      9,000    +9,000
-total tok           0    509,100  +509,100
-cost $           0.00       5.00     +5.00
-check score      1.00       1.00     +0.00
+median         baseline  candidate    change
+-------------  --------  ---------  --------
+wall m              0.0       10.0     +10.0
+user wait m     unknown        0.0   unknown
+helper wait m   unknown        0.0   unknown
+gap m           unknown        0.0   unknown
+turns                 0         40       +40
+out tok               0      9,000    +9,000
+total tok             0    509,100  +509,100
+cost $             0.00       5.00     +5.00
+check score        1.00       1.00     +0.00
 """
 
 
@@ -1001,8 +1038,8 @@ def test_scenario_groups_are_matched_separately(tmp_path, capsys):
     ]
     walls = [line for line in out.splitlines() if line.startswith("wall m")]
     assert walls == [
-        "wall m           10.0       20.0  +10.0 (x2.00)  ◀ regression",
-        "wall m           20.0       20.0   +0.0 (x1.00)",
+        "wall m             10.0       20.0  +10.0 (x2.00)  ◀ regression",
+        "wall m             20.0       20.0   +0.0 (x1.00)",
     ]
     assert "Unmatched" not in out
     assert report.regressions(load_runs([str(tmp_path / "base")]), load_runs([str(tmp_path / "cand")])) == [
@@ -1078,292 +1115,182 @@ def test_empty_baseline_glob_exits_2(tmp_path, capsys):
     )
 
 
-# 7. Child agents and idle time, from a version-2 record.
-
-C1 = "toolu_01Kq7dsc01"  # top-level, in discovery, foreground
-C2 = "toolu_01Nst8xp02"  # C1's child, in the background
-C5 = "toolu_01Gch5ex05"  # C2's child: two levels down
-C3 = "toolu_01Orc9rv03"  # the orchestrator's, outside every step
-C4 = "bob-call-Bb4unk04"  # Bob-style: its log shows almost nothing
-
-C1_PROMPT = "Read the auth module.\nList every file that touches sessions."  # 60 characters
-REVIEW_PROMPT = "Check every section against the spec. " * 30  # 1,140 characters
-
-BOB_GAPS = ["kind", "spec", "step", "background", "duration_s", "ending", "prompt", "prompt_chars"]
+# 7. Helpers, briefs and gap time, from a version-3 record.
 
 
-def child(child_id, kind, spec, step, background, duration, ending, prompt, parent=None):
-    """One entry of a version-2 record's subagents.children."""
-    return {
-        "id": child_id,
-        "parent": parent,
-        "kind": kind,
-        "description": None,
-        "background": background,
-        "spec": spec,
-        "step": step,
-        "launched_at": None,
-        "ended_at": None,
-        "duration_s": duration,
-        "ending": ending,
-        "hand_back": None,
-        "models": None,
-        "output": None,
-        "prompt": prompt,
-        "prompt_chars": None if prompt is None else len(prompt),
-    }
+def test_run_view_shows_the_split_the_totals_and_every_helper(tmp_path, capsys):
+    jobs = standard_jobs(tmp_path)
+    assert main([str(jobs), "--run", A1]) == 0
+    out = capsys.readouterr().out
+    assert "  discovery           1    120.0    13%     40.0         80.0        0.0        1\n" in out
+    assert "Totals: wall 948.4 s, user wait 30.0 s, helper wait 80.0 s, gaps over 300.0 s: 0.0 s (0), 0% of wall\n" in out
+    assert "  research    20260101000000-user-auth  discovery           80.0  stopped\n" in out
+    # an orchestrator's helper, started outside any run, still running when the logs end
+    assert "  plan alpha  20260101000000-user-auth  outside any run      0.0  open*\n" in out
 
 
-def v2_record(children, idle_s=None, wall=948.39, subagents=None, **overrides):
-    """make_record's record at schema version 2: totals with idle_s, and a
-    child list (None when unknown) beside the sub-agent counts."""
-    record = make_record(totals={**totals(wall, 87, 41230, 1234567, 4.12), "idle_s": idle_s}, subagents=subagents, **overrides)
+def test_prompts_prints_every_helpers_brief_after_the_breakdown(tmp_path, capsys):
+    jobs = standard_jobs(tmp_path)
+    assert main([str(jobs), "--run", A1, "--prompts"]) == 0
+    out = capsys.readouterr().out
+    assert out == A1_BREAKDOWN + "\n" + (
+        "── toolu_01AbCdEfGh general-purpose Research the codebase (37 chars)\n"
+        "Find every caller of the auth module.\n"
+        "\n"
+    )
+
+
+def gap_run(gap, wall=1000.0):
+    return run_of(make_record(totals=totals(wall, 10, 1, 1, 1.0, gap=gap, gaps=1)))
+
+
+@pytest.mark.parametrize("gap, marked", [(260.0, True), (250.0, False), (240.0, False)])
+def test_a_run_whose_gaps_take_over_a_quarter_of_its_wall_time_is_marked(gap, marked):
+    run = gap_run(gap)
+    assert report.is_gappy(run) is marked
+    assert ("◀ gaps" in report.table([run])) is marked
+    assert ("◀ gaps" in breakdown(run)) is marked
+
+
+def test_unknown_gap_time_is_never_marked():
+    run = run_of(make_record())  # a version-1 total: no gap_s
+    assert report.gap_share(run) is None
+    assert not report.is_gappy(run)
+    assert "gaps over unknown s: unknown s (unknown)" in breakdown(run)
+
+
+def v2_record():
+    """A version-2 record: per-step characters and child agents, the
+    longest idle stretch, and none of version 3's figures."""
+    record = make_record(
+        totals={**totals(600.0, 10, 1, 1, 1.0), "idle_s": 120.0},
+        steps={"unit": "characters", "workflows": [{"kind": "plan", "name": NAME, "steps": [
+            {"step": "discovery", "started_at": None, "duration_s": 300.0, "output": 900, "children": 1}]}]},
+        subagents={"started": 1, "completed": 1, "failed": 0, "stopped": 0, "durations_s": [12.0],
+                   "children": [{"id": "toolu_x", "prompt": "old", "prompt_chars": 3}]},
+    )
     record["schema_version"] = 2
-    record["subagents"] = {**record["subagents"], "children": children}
+    for key in ("user_wait_s", "helper_wait_s", "gap_s", "gaps", "gap_threshold_s"):
+        del record["totals"][key]
     return record
 
 
-def family_record():
-    return v2_record(
-        [
-            child(C1, "general-purpose", NAME, "discovery", False, 120.5, "completed", C1_PROMPT),
-            child(C2, "Explore", NAME, "discovery", True, 30.0, "completed", "Find the session stores.", parent=C1),
-            child(C5, "Explore", NAME, "discovery", True, 12.0, "completed", "Grep for cookie.", parent=C2),
-            child(C3, "general-purpose", None, None, False, 45.0, "failed", REVIEW_PROMPT),
-            child(C4, None, None, None, None, None, None, None),
-        ],
-        idle_s=120.0,
-        steps=REFERENCE_STEPS,
-        subagents={"started": 5, "completed": 3, "failed": 1, "stopped": 0, "durations_s": [120.5, 30.0, 12.0, 45.0]},
-        unknown=[{"field": f"subagents.children[{C4}].{f}", "reason": f"bob logs no {f}"} for f in BOB_GAPS],
+def test_a_version_2_record_loads_with_the_new_figures_unknown(tmp_path, capsys):
+    jobs = tmp_path / "jobs"
+    write_trial(jobs, "old", "plan-workflow__v2", v2_record(), reward=1.0)
+    assert main([str(jobs)]) == 0
+    row = capsys.readouterr().out.splitlines()[3]
+    assert row.split()[3:6] == ["10.0", "unknown", "unknown"]
+    assert main([str(jobs), "--run", "plan-workflow__v2", "--prompts"]) == 0
+    out = capsys.readouterr().out
+    assert "  discovery  unknown    300.0    50%  unknown      unknown    unknown  unknown  ◀ dominant\n" in out
+    assert "user wait unknown s, helper wait unknown s" in out
+    assert "Helper spans: not recorded (schema 2)\n" in out
+    assert "No briefs recorded (schema 2).\n" in out
+    assert "idle" not in out and "children" not in out.lower()
+
+
+def test_unknown_helpers_and_briefs_say_so():
+    record = make_record(subagents={**dict.fromkeys(["started", "completed", "failed", "unfinished", "durations_s"]), "helpers": None, "briefs": None})
+    run = run_of(record)
+    assert "Helper spans: unknown (see below)\n" in breakdown(run)
+    assert report.prompts(run) == "Briefs: unknown (see the breakdown's Unknown list)."
+
+
+def test_medians_include_user_wait_helper_wait_and_gap_time():
+    labels = [m.label for m in report.MEASURES]
+    assert labels[:4] == ["wall m", "user wait m", "helper wait m", "gap m"]
+    base = [run_of(make_record(totals=totals(600.0, 10, 1, 1, 1.0, user=60.0, helper=120.0, gap=0.0)), trial=f"plan-workflow__b{i}") for i in range(3)]
+    cand = [run_of(make_record(totals=totals(600.0, 10, 1, 1, 1.0, user=180.0, helper=120.0, gap=600.0)), trial=f"plan-workflow__c{i}") for i in range(3)]
+    text = report.compare(base, cand)
+    assert "user wait m         1.0        3.0   +2.0 (x3.00)  ◀ regression\n" in text
+    assert "helper wait m       2.0        2.0   +0.0 (x1.00)\n" in text
+    # a zero baseline never flags a ratio
+    assert "gap m               0.0       10.0          +10.0\n" in text
+    assert [f.measure for f in report.regressions(base, cand)] == ["user wait m"]
+
+
+# 8. Two trials side by side.
+
+
+def trial_record(steps, user, helper, gap, cost, name=NAME):
+    return make_record(
+        totals=totals(sum(s["duration_s"] for s in steps), 10, 1000, 10000, cost, user=user, helper=helper, gap=gap),
+        steps={"workflows": [{"kind": "plan", "name": name, "status": "finished", "steps": steps}]},
     )
 
 
-FAMILY = "plan-workflow__k1Ds5"
-
-FAMILY_BREAKDOWN = """\
-== plan-workflow__k1Ds5 ==
-plan-workflow (default), claude-code on claude-sonnet-4-6, pass
-wall 15.8 m, turns 87, cost $4.12, checks 12/12 (1.00)
-
-plan 20260101000000-user-auth
-  step          seconds  share  characters
-  ------------  -------  -----  ----------
-  discovery       120.0    13%       4,210
-  architecture    210.5    22%       9,876
-  assemble        368.8    39%      31,502  ◀ dominant
-  verification     45.3     5%     unknown
-
-Orchestrator output, outside every lane: 1,500 characters
-
-Sub-agents: started 5, completed 3, failed 1, stopped 0; durations (s): 120.5, 30.0, 12.0, 45.0
-Idle: 120.0 s of 948.4 s (13%)
-
-Children:
-  child         kind             spec                      step       bg       seconds  ending     context
-  ------------  ---------------  ------------------------  ---------  -------  -------  ---------  -------
-  Kq7dsc01      general-purpose  20260101000000-user-auth  discovery  fg         120.5  completed       60
-  └ Nst8xp02    Explore          20260101000000-user-auth  discovery  bg          30.0  completed       24
-    └ Gch5ex05  Explore          20260101000000-user-auth  discovery  bg          12.0  completed       16
-  Orc9rv03      general-purpose  -                         -          fg          45.0  failed       1,140
-  Bb4unk04      unknown          unknown                   unknown    unknown  unknown  unknown    unknown
-
-Unknown:
-  subagents.children[bob-call-Bb4unk04].kind: bob logs no kind
-  subagents.children[bob-call-Bb4unk04].spec: bob logs no spec
-  subagents.children[bob-call-Bb4unk04].step: bob logs no step
-  subagents.children[bob-call-Bb4unk04].background: bob logs no background
-  subagents.children[bob-call-Bb4unk04].duration_s: bob logs no duration_s
-  subagents.children[bob-call-Bb4unk04].ending: bob logs no ending
-  subagents.children[bob-call-Bb4unk04].prompt: bob logs no prompt
-  subagents.children[bob-call-Bb4unk04].prompt_chars: bob logs no prompt_chars
-"""
-
-# What `--prompts` prints after the breakdown: each child's whole context.
-FAMILY_PROMPTS = (
-    "── toolu_01Kq7dsc01 general-purpose 20260101000000-user-auth/discovery (60 chars)\n"
-    "Read the auth module.\n"
-    "List every file that touches sessions.\n"
-    "\n"
-    "── toolu_01Nst8xp02 Explore 20260101000000-user-auth/discovery (24 chars)\n"
-    "Find the session stores.\n"
-    "\n"
-    "── toolu_01Gch5ex05 Explore 20260101000000-user-auth/discovery (16 chars)\n"
-    "Grep for cookie.\n"
-    "\n"
-    "── toolu_01Orc9rv03 general-purpose -/- (1,140 chars)\n"
-    + REVIEW_PROMPT
-    + "\n"
-    "\n"
-    "── bob-call-Bb4unk04 unknown unknown/unknown (unknown chars)\n"
-    "unknown\n"
-    "\n"
-)
-
-
-def family_jobs(tmp_path: Path) -> Path:
+def compare_jobs(tmp_path):
     jobs = tmp_path / "jobs"
-    write_trial(jobs, "fix-plan-2026-10-22", FAMILY, family_record(), started_at="2026-10-22T10:00:00Z", reward=1.0)
+    a = trial_record(
+        [step("discovery", None, 120.0, helper=80.0, helpers=1), step("architecture", None, 200.0, user=50.0)],
+        user=50.0, helper=80.0, gap=0.0, cost=1.0,
+    )
+    b = trial_record(
+        [step("discovery", None, 90.0, helper=30.0, helpers=1), step("architecture", None, 260.0, user=20.0), step("walkthrough", None, 30.0)],
+        user=20.0, helper=30.0, gap=310.0, cost=1.5, name="20260101000001-user-auth",
+    )
+    write_trial(jobs, "job", "plan-workflow__ta", a, reward=1.0)
+    write_trial(jobs, "job", "plan-workflow__tb", b, reward=1.0)
     return jobs
 
 
-def test_run_view_prints_one_row_per_child_and_the_idle_time(tmp_path, capsys):
-    jobs = family_jobs(tmp_path)
+COMPARE_TRIALS = """\
+== plan-workflow__ta (A) against plan-workflow__tb (B) ==
 
-    assert main([str(jobs), "--run", FAMILY]) == 0
+plan 20260101000000-user-auth (A) / plan 20260101000001-user-auth (B)
+  step          secs A  secs B  secs B-A  work A  work B  work B-A  helper A  helper B  helper B-A  user A  user B  user B-A  helpers A  helpers B  helpers B-A
+  ------------  ------  ------  --------  ------  ------  --------  --------  --------  ----------  ------  ------  --------  ---------  ---------  -----------
+  discovery      120.0    90.0     -30.0    40.0    60.0     +20.0      80.0      30.0       -50.0     0.0     0.0      +0.0          1          1           +0
+  architecture   200.0   260.0     +60.0   150.0   240.0     +90.0       0.0       0.0        +0.0    50.0    20.0     -30.0          0          0           +0
+  walkthrough        -    30.0         -       -    30.0         -         -       0.0           -       -     0.0         -          -          0            -
 
-    captured = capsys.readouterr()
-    assert captured.out == FAMILY_BREAKDOWN + "\n"
-    assert captured.err == ""
-
-
-def test_prompts_prints_every_childs_full_context_after_the_breakdown(tmp_path, capsys):
-    jobs = family_jobs(tmp_path)
-
-    assert main([str(jobs), "--run", FAMILY, "--prompts"]) == 0
-
-    captured = capsys.readouterr()
-    assert captured.out == FAMILY_BREAKDOWN + "\n" + FAMILY_PROMPTS
-    assert REVIEW_PROMPT in captured.out  # whole, not cut to the table's size
-    assert captured.err == ""
-
-
-PROMPTS_USAGE_ERROR = "report: --prompts prints one run's child contexts, so it needs --run <trial>\n"
-
-
-@pytest.mark.parametrize(
-    "argv",
-    [
-        ["--prompts"],
-        ["{jobs}", "--prompts"],
-        ["--prompts", "--baseline", "{jobs}", "--candidate", "{jobs}"],
-    ],
-    ids=["alone", "with a path", "with a comparison"],
-)
-def test_prompts_without_run_is_a_usage_error(tmp_path, capsys, argv):
-    jobs = family_jobs(tmp_path)
-
-    assert main([a.format(jobs=jobs) for a in argv]) == 2
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == PROMPTS_USAGE_ERROR
-
-
-def test_agent_wide_unknown_child_fields_print_as_unknown_not_as_a_dash():
-    # A Bob run's log carries no session to place children in, nor their
-    # background state, duration or outcome: one Unknown for every child.
-    gaps = ["parent", "background", "duration_s", "ending", "spec", "step"]
-    record = v2_record(
-        [child("call_00000000aa11bb22", "general-purpose", None, None, None, None, None, "Draft the plan.")],
-        agent="bob",
-        model=HAIKU,
-        unknown=[{"field": f"subagents.children.{f}", "reason": "bob logs no sub-agent detail"} for f in gaps],
-    )
-    run = run_of(record)
-
-    assert (
-        "Children:\n"
-        "  child     kind             spec     step     bg       seconds  ending   context\n"
-        "  --------  ---------------  -------  -------  -------  -------  -------  -------\n"
-        "  aa11bb22  general-purpose  unknown  unknown  unknown  unknown  unknown       15\n"
-    ) in breakdown(run)
-    assert report.prompts(run) == (
-        "── call_00000000aa11bb22 general-purpose unknown/unknown (15 chars)\n"
-        "Draft the plan.\n"
-    )
-
-
-IDLE_TABLE = """\
-== plan-workflow (default) ==
-trial                  agent        model              wall m  idle m  turns  out tok  cache-read tok  cost $  checks        result
----------------------  -----------  -----------------  ------  ------  -----  -------  --------------  ------  ------------  ------
-plan-workflow__idle26  claude-code  claude-sonnet-4-6    16.7     4.3     87   41,230       1,234,567    4.12  12/12 (1.00)  pass  ◀ idle
-plan-workflow__idle25  claude-code  claude-sonnet-4-6    16.7     4.2     87   41,230       1,234,567    4.12  12/12 (1.00)  pass
-plan-workflow__idle24  claude-code  claude-sonnet-4-6    16.7     4.0     87   41,230       1,234,567    4.12  12/12 (1.00)  pass
+Totals
+  total               A       B     B-A
+  -------------  ------  ------  ------
+  wall s          320.0   380.0   +60.0
+  user wait s      50.0    20.0   -30.0
+  helper wait s    80.0    30.0   -50.0
+  gap s             0.0   310.0  +310.0
+  cost $           1.00    1.50   +0.50
+  total tok      11,100  11,100      +0
 """
 
 
-def test_table_flags_a_run_idle_for_more_than_a_quarter_of_its_wall_time(tmp_path, capsys):
-    # Wall 1,000 s; idle 260 s (0.26), 250 s (exactly 0.25) and 240 s (0.24).
-    jobs = tmp_path / "jobs"
-    for trial, idle, hour in [("idle26", 260.0, 10), ("idle25", 250.0, 11), ("idle24", 240.0, 12)]:
-        record = v2_record([], idle_s=idle, wall=1000.0)
-        write_trial(jobs, "idle", f"plan-workflow__{trial}", record, started_at=f"2026-10-22T{hour}:00:00Z", reward=1.0)
-
-    assert main([str(jobs)]) == 0
-
-    captured = capsys.readouterr()
-    assert captured.out == IDLE_TABLE + "\n"
-    assert captured.err == ""
+def test_compare_shows_each_trials_split_and_totals_and_bs_difference(tmp_path, capsys):
+    jobs = compare_jobs(tmp_path)
+    assert main([str(jobs), "--compare", "plan-workflow__ta", "plan-workflow__tb"]) == 0
+    assert capsys.readouterr().out == COMPARE_TRIALS + "\n"
 
 
-@pytest.mark.parametrize(
-    "idle, line, flagged",
-    [
-        (260.0, "Idle: 260.0 s of 1000.0 s (26%)  ◀ idle", True),
-        (250.0, "Idle: 250.0 s of 1000.0 s (25%)", False),
-        (240.0, "Idle: 240.0 s of 1000.0 s (24%)", False),
-    ],
-    ids=["0.26", "0.25", "0.24"],
-)
-def test_run_view_flags_idle_over_a_quarter_and_not_at_or_below(idle, line, flagged):
-    run = run_of(v2_record([], idle_s=idle, wall=1000.0))
-
-    assert report.is_idle(run) is flagged
-    assert f"\n{line}\n" in breakdown(run)
-    assert ("◀ idle" in breakdown(run)) is flagged
+def test_a_step_only_one_trial_entered_is_absent_not_zero(tmp_path):
+    jobs = compare_jobs(tmp_path)
+    runs = load_runs([str(jobs)])
+    text = report.compare_trials(find_run(runs, "plan-workflow__ta"), find_run(runs, "plan-workflow__tb"))
+    walkthrough = next(l for l in text.splitlines() if l.strip().startswith("walkthrough")).split()
+    assert walkthrough[1] == "-" and walkthrough[3] == "-"
+    assert "0.0" not in walkthrough[1:4:2]
 
 
-def test_version_1_record_says_children_were_not_recorded_and_idle_is_unknown(tmp_path, capsys):
-    jobs = tmp_path / "jobs"
-    write_trial(jobs, "old", "plan-workflow__v1Old", make_record(), started_at="2026-10-01T10:00:00Z", reward=1.0)
-
-    assert main([str(jobs)]) == 0
-    table_out = capsys.readouterr().out
-    assert main([str(jobs), "--run", "plan-workflow__v1Old", "--prompts"]) == 0
-    run_out = capsys.readouterr().out
-
-    assert "plan-workflow__v1Old  claude-code  claude-sonnet-4-6    10.0  unknown     40" in table_out
-    assert "◀ idle" not in table_out
-    assert run_out.endswith(
-        "Sub-agents: started 0, completed 0, failed 0, stopped 0; durations (s): none\n"
-        "Idle: unknown s of 600.0 s\n"
-        "\n"
-        "Children: not recorded (schema 1)\n"
-        "\n"
-        "No child contexts recorded (schema 1).\n"
-    )
+def test_compare_by_trial_directory_and_old_records(tmp_path, capsys):
+    jobs = compare_jobs(tmp_path)
+    write_trial(jobs, "old", "plan-workflow__v2", v2_record(), reward=1.0)
+    assert main(["--compare", str(jobs / "job" / "plan-workflow__ta"), str(jobs / "old" / "plan-workflow__v2")]) == 0
+    out = capsys.readouterr().out
+    discovery = next(l for l in out.splitlines() if l.strip().startswith("discovery")).split()
+    # the version-2 record has the step and its duration, but none of the split
+    assert discovery[:4] == ["discovery", "120.0", "300.0", "+180.0"]
+    assert discovery[5] == "unknown" and discovery[6] == "unknown"
+    assert "  user wait s      50.0  unknown  unknown\n" in out
 
 
-def test_unknown_children_print_as_unknown_and_unknown_idle_is_never_flagged():
-    record = v2_record(
-        None,
-        idle_s=None,
-        unknown=[
-            {"field": "subagents.children", "reason": "no agent log"},
-            {"field": "totals.idle_s", "reason": "too little activity to measure"},
-        ],
-    )
-    run = run_of(record)
-
-    assert breakdown(run).endswith(
-        "Idle: unknown s of 948.4 s\n"
-        "\n"
-        "Children: unknown (see below)\n"
-        "\n"
-        "Unknown:\n"
-        "  subagents.children: no agent log\n"
-        "  totals.idle_s: too little activity to measure\n"
-    )
-    assert report.is_idle(run) is False
-    assert "  unknown     87" in table([run])
-    # unknown children are told apart from none
-    assert report.prompts(run) == "Child contexts: unknown (see the breakdown's Unknown list)."
+@pytest.mark.parametrize("extra", [["--run", "x"], ["--baseline", "a", "--candidate", "b"]])
+def test_compare_with_another_mode_is_a_usage_error(tmp_path, capsys, extra):
+    assert main(["--compare", "a", "b", *extra]) == 2
+    assert "--compare takes two trials" in capsys.readouterr().err
 
 
-def test_a_run_with_no_children_says_none():
-    run = run_of(v2_record([], idle_s=0.0))
-
-    assert "\nIdle: 0.0 s of 948.4 s (0%)\n\nChildren: none\n" in breakdown(run)
-    assert report.prompts(run) == "No child contexts recorded."
+def test_compare_of_an_unknown_trial_exits_2(tmp_path, capsys):
+    jobs = compare_jobs(tmp_path)
+    assert main([str(jobs), "--compare", "plan-workflow__ta", "plan-workflow__zz"]) == 2
+    assert "no recorded run matches 'plan-workflow__zz'" in capsys.readouterr().err

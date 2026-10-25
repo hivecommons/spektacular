@@ -8,20 +8,26 @@ written, and ignores how it exits. It reads:
   agent, suite, scenario, Spektacular version and commit;
 - the agent's own log under /logs/agent: Claude's stream-json, the ATIF
   trajectory harbor writes for Bob and Codex, or Codex's rollout;
-- Spektacular's session log under /app/.spektacular/logs, for the steps
-  and for placing each child agent in the spec and step it was started in;
+- Spektacular's own logs under /app/.spektacular/logs, read only through
+  `spektacular stats` (runlog.py), for every step and its timing, each
+  step's split into working, helper-wait and user-wait time, every helper
+  agent with the spec and step it was started in, and the waits and gaps:
+  the same way for every agent;
 - pytest's JUnit XML and the reward, for the check score;
 
-and writes /logs/verifier/metrics.json, in the same shape for every agent
-and suite. A measure a source does not supply is null and is listed under
-`unknown` with the reason, never written as zero.
+and writes /logs/verifier/metrics.json (schema 3), in the same shape for
+every agent and suite. Tokens, models, cost and the helpers' briefs come
+from the agent's log; everything else from Spektacular's. A measure a source
+does not supply is null and is listed under `unknown` with the reason, never
+written as zero, and a log-sourced measure is never filled in from a
+transcript.
 
 It never fails the run: each section is gathered on its own, a failure costs
 only that section's fields, and it always exits 0. It never writes the
 reward. Run it inside the container, or locally against a collected trial:
 
     python3 metrics.py --agent-dir <trial>/agent \\
-        --debug-dir <trial>/artifacts/spektacular/logs \\
+        --log-dir <trial>/artifacts/spektacular/logs \\
         --junit <trial>/verifier/junit.xml --reward <trial>/verifier/reward.txt \\
         --out /tmp/metrics.json
 """
@@ -34,37 +40,29 @@ import os
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import spans  # noqa: E402
+import runlog  # noqa: E402
 import transcripts as tx  # noqa: E402
-from sessionlog import Lane, SessionLog, StepWindow  # noqa: E402
-from transcripts import Child, Message, Subagents, SubagentLaunch, Totals, Unknown  # noqa: E402
+from transcripts import Child, Totals, Unknown  # noqa: E402
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 WORKFLOW_KINDS = ("spec", "plan", "implement")
 
 BUILD_INFO = Path("/tests/build.json")
 AGENT_DIR = Path("/logs/agent")
-DEBUG_DIR = Path("/app/.spektacular/logs")
+LOG_DIR = Path("/app/.spektacular/logs")
 BOB_LOGS = Path("/root/.bob/logs")
 JUNIT = Path("/logs/verifier/junit.xml")
 REWARD = Path("/logs/verifier/reward.txt")
 OUT = Path("/logs/verifier/metrics.json")
 
 RUN_FIELDS = ("suite", "agent", "spektacular_version", "commit", "dirty")
-SUBAGENT_FIELDS = ("started", "completed", "failed", "stopped", "durations_s")
-CHILD_FIELDS = (
-    "id", "parent", "kind", "description", "background", "spec", "step", "launched_at", "ended_at",
-    "duration_s", "ending", "hand_back", "models", "output", "prompt", "prompt_chars",
-)
-
-
 def utc(at: datetime) -> datetime:
     return at.replace(tzinfo=timezone.utc) if at.tzinfo is None else at
 
@@ -111,10 +109,6 @@ class AgentLog:
 
     agent: str | None
     totals: Totals
-    subagents: Subagents
-    messages: list[Message] | None  # None when the format's messages are not read
-    launch_root: dict[str, str] = field(default_factory=dict)
-    launches: list[SubagentLaunch] = field(default_factory=list)
     # Reads the child agents when called, so a reader failure costs only them.
     read_children: Callable[[], tuple[list[Child] | None, list[Unknown]]] = lambda: (None, [])
 
@@ -127,8 +121,7 @@ def missing_log(reason: str) -> AgentLog:
     totals = Totals()
     totals.unknowns = [Unknown(f"totals.{name}", reason) for name in tx.TOTAL_FIELDS]
     totals.unknowns.append(Unknown("run.model", reason))
-    subagents = Subagents(unknowns=[Unknown(f"subagents.{name}", reason) for name in SUBAGENT_FIELDS])
-    return AgentLog(agent=None, totals=totals, subagents=subagents, messages=None, read_children=no_children(reason))
+    return AgentLog(agent=None, totals=totals, read_children=no_children(reason))
 
 
 def has_rollout(agent_dir: Path) -> bool:
@@ -158,10 +151,6 @@ def read_agent_log(agent_dir: Path, build_agent: str | None) -> tuple[AgentLog, 
         log = AgentLog(
             agent="claude",
             totals=tx.claude_summary(objs),
-            subagents=tx.claude_subagents(objs),
-            messages=tx.claude_messages(objs),
-            launch_root=tx.claude_launch_root(objs),
-            launches=tx.claude_subagent_launches(objs),
             read_children=lambda: tx.claude_children(objs),
         )
     elif reader == "atif":
@@ -175,8 +164,6 @@ def read_agent_log(agent_dir: Path, build_agent: str | None) -> tuple[AgentLog, 
             log = AgentLog(
                 agent=tx.atif_agent_name(traj),
                 totals=tx.atif_summary(traj),
-                subagents=tx.atif_subagents(traj),
-                messages=tx.atif_messages(traj),
                 read_children=lambda: tx.atif_children(traj),
             )
         elif log is None:
@@ -185,8 +172,6 @@ def read_agent_log(agent_dir: Path, build_agent: str | None) -> tuple[AgentLog, 
         log = AgentLog(
             agent="codex",
             totals=tx.codex_rollout_summary(agent_dir / "sessions"),
-            subagents=Subagents(unknowns=[Unknown(f"subagents.{n}", "codex reports no sub-agents") for n in SUBAGENT_FIELDS]),
-            messages=None,
             read_children=no_children("codex reports no sub-agents"),
         )
     if log is None:
@@ -256,318 +241,172 @@ def read_reward(path: Path) -> tuple[int | None, list[Unknown]]:
         return None, [Unknown("result.reward", f"reward.txt holds {text!r}")]
 
 
-# Step breakdown.
+# Steps, helpers, waits and gaps: from Spektacular's logs, through `stats`.
 
 
-def window_of(windows: list[StepWindow], at: datetime) -> int | None:
-    at = utc(at)
-    for i, w in enumerate(windows):
-        if utc(w.start) <= at < utc(w.end):
-            return i
-    return None
+def seconds(ms) -> float | None:
+    return round(ms / 1000, 3) if isinstance(ms, (int, float)) else None
 
 
-def lane_for(prompt: str, names: list[str]) -> str | None:
-    """The lane whose spec name a sub-agent's launch prompt names first, the
-    longest name winning when one contains another. A prompt names its own
-    spec before any it depends on."""
-    named = [n for n in names if n in prompt]
-    return min(named, key=lambda n: (prompt.index(n), -len(n))) if named else None
+def step_rows(report: dict) -> list[dict]:
+    """A run report's per-step rows, in seconds, each split into working,
+    helper-wait and user-wait time adding up to its duration."""
+    first_entry: dict[str, str] = {}
+    for e in report.get("step_entries") or []:
+        first_entry.setdefault(e["step"], e["started_at"])
+    helpers: dict[str, int] = {}
+    for h in report.get("helpers") or []:
+        helpers[h.get("step")] = helpers.get(h.get("step"), 0) + 1
+    rows = []
+    for r in report.get("steps") or []:
+        duration, helper, user = r["duration_ms"], r["helper_wait_ms"], r["user_wait_ms"]
+        rows.append({
+            "step": r["step"],
+            "started_at": first_entry.get(r["step"]),
+            "entries": r["entries"],
+            "duration_s": seconds(duration),
+            "working_s": seconds(max(0, duration - helper - user)),
+            "helper_wait_s": seconds(helper),
+            "user_wait_s": seconds(user),
+            "commands": r["commands"],
+            "helpers": helpers.get(r["step"], 0),
+            "incomplete": r["incomplete"],
+        })
+    return rows
 
 
-def step_breakdown(
-    lanes: list[Lane],
-    messages: list[Message] | None,
-    root_of: dict[str, str],
-    launches: list[SubagentLaunch],
-    agent: str | None,
-) -> tuple[dict, list[Unknown]]:
-    """Each lane's steps with their durations and the characters written in
-    them. Durations come from the session log alone; characters from the
-    agent log, joined by time, or by the agent's own gotos when its messages
-    carry no time."""
-    windows = {(lane.kind, lane.name): lane.step_windows() for lane in lanes}
-    outputs: dict[tuple[str, str], list[int | None]] = {
-        key: [0] * len(ws) for key, ws in windows.items()
-    }
-    unknowns: list[Unknown] = []
-    extra: dict = {}
-    who = agent or "the agent"
-
-    if messages is None:
-        outputs = {key: [None] * len(ws) for key, ws in windows.items()}
-        if windows:
-            unknowns.append(Unknown("steps.output", f"no messages read from {who}'s log"))
-    elif len(windows) == 1:
-        (key, ws), = windows.items()
-        if messages and all(m.at is not None for m in messages):
-            for m in messages:
-                i = window_of(ws, m.at)
-                if i is not None:
-                    outputs[key][i] += m.chars
-        else:
-            i = 0
-            for m in sorted(messages, key=lambda m: m.order):
-                if ws:
-                    outputs[key][i] += m.chars
-                if m.goto_step:
-                    ahead = [j for j in range(i + 1, len(ws)) if ws[j].step == m.goto_step]
-                    if ahead:
-                        i = ahead[0]
-    elif len(windows) > 1 and agent == "claude":
-        prompts = {l.tool_use_id: l.prompt for l in launches}
-        names = [name for _, name in windows]
-        by_name = {key[1]: key for key in windows}
-        orchestrator = 0
-        for m in messages:
-            lane = None
-            if m.parent:
-                lane = lane_for(prompts.get(root_of.get(m.parent, m.parent), ""), names)
-            i = window_of(windows[by_name[lane]], m.at) if lane and m.at else None
-            if i is None:
-                orchestrator += m.chars
-            else:
-                outputs[by_name[lane]][i] += m.chars
-        extra["orchestrator_output"] = orchestrator
-    elif len(windows) > 1:
-        outputs = {key: [None] * len(ws) for key, ws in windows.items()}
-        unknowns.append(Unknown("steps.output", f"{who} output cannot be split between concurrent lanes"))
-
-    workflows = [
-        {
-            "kind": kind,
-            "name": name,
-            "steps": [
-                {"step": w.step, "started_at": iso(w.start), "duration_s": round(w.duration_s, 3), "output": out}
-                for w, out in zip(ws, outputs[(kind, name)])
-            ],
-        }
-        for (kind, name), ws in windows.items()
-    ]
-    return {"unit": "characters", "workflows": workflows, **extra}, unknowns
-
-
-def read_session(debug_dir: Path) -> tuple[SessionLog | None, list[Unknown]]:
-    session = SessionLog(debug_dir, kinds=WORKFLOW_KINDS)
-    if session.empty:
-        reason = "no session log" if not Path(debug_dir).is_dir() else "the session log is empty"
-        return None, [Unknown("steps", reason)]
-    return session, []
-
-
-def session_lanes(session: SessionLog) -> list[Lane]:
-    return sorted((l for l in session.lanes.values() if l.events), key=lambda l: l.events[0].at)
-
-
-def lane_windows(session: SessionLog | None) -> dict[tuple[str, str], list[StepWindow]] | None:
-    """Each lane's step windows, keyed by (kind, name); None without a session log."""
-    if session is None:
-        return None
-    return {(lane.kind, lane.name): lane.step_windows() for lane in session_lanes(session)}
-
-
-def read_trace_calls(session: SessionLog | None, debug_dir: Path) -> tuple[dict, list[Unknown]]:
-    """The `spektacular trace` calls the run made (spec 000074), from the
-    session log, and their average per plan task: the run's task spans. The
-    session log records every call, chained or not, whichever agent made it.
-    With no session log both are None, as read_session already said why."""
-    if session is None:
-        return {"trace_calls": None, "trace_calls_per_task": None}, []
-    calls = sum(1 for e in session.all_events() if e.command[:1] == ["trace"])
-    tasks = len(spans.of_type(spans.read_spans(debug_dir), spans.TASK))
-    return {"trace_calls": calls, "trace_calls_per_task": round(calls / tasks, 2) if tasks else None}, []
-
-
-def read_steps(session: SessionLog | None, log: AgentLog) -> tuple[dict, list[Unknown]]:
-    if session is None:  # read_session already said why
-        return {"unit": "characters", "workflows": None}, []
-    return step_breakdown(session_lanes(session), log.messages, log.launch_root, log.launches, log.agent)
-
-
-# Child agents: placed in a spec and a step, and counted per step.
-
-
-@dataclass
-class PlacedChild:
-    """A child agent with the lane, step window, spec and step it was started in."""
-
-    child: Child
-    lane: tuple[str, str] | None
-    window: int | None  # index into the lane's step windows
-    spec: str | None
-    step: str | None  # None: started outside any workflow step, unless listed unknown
-
-
-def _gap(field_name: str, ids: list[str], every: int, reason: str) -> list[Unknown]:
-    """One agent-wide Unknown when a gap holds for every child, else one per child."""
-    if not ids:
-        return []
-    if len(ids) == every:
-        return [Unknown(f"subagents.children.{field_name}", reason)]
-    return [Unknown(f"subagents.children[{i}].{field_name}", reason) for i in ids]
-
-
-def place_children(
-    children: list[Child],
-    windows_by_lane: dict[tuple[str, str], list[StepWindow]] | None,
-    messages: list[Message] | None = None,
-) -> tuple[list[PlacedChild], list[Unknown]]:
-    """Places each child in the spec and workflow step it was started in.
-
-    Its spec is the single lane's in a one-lane run; otherwise the spec its own
-    prompt names first, else its top-level ancestor's. Its step is the window
-    of that lane holding its launch time. A child with no launch time (Bob) is
-    placed by the order of the agent's messages and gotos, as the step
-    breakdown places their output, which only a one-lane run allows.
-    """
-    if windows_by_lane is None:
-        reason = "no session log to place children in"
-        unknowns = [Unknown("subagents.children.spec", reason), Unknown("subagents.children.step", reason)] if children else []
-        return [PlacedChild(c, None, None, None, None) for c in children], unknowns
-
-    by_id = {c.id: c for c in children}
-    names = list(dict.fromkeys(name for _, name in windows_by_lane))
-
-    def ancestor(c: Child) -> Child:
-        seen = {c.id}
-        while c.parent in by_id and c.parent not in seen:
-            c = by_id[c.parent]
-            seen.add(c.id)
-        return c
-
-    def spec_of(c: Child) -> str | None:
-        if len(names) == 1:
-            return names[0]
-        return lane_for(c.prompt or "", names) or (lane_for(ancestor(c).prompt or "", names) if c.parent else None)
-
-    # For a log without times: the window the agent stood in at each message.
-    window_at_order: dict[int, int] = {}
-    if len(windows_by_lane) == 1 and messages:
-        (ws,) = windows_by_lane.values()
-        i = 0
-        for m in sorted(messages, key=lambda m: m.order):
-            window_at_order[m.order] = i
-            if m.goto_step:
-                ahead = [j for j in range(i + 1, len(ws)) if ws[j].step == m.goto_step]
-                if ahead:
-                    i = ahead[0]
-
-    placed, unplaced = [], []
-    for c in children:
-        spec = spec_of(c)
-        keys = [k for k in windows_by_lane if k[1] == spec]
-        window = None
-        if c.launched_at is not None:
-            key = next((k for k in keys if window_of(windows_by_lane[k], c.launched_at) is not None), keys[0] if keys else None)
-            window = window_of(windows_by_lane[key], c.launched_at) if key else None
-        else:
-            key = keys[0] if keys else None
-            if key and window_at_order and c.order in window_at_order and windows_by_lane[key]:
-                window = window_at_order[c.order]
-            elif any(windows_by_lane.values()):
-                # Without a time it may have been started in any lane's step.
-                unplaced.append(c.id)
-        step = windows_by_lane[key][window].step if key and window is not None else None
-        placed.append(PlacedChild(c, key, window, spec, step))
-    return placed, _gap("step", unplaced, len(children), "the child has no launch time to place it in a step")
-
-
-def step_child_counts(
-    placed: list[PlacedChild], windows_by_lane: dict[tuple[str, str], list[StepWindow]]
-) -> dict[tuple[tuple[str, str], int], int]:
-    """How many children, at any depth, were started in each lane's step window."""
-    counts = {(key, i): 0 for key, ws in windows_by_lane.items() for i in range(len(ws))}
-    for p in placed:
-        if p.lane is not None and p.window is not None:
-            counts[(p.lane, p.window)] += 1
-    return counts
-
-
-def child_record(p: PlacedChild) -> dict:
-    c = p.child
+def workflow_entry(summary: dict, report: dict) -> dict:
+    t = report.get("totals") or {}
     return {
-        "id": c.id,
-        "parent": c.parent,
-        "kind": c.kind,
-        "description": c.description,
-        "background": c.background,
-        "spec": p.spec,
-        "step": p.step,
-        "launched_at": iso(c.launched_at) if c.launched_at else None,
-        "ended_at": iso(c.ended_at) if c.ended_at else None,
-        "duration_s": round(c.duration_s, 3) if c.duration_s is not None else None,
-        "ending": c.ending,
-        "hand_back": c.hand_back,
-        "models": sorted(c.models) if c.models is not None else None,
-        "output": c.output,
-        "prompt": c.prompt,
-        "prompt_chars": len(c.prompt) if c.prompt is not None else None,
+        "run_id": summary["run_id"],
+        "kind": summary["kind"],
+        "name": summary["name"],
+        "status": summary.get("status"),
+        "wall_s": seconds(t.get("wall_ms")),
+        "user_wait_s": seconds(t.get("user_wait_ms")),
+        "helper_wait_s": seconds(t.get("helper_wait_ms")),
+        "gap_s": seconds(t.get("gap_ms")),
+        "gaps": t.get("gaps_over_threshold"),
+        "steps": step_rows(report),
     }
 
 
-def read_children(log: AgentLog, session: SessionLog | None) -> tuple[tuple[list[dict] | None, list[PlacedChild] | None], list[Unknown]]:
-    """The record's child list, placed in specs and steps, and the placement itself."""
+LOG_FIELDS = (
+    "steps", "subagents.started", "subagents.helpers",
+    "totals.user_wait_s", "totals.helper_wait_s", "totals.gap_s", "totals.trace_calls",
+)
+
+
+def no_logs(reason: str) -> tuple[dict, list[Unknown]]:
+    """Every log-sourced section as null, each listed unknown with reason:
+    nothing is filled in from a transcript."""
+    return {"workflows": None, "totals": None, "subagents": None, "trace": None}, [Unknown(f, reason) for f in LOG_FIELDS]
+
+
+def helper_record(s: runlog.Span, lanes: list[runlog.Lane], launched: dict[str, str]) -> dict:
+    spec, step = s.spec, s.step
+    if s.run_id is None:
+        # An orchestrator's helper: the lane of the child launched under it,
+        # else the lane whose first run started while it ran.
+        spec = launched.get(s.span_id) or next(
+            (l.name for l in lanes if l.runs and s.start <= runlog.parse_time(l.runs[0]["started_at"]) <= s.end), None
+        )
+        step = None
+    return {
+        "span_id": s.span_id, "parent": s.parent, "name": s.name, "spec": spec, "kind": s.kind,
+        "step": step, "task_id": s.task_id, "outside_run": s.run_id is None,
+        "started_at": iso(s.start), "ended_at": iso(s.end),
+        "duration_s": round((s.end - s.start).total_seconds(), 3),
+        "end_reason": s.end_reason, "status": s.status, "complete": s.complete,
+    }
+
+
+def read_logs(log_dir: Path) -> tuple[dict, list[Unknown]]:
+    """The record's log-sourced sections, from `spektacular stats` over the
+    logs directory, the same way for every agent."""
+    log = runlog.RunLog(log_dir)
+    try:
+        runs = log.runs()
+        if not runs:
+            return no_logs("the Spektacular logs hold no workflow run")
+        reports = [(r, log.report(r["run_id"])) for r in runs]
+        spans = log.spans()
+        commands = log.commands()
+        lanes = list(log.lanes(WORKFLOW_KINDS).values())
+    except runlog.Unavailable as u:
+        return no_logs(u.reason)
+
+    workflows = [workflow_entry(r, rep) for r, rep in reports]
+    rep0 = reports[0][1]
+
+    def total(key: str):
+        return round(sum((w[key] for w in workflows if w[key] is not None), 0.0), 3)
+
+    totals = {
+        "user_wait_s": total("user_wait_s"),
+        "helper_wait_s": total("helper_wait_s"),
+        "gap_s": total("gap_s"),
+        "gaps": sum(w["gaps"] or 0 for w in workflows),
+        "gap_threshold_s": seconds(rep0.get("gap_threshold_ms")),
+    }
+    helpers = [s for s in spans if s.type == "sub-agent"]
+    launched = {}
+    for lane in lanes:
+        for first in lane.child_starts:
+            span = log.child_span(first)
+            if span is not None:
+                launched[span.span_id] = lane.name
+    subagents = {
+        "started": len(helpers),
+        "completed": sum(1 for s in helpers if s.complete and s.status == "ok"),
+        "failed": sum(1 for s in helpers if s.status == "error"),
+        "unfinished": sum(1 for s in helpers if not s.complete),
+        "durations_s": [round((s.end - s.start).total_seconds(), 3) for s in helpers if s.complete],
+        "helpers": [helper_record(s, lanes, launched) for s in helpers],
+    }
+    calls = sum(1 for c in commands if c.is_verb("trace"))
+    tasks = sum(len(rep.get("tasks") or []) for _, rep in reports)
+    trace = {"trace_calls": calls, "trace_calls_per_task": round(calls / tasks, 2) if tasks else None}
+    return {"workflows": workflows, "totals": totals, "subagents": subagents, "trace": trace}, []
+
+
+def read_logs_safely(log_dir: Path) -> tuple[dict, list[Unknown]]:
+    """read_logs, with a recorder bug costing every log-sourced field, each
+    listed unknown, and nothing else."""
+    try:
+        return read_logs(log_dir)
+    except Exception as exc:  # a recorder bug must never cost the record
+        return no_logs(f"recorder error: {exc}")
+
+
+# Child briefs: what each helper was told, from the transcript.
+
+
+def read_briefs(log: AgentLog) -> tuple[list[dict] | None, list[Unknown]]:
     children, unknowns = log.read_children()
     if children is None:
-        return (None, None), unknowns
-    placed, gaps = place_children(children, lane_windows(session), log.messages)
-    unknowns = unknowns + gaps
+        return None, [Unknown("subagents.briefs", u.reason) for u in unknowns[:1]] or [Unknown("subagents.briefs", "the agent log shows no helpers")]
+    briefs = [
+        {
+            "id": c.id,
+            "parent": c.parent,
+            "kind": c.kind,
+            "description": c.description,
+            "models": sorted(c.models) if c.models is not None else None,
+            "prompt": c.prompt,
+            "prompt_chars": len(c.prompt) if c.prompt is not None else None,
+        }
+        for c in children
+    ]
+    kept = (".kind", ".description", ".models", ".prompt")
+    found = [
+        Unknown(u.field.replace("subagents.children", "subagents.briefs", 1), u.reason)
+        for u in unknowns
+        if u.field.endswith(kept)
+    ]
     # A prompt the log could not show leaves its size unknown too.
-    unknowns += [Unknown(u.field.removesuffix(".prompt") + ".prompt_chars", u.reason) for u in unknowns if u.field.endswith(".prompt")]
-    return ([child_record(p) for p in placed], placed), unknowns
-
-
-def count_step_children(
-    steps: dict, session: SessionLog | None, placed: list[PlacedChild] | None, unknowns: list[Unknown]
-) -> tuple[None, list[Unknown]]:
-    """Writes each step entry's `children`: how many children it started, or
-    None when the children, or where they were started, are unknown."""
-    workflows = steps.get("workflows")
-    if not workflows:
-        return None, []
-    windows = lane_windows(session) or {}
-    unplaced = any(u.field in ("subagents.children", "subagents.children.step") or (u.field.startswith("subagents.children[") and u.field.endswith("].step")) for u in unknowns)
-    counts = step_child_counts(placed, windows) if placed is not None and not unplaced else None
-    for wf in workflows:
-        for i, entry in enumerate(wf["steps"]):
-            entry["children"] = counts.get(((wf["kind"], wf["name"]), i)) if counts is not None else None
-    if counts is None:
-        return None, [Unknown("steps.children", "the run's children, or the steps they were started in, are unknown")]
-    return None, []
-
-
-# Idle time: the longest stretch with no activity.
-
-
-def idle_seconds(instants: list[datetime]) -> float | None:
-    """The longest gap between consecutive instants; None with fewer than two."""
-    times = sorted(utc(t) for t in instants)
-    if len(times) < 2:
-        return None
-    return max((b - a).total_seconds() for a, b in zip(times, times[1:]))
-
-
-def read_idle(
-    log: AgentLog, placed: list[PlacedChild] | None, session: SessionLog | None, bob_logs: Path
-) -> tuple[float | None, list[Unknown]]:
-    """Idle time from every timestamped message, child start and end, and
-    Spektacular command start and end. The session log alone would count the
-    agent's time thinking between commands as idle, so a run whose agent log
-    carries no times has its idle time unknown, unless Bob's own shell logs
-    supply them."""
-    instants = [m.at for m in log.messages or [] if m.at is not None]
-    if not instants:
-        instants = bob_log_times(bob_logs)
-    if not instants:
-        return None, [Unknown("totals.idle_s", f"{log.agent or 'the agent'}'s log carries no activity times")]
-    for p in placed or []:
-        instants += [t for t in (p.child.launched_at, p.child.ended_at) if t is not None]
-    for e in session.all_events() if session is not None else []:
-        instants += [e.at, e.end]
-    idle = idle_seconds(instants)
-    if idle is None:
-        return None, [Unknown("totals.idle_s", "too little activity to measure")]
-    return round(idle, 3), []
+    found += [Unknown(u.field.removesuffix(".prompt") + ".prompt_chars", u.reason) for u in found if u.field.endswith(".prompt")]
+    return briefs, found
 
 
 # Wall-time fallback for agents whose log carries no time.
@@ -600,21 +439,28 @@ def bob_log_times(log_dir: Path) -> list[datetime]:
     return times
 
 
-def session_span_s(debug_dir: Path) -> float | None:
-    events = SessionLog(debug_dir, kinds=WORKFLOW_KINDS).all_events()
-    if not events:
+def log_span_s(log_dir: Path) -> float | None:
+    """First start to last end over the logs' workflow runs, or None."""
+    try:
+        runs = runlog.RunLog(log_dir).runs()
+    except runlog.Unavailable:
         return None
-    return (max(e.end for e in events) - events[0].at).total_seconds()
+    if not runs:
+        return None
+    start = min(runlog.parse_time(r["started_at"]) for r in runs)
+    end = max(runlog.parse_time(r["ended_at"]) for r in runs)
+    return (end - start).total_seconds()
 
 
-def wall_time_fallback(totals: Totals, bob_logs: Path, debug_dir: Path) -> None:
-    """Fills an unknown wall time from Bob's shell logs, else from the
-    session log's span, dropping its Unknown only when one succeeds."""
+def wall_time_fallback(totals: Totals, bob_logs: Path, log_dir: Path) -> None:
+    """Fills an unknown wall time from Bob's shell logs, else from the span
+    of the workflow runs in Spektacular's logs, dropping its Unknown only
+    when one succeeds."""
     if totals.wall_time_s is not None:
         return
     span = bob_log_span_s(bob_logs)
     if span is None:
-        span = session_span_s(debug_dir)
+        span = log_span_s(log_dir)
     if span is not None:
         totals.wall_time_s = round(span, 3)
         totals.unknowns = [u for u in totals.unknowns if u.field != "totals.wall_time_s"]
@@ -627,7 +473,7 @@ def wall_time_fallback(totals: Totals, bob_logs: Path, debug_dir: Path) -> None:
 class Paths:
     build_info: Path = BUILD_INFO
     agent_dir: Path = AGENT_DIR
-    debug_dir: Path = DEBUG_DIR
+    log_dir: Path = LOG_DIR
     bob_logs: Path = BOB_LOGS
     junit: Path = JUNIT
     reward: Path = REWARD
@@ -655,24 +501,19 @@ def build_record(paths: Paths) -> dict:
     if not run.get("agent") and log.agent:
         # The log names the agent when build.json could not.
         unknowns = [u for u in unknowns if u.field != "run.agent"]
-    gather("totals.wall_time_s", lambda: (wall_time_fallback(log.totals, paths.bob_logs, paths.debug_dir), []), None)
+    gather("totals.wall_time_s", lambda: (wall_time_fallback(log.totals, paths.bob_logs, paths.log_dir), []), None)
     unknowns.extend(log.totals.unknowns)
-    unknowns.extend(log.subagents.unknowns)
     (checks, groups) = gather("result.checks", lambda: read_checks(paths.junit), ({"passed": None, "total": None, "score": None}, None))
     reward = gather("result.reward", lambda: read_reward(paths.reward), None)
-    session = gather("steps", lambda: read_session(paths.debug_dir), None)
-    steps = gather("steps", lambda: read_steps(session, log), {"unit": "characters", "workflows": None})
-    children, placed = gather("subagents.children", lambda: read_children(log, session), (None, None))
-    child_unknowns = [u for u in unknowns if u.field.startswith("subagents.children")]
-    gather("steps.children", lambda: count_step_children(steps, session, placed, child_unknowns), None)
-    idle = gather("totals.idle_s", lambda: read_idle(log, placed, session, paths.bob_logs), None)
-    trace = gather(
-        "totals.trace_calls",
-        lambda: read_trace_calls(session, paths.debug_dir),
-        {"trace_calls": None, "trace_calls_per_task": None},
-    )
+    logs = gather("steps", lambda: read_logs_safely(paths.log_dir), no_logs("recorder error")[0])
+    briefs = gather("subagents.briefs", lambda: read_briefs(log), None)
 
     totals = log.totals
+    trace = logs["trace"] or {"trace_calls": None, "trace_calls_per_task": None}
+    log_totals = logs["totals"] or dict.fromkeys(("user_wait_s", "helper_wait_s", "gap_s", "gaps", "gap_threshold_s"))
+    helpers = logs["subagents"] or {
+        **dict.fromkeys(("started", "completed", "failed", "unfinished", "durations_s")), "helpers": None,
+    }
     return {
         "schema_version": SCHEMA_VERSION,
         "run": {
@@ -685,9 +526,9 @@ def build_record(paths: Paths) -> dict:
             "dirty": run.get("dirty"),
         },
         "result": {"reward": reward, "checks": checks, "groups": groups},
-        "totals": {**{name: getattr(totals, name) for name in tx.TOTAL_FIELDS}, "idle_s": idle, **trace},
-        "steps": steps,
-        "subagents": {**{name: getattr(log.subagents, name) for name in SUBAGENT_FIELDS}, "children": children},
+        "totals": {**{name: getattr(totals, name) for name in tx.TOTAL_FIELDS}, **trace, **log_totals},
+        "steps": {"workflows": logs["workflows"]},
+        "subagents": {**helpers, "briefs": briefs},
         "unknown": [{"field": u.field, "reason": u.reason} for u in unknowns],
     }
 
@@ -714,9 +555,13 @@ def summary(record: dict) -> str:
     cost = "unknown" if t["cost_usd"] is None else f"${t['cost_usd']:.2f}"
     score = "unknown" if c["total"] is None else f"{c['passed']}/{c['total']}"
     turns = "unknown" if t["turns"] is None else t["turns"]
+    workflows = record["steps"]["workflows"]
+    steps = "unknown" if workflows is None else sum(len(w["steps"]) for w in workflows)
+    started = record["subagents"]["started"]
+    helpers = "unknown" if started is None else started
     return (
         f"metrics: {record['run']['agent'] or 'unknown agent'} wall {wall}, turns {turns}, "
-        f"cost {cost}, checks {score}, {len(record['unknown'])} unknown"
+        f"cost {cost}, checks {score}, {steps} steps, {helpers} helpers, {len(record['unknown'])} unknown"
     )
 
 
@@ -724,7 +569,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Write a harbor run's metrics record. Always exits 0.")
     parser.add_argument("--build-info", type=Path, default=BUILD_INFO)
     parser.add_argument("--agent-dir", type=Path, default=AGENT_DIR)
-    parser.add_argument("--debug-dir", type=Path, default=DEBUG_DIR)
+    parser.add_argument("--log-dir", type=Path, default=LOG_DIR)
+    # The old name, kept so hand-run commands from before schema 3 still work.
+    parser.add_argument("--debug-dir", dest="log_dir", type=Path, default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     parser.add_argument("--bob-logs", type=Path, default=BOB_LOGS)
     parser.add_argument("--junit", type=Path, default=JUNIT)
     parser.add_argument("--reward", type=Path, default=REWARD)

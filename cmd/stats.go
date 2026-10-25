@@ -73,6 +73,30 @@ values, exactly those runs.`,
 	RunE: runStatsSummary,
 }
 
+var statsCommandsCmd = &cobra.Command{
+	Use:   "commands",
+	Short: "List every recorded command, oldest first, with its run, step, arguments and exit code",
+	Long: `List every recorded command, oldest first: the run and step it ran in, the
+step it moved the run to, its arguments, how long it took, its exit code and
+any error message. With no selection it lists every command, in runs and
+outside them; with a selection, only the selected runs' commands. With
+--outside-runs it lists only the commands recorded outside any workflow run,
+such as an epic orchestrator's.`,
+	Args: cobra.NoArgs,
+	RunE: runStatsCommands,
+}
+
+var statsSpansCmd = &cobra.Command{
+	Use:   "spans",
+	Short: "List every helper agent, wait on the user and other marked span, oldest first",
+	Long: `List every span an agent marked with trace start (helper agents, waits on
+the user and other work), oldest first, with its run, step, task, parent and
+how it ended. An unfinished span is capped as the run report caps it. The
+selection and --outside-runs work as for stats commands.`,
+	Args: cobra.NoArgs,
+	RunE: runStatsSpans,
+}
+
 // statsSource is what every stats result carries beside its figures: the
 // logs directory read and the lines in it that could not be read.
 type statsSource struct {
@@ -115,6 +139,20 @@ type statsCompareResult struct {
 type statsSummaryResult struct {
 	statsSource
 	runstats.Summary
+}
+
+// statsCommandsResult and statsSpansResult are the JSON of `stats commands`
+// and `stats spans`, a contract read by the Harbor harness and fixed by the
+// Data Structures section of plan 000076_harbor-on-built-in-logs (the rows
+// are documented on runstats.CommandRow and runstats.SpanRow).
+type statsCommandsResult struct {
+	statsSource
+	Commands []runstats.CommandRow `json:"commands"`
+}
+
+type statsSpansResult struct {
+	statsSource
+	Spans []runstats.SpanRow `json:"spans"`
 }
 
 // statsSelectionFlags are the flags every stats subcommand's schema lists.
@@ -222,6 +260,72 @@ func runStatsRun(cmd *cobra.Command, _ []string) error {
 		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsRunResult{statsSource: source(logs), Report: rep})
 	}
 	return runstats.RenderReport(cmd.OutOrStdout(), rep, logs.Skipped)
+}
+
+// statsListingFlags are the flags of the two listings' schemas.
+func statsListingFlags() map[string]*schemaProp {
+	flags := statsSelectionFlags()
+	flags["outside-runs"] = &schemaProp{Type: "boolean", Description: "only the records written outside any workflow run; not combined with a selection"}
+	return flags
+}
+
+func runStatsCommands(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		return output.Write(cmd.OutOrStdout(), commandSchema{
+			Output: statsOutput(map[string]*schemaProp{
+				"commands": {Type: "array", Description: "oldest first; each run_id, kind, name, agent, span_id, parent_span_id, command, args, step, step_to, started_at, ended_at, duration_ms, exit_code, status, message (run fields null outside any run)"},
+			}),
+			Flags: statsListingFlags(),
+		}, "")
+	}
+	format, logs, f, outside, err := statsListing(cmd)
+	if err != nil {
+		return err
+	}
+	rows, err := logs.Commands(f, outside)
+	if err != nil {
+		return statsError(err)
+	}
+	if format == statusFormatJSON {
+		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsCommandsResult{statsSource: source(logs), Commands: rows})
+	}
+	return runstats.RenderCommands(cmd.OutOrStdout(), rows, logs.Skipped)
+}
+
+func runStatsSpans(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		return output.Write(cmd.OutOrStdout(), commandSchema{
+			Output: statsOutput(map[string]*schemaProp{
+				"spans": {Type: "array", Description: "oldest first; each a run report's helpers entry plus type (sub-agent, user-wait or work), trace_id, run_id, kind and workflow (the last three null outside any run)"},
+			}),
+			Flags: statsListingFlags(),
+		}, "")
+	}
+	format, logs, f, outside, err := statsListing(cmd)
+	if err != nil {
+		return err
+	}
+	rows, err := logs.AgentSpans(f, outside)
+	if err != nil {
+		return statsError(err)
+	}
+	if format == statusFormatJSON {
+		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsSpansResult{statsSource: source(logs), Spans: rows})
+	}
+	return runstats.RenderSpans(cmd.OutOrStdout(), rows, logs.Skipped)
+}
+
+// statsListing does what both listings share: it validates the format and
+// reads the logs, the selection and --outside-runs.
+func statsListing(cmd *cobra.Command) (format string, logs *runstats.Logs, f runstats.Filter, outside bool, err error) {
+	if format, err = statsFormat(cmd); err != nil {
+		return
+	}
+	if logs, err = statsLogs(cmd); err != nil {
+		return
+	}
+	outside, _ = cmd.Flags().GetBool("outside-runs")
+	return format, logs, statsFilter(cmd), outside, nil
 }
 
 // statsFigureSchema is the schema of a comparison's or a summary's output.
@@ -432,6 +536,10 @@ func statsError(err error) error {
 			return output.NewError("stats_run_ambiguous", se.Error()).
 				WithResource(se.Value).
 				WithNextAction(fmt.Sprintf("give more characters of the run id; it matches %s", strings.Join(se.Matches, ", ")))
+		case runstats.CodeBadSelection:
+			return output.NewError("stats_bad_selection", se.Error()).
+				WithResource(se.Value).
+				WithNextAction("use --outside-runs on its own, or drop it and select runs with --name, --kind, --agent or --run")
 		}
 	case errors.Is(err, runstats.ErrNoRuns):
 		return output.NewError("stats_no_runs", "no recorded run matches the selection").
@@ -453,7 +561,10 @@ func init() {
 	statsCmd.PersistentFlags().Duration("gap-threshold", 5*time.Minute, "Gaps longer than this count toward the gap total")
 
 	statsRunCmd.Flags().Int("gaps", runstats.DefaultOptions.Gaps, "The most gaps to list, longest first")
-	for _, c := range []*cobra.Command{statsListCmd, statsRunCmd, statsCompareCmd, statsSummaryCmd} {
+	for _, c := range []*cobra.Command{statsCommandsCmd, statsSpansCmd} {
+		c.Flags().Bool("outside-runs", false, "Only the records written outside any workflow run (not combined with a selection)")
+	}
+	for _, c := range []*cobra.Command{statsListCmd, statsRunCmd, statsCompareCmd, statsSummaryCmd, statsCommandsCmd, statsSpansCmd} {
 		c.Flags().Bool("schema", false, "Print the input/output schema and exit")
 		statsCmd.AddCommand(c)
 	}

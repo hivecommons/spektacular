@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared"))
 
 import test_standing_rules as sr  # noqa: E402
 
@@ -29,7 +30,7 @@ SPEC = "20260101000001-low-stock-alerts"
 # ---------------------------------------------------------------------------
 # Synthetic inputs
 #
-# Commands mirror sessionlog.Event.command: the argv after the binary name.
+# Commands mirror runlog.Command.args (`stats commands` "args"): the argv after the binary name.
 # Answers are hand-written answer files run through parse_answers, the same
 # way the verifier reads /app/answers.md.
 # ---------------------------------------------------------------------------
@@ -248,3 +249,48 @@ class TestFeatureOffersSpec:
     def test_fails_without_feature_heading(self):
         a = sr.parse_answers("## Code\n\n37\n\n## Spec\n\nsummary\n")
         assert sr.rule_feature_offers_spec(a) is not None
+
+
+# ---------------------------------------------------------------------------
+# The command list comes from the logs, through `spektacular stats commands`:
+# a fake reader answering with canned rows gives the rules each command's
+# argv, and logs that hold nothing fail the fixture.
+# ---------------------------------------------------------------------------
+
+
+def canned_reader(monkeypatch, rows):
+    import json
+
+    import runlog
+
+    answers = {
+        "commands": {"error": False, "commands": rows},
+        "list": {"error": False, "runs": []},
+    }
+    real = runlog.RunLog
+
+    def runner(argv, **kwargs):
+        return type("Done", (), {"stdout": json.dumps(answers[argv[2]])})()
+
+    monkeypatch.setattr(runlog, "RunLog", lambda d: real(Path(__file__).parent, binary="spektacular", runner=runner))
+
+
+def command_row(minute, *args):
+    return {
+        "run_id": None, "kind": None, "name": None, "span_id": f"s{minute}", "command": " ".join(args[:2]),
+        "args": list(args), "step": None, "step_to": None, "started_at": f"2026-10-23T10:{minute:02d}:00Z",
+        "ended_at": f"2026-10-23T10:{minute:02d}:01Z", "exit_code": 0, "message": None,
+    }
+
+
+def test_commands_come_from_the_logs_through_stats(monkeypatch):
+    canned_reader(monkeypatch, [command_row(0, "knowledge", "search", "auth"), command_row(1, "spec", "new", "--data", "{}")])
+    assert sr.commands.__wrapped__() == [["knowledge", "search", "auth"], ["spec", "new", "--data", "{}"]]
+
+
+def test_commands_fail_when_nothing_was_logged(monkeypatch):
+    import pytest
+
+    canned_reader(monkeypatch, [])
+    with pytest.raises(AssertionError):
+        sr.commands.__wrapped__()

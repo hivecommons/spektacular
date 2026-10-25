@@ -8,9 +8,10 @@ set -euo pipefail
 SEED=/tmp/seed
 
 # set_log_level rewrites log.level in the project's config.yaml. Seeding runs
-# with logging off, so the session log holds only the agent's run, and the
-# last step turns it to verbose, which keeps the responses and state
-# snapshots the verifiers and tools read from .spektacular/logs/. The edit
+# with logging off, so the logs hold only the agent's run, and the last step
+# turns it back to the default level (standard), which records everything
+# the verifiers and tools read from .spektacular/logs/ with no special
+# setting. The edit
 # fails the image build, not the run, if the config has no log.level line.
 set_log_level() {
   python3 - /app/.spektacular/config.yaml "$1" <<'PY'
@@ -96,4 +97,4 @@ if compgen -G "/app/.spektacular/logs/*.jsonl" >/dev/null; then
   echo "the seed's own spektacular commands were logged under /app/.spektacular/logs" >&2
   exit 1
 fi
-set_log_level verbose
+set_log_level standard

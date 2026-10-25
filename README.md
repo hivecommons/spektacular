@@ -57,6 +57,8 @@ spektacular stats list                     # every recorded run, newest first
 spektacular stats run [--name <spec>]      # where one run's time went: steps, tasks, helpers, waits, gaps
 spektacular stats compare                  # the two latest runs of a kind, side by side
 spektacular stats summary --kind implement # median and 90th percentile per step
+spektacular stats commands                 # every recorded command, with its step and arguments
+spektacular stats spans                    # helpers and waits, including an epic orchestrator's
 ```
 
 Every form takes the same selection (`--name`, `--kind`, `--agent`, and a repeatable `--run <id or 8+ character prefix>`), prints a readable table by default, and gives the structured report with `--format json`, whose durations are integer milliseconds and whose field names are stable. `--dir <path>` reads a logs directory copied from anywhere, such as a test run's, with no project needed. Reporting never changes a log, and `stats` commands are never logged. The figures are defined on the documentation site's [Run statistics](https://spektacular.dev/run-stats/) page.
@@ -508,7 +510,7 @@ tests/harbor/jobs/<timestamp>/
 └── spec-workflow__<id>/
     ├── agent/                     # Agent output log and native session transcripts
     ├── artifacts/
-    │   ├── spektacular/           # The project's .spektacular, with logs/ command logs
+    │   ├── spektacular/           # The project's .spektacular, with logs/ (Spektacular's run logs)
     │   └── agent-logs/bob/        # Bob's own debug log, on Bob runs only
     ├── verifier/
     │   ├── test-stdout.txt        # pytest output
@@ -525,19 +527,30 @@ tests/harbor/jobs/<timestamp>/
 | `tests/harbor/spec-workflow` | Full spec creation workflow, end to end |
 | `tests/harbor/plan-workflow` | Full plan generation workflow, end to end |
 | `tests/harbor/repo-workflow` | Guided repo add, checked against the agent's own transcript |
-| `tests/harbor/epic-workflow` | Plans a seeded three-spec epic with `spek-plan-epic`, checked against CLI state and the session log, so the same verifier serves every agent |
-| `tests/harbor/implement-epic-workflow` | Implements a seeded, planned four-spec epic with `spek-implement-epic`: storage and format in parallel, commands after both are merged, export after commands. Checked against CLI state, git, the finished app's behaviour and the session log |
+| `tests/harbor/epic-workflow` | Plans a seeded three-spec epic with `spek-plan-epic`, checked against CLI state and Spektacular's logs, so the same verifier serves every agent |
+| `tests/harbor/implement-epic-workflow` | Implements a seeded, planned four-spec epic with `spek-implement-epic`: storage and format in parallel, commands after both are merged, export after commands. Checked against CLI state, git, the finished app's behaviour and Spektacular's logs |
 
-Every suite seeds its project with `log.level: verbose` in `.spektacular/config.yaml` (seeding
-itself runs with logging off, and the verifiers switch logging off before their own calls), so the
-project's `.spektacular/logs/`, collected as each run's `artifacts/spektacular/logs/`, holds a
-timestamped line per `spektacular` call, whichever agent ran, apart from `status`, which is never
-logged. The epic suite prints a timeline from
-that log at the top of its results: when each spec's child started and finished, its slowest step,
-and how long the orchestrator took to notice it had finished (its `status` polls are not logged, so
-the time to start each child is no longer shown). Both epic suites print it, and it also lists every child that had to be resumed and the step it
-stopped at, and, on Bob runs, how often Bob ended a task at its turn limit. Run it on a collected job
-with `python3 tests/harbor/shared/timeline.py <job>/<trial>/artifacts/spektacular/logs [<job>/<trial>/artifacts/agent-logs/bob]`.
+Every suite records the agent's run at Spektacular's default log level, with no special setting
+(the pre-built projects' seed scripts run with logging off and switch it back to the default as
+their last step, and the verifiers switch logging off before their own calls). The project's
+`.spektacular/logs/`, collected as each run's `artifacts/spektacular/logs/`, holds one file per
+workflow run and one per day for commands outside any run, whichever agent ran, apart from
+`status`, which is never logged. Harbor reads these logs only through `spektacular stats` (`list`,
+`run`, `commands` and `spans`), never by parsing them, so running `spektacular stats run --dir
+<trial>/artifacts/spektacular/logs` on a collected trial shows the same step timings as its
+metrics record. Reading them locally needs a `spektacular` that has `stats` on `PATH`, or one named
+by `SPEKTACULAR_BIN`.
+
+The epic suites print a timeline from those logs at the top of their results: when each spec's
+child started and finished, its slowest step, and the hand-off gaps. The orchestrator starts a
+`sub-agent` span when it launches a child and stops it when it handles the child's hand-back, so
+*spawned after* runs from that span's start to the child's first command and *picked up after*
+from the child's last command to the span's end (or, for a span never stopped, to the
+orchestrator's next recorded command or span); *merged after* runs to the orchestrator's
+`epic merge`. Because `status` is never logged, these gaps are not comparable with timelines from
+before. The timeline also lists every child that had to be resumed and the step it stopped at,
+and, on Bob runs, how often Bob ended a task at its turn limit. Run it on a collected job with
+`python3 tests/harbor/shared/timeline.py <job>/<trial>/artifacts/spektacular/logs [<job>/<trial>/artifacts/agent-logs/bob]`.
 
 #### Run metrics
 
@@ -554,45 +567,35 @@ reason. It is never written as zero.
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | The record's shape, currently `2`. Version 2 added each child agent, the per-step child count and the idle time; the report still reads version-1 records |
+| `schema_version` | The record's shape, currently `3`. Version 3 takes every step, helper, wait and gap from Spektacular's logs, in place of version 2's transcript-based step output, child placement and idle time; the report still reads version-1 and version-2 records |
 | `run` | `suite`, `scenario`, `agent`, `model`, `spektacular_version` (`git describe`), `commit`, and `dirty` (the tree had uncommitted changes when the suite was built) |
 | `result` | `reward` as written to `reward.txt`. `checks` holds `passed`, `total` and `score` (passed over total, skipped tests excluded). `groups` gives the same per group, under its `name`: the test class, or the test module for suites written as plain functions |
-| `totals` | `wall_time_s`, `model_time_s` (time spent in model calls, summed across sub-agents, so it can exceed the wall time), `turns`, `cost_usd`, `input_tokens` (uncached), `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, and `idle_s`, the longest stretch with no activity from the agent, its children or Spektacular |
-| `steps` | `unit` (`characters`), then one entry in `workflows` per spec, plan or implement workflow the run drove: its `kind` and `name`, and in `steps` each step it entered, in order, with its `step` name, `started_at`, `duration_s`, `output`, the characters the agent wrote there (text, thinking and tool-call input), and `children`, how many child agents were started in it, nested ones included. `workflows` is `null` when the run left no session log. A Claude run that drove several workflows at once also has `orchestrator_output`, the characters written outside every workflow |
-| `subagents` | `started`, `completed`, `failed` and `stopped`, and `durations_s` for each sub-agent that reported one, kept for version-1 readers. `children` lists every child agent the run started, nested ones included, each with: `id` (its launching call), `parent` (the child that started it, `null` for the main agent), `kind`, `description`, `background` (as it actually ran), `spec`, `step` (`null` when it was started outside any workflow step, such as an epic orchestrator's own children, unless `unknown` lists it), `launched_at`, `ended_at`, `duration_s` (the agent's own report of its run time), `ending` (`completed`, `failed`, `stopped` or `no_hand_back`), `hand_back` (the first line it handed back), `models`, `output` (characters of its own messages), `prompt` (the full context it was given) and `prompt_chars` |
+| `totals` | From the agent's log: `wall_time_s`, `model_time_s` (time spent in model calls, summed across sub-agents, so it can exceed the wall time), `turns`, `cost_usd`, `input_tokens` (uncached), `output_tokens`, `cache_read_tokens` and `cache_write_tokens`. From Spektacular's logs: `trace_calls` and `trace_calls_per_task` (the run's `spektacular trace` calls, and their average per plan task), and, summed over every workflow run, `user_wait_s` (time waiting on the user), `helper_wait_s` (time a helper agent was running), `gap_s` and `gaps` (the time in, and the number of, stretches with no recorded event longer than `gap_threshold_s`, 300 by default) |
+| `steps` | One entry in `workflows` per workflow run in Spektacular's logs, in start order: its `run_id`, `kind`, `name`, `status`, `wall_s`, `user_wait_s`, `helper_wait_s`, `gap_s` and `gaps`, and in `steps` each step it entered, in order of first entry, with its `step` name, `started_at`, `entries`, `duration_s` (over every entry), its split into `working_s`, `helper_wait_s` and `user_wait_s` (which add up to its duration), `commands`, `helpers` (how many helper agents were started in it) and `incomplete` (entries that did not finish). `workflows` is `null` when the logs are missing or hold no workflow run |
+| `subagents` | From Spektacular's logs: `started`, `completed`, `failed`, `unfinished` (not stopped, or cut off), `durations_s` for each helper that finished, and `helpers`, every `sub-agent` span: `span_id`, `parent`, `name`, `spec`, `kind`, `step`, `task_id`, `outside_run` (an epic orchestrator's helper, started outside any run, whose `spec` is the lane of the child launched under it and whose `step` is `null`), `started_at`, `ended_at`, `duration_s`, `end_reason`, `status` and `complete`. From the agent's log: `briefs`, every child agent the run started, nested ones included, with its `id` (its launching call), `parent`, `kind`, `description`, `models`, `prompt` (the full context it was given) and `prompt_chars` |
 | `unknown` | One `{field, reason}` per measure the record could not fill |
 
-Step durations come from Spektacular's own session log, so they mean the same for every agent. A
-step runs from the command that moved the workflow onto it (the workflow's `new`, or a `goto`) to
-the one that moved it on; the last step ends at the workflow's last command, and a child that
-resumes a workflow opens a fresh window, so the hand-off is not counted. The agent's setup before
-the workflow starts falls outside every step, so one workflow's steps add up to less than the wall
-time. Workflows driven at once run in parallel, so steps summed across them can exceed it.
-
-Idle time is measured from every timestamped message, main agent and children alike, every
-child's start and end, and every Spektacular command's start and end, so time an agent spends
-thinking between commands is not counted as idle. The report flags a run idle for more than a
-quarter of its wall time; the threshold is `IDLE_SHARE` at the top of `report.py`.
-
-A child is placed in the spec its own launch prompt names first, else in the spec of the child
-that started it, and in the step whose window holds its launch time. A step whose instructions
-only suggest a child, such as plan discovery, shows whether it used one through its `children`
-count. In a Claude run, a child started by another child streams none of its own messages, so its
-`models` and `output` are unknown.
+Everything but tokens, models, cost and briefs comes from the logs Spektacular keeps under
+`.spektacular/logs/`, recorded at the default log level, which reach the trial's artifacts with
+the project's `.spektacular`. The recorder reads them only through `spektacular stats` (`list`,
+`run`, `commands` and `spans`), never by parsing them, so every step, helper and wait figure means
+the same for every agent, and `spektacular stats run --dir <trial>/artifacts/spektacular/logs` on a
+collected trial gives the same numbers. A step's figures add up over every entry into it, and a
+resumed child's hand-off is not inside any step. When the logs are missing, or `stats` cannot read
+them, every log-sourced field is `null` and listed under `unknown` with the reason, and none is
+filled in from the agent's transcript.
 
 Claude's totals come from the `result` summary at the end of its transcript, with tokens summed over
 every model it used. When background sub-agents split a Claude run into several summaries, turns are
 summed, cost, tokens and model time come from the last summary, and wall time is the span from the
-transcript's first message to its last. The other agents report less:
+transcript's first message to its last. The other agents report less, but only in the transcript's
+fields: steps, helpers and waits are the same for every agent.
 
 | Agent | Unknown in its record |
 |---|---|
-| Bob | Tokens, cost, model time, model, and every sub-agent measure but `started`. Each child carries only its `kind`, `description` and `prompt` (and so `prompt_chars`); every other child field is unknown. Its wall time and idle time come from Bob's own shell logs, and its characters and children are placed by its `goto` calls, so in a run that drove several workflows at once each child's `step`, and every step's `children`, are unknown |
-| Codex | Every sub-agent measure, `children` included (`null`), model time and cache writes. Cost too, unless Harbor can price the model. When Harbor left no `trajectory.json` and the record falls back to Codex's own rollout, cost and every step's `output` are unknown as well |
-| Oracle (no agent) | Every agent total, the idle time, the model, every sub-agent measure, `children` included, and every step's `output` and `children`. Wall time comes from the session log |
-
-A Bob or Codex run that drove several workflows at once has its per-step `output` unknown, because
-their logs cannot split it between workflows.
+| Bob | Tokens, cost, model time and model. Each brief carries only its `kind`, `description` and `prompt` (and so `prompt_chars`); its `models` are unknown. Its wall time comes from Bob's own shell logs |
+| Codex | `briefs` (`null`: Codex's log shows no helpers), model time and cache writes. Cost too, unless Harbor can price the model |
+| Oracle (no agent) | Every agent total, the model and `briefs`. Wall time comes from Spektacular's logs |
 
 #### Comparing runs
 
@@ -607,25 +610,34 @@ record, such as runs from before the recorder, are skipped. `make harbor-report`
 ```bash
 make harbor-report                                     # one row per run, grouped by suite
 make harbor-report ARGS='tests/harbor/jobs/fix2-*'     # only some jobs (directories or globs)
-make harbor-report ARGS='--run plan-workflow-claude__<id>'    # one run's step breakdown, by a trial name from the table
-make harbor-report ARGS='--run epic-workflow-claude__<id> --prompts'   # ... and every child agent's full context
+make harbor-report ARGS='--run plan-workflow-claude__<id>'    # one run's step split, by a trial name from the table
+make harbor-report ARGS='--run epic-workflow-claude__<id> --prompts'   # ... and every helper's brief
+make harbor-report ARGS='--compare plan-workflow-claude__<a> plan-workflow-claude__<b>'   # two trials side by side
 make harbor-report ARGS="--baseline 'tests/harbor/jobs/before-*' --candidate 'tests/harbor/jobs/after-*'"
 ```
 
-The table shows each run's agent and model, wall time and idle time in minutes, turns, output and cache-read
-tokens, cost, check score and pass or fail, and marks a run idle for more than a quarter of its
-wall time `◀ idle`. `--run` takes a trial directory, a trial name, or a prefix that names one
-trial. It lists every step with its duration, its share of the run and the characters written,
-then the sub-agents, the idle time, a table of the child agents (one row per child, nested ones
-indented under the child that started them, with kind, spec, step, background or foreground,
-seconds, ending and context size), and every unknown measure with its reason. A step taking more
-than a third of the run's wall time is marked `◀ dominant`. Add `--prompts` to `--run` to print
-each child's full context after it; without `--run` it is a usage error. A version-1 record says
-its children were not recorded.
+The table shows each run's agent and model, wall time, user wait and gap time in minutes, turns,
+output and cache-read tokens, cost, check score and pass or fail, and marks a run whose gaps take
+more than a quarter of its wall time `◀ gaps` (the threshold is `GAP_SHARE` at the top of
+`report.py`). `--run` takes a trial directory, a trial name, or a prefix that names one trial. For
+each workflow run it lists every step with its entries, duration and share of the run, and its
+split into working, helper-wait and user-wait time, with the helpers it started; then the run's
+totals (wall, user wait, helper wait and gaps over the threshold), the helper counts, a table of
+the helpers (name, spec, step, seconds and how it ended), and every unknown measure with its
+reason. A step taking more than a third of the run's wall time is marked `◀ dominant`. Add
+`--prompts` to `--run` to print each helper's brief after it; without `--run` it is a usage error.
+
+`--compare A B` takes two trial directories or names and prints, for each workflow (matched by
+kind and name, else in order within a kind, since a suite's generated spec names differ from
+trial to trial), every step's duration, working, helper-wait and user-wait time and helpers for A
+and B with B's difference from A, then the totals (wall, user wait, helper wait, gaps, cost and
+tokens) the same way. A step only one trial entered shows `-` on the other side, never 0. A
+version-1 or version-2 record holds none of the split, so those figures print `unknown`.
 
 `--baseline` and `--candidate` each take job directories or globs: the runs before a change and the
 runs after it. For each suite (and scenario) present in both, it prints the median of wall time,
-turns, output tokens, total tokens, cost and check score in each set, and the change. A median is
+user wait, helper wait, gap time, turns, output tokens, total tokens, cost and check score in each
+set, and the change. A median is
 taken over the runs whose value is known. A measure is marked
 `◀ regression` when the candidate's median is at least twice the baseline's, or when the check
 score falls by 0.1 or more. A measure no run in a set knows prints `unknown` there and is never
@@ -634,7 +646,7 @@ Suites present in only one set are listed as unmatched. The thresholds are const
 `report.py`.
 
 The recorder can also be run by hand on a collected trial, for example to re-record it:
-`python3 tests/harbor/shared/metrics.py --agent-dir <trial>/agent --debug-dir <trial>/artifacts/spektacular/logs --bob-logs <trial>/artifacts/agent-logs/bob --junit <trial>/verifier/junit.xml --reward <trial>/verifier/reward.txt --build-info <build.json> --out <file>`.
+`python3 tests/harbor/shared/metrics.py --agent-dir <trial>/agent --log-dir <trial>/artifacts/spektacular/logs --bob-logs <trial>/artifacts/agent-logs/bob --junit <trial>/verifier/junit.xml --reward <trial>/verifier/reward.txt --build-info <build.json> --out <file>`.
 Reading `agent/` there needs the same permissions as the files Harbor left in it.
 
 The repo-workflow suite is the one whose assertions are about the conversation rather than the
@@ -648,9 +660,13 @@ pytest with no container and proves each rule fails on a transcript that breaks 
 python3 -m pytest tests/harbor/repo-workflow/tests/test_verifier_selfcheck.py
 ```
 
-The shared helpers have self-checks of their own, also without a container: the log readers, the
-step windows, the recorder (including every way an input can be missing or broken), the report,
-and the wiring of the recorder into every suite. Some run on real runs: trimmed copies of
+The shared helpers have self-checks of their own, also without a container: the run log reader
+(over canned `stats` answers, which include the Go golden files, so a renamed field breaks them
+too), the delegation rules, the recorder (including every way an input can be missing or broken),
+the timeline, the report, the wiring of the recorder into every suite, and a check that the shared
+scripts stay within 3,000 lines. An integration test builds a throwaway `spektacular` from the
+working tree and runs the reader, the recorder and the timeline over fixture logs; it needs Go,
+and skips without it. Some run on real runs: trimmed copies of
 collected trials, checked in under `tests/harbor/shared/tests/data/`, with every message's text
 blanked to the same length. `python3 tests/harbor/shared/tests/trim_reference.py <trial dir> <name>`
 adds one, and writes nothing if trimming would change a value the recorder computes. They live in

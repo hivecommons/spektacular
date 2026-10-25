@@ -11,8 +11,9 @@ writes tests/harbor/shared/tests/data/<name>/ (or <dir>), holding:
   text is replaced by the same number of `x`, so the characters the recorder
   counts are unchanged and no conversation is checked in. A child's
   hand-back keeps only its first line, which the record reads;
-- debug/: Spektacular's session log, every command's argv, times, exit code
-  and states, with each response cut to its error code and step;
+- logs/: Spektacular's own logs, copied unchanged: recorded at the default
+  level, they hold no response or conversation, only each command's argv,
+  times, exit status and step, and the step, task and agent spans;
 - build.json: the agent and suite, from the job's config.json;
 - README: where the data came from.
 
@@ -39,7 +40,6 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 import metrics  # noqa: E402
-import sessionlog  # noqa: E402
 import transcripts as tx  # noqa: E402
 
 DATA = HERE / "data"
@@ -50,8 +50,6 @@ BLANK_SYSTEM = {"task_notification": "summary", "task_progress": "description"} 
 KEEP_INIT = ("type", "subtype", "model", "session_id", "uuid", "cwd", "claude_code_version")
 KEEP_MESSAGE_OBJECT = ("type", "timestamp", "parent_tool_use_id", "uuid", "session_id", "origin", "agent_id")
 KEEP_TOOL_USE_RESULT = ("isAsync", "status", "agentId", "totalDurationMs")
-KEEP_EVENT = ("seq", "timestamp", "session_id", "command", "duration_ms", "exit_code", "state_before", "state_after", "advanced")
-KEEP_RESPONSE = ("error", "code", "step")
 
 
 def blank(text: str) -> str:
@@ -153,37 +151,12 @@ def trim_transcript(objs: list[dict]) -> list[dict]:
     return [trim_object(o, launches - notified) for o in objs]
 
 
-def trim_response(event: dict) -> str:
-    response = event.get("response") or ""
-    if (event.get("command") or [])[:2] == ["epic", "worktree"]:
-        return response
-    try:
-        parsed = json.loads(response)
-    except (json.JSONDecodeError, TypeError):
-        return ""
-    if not isinstance(parsed, dict):
-        return ""
-    return json.dumps({k: parsed[k] for k in KEEP_RESPONSE if k in parsed})
-
-
-def trim_event(event: dict) -> dict:
-    out = {k: event[k] for k in KEEP_EVENT if k in event}
-    response = trim_response(event)
-    if response:
-        out["response"] = response
-    return out
-
-
 def layout(src: Path) -> tuple[Path, Path]:
-    """The transcript's directory and the session log of a collected trial,
-    or of a reference run trimmed before."""
+    """The transcript's directory and Spektacular's logs of a collected
+    trial, or of a reference run trimmed before."""
     if (src / "agent" / "claude-code.txt").is_file():
-        # A trial collected before log mode kept its session log in debug/;
-        # a newer one keeps it in logs/.
-        spek = src / "artifacts" / "spektacular"
-        logs = spek / "logs"
-        return src / "agent", logs if logs.is_dir() else spek / "debug"
-    return src, src / "debug"
+        return src / "agent", src / "artifacts" / "spektacular" / "logs"
+    return src, src / "logs"
 
 
 def build_info(src: Path) -> dict:
@@ -200,32 +173,31 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
 
 
 def trim(src: Path, out: Path, source_note: str) -> None:
-    agent_dir, debug_dir = layout(src)
+    agent_dir, log_dir = layout(src)
     out.mkdir(parents=True)
     write_jsonl(out / "claude-code.txt", trim_transcript(tx.read_jsonl(agent_dir / "claude-code.txt")))
-    if debug_dir.is_dir():  # a run that never called spektacular has none
-        (out / "debug").mkdir()
-    for path in sorted(debug_dir.glob("*.jsonl")):
-        write_jsonl(out / "debug" / path.name, [trim_event(e) for e in tx.read_jsonl(path)])
+    logs = sorted(log_dir.glob("*.jsonl")) if log_dir.is_dir() else []  # a run that never called spektacular has none
+    if logs:
+        (out / "logs").mkdir()
+    for path in logs:
+        shutil.copyfile(path, out / "logs" / path.name)
     (out / "build.json").write_text(json.dumps(build_info(src), indent=2) + "\n")
     readme = src / "README"
     (out / "README").write_text(readme.read_text() if readme.is_file() else source_note + "\n")
 
 
-def measured(agent_dir: Path, debug_dir: Path) -> dict:
-    """The values a reference run proves: the metrics record but the run's
-    identity and its check score, which come from files the trim leaves out,
-    and the session-log rules the verifiers judge what ran by."""
+def measured(agent_dir: Path, log_dir: Path) -> dict:
+    """The values a reference run proves: the metrics record (schema 3, its
+    log sections read through `spektacular stats` over the copied logs) but
+    the run's identity and its check score, which come from files the trim
+    leaves out. A reason that names the logs directory names it as <logs>,
+    so a trim into another folder compares equal."""
     none = Path("/nonexistent")
     record = metrics.build_record(
-        metrics.Paths(build_info=none, agent_dir=agent_dir, debug_dir=debug_dir, bob_logs=none, junit=none, reward=none)
+        metrics.Paths(build_info=none, agent_dir=agent_dir, log_dir=log_dir, bob_logs=none, junit=none, reward=none)
     )
-    events = sessionlog.SessionLog(debug_dir, kinds=metrics.WORKFLOW_KINDS).all_events()
-    return {
-        **{k: v for k, v in record.items() if k not in ("run", "result")},
-        "plan_steps_entered": sessionlog.plan_steps_entered(events),
-        "changelog_writes_by_repo": sessionlog.changelog_writes_by_repo(events),
-    }
+    record["unknown"] = [{**u, "reason": u["reason"].replace(str(log_dir), "<logs>")} for u in record["unknown"]]
+    return {k: v for k, v in record.items() if k not in ("run", "result")}
 
 
 def main(argv: list[str] | None = None) -> int:

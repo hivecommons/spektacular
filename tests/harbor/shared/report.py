@@ -9,10 +9,15 @@ agent/. Trials without a record, such as runs from before the recorder,
 are skipped.
 
     python3 report.py [jobs or trial dirs or globs ...]   # one row per run, by suite
-    python3 report.py --run <trial dir or trial name>     # one run's step breakdown and children
-    python3 report.py --run <trial> --prompts             # ... and each child's full context
+    python3 report.py --run <trial dir or trial name>     # one run's step split, helpers and totals
+    python3 report.py --run <trial> --prompts             # ... and each helper's brief
+    python3 report.py --compare <trial A> <trial B>       # two trials side by side, with B's difference
     python3 report.py --baseline <dirs or globs> --candidate <dirs or globs>
                                                           # per-suite medians, before and after
+
+It reads schema-3 records, whose steps, helpers, waits and gaps come from
+Spektacular's own logs, and still loads schema-1 and schema-2 records: a
+figure an older record does not hold prints as `unknown`.
 
 With no paths it reads tests/harbor/jobs. A value it cannot read prints
 as `unknown`, never as zero.
@@ -31,7 +36,7 @@ from pathlib import Path
 # The thresholds the report flags at. Tune them here: the records store
 # measurements only, so a change needs no suite re-run.
 DOMINANT_STEP_SHARE = 1 / 3  # a step taking more than this share of its run's wall time
-IDLE_SHARE = 0.25  # a run idle for more than this share of its wall time
+GAP_SHARE = 0.25  # a run whose gaps take more than this share of its wall time
 REGRESSION_RATIO = 2.0  # a candidate median at least this multiple of the baseline's
 SCORE_DROP = 0.1  # a check-score median falling by at least this much
 
@@ -187,8 +192,10 @@ def group_title(group: tuple[str, str | None]) -> str:
 
 # The run table.
 
-TABLE_HEADERS = ["trial", "agent", "model", "wall m", "idle m", "turns", "out tok", "cache-read tok", "cost $", "checks", "result"]
-IDLE_MARK = "  ◀ idle"
+TABLE_HEADERS = [
+    "trial", "agent", "model", "wall m", "user wait m", "gap m", "turns", "out tok", "cache-read tok", "cost $", "checks", "result",
+]
+GAP_MARK = "  ◀ gaps"
 
 
 def table(runs: list[Run]) -> str:
@@ -201,14 +208,15 @@ def table(runs: list[Run]) -> str:
         rows, marks = [], []
         for run in groups[group]:
             meta = run.record.get("run") or {}
-            marks.append(IDLE_MARK if is_idle(run) else "")
+            marks.append(GAP_MARK if is_gappy(run) else "")
             rows.append(
                 [
                     run.trial,
                     meta.get("agent") or UNKNOWN,
                     meta.get("model") or UNKNOWN,
                     minutes(run.total("wall_time_s")),
-                    minutes(run.total("idle_s")),
+                    minutes(run.total("user_wait_s")),
+                    minutes(run.total("gap_s")),
                     number(run.total("turns")),
                     number(run.total("output_tokens")),
                     number(run.total("cache_read_tokens")),
@@ -217,7 +225,7 @@ def table(runs: list[Run]) -> str:
                     result_text(run.reward),
                 ]
             )
-        lines = render(TABLE_HEADERS, rows, right={3, 4, 5, 6, 7, 8})
+        lines = render(TABLE_HEADERS, rows, right={3, 4, 5, 6, 7, 8, 9})
         out.extend(line + mark for line, mark in zip(lines, ["", "", *marks]))
         out.append("")
     return "\n".join(out)
@@ -272,110 +280,84 @@ def dominant_steps(run: Run) -> list[tuple[str, str, float]]:
     return out
 
 
-def idle_share(run: Run) -> float | None:
-    """The run's idle time as a share of its wall time, when both are known."""
-    idle, wall = run.total("idle_s"), run_wall_time(run)
-    return idle / wall if idle is not None and wall else None
+def gap_share(run: Run) -> float | None:
+    """The run's gap time as a share of its wall time, when both are known."""
+    gap, wall = run.total("gap_s"), run_wall_time(run)
+    return gap / wall if gap is not None and wall else None
 
 
-def is_idle(run: Run) -> bool:
-    share = idle_share(run)
-    return share is not None and share > IDLE_SHARE
+def is_gappy(run: Run) -> bool:
+    share = gap_share(run)
+    return share is not None and share > GAP_SHARE
 
 
-# Child agents, from a version-2 record.
-
-CHILD_HEADERS = ["child", "kind", "spec", "step", "bg", "seconds", "ending", "context"]
-
-
-def children(run: Run) -> list[dict] | None:
-    return (run.record.get("subagents") or {}).get("children")
+def seconds(value) -> str:
+    return number(value, "{:.1f}")
 
 
-def has_children_key(run: Run) -> bool:
-    return "children" in (run.record.get("subagents") or {})
+STEP_HEADERS = ["step", "entries", "seconds", "share", "working", "helper wait", "user wait", "helpers"]
 
 
-def unknown_child_fields(run: Run) -> set[str]:
-    return {u.get("field") for u in run.record.get("unknown") or [] if str(u.get("field", "")).startswith("subagents.children")}
+def step_table(w: dict, wall: float | None, dominant: set) -> list[str]:
+    rows, marks = [], []
+    for s in w.get("steps") or []:
+        duration = s.get("duration_s")
+        share = UNKNOWN if duration is None or not wall else f"{duration / wall:.0%}"
+        rows.append([
+            s.get("step"), number(s.get("entries")), seconds(duration), share, seconds(s.get("working_s")),
+            seconds(s.get("helper_wait_s")), seconds(s.get("user_wait_s")), number(s.get("helpers")),
+        ])
+        marks.append("  ◀ dominant" if (w.get("name"), s.get("step")) in dominant else "")
+    lines = render(STEP_HEADERS, rows, right={1, 2, 3, 4, 5, 6, 7})
+    return ["  " + line + mark for line, mark in zip(lines, ["", "", *marks])]
 
 
-def child_value(child: dict, name: str, unknown: set[str]) -> object:
-    """A child's field, or UNKNOWN where the record lists it unknown."""
-    value = child.get(name)
-    if value is None and {f"subagents.children.{name}", f"subagents.children[{child.get('id')}].{name}"} & unknown:
-        return UNKNOWN
-    return value
+HELPER_HEADERS = ["helper", "spec", "step", "seconds", "end"]
 
 
-def child_depth(child: dict, by_id: dict[str, dict]) -> int:
-    depth, seen = 0, set()
-    while child.get("parent") in by_id and child["parent"] not in seen:
-        seen.add(child["parent"])
-        child = by_id[child["parent"]]
-        depth += 1
-    return depth
-
-
-def short_id(child_id: str | None) -> str:
-    return (child_id or UNKNOWN)[-8:]
-
-
-def children_table(run: Run) -> list[str]:
-    if not has_children_key(run):
-        return ["Children: not recorded (schema 1)"]
-    kids = children(run)
-    if kids is None:
-        return ["Children: unknown (see below)"]
-    if not kids:
-        return ["Children: none"]
-    unknown = unknown_child_fields(run)
-    by_id = {c.get("id"): c for c in kids}
-    rows = []
-    for c in kids:
-        depth = child_depth(c, by_id)
-        step, spec, bg = (child_value(c, n, unknown) for n in ("step", "spec", "background"))
-        rows.append(
-            [
-                ("  " * (depth - 1) + "└ " if depth else "") + short_id(c.get("id")),
-                child_value(c, "kind", unknown) or UNKNOWN,
-                spec if spec is not None else "-",
-                step if step is not None else "-",
-                UNKNOWN if bg in (None, UNKNOWN) else "bg" if bg else "fg",
-                number(c.get("duration_s"), "{:.1f}"),
-                c.get("ending") or UNKNOWN,
-                number(c.get("prompt_chars")),
-            ]
-        )
-    return ["Children:", *("  " + line for line in render(CHILD_HEADERS, rows, right={5, 7}))]
+def helpers_table(run: Run) -> list[str]:
+    sub = run.record.get("subagents") or {}
+    if "helpers" not in sub:
+        return [f"Helper spans: not recorded (schema {run.record.get('schema_version') or 1})"]
+    helpers = sub.get("helpers")
+    if helpers is None:
+        return ["Helper spans: unknown (see below)"]
+    if not helpers:
+        return ["Helper spans: none"]
+    rows = [
+        [
+            h.get("name") or UNKNOWN,
+            h.get("spec") or "-",
+            h.get("step") or ("outside any run" if h.get("outside_run") else "-"),
+            seconds(h.get("duration_s")),
+            (h.get("end_reason") or UNKNOWN) + ("" if h.get("complete") else "*"),
+        ]
+        for h in helpers
+    ]
+    return ["Helper spans:", *("  " + line for line in render(HELPER_HEADERS, rows, right={3}))]
 
 
 def prompts(run: Run) -> str:
-    """Every child's full context, each under a header naming it."""
-    kids = children(run) or []
-    unknown = unknown_child_fields(run)
+    """Every helper's brief, each under a header naming it."""
+    sub = run.record.get("subagents") or {}
+    briefs = sub.get("briefs")
     out = []
-    for c in kids:
-        spec, step = (child_value(c, n, unknown) for n in ("spec", "step"))
-        out.append(
-            f"── {c.get('id')} {child_value(c, 'kind', unknown) or UNKNOWN} "
-            f"{spec if spec is not None else '-'}/{step if step is not None else '-'} ({number(c.get('prompt_chars'))} chars)"
-        )
-        out.append(c.get("prompt") if c.get("prompt") is not None else UNKNOWN)
+    for b in briefs or []:
+        out.append(f"── {b.get('id')} {b.get('kind') or UNKNOWN} {b.get('description') or '-'} ({number(b.get('prompt_chars'))} chars)")
+        out.append(b.get("prompt") if b.get("prompt") is not None else UNKNOWN)
         out.append("")
-    if not has_children_key(run):
-        out.append("No child contexts recorded (schema 1).")
-    elif children(run) is None:
-        out.append("Child contexts: unknown (see the breakdown's Unknown list).")
-    elif not kids:
-        out.append("No child contexts recorded.")
+    if "briefs" not in sub:
+        out.append(f"No briefs recorded (schema {run.record.get('schema_version') or 1}).")
+    elif briefs is None:
+        out.append("Briefs: unknown (see the breakdown's Unknown list).")
+    elif not briefs:
+        out.append("No briefs recorded.")
     return "\n".join(out)
 
 
 def breakdown(run: Run) -> str:
     meta = run.record.get("run") or {}
     steps = run.record.get("steps") or {}
-    unit = steps.get("unit") or "characters"
     wall = run_wall_time(run)
     dominant = {(lane, step) for lane, step, _ in dominant_steps(run)}
     out = [
@@ -392,41 +374,129 @@ def breakdown(run: Run) -> str:
     elif not workflows(run):
         out.append("Steps: the run entered no workflow")
     for w in workflows(run):
-        out.append(f"{w.get('kind')} {w.get('name')}")
-        rows, marks = [], []
-        for s in w.get("steps") or []:
-            duration = s.get("duration_s")
-            share = UNKNOWN if duration is None or not wall else f"{duration / wall:.0%}"
-            rows.append([s.get("step"), number(duration, "{:.1f}"), share, number(s.get("output"))])
-            marks.append("  ◀ dominant" if (w.get("name"), s.get("step")) in dominant else "")
-        lines = render(["step", "seconds", "share", unit], rows, right={1, 2, 3})
-        out.extend("  " + line + mark for line, mark in zip(lines, ["", "", *marks]))
-        out.append("")
-    if "orchestrator_output" in steps:
-        out.append(f"Orchestrator output, outside every lane: {number(steps['orchestrator_output'])} {unit}")
+        out.append(
+            f"{w.get('kind')} {w.get('name')}: wall {seconds(w.get('wall_s'))} s, user wait {seconds(w.get('user_wait_s'))} s, "
+            f"helper wait {seconds(w.get('helper_wait_s'))} s, gaps {seconds(w.get('gap_s'))} s"
+        )
+        out.extend(step_table(w, wall, dominant))
         out.append("")
 
+    share = gap_share(run)
+    threshold = run.total("gap_threshold_s")
+    out.append(
+        f"Totals: wall {seconds(wall)} s, user wait {seconds(run.total('user_wait_s'))} s, "
+        f"helper wait {seconds(run.total('helper_wait_s'))} s, "
+        f"gaps over {seconds(threshold)} s: {seconds(run.total('gap_s'))} s ({number(run.total('gaps'))})"
+        + ("" if share is None else f", {share:.0%} of wall")
+        + (GAP_MARK if is_gappy(run) else "")
+    )
     sub = run.record.get("subagents") or {}
     durations = sub.get("durations_s")
     out.append(
-        f"Sub-agents: started {number(sub.get('started'))}, completed {number(sub.get('completed'))}, "
-        f"failed {number(sub.get('failed'))}, stopped {number(sub.get('stopped'))}; durations (s): "
+        f"Helpers: started {number(sub.get('started'))}, completed {number(sub.get('completed'))}, "
+        f"failed {number(sub.get('failed'))}, unfinished {number(sub.get('unfinished'))}; durations (s): "
         + (UNKNOWN if durations is None else (", ".join(f"{d:.1f}" for d in durations) or "none"))
     )
-    share = idle_share(run)
-    idle = run.total("idle_s")
-    out.append(
-        f"Idle: {number(idle, '{:.1f}')} s of {number(wall, '{:.1f}')} s"
-        + ("" if share is None else f" ({share:.0%})")
-        + (IDLE_MARK if is_idle(run) else "")
-    )
     out.append("")
-    out.extend(children_table(run))
+    out.extend(helpers_table(run))
     unknowns = run.record.get("unknown") or []
     if unknowns:
         out.append("")
         out.append("Unknown:")
         out.extend(f"  {u.get('field')}: {u.get('reason')}" for u in unknowns)
+    out.append("")
+    return "\n".join(out)
+
+
+# Two trials side by side.
+
+STEP_FIGURES = [("secs", "duration_s"), ("work", "working_s"), ("helper", "helper_wait_s"), ("user", "user_wait_s"), ("helpers", "helpers")]
+
+
+def difference(a, b, fmt) -> str:
+    if a is None or b is None:
+        return UNKNOWN
+    return f"{'+' if b >= a else '-'}{fmt(abs(b - a))}"
+
+
+def side(step: dict | None, field: str, fmt) -> str:
+    """A step's figure: `-` when the trial never entered the step, `unknown`
+    when its record does not hold the figure."""
+    if step is None:
+        return "-"
+    value = step.get(field)
+    return UNKNOWN if value is None else fmt(value)
+
+
+def pair_workflows(a: list[dict], b: list[dict]) -> list[tuple[dict | None, dict | None]]:
+    """The two trials' workflows side by side: the same kind and name first,
+    then, in order, the rest of each kind (a suite's generated spec names
+    differ from trial to trial), then whatever is left alone."""
+    pairs, rest_b = [], list(b)
+    unmatched_a = []
+    for w in a:
+        twin = next((x for x in rest_b if (x.get("kind"), x.get("name")) == (w.get("kind"), w.get("name"))), None)
+        if twin is not None:
+            rest_b.remove(twin)
+            pairs.append((w, twin))
+        else:
+            unmatched_a.append(w)
+    for w in unmatched_a:
+        twin = next((x for x in rest_b if x.get("kind") == w.get("kind")), None)
+        if twin is not None:
+            rest_b.remove(twin)
+        pairs.append((w, twin))
+    pairs += [(None, x) for x in rest_b]
+    return pairs
+
+
+def compare_trials(a: Run, b: Run) -> str:
+    """Each workflow's per-step split for both trials, with B's difference
+    from A, then the totals the same way. A step only one trial entered
+    shows `-` on the other side, never 0."""
+    def fmt_of(key):
+        return (lambda v: f"{v:,.0f}") if key == "helpers" else (lambda v: f"{v:.1f}")
+
+    out = [f"== {a.trial} (A) against {b.trial} (B) =="]
+    unknown_steps = [r.trial for r in (a, b) if (r.record.get("steps") or {}).get("workflows") is None]
+    if unknown_steps:
+        out.append("Steps: unknown in " + " and ".join(unknown_steps))
+    headers = ["step"] + [f"{label} {x}" for label, _ in STEP_FIGURES for x in ("A", "B", "B-A")]
+    for wa, wb in pair_workflows(workflows(a), workflows(b)):
+        out.append("")
+        name_a = f"{wa.get('kind')} {wa.get('name')}" if wa else None
+        name_b = f"{wb.get('kind')} {wb.get('name')}" if wb else None
+        if name_a and name_b:
+            out.append(name_a if name_a == name_b else f"{name_a} (A) / {name_b} (B)")
+        else:
+            out.append(f"{name_a or name_b} (in {'A' if wa else 'B'} only)")
+        sa = {s.get("step"): s for s in (wa or {}).get("steps") or []}
+        sb = {s.get("step"): s for s in (wb or {}).get("steps") or []}
+        rows = []
+        for step in list(sa) + [s for s in sb if s not in sa]:
+            row = [step]
+            for _, field in STEP_FIGURES:
+                fmt = fmt_of(field)
+                va = sa[step].get(field) if step in sa else None
+                vb = sb[step].get(field) if step in sb else None
+                both = step in sa and step in sb
+                row += [side(sa.get(step), field, fmt), side(sb.get(step), field, fmt), difference(va, vb, fmt) if both else "-"]
+            rows.append(row)
+        out.extend("  " + line for line in render(headers, rows, right=set(range(1, len(headers)))))
+    out.append("")
+    out.append("Totals")
+    rows = []
+    for label, value, fmt in [
+        ("wall s", lambda r: r.total("wall_time_s"), lambda v: f"{v:.1f}"),
+        ("user wait s", lambda r: r.total("user_wait_s"), lambda v: f"{v:.1f}"),
+        ("helper wait s", lambda r: r.total("helper_wait_s"), lambda v: f"{v:.1f}"),
+        ("gap s", lambda r: r.total("gap_s"), lambda v: f"{v:.1f}"),
+        ("cost $", lambda r: r.total("cost_usd"), lambda v: f"{v:.2f}"),
+        ("total tok", total_tokens, lambda v: f"{v:,.0f}"),
+    ]:
+        va, vb = value(a), value(b)
+        rows.append([label, UNKNOWN if va is None else fmt(va), UNKNOWN if vb is None else fmt(vb), UNKNOWN if va is None or vb is None else difference(va, vb, fmt)])
+    out.extend("  " + line for line in render(["total", "A", "B", "B-A"], rows, right={1, 2, 3}))
     out.append("")
     return "\n".join(out)
 
@@ -457,6 +527,9 @@ def count(value: float) -> str:
 
 MEASURES = [
     Measure("wall m", lambda r: r.total("wall_time_s"), lambda v: f"{v / 60:.1f}"),
+    Measure("user wait m", lambda r: r.total("user_wait_s"), lambda v: f"{v / 60:.1f}"),
+    Measure("helper wait m", lambda r: r.total("helper_wait_s"), lambda v: f"{v / 60:.1f}"),
+    Measure("gap m", lambda r: r.total("gap_s"), lambda v: f"{v / 60:.1f}"),
     Measure("turns", lambda r: r.total("turns"), count),
     Measure("out tok", lambda r: r.total("output_tokens"), count),
     Measure("total tok", total_tokens, count),
@@ -549,14 +622,28 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Report the metrics records of collected harbor runs.")
     parser.add_argument("paths", nargs="*", help=f"job or trial directories, or globs (default: {DEFAULT_JOBS})")
     parser.add_argument("--run", metavar="TRIAL", help="show one run's step breakdown: a trial directory or trial name")
-    parser.add_argument("--prompts", action="store_true", help="with --run, also print each child agent's full context")
+    parser.add_argument("--prompts", action="store_true", help="with --run, also print each helper's brief")
+    parser.add_argument("--compare", nargs=2, metavar=("A", "B"), help="two trial directories or names, side by side")
     parser.add_argument("--baseline", nargs="+", metavar="DIR", help="job directories or globs: the runs before a change")
     parser.add_argument("--candidate", nargs="+", metavar="DIR", help="job directories or globs: the runs after it")
     args = parser.parse_args(argv)
 
     if args.prompts and not args.run:
-        print("report: --prompts prints one run's child contexts, so it needs --run <trial>", file=sys.stderr)
+        print("report: --prompts prints one run's helper briefs, so it needs --run <trial>", file=sys.stderr)
         return 2
+    if args.compare:
+        if args.run or args.baseline or args.candidate:
+            print("report: --compare takes two trials and no --run, --baseline or --candidate", file=sys.stderr)
+            return 2
+        paths = [*args.paths] + [t for t in args.compare if Path(t).is_dir()]
+        runs = load_runs(paths or [str(DEFAULT_JOBS)])
+        try:
+            a, b = (find_run(runs, t) for t in args.compare)
+        except LookupError as exc:
+            print(f"report: {exc}", file=sys.stderr)
+            return 2
+        print(compare_trials(a, b))
+        return 0
     if args.baseline or args.candidate:
         if not (args.baseline and args.candidate) or args.run or args.paths:
             print(

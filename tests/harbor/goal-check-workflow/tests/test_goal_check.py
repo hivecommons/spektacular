@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 
 PROJECT_DIR = Path("/app")
-DEBUG_DIR = PROJECT_DIR / ".spektacular" / "logs"
+LOG_DIR = PROJECT_DIR / ".spektacular" / "logs"
 SCENARIO_FILE = Path(__file__).resolve().parent / "scenario"
 
 PLAN = "20260301000000-todo-count"
@@ -122,7 +122,7 @@ def rule_nothing_ticked_before_the_check(events: list) -> list[str]:
     for e in events:
         if is_record(e):
             return out
-        if e.ok and e.is_verb("plan", "file", "write") and PLAN in e.command and "plan" in e.command[4:5]:
+        if e.ok and e.is_verb("plan", "file", "write") and PLAN in e.args and "plan" in e.args[4:5]:
             out.append(f"the plan was written at {e.at:%H:%M:%S}, before any goal check was recorded")
         if e.ok and e.goto_step == "update_plan":
             out.append(f"the run went to update_plan at {e.at:%H:%M:%S}, before any goal check was recorded")
@@ -240,7 +240,7 @@ def rule_required_children(run) -> list[str]:
     delegation.Run."""
     from delegation import missing_required
 
-    return [str(f) for f in missing_required(run.placed, run.windows)]
+    return [str(f) for f in missing_required(run.log, run.lanes, run.spans)]
 
 
 # ---------------------------------------------------------------------------
@@ -304,11 +304,11 @@ def plan_text() -> str:
 
 @pytest.fixture(scope="session")
 def events() -> list:
-    from sessionlog import SessionLog
+    from runlog import RunLog
 
-    log = SessionLog(DEBUG_DIR)
-    assert not log.empty, f"no session log under {DEBUG_DIR}"
-    return log.all_events()
+    log = RunLog(LOG_DIR)
+    assert not log.empty, f"no Spektacular logs under {LOG_DIR}, or `spektacular stats` could not read them"
+    return log.commands()
 
 
 def claude_objects() -> list[dict]:
@@ -370,7 +370,7 @@ def test_required_steps_each_started_a_child():
 
     if not dl.is_claude():
         pytest.skip("only a Claude transcript shows where a child agent was started")
-    assert rule_required_children(dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, DEBUG_DIR)) == []
+    assert rule_required_children(dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, LOG_DIR)) == []
 
 
 def test_reviewer_launch_is_a_sub_agent_span():
@@ -382,8 +382,8 @@ def test_reviewer_launch_is_a_sub_agent_span():
 
     if not dl.is_claude():
         pytest.skip("only a Claude transcript shows where a child agent was started")
-    run = dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, DEBUG_DIR)
-    assert [str(f) for f in dl.unmarked_launches(run.placed, run.spans)] == []
+    run = dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, LOG_DIR)
+    assert [str(f) for f in dl.unmarked_launches(run.children, run.spans)] == []
 
 
 def test_reviewer_was_a_separate_helper_on_a_cheaper_model():

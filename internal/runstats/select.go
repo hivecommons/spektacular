@@ -44,6 +44,8 @@ func (e *SelectionError) Error() string {
 		return fmt.Sprintf("no recorded run has an id starting %q", e.Value)
 	case CodeRunAmbiguous:
 		return fmt.Sprintf("run id prefix %q matches %d runs: %s", e.Value, len(e.Matches), strings.Join(e.Matches, ", "))
+	case CodeBadSelection:
+		return "--outside-runs lists only the records written outside any workflow run, so it cannot be combined with a run selection"
 	}
 	return fmt.Sprintf("bad selection %q", e.Value)
 }

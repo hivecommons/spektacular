@@ -1,29 +1,32 @@
-"""Read an agent's own record of a harbor run: tool calls and sub-agents.
+"""Read an agent's own record of a harbor run: what Spektacular cannot see.
+
+Spektacular's logs give every step, helper agent, wait and gap, the same
+way for every agent (runlog.py). The agent's own log is read only for what
+those logs cannot show: tokens, models, cost and turns; each helper's brief
+(its kind, description, prompt and models); and the main agent's turns,
+wake-ups and children's background state, which the delegation rules and
+the background-child probe judge.
 
 Claude Code writes a stream-json transcript, one JSON object per line, in
 which a sub-agent's messages carry the `parent_tool_use_id` of the Agent (or
 Task) tool call that launched it, and every assistant message names its
 model. Agents run through harbor's ACP agent, such as Bob, leave a trajectory
 of tool calls instead, where `Running subagent: <prompt>` launches a
-sub-agent. Codex leaves no sub-agent signal at all.
-
-They also read each agent's own summary of a run, for the metrics record:
-Claude's `result` events, the ATIF trajectory harbor writes for ACP agents
-and Codex, and Codex's native rollout as a fallback. Whatever a log does not
-supply comes back as None with an Unknown naming the reason, never as zero.
-The same goes for the child agents a run started, at any depth, and for the
-main agent's turns and the timed wake-ups it set itself.
+sub-agent. Codex leaves no sub-agent signal at all. Each agent's own summary
+of a run is read from Claude's `result` events, the ATIF trajectory harbor
+writes for ACP agents and Codex, or Codex's native rollout as a fallback.
+Whatever a log does not supply comes back as None with an Unknown naming the
+reason, never as zero.
 
 The functions here are pure over the parsed records, so a verifier's
 self-check can exercise them on synthetic input. Copied into each suite's
-tests/ by the Makefile, like sessionlog.py.
+tests/ by the Makefile with the other shared helpers.
 """
 
 from __future__ import annotations
 
 import json
 import re
-import shlex
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,7 +34,6 @@ from pathlib import Path
 AGENT_LOG_DIR = Path("/logs/agent")
 CLAUDE_TRANSCRIPT = AGENT_LOG_DIR / "claude-code.txt"
 ACP_TRAJECTORY = AGENT_LOG_DIR / "trajectory.json"
-CODEX_OUTPUT = AGENT_LOG_DIR / "codex.txt"
 CODEX_SESSIONS = AGENT_LOG_DIR / "sessions"
 
 SUBAGENT_TOOLS = ("Agent", "Task")
@@ -170,27 +172,6 @@ TOTAL_FIELDS = (
 
 
 @dataclass
-class Message:
-    """One assistant message: when it was written and how much it wrote."""
-
-    at: datetime | None  # None when the log has no timestamps (Bob)
-    chars: int
-    parent: str | None  # the launching tool call, for a Claude sub-agent's message
-    order: int
-    goto_step: str | None = None  # the step a `spektacular ... goto` in it moves to
-
-
-@dataclass
-class Subagents:
-    started: int | None = None
-    completed: int | None = None
-    failed: int | None = None
-    stopped: int | None = None
-    durations_s: list[float] | None = None
-    unknowns: list[Unknown] = field(default_factory=list)
-
-
-@dataclass
 class Child:
     """One child agent a run started, at any depth, before it is placed in a
     spec and step. None is a detail the log could not supply."""
@@ -206,7 +187,6 @@ class Child:
     ending: str | None  # completed | failed | stopped | no_hand_back
     hand_back: str | None  # the first non-empty line of what it handed back
     models: list[str] | None
-    output: int | None  # characters of its own messages
     prompt: str | None
     order: int | None = None  # its launching step's index, for a log without times (ATIF)
 
@@ -248,39 +228,6 @@ def _mark_unknown(totals: Totals, reason: str, *names: str) -> None:
     for name in names:
         if getattr(totals, name) is None:
             totals.unknowns.append(Unknown(f"totals.{name}", reason))
-
-
-_STEP_IN_DATA = re.compile(r'"step"\s*:\s*"(?P<step>[^"]+)"')
-
-
-def goto_step_of(command: str) -> str | None:
-    """The step a shell command's `spektacular <kind> goto --data` moves to."""
-    if not isinstance(command, str) or "spektacular" not in command or "goto" not in command:
-        return None
-    try:
-        args = shlex.split(command)
-    except ValueError:
-        args = []
-    for i, arg in enumerate(args):
-        if arg != "goto":
-            continue
-        rest = args[i + 1 :]
-        for j, a in enumerate(rest):
-            raw = None
-            if a in ("--data", "-d") and j + 1 < len(rest):
-                raw = rest[j + 1]
-            elif a.startswith("--data="):
-                raw = a.removeprefix("--data=")
-            if raw is None:
-                continue
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                break
-            step = data.get("step") if isinstance(data, dict) else None
-            return step if isinstance(step, str) else None
-    m = _STEP_IN_DATA.search(command) if re.search(r"spektacular\s+\w+\s+goto\b", command) else None
-    return m["step"] if m else None
 
 
 def claude_summary(objs: list[dict]) -> Totals:
@@ -332,97 +279,6 @@ def claude_summary(objs: list[dict]) -> Totals:
     if totals.model is None:
         totals.unknowns.append(Unknown("run.model", "claude-code.txt names no model"))
     return totals
-
-
-def _block_chars(block: dict) -> int:
-    kind = block.get("type")
-    if kind == "text":
-        return len(block.get("text") or "")
-    if kind == "thinking":
-        return len(block.get("thinking") or "")
-    if kind == "tool_use":
-        return len(json.dumps(block.get("input") or {}))
-    return 0
-
-
-def claude_messages(objs: list[dict]) -> list[Message]:
-    """Every assistant message, main agent and sub-agent alike, with the
-    characters it wrote: text, thinking and tool-call input."""
-    out = []
-    for o in objs:
-        if o.get("type") != "assistant":
-            continue
-        content = message_of(o).get("content") or []
-        blocks = [b for b in content if isinstance(b, dict)]
-        goto = None
-        for b in blocks:
-            if b.get("type") == "tool_use":
-                goto = goto_step_of((b.get("input") or {}).get("command", "")) or goto
-        out.append(
-            Message(
-                at=parse_timestamp(o.get("timestamp")),
-                chars=sum(_block_chars(b) for b in blocks),
-                parent=o.get("parent_tool_use_id") or None,
-                order=len(out),
-                goto_step=goto,
-            )
-        )
-    return out
-
-
-def claude_subagents(objs: list[dict]) -> Subagents:
-    """Sub-agent counts from the last result's `subagent_stats`, and each
-    sub-agent's duration from its `task_notification`."""
-    notes = [o for o in objs if o.get("type") == "system" and o.get("subtype") == "task_notification"]
-    durations = [
-        n["usage"]["duration_ms"] / 1000
-        for n in notes
-        if isinstance(n.get("usage"), dict) and isinstance(n["usage"].get("duration_ms"), (int, float))
-    ]
-    results = [o for o in objs if o.get("type") == "result"]
-    stats = (results[-1].get("subagent_stats") if results else None) or None
-    out = Subagents(durations_s=durations)
-    if isinstance(stats, dict):
-        killed = stats.get("killed") or {}
-        out.started = stats.get("spawned")
-        out.completed = stats.get("completed")
-        out.failed = stats.get("failed")
-        out.stopped = sum(v for v in killed.values() if isinstance(v, int)) if isinstance(killed, dict) else None
-    else:
-        statuses = [n.get("status") for n in notes]
-        out.started = len(claude_subagent_launches(objs))
-        out.completed = statuses.count("completed")
-        out.failed = statuses.count("failed")
-        out.stopped = len(statuses) - out.completed - out.failed
-    for name in ("started", "completed", "failed", "stopped"):
-        if getattr(out, name) is None:
-            out.unknowns.append(Unknown(f"subagents.{name}", "missing from subagent_stats in claude-code.txt"))
-    missing = (out.started or 0) - len(durations)
-    if missing > 0:
-        out.unknowns.append(Unknown("subagents.durations_s", f"{missing} sub-agents never reported a duration"))
-    return out
-
-
-def claude_launch_root(objs: list[dict]) -> dict[str, str]:
-    """Maps every sub-agent message's `parent_tool_use_id` to the main
-    agent's launch it descends from, walking up nested launches."""
-    parent_of: dict[str, str] = {}
-    for o in objs:
-        parent = o.get("parent_tool_use_id")
-        if o.get("type") != "assistant" or not parent:
-            continue
-        for b in message_of(o).get("content") or []:
-            if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") in SUBAGENT_TOOLS and b.get("id"):
-                parent_of[b["id"]] = parent
-
-    def root(tid: str) -> str:
-        seen = set()
-        while tid in parent_of and tid not in seen:
-            seen.add(tid)
-            tid = parent_of[tid]
-        return tid
-
-    return {p: root(p) for p in {o.get("parent_tool_use_id") for o in objs} if p}
 
 
 # Child agents, turns and wake-ups, for the metrics record and the delegation
@@ -478,7 +334,7 @@ def claude_children(objs: list[dict]) -> tuple[list[Child], list[Unknown]]:
     run time and its hand-back. A launch the agent refused never starts, and
     a background shell task is not a child, so neither is counted. Children
     started by children stream no messages of their own, which leaves their
-    models and output unknown.
+    models unknown.
     """
     launches: dict[str, tuple[dict, dict]] = {}  # id -> (tool_use block, enclosing object)
     results: dict[str, tuple[dict, dict]] = {}  # id -> (tool_result block, enclosing object)
@@ -501,13 +357,14 @@ def claude_children(objs: list[dict]) -> tuple[list[Child], list[Unknown]]:
     notes = {n.get("tool_use_id"): n for n in _system(objs, "task_notification") if n.get("tool_use_id")}
     launch_of_task = {s.get("task_id"): tid for tid, s in started.items() if s.get("task_id")}
 
-    messages: dict[str, list[Message]] = {}
+    # The models of each child's own streamed messages.
     models: dict[str, set[str]] = {}
-    for o, m in zip((o for o in objs if o.get("type") == "assistant"), claude_messages(objs)):
-        if m.parent:
-            messages.setdefault(m.parent, []).append(m)
+    for o in objs:
+        parent = o.get("parent_tool_use_id")
+        if o.get("type") == "assistant" and parent:
+            own = models.setdefault(parent, set())
             if message_of(o).get("model"):
-                models.setdefault(m.parent, set()).add(o["message"]["model"])
+                own.add(o["message"]["model"])
 
     # Without any task_started event the log cannot tell a started child from
     # a refused launch, so every launch the agent did not refuse counts.
@@ -548,7 +405,7 @@ def claude_children(objs: list[dict]) -> tuple[list[Child], list[Unknown]]:
             ending = "failed" if res[0].get("is_error") else CHILD_ENDINGS.get(status, "completed")
             hand_back = _first_line(_unframed(_result_text(res[0])))
 
-        own = messages.get(tid)
+        own = models.get(tid)
         child = Child(
             id=tid,
             parent=parent if parent in launches else None,
@@ -560,8 +417,7 @@ def claude_children(objs: list[dict]) -> tuple[list[Child], list[Unknown]]:
             duration_s=duration,
             ending=ending,
             hand_back=hand_back,
-            models=sorted(models.get(tid, set())) if own else None,
-            output=sum(m.chars for m in own) if own else None,
+            models=sorted(own) if own is not None else None,
             prompt=inp.get("prompt") or start.get("prompt"),
         )
         children.append(child)
@@ -574,7 +430,6 @@ def claude_children(objs: list[dict]) -> tuple[list[Child], list[Unknown]]:
              "claude reported no duration for a failed child" if ending == "failed" else "claude reported no duration for the child"),
             ("hand_back", child.hand_back is None and ending not in ("no_hand_back", "stopped"), "the child's hand-back was empty"),
             ("models", own is None, "claude streamed none of the child's messages"),
-            ("output", own is None, "claude streamed none of the child's messages"),
             ("prompt", child.prompt is None, "the launch named no prompt"),
             ("description", child.description is None, "the launch named no description"),
         ]
@@ -691,39 +546,6 @@ def atif_summary(traj: dict) -> Totals:
     return totals
 
 
-def atif_messages(traj: dict) -> list[Message]:
-    """One message per agent step: its text, reasoning and tool-call
-    arguments in characters. `at` is None where the step has no timestamp."""
-    out = []
-    for order, step in enumerate(s for s in traj.get("steps") or [] if isinstance(s, dict)):
-        if step.get("source") != "agent":
-            continue
-        chars = len(_atif_text(step.get("message"))) + len(step.get("reasoning_content") or "")
-        goto = None
-        for tc in step.get("tool_calls") or []:
-            args = tc.get("arguments") or {}
-            chars += len(json.dumps(args))
-            if isinstance(args, dict):
-                goto = goto_step_of(args.get("command", "")) or goto
-        out.append(Message(at=parse_timestamp(step.get("timestamp")), chars=chars, parent=None, order=order, goto_step=goto))
-    return out
-
-
-def atif_subagents(traj: dict) -> Subagents:
-    """What an ATIF trajectory says about sub-agents. Codex leaves no
-    sub-agent signal; an ACP agent names launches but not their outcomes."""
-    name = atif_agent_name(traj)
-    out = Subagents()
-    if name == "codex":
-        for f in ("started", "completed", "failed", "stopped", "durations_s"):
-            out.unknowns.append(Unknown(f"subagents.{f}", "codex reports no sub-agents"))
-        return out
-    out.started = len(acp_subagent_launches(traj.get("steps") or []))
-    for f in ("completed", "failed", "stopped", "durations_s"):
-        out.unknowns.append(Unknown(f"subagents.{f}", f"{name} reports no sub-agent outcomes"))
-    return out
-
-
 # What an ACP trajectory's `Running subagent` call cannot tell, by child field.
 ACP_CHILD_GAPS = {
     "parent": "sub-agent parent",
@@ -734,7 +556,6 @@ ACP_CHILD_GAPS = {
     "ending": "sub-agent outcome",
     "hand_back": "sub-agent hand-back",
     "models": "sub-agent models",
-    "output": "sub-agent output",
 }
 
 
@@ -759,7 +580,7 @@ def atif_children(traj: dict) -> tuple[list[Child] | None, list[Unknown]]:
                 id=tid, parent=None, kind=args.get("name") or None,
                 description=title.removeprefix("Running subagent").lstrip(": ") or None,
                 background=None, launched_at=None, ended_at=None, duration_s=None, ending=None,
-                hand_back=None, models=None, output=None, prompt=args.get("description") or None, order=order,
+                hand_back=None, models=None, prompt=args.get("description") or None, order=order,
             )
             children.append(child)
             for f, missing in (("kind", child.kind), ("description", child.description), ("prompt", child.prompt)):

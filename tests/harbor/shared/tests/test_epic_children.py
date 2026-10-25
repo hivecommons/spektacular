@@ -8,7 +8,10 @@ rules themselves are pinned in test_delegation.py; this file pins the
 verifiers' wiring of them. It calls each TestChildren method directly with a
 `delegation.Run`, read from the two epic reference runs under data/ or from a
 small implement-epic run built by hand under tmp_path, and asserts the
-failure lines each method reports, with hand-written expected values. It
+failure lines each method reports, with hand-written expected values. The
+run's Spektacular logs are given as what `spektacular stats` answers for
+them (lanes, step entries and sub-agent spans); the reference runs' logs
+predate that format, so their lanes are given by hand. It
 also checks that the child checks skip for other agents and that no other
 check in either verifier reads the transcript, so Codex and Bob runs are
 checked exactly as before.
@@ -34,6 +37,7 @@ for path in (HARBOR / "shared", HARBOR / "epic-workflow" / "tests", HARBOR / "im
     sys.path.insert(0, str(path))
 
 import delegation  # noqa: E402
+import runlog  # noqa: E402
 import test_epic_workflow as epic_verifier  # noqa: E402
 import test_implement_epic_workflow as implement_verifier  # noqa: E402
 
@@ -60,10 +64,6 @@ RULES = (
 )
 
 
-def worktree(spec):
-    return f"/app/.spektacular/worktrees/{spec}/app"
-
-
 def verdict(test, run) -> list[str]:
     """The failure lines a TestChildren method reports on `run`; [] when it
     passes. pytest's assertion rewriting indents each continuation line of
@@ -78,7 +78,7 @@ def verdict(test, run) -> list[str]:
     return []
 
 
-# --- the session log ------------------------------------------------------------
+# --- Spektacular's logs, as `spektacular stats` answers for them ----------------------
 
 
 def m(minute: int, second: int = 0) -> str:
@@ -86,41 +86,68 @@ def m(minute: int, second: int = 0) -> str:
     return f"10:{minute:02d}:{second:02d}"
 
 
-def state(name, step):
-    return {"kind": "implement", "name": name, "current_step": step}
+def ts(clock: str) -> str:
+    return f"2026-10-23T{clock}.000000000Z"
 
 
-def record(clock, command, before, after, response=None):
-    rec = {
-        "timestamp": f"2026-10-23T{clock}.000000000Z",
-        "command": command,
-        "duration_ms": 0,
-        "exit_code": 0,
-        "state_before": before,
-        "state_after": after,
+def trace_of(spec: str) -> str:
+    return f"{SPECS.index(spec) + 1:08x}" + "0" * 24
+
+
+def lane_answers(spec: str) -> tuple[dict, dict, dict]:
+    """An implement lane entering each of LANE_STEPS a minute after the last,
+    from 10:00: its run summary, its `implement new` and its step entries."""
+    run_id = trace_of(spec)
+    summary = {"run_id": run_id, "kind": "implement", "name": spec, "started_at": ts(m(0)), "ended_at": ts(m(len(LANE_STEPS))), "status": "in_progress"}
+    new = {
+        "run_id": run_id, "kind": "implement", "name": spec, "span_id": f"n{run_id}", "command": "implement new",
+        "args": ["implement", "new", "--data", json.dumps({"name": spec})], "step": None, "step_to": LANE_STEPS[0],
+        "started_at": ts(m(0)), "ended_at": ts(m(0)), "exit_code": 0, "message": None,
     }
-    if response is not None:
-        rec["response"] = response
-    return rec
+    entries = [
+        {"step": step, "started_at": ts(m(i)), "ended_at": ts(m(i + 1)), "end_reason": "moved", "complete": True}
+        for i, step in enumerate(LANE_STEPS)
+    ]
+    return summary, new, {"step_entries": entries}
 
 
-def walk(name):
-    """An implement lane entering each of LANE_STEPS a minute after the last, from 10:00."""
-    records = [record(m(0), ["implement", "new", "--data", json.dumps({"name": name})], None, state(name, LANE_STEPS[0]))]
-    for i, (before, after) in enumerate(zip(LANE_STEPS, LANE_STEPS[1:]), start=1):
-        goto = ["implement", "goto", "--data", json.dumps({"step": after, "name": name})]
-        records.append(record(m(i), goto, state(name, before), state(name, after)))
-    return records
+def span_row(clock, span_id, spec=None, step=None, end=None):
+    """A sub-agent span row: an orchestrator's outside any run when `spec` is
+    None, else one started in the spec's lane at `step`."""
+    return {
+        "span_id": span_id, "parent_span_id": None, "name": span_id, "type": "sub-agent", "trace_id": "t",
+        "run_id": trace_of(spec) if spec else None, "kind": "implement" if spec else None, "workflow": spec,
+        "step": step, "task_id": None, "started_at": ts(clock), "ended_at": ts(end or clock),
+        "end_reason": "stopped", "status": "ok", "complete": True,
+    }
 
 
-def worktree_record(clock, spec):
-    response = json.dumps({"spec": spec, "repos": [{"repo": "app", "path": worktree(spec)}]})
-    return record(clock, ["epic", "worktree", "--data", json.dumps({"spec": spec})], None, None, response=response)
+class Canned:
+    def __init__(self, answers):
+        self.answers = answers
+
+    def __call__(self, argv, **kwargs):
+        sub = argv[2]
+        key = f"run {argv[argv.index('--run') + 1]}" if sub == "run" else sub
+        return type("Done", (), {"stdout": json.dumps({"error": False, **self.answers[key]})})()
 
 
 def write_jsonl(path: Path, objs) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(json.dumps(o) + "\n" for o in objs))
+
+
+def read_with(path: Path, log_dir: Path, answers: dict | None) -> delegation.Run:
+    """delegation.read_run over canned `stats` answers (None: no readable logs)."""
+    real = delegation.runlog.RunLog
+    if answers is None:
+        delegation.runlog.RunLog = lambda d: real(d, binary="spektacular", runner=lambda *a, **k: (_ for _ in ()).throw(OSError("no binary")))
+    else:
+        delegation.runlog.RunLog = lambda d: real(d, binary="spektacular", runner=Canned(answers))
+    try:
+        return delegation.read_run(path, log_dir)
+    finally:
+        delegation.runlog.RunLog = real
 
 
 # --- the Claude transcript --------------------------------------------------------
@@ -179,6 +206,10 @@ def child(tid, launched, prompt, ended, parent=None, background=False):
     ]
 
 
+def worktree(spec):
+    return f"/app/.spektacular/worktrees/{spec}/app"
+
+
 def spec_prompt(spec, worktrees):
     return " ".join(
         [
@@ -189,72 +220,69 @@ def spec_prompt(spec, worktrees):
     )
 
 
-def sub_agent_span(clock, name, span_id):
-    """A sub-agent span_start at clock, as `trace start --type sub-agent`
-    writes it to the day file of a standalone span."""
-    return {
-        "record": "span_start",
-        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
-        "span_id": span_id,
-        "name": name,
-        "kind": "internal",
-        "start_time": f"2026-10-23T{clock}.000000000Z",
-        "attributes": {"spektacular.span.type": "sub-agent", "spektacular.agent": "claude"},
-        "resource": {"service.name": "spektacular"},
-    }
-
-
-def implement_epic_run(tmp_path, *, skip_spec=None, skip_step=None, short_prompt=None, extra=(), background=False, marked=None) -> delegation.Run:
+def implement_epic_run(tmp_path, *, skip_spec=None, skip_step=None, short_prompt=None, extra=(), background=False, marked="all") -> delegation.Run:
     """Two implement lanes walked side by side from 10:00, each worked by a
     top-level child of its own launched before the lanes start, which starts
-    a child half a minute into each check_goal step. The orchestrator asked
-    for each spec's worktree first. The spec children run
+    a child half a minute into each check_goal step. The spec children run
     in the foreground and end at 10:05, and the orchestrator's one turn ends
     at 10:05:30 after them; with `background`, they run in the background and
     the turn ends at 09:59:10, once both are launched.
 
     skip_spec: the spec no top-level child works. skip_step: (spec, step)
     whose nested child is never started. short_prompt: the spec whose child
-    is not given its worktree path. extra: more transcript objects.
-    marked: the clocks of the sub-agent spans to write, one per launch they
-    mark (every launch when "all"); None writes no spans.
+    is not given its worktree folder. extra: more transcript objects.
+    marked: the launch clocks that get a sub-agent span (every launch when
+    "all"): the orchestrator's span outside any run for a spec child, a span
+    in the lane's step for a nested one.
     """
-    debug = tmp_path / "debug"
-    write_jsonl(debug / "20261023T095800.903970323Z_claude_no-active-workflow.jsonl", [worktree_record(f"09:58:{n}0", s) for n, s in enumerate(SPECS)])
-    for n, spec in enumerate(SPECS):
-        write_jsonl(debug / f"20261023T1000{n:02d}.903970323Z_claude_implement_{spec}.jsonl", walk(spec))
+    answers = {"list": {"runs": []}, "commands": {"commands": []}, "spans": {"spans": []}}
+    for spec in SPECS:
+        summary, new, report = lane_answers(spec)
+        answers["list"]["runs"].append(summary)
+        answers["commands"]["commands"].append(new)
+        answers[f"run {summary['run_id']}"] = report
 
     objs = [{"type": "system", "subtype": "init", "model": SONNET}]
+    launches = []  # (clock, spec, step) of each launch
     for n, spec in enumerate(SPECS):
         if spec == skip_spec:
             continue
         parent = f"toolu_{n}"
         worktrees = [] if spec == short_prompt else [worktree(spec)]
         objs += child(parent, f"09:59:{n}0", spec_prompt(spec, worktrees), ended=m(5), background=background)
+        launches.append((f"09:59:{n}0", None, None))
         for i, step in enumerate(LANE_STEPS):
             if ("implement", step) in delegation.REQUIRED and (spec, step) != skip_step:
                 objs += child(f"{parent}_{step}", m(i, 30), f"Do the {step} step.", ended=m(i, 50), parent=parent)
+                launches.append((m(i, 30), spec, step))
     if not background:
         objs.append(assistant(m(5, 30), {"type": "text", "text": "Both specs are implemented."}))
     objs += list(extra)
     objs.append({"type": "result", "subtype": "success", "num_turns": 1})
 
-    if marked is not None:
-        launches = [f"09:59:{n}0" for n, spec in enumerate(SPECS) if spec != skip_spec]
-        launches += [m(i, 30) for i, step in enumerate(LANE_STEPS) if ("implement", step) in delegation.REQUIRED for _ in SPECS]
-        clocks = launches if marked == "all" else list(marked)
-        write_jsonl(debug / "standalone_20261023.jsonl", [sub_agent_span(c, f"child-{k}", f"{k + 1:016x}") for k, c in enumerate(clocks)])
+    clocks = [c for c, _, _ in launches] if marked == "all" else list(marked)
+    for k, (clock, spec, step) in enumerate(launches):
+        if clock in clocks:
+            clocks.remove(clock)
+            answers["spans"]["spans"].append(span_row(clock, f"s{k}", spec, step, end=m(5) if spec is None else None))
 
     path = tmp_path / "claude-code.txt"
     write_jsonl(path, objs)
-    return delegation.read_run(path, debug)
+    return read_with(path, tmp_path, answers)
 
 
 # --- the epic verifier on the reference runs (criteria 1, 2 and 4) -----------------
 
 
+REFERENCE_LANES = [("plan", "20260101000001-storage"), ("plan", "20260101000002-commands"), ("plan", "20260101000003-help")]
+
+
 def reference(name):
-    return delegation.read_run(DATA / name / "claude-code.txt", DATA / name / "debug")
+    """A reference run's transcript, with its lanes given by hand: its
+    Spektacular logs predate the format `stats` reads."""
+    run = read_with(DATA / name / "claude-code.txt", DATA / name, None)
+    run.lanes = dict.fromkeys(REFERENCE_LANES)
+    return run
 
 
 EPIC_TESTS = [
@@ -263,16 +291,25 @@ EPIC_TESTS = [
     "test_no_wakeup_while_children_run",
     "test_children_run_as_the_probe_settled",
 ]
+TRANSCRIPT_TESTS = EPIC_TESTS[1:]
 
 
-@pytest.mark.parametrize("test", EPIC_TESTS)
-def test_the_46_epic_run_passes_every_child_check(test):
+@pytest.mark.parametrize("test", TRANSCRIPT_TESTS)
+def test_the_46_epic_run_passes_every_transcript_child_check(test):
     assert verdict(getattr(epic_verifier.TestChildren(), test), reference("m70-epic")) == []
 
 
-@pytest.mark.parametrize("test", EPIC_TESTS[:2])
-def test_the_55_epic_run_gives_every_spec_its_child_and_context(test):
-    assert verdict(getattr(epic_verifier.TestChildren(), test), reference("s55-epic")) == []
+def test_the_55_epic_run_gives_every_spec_its_context():
+    assert verdict(epic_verifier.TestChildren().test_children_are_given_their_context, reference("s55-epic")) == []
+
+
+def test_a_reference_run_without_readable_logs_fails_the_span_checks_naming_why():
+    lines = []
+    try:
+        epic_verifier.TestChildren().test_every_spec_has_its_own_child(read_with(DATA / "m70-epic" / "claude-code.txt", DATA / "m70-epic", None))
+    except AssertionError as e:
+        lines = [line.lstrip(" ~") for line in str(e).splitlines() if "logs_unavailable" in line]
+    assert lines and all("cannot run spektacular" in line for line in lines)
 
 
 def test_the_55_epic_run_fails_naming_its_scheduled_wakeup():
@@ -301,8 +338,7 @@ IMPLEMENT_TESTS = EPIC_TESTS + ["test_required_steps_each_started_a_child"]
 @pytest.mark.parametrize("test", IMPLEMENT_TESTS)
 def test_a_well_delegated_implement_epic_run_passes_every_child_check(tmp_path, test):
     run = implement_epic_run(tmp_path)
-    assert sorted(run.windows) == [("implement", A), ("implement", B)]
-    assert delegation.worktree_paths(run.session) == {A: [worktree(A)], B: [worktree(B)]}
+    assert sorted(run.lanes) == [("implement", A), ("implement", B)]
     assert verdict(getattr(implement_verifier.TestChildren(), test), run) == []
 
 
@@ -322,11 +358,11 @@ def test_a_test_or_verify_step_done_inline_passes(tmp_path, step):
     assert verdict(implement_verifier.TestChildren().test_required_steps_each_started_a_child, run) == []
 
 
-def test_a_child_not_given_its_worktree_fails_naming_the_child_and_the_path(tmp_path):
+def test_a_child_not_given_its_worktree_fails_naming_the_child_and_the_folder(tmp_path):
     # criterion 2
     run = implement_epic_run(tmp_path, short_prompt=A)
     assert verdict(implement_verifier.TestChildren().test_children_are_given_their_context, run) == [
-        f"context_gap child toolu_0 ({A}): its prompt does not give its code location {worktree(A)}"
+        f"context_gap child toolu_0 ({A}): its prompt does not give its worktree folder /app/.spektacular/worktrees/{A}"
     ]
 
 
@@ -436,23 +472,22 @@ def test_only_the_child_checks_read_the_transcript(verifier):
 
 @pytest.mark.parametrize("verifier", sorted(VERIFIERS))
 def test_a_run_whose_every_launch_is_marked_passes(tmp_path, verifier):
-    run = implement_epic_run(tmp_path, marked="all")
+    run = implement_epic_run(tmp_path)
     assert len(run.spans) == 4
     assert verdict(VERIFIERS[verifier].TestChildren().test_every_launch_is_a_sub_agent_span, run) == []
 
 
 @pytest.mark.parametrize("verifier", sorted(VERIFIERS))
-def test_an_unmarked_launch_fails_naming_its_step(tmp_path, verifier):
+def test_an_unmarked_launch_fails_naming_it(tmp_path, verifier):
     # the two spec children and one of the two goal reviewers, launched at
     # the same moment, are marked
     run = implement_epic_run(tmp_path, marked=["09:59:00", "09:59:10", m(2, 30)])
     lines = verdict(VERIFIERS[verifier].TestChildren().test_every_launch_is_a_sub_agent_span, run)
     assert len(lines) == 1
-    assert lines[0].split(": child ")[0] in (f"unmarked_launch {A}", f"unmarked_launch {B}")
-    assert "in step check_goal has no sub-agent span (`trace start <helper> --type sub-agent`)" in lines[0]
-
+    assert lines[0].startswith("unmarked_launch child toolu_")
+    assert "_check_goal launched at 10:02:30 has no sub-agent span (`trace start <helper> --type sub-agent`)" in lines[0]
 
 def test_a_run_with_no_spans_fails_every_launch(tmp_path):
-    run = implement_epic_run(tmp_path)
+    run = implement_epic_run(tmp_path, marked=[])
     assert run.spans == []
     assert len(verdict(implement_verifier.TestChildren().test_every_launch_is_a_sub_agent_span, run)) == 4

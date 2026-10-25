@@ -312,3 +312,60 @@ func statValue(figure string, v *float64) string {
 	}
 	return strconv.FormatFloat(*v, 'f', -1, 64)
 }
+
+// RenderCommands draws the command records as one table, oldest first as
+// given. A command outside any run shows "-" for its run.
+func RenderCommands(w io.Writer, rows []CommandRow, skipped int) error {
+	b := &strings.Builder{}
+	if len(rows) == 0 {
+		fmt.Fprintln(b, "No recorded commands.")
+	} else {
+		tw := table(b)
+		fmt.Fprintln(tw, "TIME\tRUN\tSTEP\tCOMMAND\tEXIT\tDURATION")
+		for _, c := range rows {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%s\n", c.StartedAt.Format(timeLayout), runCell(c.RunID),
+				orDash(c.Step), c.Command, c.ExitCode, fmtMS(c.DurationMS))
+		}
+		tw.Flush()
+	}
+	skippedLine(b, skipped)
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+// RenderSpans draws the agent-marked spans as one table, oldest first as
+// given. An unfinished span's end reason is marked, as in a run report.
+func RenderSpans(w io.Writer, rows []SpanRow, skipped int) error {
+	b := &strings.Builder{}
+	if len(rows) == 0 {
+		fmt.Fprintln(b, "No recorded spans.")
+	} else {
+		unfinished := false
+		tw := table(b)
+		fmt.Fprintln(tw, "TIME\tRUN\tTYPE\tNAME\tSTEP\tDURATION\tEND")
+		for _, s := range rows {
+			end := s.EndReason
+			if !s.Complete {
+				end += unfinishedMark
+				unfinished = true
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", s.StartedAt.Format(timeLayout), runCell(s.RunID),
+				s.Type, s.Name, orDash(s.Step), fmtMS(s.DurationMS), end)
+		}
+		tw.Flush()
+		if unfinished {
+			fmt.Fprintf(b, "\n%s did not finish: its duration runs to the last event recorded with it.\n", unfinishedMark)
+		}
+	}
+	skippedLine(b, skipped)
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+// runCell is a run id cut short, or "-" outside any run.
+func runCell(id *string) string {
+	if id == nil {
+		return "-"
+	}
+	return shortID(*id)
+}

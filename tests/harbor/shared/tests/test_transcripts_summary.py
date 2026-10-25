@@ -3,11 +3,14 @@
 Each agent leaves a different record of a run: Claude's stream-json
 transcript with its `result` events, the ATIF trajectory harbor writes for
 Bob and Codex, and Codex's native rollout. The readers turn each into the
-same totals, messages and sub-agent counts, and must report whatever a log
+same totals, child agents, turns and wake-ups, and must report whatever a log
 does not supply as None with an Unknown, never as zero. Each reader is
 exercised here on a small hand-built log with hand-worked expected values,
 and the readers the existing verifiers already use are pinned on the same
-input so that the new code cannot have changed them.
+input so that the new code cannot have changed them. These cases also pin
+the ATIF and Codex totals readers on hand-built input, alongside the
+reference runs' Claude totals pinned in test_reference_runs.py before spec
+000076 changed any transcript reader.
 
 This file never runs in a harbor container. It lives under shared/tests/ so
 the Makefile, which copies shared/*.py into each image, leaves it out. Run it
@@ -25,29 +28,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from transcripts import (  # noqa: E402
     Child,
-    Message,
     SubagentLaunch,
-    Subagents,
     Totals,
     Turn,
     Unknown,
     Wakeup,
     acp_subagent_launches,
     atif_children,
-    atif_messages,
-    atif_subagents,
     atif_summary,
     claude_children,
-    claude_launch_root,
     claude_main_models,
-    claude_messages,
     claude_subagent_launches,
-    claude_subagents,
     claude_summary,
     claude_turns,
     claude_wakeups,
     codex_rollout_summary,
-    goto_step_of,
     parse_timestamp,
 )
 
@@ -62,12 +57,8 @@ GOTO_HELP = "spektacular spec goto --help"
 # len(json.dumps(input)) of each tool input used below, worked out by hand
 # from the escaped JSON text so the expected character counts stay fixed.
 LEN_GOTO_DISCOVERY = 90  # {"command": "spektacular plan goto --data '{\"step\"...}' 2>&1"}
-LEN_GOTO_VERIFICATION = 88
 LEN_GOTO_HELP = 43  # {"command": "spektacular spec goto --help"}
 LEN_FIND_SPECS = 60  # {"subagent_type": "general-purpose", "prompt": "find specs"}
-LEN_LS = 17  # {"command": "ls"}
-LEN_EXPLORE = 50  # {"name": "explore", "description": "map the repo"}
-LEN_EMPTY = 2  # {}
 
 
 def ts(clock: str) -> str:
@@ -286,8 +277,6 @@ def codex_trajectory():
 # Child agents, turns and wake-ups. Claude's system events carry no timestamp,
 # as in real logs; task_updated carries only its task id and patch.
 
-LEN_NESTED_LOOK = 53  # {"subagent_type": "Explore", "prompt": "nested look"}
-
 # A multi-line prompt with indentation and a trailing newline, which a child's
 # context must keep exactly as launched: 77 characters.
 PROMPT_A = "Find every spec under .spektacular/specs.\n\n  Report the names, one per line.\n"
@@ -453,7 +442,7 @@ ALL_TOTALS = (
 )
 
 
-# parse_timestamp and goto_step_of
+# parse_timestamp
 
 
 def test_parse_timestamp_reads_iso_with_z_and_rejects_the_rest():
@@ -462,14 +451,6 @@ def test_parse_timestamp_reads_iso_with_z_and_rejects_the_rest():
     assert parse_timestamp(None) is None
     assert parse_timestamp("") is None
     assert parse_timestamp("yesterday") is None
-
-
-def test_goto_step_of_reads_the_step_from_goto_data():
-    assert goto_step_of(GOTO_DISCOVERY) == "discovery"
-    assert goto_step_of("""spektacular implement goto --data='{"step":"verify","name":"x"}'""") == "verify"
-    assert goto_step_of(GOTO_HELP) is None
-    assert goto_step_of("spektacular plan status") is None
-    assert goto_step_of("ls -la") is None
 
 
 # Claude: one result event
@@ -499,19 +480,6 @@ def test_claude_one_result_missing_cost_is_unknown_not_zero():
     assert totals.unknowns == [Unknown("totals.cost_usd", "missing from the last result event in claude-code.txt")]
 
 
-def test_claude_one_result_subagents_from_stats_and_notification():
-    assert claude_subagents(claude_one_result()) == Subagents(
-        started=1, completed=1, failed=0, stopped=0, durations_s=[14.0], unknowns=[]
-    )
-
-
-def test_claude_messages_one_per_assistant_object():
-    assert claude_messages(claude_one_result()) == [
-        Message(at=at(10, 0, 0), chars=7 + 9 + LEN_GOTO_DISCOVERY, parent=None, order=0, goto_step="discovery"),
-        Message(at=at(10, 0, 5), chars=LEN_FIND_SPECS, parent=None, order=1, goto_step=None),
-        Message(at=at(10, 0, 6), chars=7 + LEN_GOTO_HELP, parent="toolu_A", order=2, goto_step=None),
-    ]
-
 
 # Claude: split by background sub-agents
 
@@ -532,30 +500,7 @@ def test_claude_split_sums_turns_and_takes_the_rest_from_the_last_result():
     )
 
 
-def test_claude_split_subagents_from_last_stats_with_unknown_durations():
-    assert claude_subagents(claude_split()) == Subagents(
-        started=4,
-        completed=2,
-        failed=1,
-        stopped=1,
-        durations_s=[14.0, 2.5],
-        unknowns=[Unknown("subagents.durations_s", "2 sub-agents never reported a duration")],
-    )
 
-
-def test_claude_subagents_without_stats_counts_launches_and_notifications():
-    assert claude_subagents(claude_split(with_stats=False)) == Subagents(
-        started=3,  # top-level launches A, B, C; the nested N is not the main agent's
-        completed=1,
-        failed=1,
-        stopped=1,  # B's "killed"
-        durations_s=[14.0, 2.5],
-        unknowns=[Unknown("subagents.durations_s", "1 sub-agents never reported a duration")],
-    )
-
-
-def test_claude_launch_root_resolves_nested_launch_to_top_level():
-    assert claude_launch_root(claude_split()) == {"toolu_A": "toolu_A", "toolu_N": "toolu_A"}
 
 
 # Claude: no result event
@@ -628,26 +573,6 @@ def test_bob_summary_has_turns_and_everything_else_unknown():
     )
 
 
-def test_bob_messages_are_agent_steps_without_timestamps():
-    # order is the step's index in the trajectory, user steps included.
-    assert atif_messages(bob_trajectory()) == [
-        Message(at=None, chars=13 + 5 + LEN_GOTO_VERIFICATION, parent=None, order=1, goto_step="verification"),
-        Message(at=None, chars=LEN_EXPLORE, parent=None, order=2, goto_step=None),
-        Message(at=None, chars=5 + LEN_EMPTY, parent=None, order=4, goto_step=None),
-    ]
-
-
-def test_bob_subagents_counts_launches_and_leaves_outcomes_unknown():
-    reason = "bob reports no sub-agent outcomes"
-    assert atif_subagents(bob_trajectory()) == Subagents(
-        started=2,
-        unknowns=[
-            Unknown("subagents.completed", reason),
-            Unknown("subagents.failed", reason),
-            Unknown("subagents.stopped", reason),
-            Unknown("subagents.durations_s", reason),
-        ],
-    )
 
 
 # ATIF: Codex
@@ -669,24 +594,6 @@ def test_codex_summary_has_turns_tokens_and_wall_time():
     )
 
 
-def test_codex_messages_have_timestamps_and_list_text():
-    assert atif_messages(codex_trajectory()) == [
-        Message(at=at(10, 0, 4), chars=8 + LEN_LS, parent=None, order=1, goto_step=None),
-        Message(at=at(10, 1, 30), chars=9 + 2, parent=None, order=2, goto_step=None),
-    ]
-
-
-def test_codex_subagents_all_unknown():
-    reason = "codex reports no sub-agents"
-    assert atif_subagents(codex_trajectory()) == Subagents(
-        unknowns=[
-            Unknown("subagents.started", reason),
-            Unknown("subagents.completed", reason),
-            Unknown("subagents.failed", reason),
-            Unknown("subagents.stopped", reason),
-            Unknown("subagents.durations_s", reason),
-        ],
-    )
 
 
 # Codex native rollout
@@ -762,7 +669,6 @@ CHILD_A = Child(
     ending="no_hand_back",
     hand_back=None,
     models=[HAIKU],
-    output=6 + LEN_NESTED_LOOK,
     prompt=PROMPT_A,
 )
 CHILD_F = Child(
@@ -777,7 +683,6 @@ CHILD_F = Child(
     ending="completed",
     hand_back="line1",
     models=None,
-    output=None,
     prompt="look around",
 )
 CHILD_N = Child(
@@ -792,7 +697,6 @@ CHILD_N = Child(
     ending="completed",
     hand_back="Nested done.",
     models=None,
-    output=None,
     prompt="nested look",
 )
 CHILD_K = Child(
@@ -807,7 +711,6 @@ CHILD_K = Child(
     ending="stopped",
     hand_back=None,
     models=None,
-    output=None,
     prompt="watch it",
 )
 CHILD_X = Child(
@@ -822,7 +725,6 @@ CHILD_X = Child(
     ending="failed",
     hand_back="Error: boom",
     models=None,
-    output=None,
     prompt="break it",
 )
 
@@ -840,16 +742,12 @@ def test_claude_children_one_per_started_child_in_launch_order():
         child_unknown("toolu_A", "duration_s", NO_DURATION),
         child_unknown("toolu_F", "duration_s", NO_DURATION),
         child_unknown("toolu_F", "models", NO_MESSAGES),
-        child_unknown("toolu_F", "output", NO_MESSAGES),
         child_unknown("toolu_N", "models", NO_MESSAGES),
-        child_unknown("toolu_N", "output", NO_MESSAGES),
         child_unknown("toolu_N", "description", NO_DESCRIPTION),
         child_unknown("toolu_K", "duration_s", NO_DURATION),
         child_unknown("toolu_K", "models", NO_MESSAGES),
-        child_unknown("toolu_K", "output", NO_MESSAGES),
         child_unknown("toolu_X", "duration_s", NO_DURATION_FAILED),
         child_unknown("toolu_X", "models", NO_MESSAGES),
-        child_unknown("toolu_X", "output", NO_MESSAGES),
     ]
 
 
@@ -951,13 +849,13 @@ def test_claude_children_without_task_started_count_every_unrefused_launch():
     base = dict(description=None, background=None, ended_at=None)
     assert children == [
         Child(id="toolu_A", parent=None, kind="general-purpose", launched_at=at(10, 0, 0), duration_s=14.0,
-              ending="completed", hand_back=None, models=[HAIKU], output=LEN_NESTED_LOOK, prompt="find specs", **base),
+              ending="completed", hand_back=None, models=[HAIKU], prompt="find specs", **base),
         Child(id="toolu_B", parent=None, kind="Explore", launched_at=at(10, 0, 0), duration_s=None,
-              ending="stopped", hand_back=None, models=None, output=None, prompt="dig deeper", **base),
+              ending="stopped", hand_back=None, models=None, prompt="dig deeper", **base),
         Child(id="toolu_N", parent="toolu_A", kind="Explore", launched_at=at(10, 0, 30), duration_s=None,
-              ending="no_hand_back", hand_back=None, models=[HAIKU], output=6, prompt="nested look", **base),
+              ending="no_hand_back", hand_back=None, models=[HAIKU], prompt="nested look", **base),
         Child(id="toolu_C", parent=None, kind="general-purpose", launched_at=at(10, 2, 0), duration_s=2.5,
-              ending="failed", hand_back=None, models=None, output=None, prompt="write report", **base),
+              ending="failed", hand_back=None, models=None, prompt="write report", **base),
     ]
     assert unknowns == [
         Unknown("subagents.children.background", "claude logged no task_started events"),
@@ -967,7 +865,6 @@ def test_claude_children_without_task_started_count_every_unrefused_launch():
         child_unknown("toolu_B", "ended_at", NO_END),
         child_unknown("toolu_B", "duration_s", NO_DURATION),
         child_unknown("toolu_B", "models", NO_MESSAGES),
-        child_unknown("toolu_B", "output", NO_MESSAGES),
         child_unknown("toolu_B", "description", NO_DESCRIPTION),
         child_unknown("toolu_N", "ended_at", NO_END),
         child_unknown("toolu_N", "duration_s", NO_DURATION),
@@ -975,7 +872,6 @@ def test_claude_children_without_task_started_count_every_unrefused_launch():
         child_unknown("toolu_C", "ended_at", NO_END),
         child_unknown("toolu_C", "hand_back", EMPTY_HAND_BACK),
         child_unknown("toolu_C", "models", NO_MESSAGES),
-        child_unknown("toolu_C", "output", NO_MESSAGES),
         child_unknown("toolu_C", "description", NO_DESCRIPTION),
     ]
 
@@ -994,7 +890,7 @@ def test_claude_children_without_task_started_still_leave_out_refused_launches()
 def test_bob_children_carry_kind_description_prompt_and_nothing_else():
     children, unknowns = atif_children(bob_trajectory())
     empty = dict(parent=None, background=None, launched_at=None, ended_at=None, duration_s=None,
-                 ending=None, hand_back=None, models=None, output=None)
+                 ending=None, hand_back=None, models=None)
     assert children == [
         # order is the launching step's index among the dict steps: step_id 3 is index 2, step_id 5 index 4.
         Child(id="t2", kind="explore", description="map the repo", prompt="map the repo", order=2, **empty),
@@ -1009,7 +905,6 @@ def test_bob_children_carry_kind_description_prompt_and_nothing_else():
         Unknown("subagents.children.ending", "bob logs no sub-agent outcome"),
         Unknown("subagents.children.hand_back", "bob logs no sub-agent hand-back"),
         Unknown("subagents.children.models", "bob logs no sub-agent models"),
-        Unknown("subagents.children.output", "bob logs no sub-agent output"),
         Unknown("subagents.children[t3].kind", "the bob sub-agent call named no kind"),
         Unknown("subagents.children[t3].prompt", "the bob sub-agent call named no prompt"),
     ]

@@ -33,30 +33,49 @@ TOTALS_KEYS = [
     "output_tokens",
     "cache_read_tokens",
     "cache_write_tokens",
-    "idle_s",
+    "trace_calls",
+    "trace_calls_per_task",
+    "user_wait_s",
+    "helper_wait_s",
+    "gap_s",
+    "gaps",
+    "gap_threshold_s",
 ]
-SUBAGENTS_KEYS = ["started", "completed", "failed", "stopped", "durations_s", "children"]
-STEP_KEYS = ["step", "started_at", "duration_s", "output", "children"]
-CHILD_KEYS = [
-    "id",
-    "parent",
-    "kind",
-    "description",
-    "background",
-    "spec",
+SUBAGENTS_KEYS = ["started", "completed", "failed", "unfinished", "durations_s", "helpers", "briefs"]
+# Each workflow run under steps.workflows, and each step in its steps.
+WORKFLOW_KEYS = ["run_id", "kind", "name", "status", "wall_s", "user_wait_s", "helper_wait_s", "gap_s", "gaps"]
+STEP_KEYS = [
     "step",
-    "launched_at",
+    "started_at",
+    "entries",
+    "duration_s",
+    "working_s",
+    "helper_wait_s",
+    "user_wait_s",
+    "commands",
+    "helpers",
+    "incomplete",
+]
+# Each helper under subagents.helpers, from Spektacular's logs.
+HELPER_KEYS = [
+    "span_id",
+    "parent",
+    "name",
+    "spec",
+    "kind",
+    "step",
+    "task_id",
+    "outside_run",
+    "started_at",
     "ended_at",
     "duration_s",
-    "ending",
-    "hand_back",
-    "models",
-    "output",
-    "prompt",
-    "prompt_chars",
+    "end_reason",
+    "status",
+    "complete",
 ]
-CHILD_ENDINGS = ["completed", "failed", "stopped", "no_hand_back"]
-SCHEMA_VERSION = "2"
+# Each brief under subagents.briefs, from the agent's log.
+BRIEF_KEYS = ["id", "parent", "kind", "description", "models", "prompt", "prompt_chars"]
+SCHEMA_VERSION = "3"
 CHECKS_KEYS = ["passed", "total", "score"]
 
 
@@ -150,41 +169,64 @@ def test_schema_version_row_says_current_version():
     assert re.search(rf"currently `{SCHEMA_VERSION}`", row), f"the schema_version row does not say `{SCHEMA_VERSION}`"
 
 
+def test_field_table_names_every_workflow_key():
+    row = field_rows()["steps"]
+    assert mentions(row, "workflows")
+    missing = [k for k in WORKFLOW_KEYS if not mentions(row, k)]
+    assert not missing, f"the steps row does not name each workflow's {missing}"
+
+
 def test_field_table_names_every_step_key():
     row = field_rows()["steps"]
     missing = [k for k in STEP_KEYS if not mentions(row, k)]
     assert not missing, f"the steps row does not name each step's {missing}"
 
 
-def test_field_table_names_every_child_key():
+def test_steps_row_says_the_split_adds_up_to_the_duration():
+    row = field_rows()["steps"]
+    assert "add up to its duration" in row
+
+
+def test_field_table_names_every_helper_key():
     row = field_rows()["subagents"]
-    missing = [k for k in CHILD_KEYS if not mentions(row, k)]
-    assert not missing, f"the subagents row does not name each child's {missing}"
+    missing = [k for k in HELPER_KEYS if not mentions(row, k)]
+    assert not missing, f"the subagents row does not name each helper's {missing}"
 
 
-@pytest.mark.parametrize("ending", CHILD_ENDINGS)
-def test_field_table_names_every_child_ending(ending):
-    assert mentions(field_rows()["subagents"], ending), f"the subagents row does not name the ending {ending}"
+def test_subagents_row_says_an_outside_run_helper_has_no_step():
+    row = field_rows()["subagents"]
+    assert mentions(row, "outside_run") and "outside any run" in row and mentions(row, "null")
 
 
-def test_bob_row_says_which_child_fields_it_records():
+def test_field_table_names_every_brief_key():
+    row = field_rows()["subagents"]
+    missing = [k for k in BRIEF_KEYS if not mentions(row, k)]
+    assert not missing, f"the subagents row does not name each brief's {missing}"
+
+
+def test_bob_row_says_which_brief_fields_it_records():
     row = table_rows(section("Run metrics"), "Agent")["Bob"]
     missing = [k for k in ["kind", "description", "prompt"] if not mentions(row, k)]
-    assert not missing, f"the Bob row does not name the child fields it keeps: {missing}"
-    assert "every other child field is unknown" in row
+    assert not missing, f"the Bob row does not name the brief fields it keeps: {missing}"
+    assert mentions(row, "models") and "unknown" in row, "the Bob row does not say its briefs' models are unknown"
 
 
-def test_codex_row_says_children_are_unknown():
+def test_codex_row_says_briefs_are_unknown():
     row = table_rows(section("Run metrics"), "Agent")["Codex"]
-    assert mentions(row, "children"), "the Codex row does not name children"
-    assert mentions(row, "null"), "the Codex row does not say children is null"
+    assert mentions(row, "briefs"), "the Codex row does not name briefs"
+    assert mentions(row, "null"), "the Codex row does not say briefs is null"
 
 
-def test_metrics_section_states_idle_threshold():
+def test_metrics_section_says_log_fields_come_through_stats_and_never_from_the_transcript():
     body = section("Run metrics")
-    assert mentions(body, "idle_s") or "Idle time" in body
-    assert "IDLE_SHARE" in body, "Run metrics does not name the IDLE_SHARE threshold"
-    assert "quarter" in body, "Run metrics does not say the threshold is a quarter of the wall time"
+    assert "`spektacular stats`" in body, "Run metrics does not say the log fields are read through `spektacular stats`"
+    for sub in ("list", "run", "commands", "spans"):
+        assert mentions(body, sub), f"Run metrics does not name `stats {sub}`"
+    flat = " ".join(body.split())
+    assert "never by parsing them" in flat
+    assert "none is filled in from the agent's transcript" in flat, (
+        "Run metrics does not say a log field is never filled in from the transcript"
+    )
 
 
 @pytest.mark.parametrize("agent", ["Bob", "Codex"])
@@ -218,15 +260,26 @@ def test_comparing_runs_says_prompts_needs_run():
     assert "`--prompts`" in body and "usage error" in body
 
 
-def test_comparing_runs_describes_idle_mark():
+def test_comparing_runs_describes_the_gap_mark():
     body = section("Comparing runs")
-    assert "`◀ idle`" in body, "Comparing runs does not show the idle mark"
-    assert "quarter" in body, "Comparing runs does not say when a run is marked idle"
+    assert "`◀ gaps`" in body, "Comparing runs does not show the gap mark"
+    assert "quarter" in body and "GAP_SHARE" in body, "Comparing runs does not say when a run is marked"
+    assert "◀ idle" not in body and "idle" not in body
 
 
-def test_comparing_runs_describes_child_table():
+def test_comparing_runs_describes_the_split_and_the_helper_table():
     body = section("Comparing runs")
-    assert "child agents" in body and "nested" in body
+    for words in ("working", "helper-wait", "user-wait", "helpers", "how it ended"):
+        assert words in body, words
+    assert "child agents" not in body
+
+
+def test_comparing_runs_shows_the_two_trial_comparison():
+    body = section("Comparing runs")
+    assert re.search(r"make harbor-report ARGS='--compare \S+ \S+'", body), "no --compare example"
+    assert "`--compare A B`" in body
+    assert "`-` on the other side, never 0" in body
+    assert "user wait, helper wait, gap time" in body, "the medians do not name the new measures"
 
 
 def test_comparison_command_passes_both_sets_in_one_args():
@@ -242,3 +295,27 @@ def test_shared_self_check_command_is_present():
         for block in blocks
         for line in block.splitlines()
     )
+
+
+def harbor_text() -> str:
+    text = README.read_text()
+    return text[text.index("### End-to-end (Harbor)"):text.index("## Building from Source")]
+
+
+def test_harbor_sections_describe_the_logs_read_through_stats():
+    text = harbor_text()
+    for words in (".spektacular/logs/", "default log level", "`spektacular stats`", "SPEKTACULAR_BIN",
+                  "python3 tests/harbor/shared/timeline.py", "`--compare A B`", "`sub-agent`"):
+        assert words in text, words
+
+
+def test_harbor_sections_no_longer_describe_the_old_session_log():
+    text = harbor_text()
+    for gone in ("idle_s", "log.level: verbose", "session log", ".spektacular/debug", "--debug-dir"):
+        assert gone not in text, gone
+
+
+def test_harbor_sections_say_how_to_run_the_self_tests():
+    text = harbor_text()
+    assert "uvx --with pytest pytest --import-mode=importlib tests/harbor/shared/tests" in text
+    assert "integration test" in text and "needs Go" in text

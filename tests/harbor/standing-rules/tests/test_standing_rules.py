@@ -29,7 +29,7 @@ from pathlib import Path
 import pytest
 
 PROJECT_DIR = Path("/app")
-DEBUG_DIR = PROJECT_DIR / ".spektacular" / "logs"
+LOG_DIR = PROJECT_DIR / ".spektacular" / "logs"
 ANSWERS = PROJECT_DIR / "answers.md"
 SPEC_DIGEST = Path("/tmp/spec.sha256")
 
@@ -191,11 +191,11 @@ def cli_bytes(*args: str) -> subprocess.CompletedProcess:
 
 @pytest.fixture(scope="session")
 def commands() -> list[list[str]]:
-    from sessionlog import SessionLog
+    from runlog import RunLog
 
-    log = SessionLog(DEBUG_DIR)
-    assert not log.empty, f"no spektacular calls were logged under {DEBUG_DIR}"
-    return [e.command for e in log.all_events()]
+    log = RunLog(LOG_DIR)
+    assert not log.empty, f"no spektacular calls were logged under {LOG_DIR}, or `spektacular stats` could not read them"
+    return [c.args for c in log.commands()]
 
 
 @pytest.fixture(scope="session")

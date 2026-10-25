@@ -499,17 +499,15 @@ class TestUserWaits:
     session log."""
 
     def test_constraints_question_is_a_user_wait(self):
-        from spans import STEP, of_type, read_spans, user_waits
+        from runlog import RunLog
 
-        spans = read_spans(SPEK_DIR / "logs")
-        steps = [s for s in of_type(spans, STEP) if s.name == "constraints"]
-        assert steps, "the session log holds no span for the constraints step"
-        waits = user_waits(spans)
-        inside = [
-            w
-            for w in waits
-            if any(w.parent == s.span_id or (s.start <= w.start and (s.end is None or w.start <= s.end)) for s in steps)
-        ]
+        log = RunLog(SPEK_DIR / "logs")
+        spec_runs = [r for r in log.runs() if r["kind"] == "spec"]
+        assert spec_runs, "the Spektacular logs hold no spec run"
+        steps = [s["step"] for r in spec_runs for s in log.report(r["run_id"])["steps"]]
+        assert "constraints" in steps, "the Spektacular logs hold no entry into the constraints step"
+        waits = [s for s in log.spans() if s.type == "user-wait"]
+        inside = [w for w in waits if w.step == "constraints"]
         assert inside, (
             "no user-wait span marks the follow-up question of the scripted "
             f"Constraints rejection; user-wait spans: {[(w.name, w.start.isoformat()) for w in waits]}"
@@ -610,7 +608,7 @@ class TestVerificationStep:
         if not dl.is_claude():
             pytest.skip("only a Claude transcript shows where a child agent was started")
         run = dl.read_run(dl.tx.CLAUDE_TRANSCRIPT, SPEK_DIR / "logs")
-        failures = dl.missing_required(run.placed, run.windows) + dl.review_context_gaps(run.placed)
+        failures = dl.missing_required(run.log, run.lanes, run.spans) + dl.review_context_gaps(run.children, run.spans)
         assert not failures, "\n".join(str(f) for f in failures)
 
 

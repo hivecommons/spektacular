@@ -21,5 +21,3 @@ repos:
       location: .
     - name: docs
       location: ../repos/docs/.spektacular
-log:
-    level: verbose
