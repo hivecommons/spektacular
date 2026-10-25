@@ -484,7 +484,7 @@ tests/harbor/jobs/<timestamp>/
 └── spec-workflow__<id>/
     ├── agent/                     # Agent output log and native session transcripts
     ├── artifacts/
-    │   ├── spektacular/           # The project's .spektacular, with debug/ session logs
+    │   ├── spektacular/           # The project's .spektacular, with logs/ command logs
     │   └── agent-logs/bob/        # Bob's own debug log, on Bob runs only
     ├── verifier/
     │   ├── test-stdout.txt        # pytest output
@@ -504,12 +504,16 @@ tests/harbor/jobs/<timestamp>/
 | `tests/harbor/epic-workflow` | Plans a seeded three-spec epic with `spek-plan-epic`, checked against CLI state and the session log, so the same verifier serves every agent |
 | `tests/harbor/implement-epic-workflow` | Implements a seeded, planned four-spec epic with `spek-implement-epic`: storage and format in parallel, commands after both are merged, export after commands. Checked against CLI state, git, the finished app's behaviour and the session log |
 
-Every suite sets `SPEKTACULAR_SESSION_LOG=on`, so each run's `artifacts/spektacular/debug/` holds a
-timestamped line per `spektacular` call, whichever agent ran. The epic suite prints a timeline from
+Every suite seeds its project with `log.level: verbose` in `.spektacular/config.yaml` (seeding
+itself runs with logging off, and the verifiers switch logging off before their own calls), so the
+project's `.spektacular/logs/`, collected as each run's `artifacts/spektacular/logs/`, holds a
+timestamped line per `spektacular` call, whichever agent ran, apart from `status`, which is never
+logged. The epic suite prints a timeline from
 that log at the top of its results: when each spec's child started and finished, its slowest step,
-and how long the orchestrator took to start each child and to notice it had finished. Both epic suites print it, and it also lists every child that had to be resumed and the step it
+and how long the orchestrator took to notice it had finished (its `status` polls are not logged, so
+the time to start each child is no longer shown). Both epic suites print it, and it also lists every child that had to be resumed and the step it
 stopped at, and, on Bob runs, how often Bob ended a task at its turn limit. Run it on a collected job
-with `python3 tests/harbor/shared/timeline.py <job>/<trial>/artifacts/spektacular/debug [<job>/<trial>/artifacts/agent-logs/bob]`.
+with `python3 tests/harbor/shared/timeline.py <job>/<trial>/artifacts/spektacular/logs [<job>/<trial>/artifacts/agent-logs/bob]`.
 
 #### Run metrics
 
@@ -606,7 +610,7 @@ Suites present in only one set are listed as unmatched. The thresholds are const
 `report.py`.
 
 The recorder can also be run by hand on a collected trial, for example to re-record it:
-`python3 tests/harbor/shared/metrics.py --agent-dir <trial>/agent --debug-dir <trial>/artifacts/spektacular/debug --bob-logs <trial>/artifacts/agent-logs/bob --junit <trial>/verifier/junit.xml --reward <trial>/verifier/reward.txt --build-info <build.json> --out <file>`.
+`python3 tests/harbor/shared/metrics.py --agent-dir <trial>/agent --debug-dir <trial>/artifacts/spektacular/logs --bob-logs <trial>/artifacts/agent-logs/bob --junit <trial>/verifier/junit.xml --reward <trial>/verifier/reward.txt --build-info <build.json> --out <file>`.
 Reading `agent/` there needs the same permissions as the files Harbor left in it.
 
 The repo-workflow suite is the one whose assertions are about the conversation rather than the

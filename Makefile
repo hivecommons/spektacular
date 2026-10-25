@@ -229,7 +229,7 @@ harbor-test-epic-bob:
 # Renders tests/harbor/epic-workflow into tests/harbor/.build/epic-workflow-$(AGENT)
 # with the agent and its skill invocation substituted into instruction.md, then
 # runs harbor with that agent's arguments. The verifier reads only CLI state and
-# the session log, so it is the same for every agent. Its timeline of the run is
+# the session log in .spektacular/logs, so it is the same for every agent. Its timeline of the run is
 # at the top of the results. Callers must set AGENT and SPEK_PLAN_EPIC.
 _harbor-test-epic:
 	@test -n "$(AGENT)" || (echo "AGENT is required" && exit 1)
@@ -265,9 +265,10 @@ harbor-test-standing-rules-bob:
 # tests/harbor/.build/standing-rules-$(AGENT), with the agent substituted into
 # the seed, which runs `spektacular init $(AGENT)` while the image is built so
 # the standing rules in AGENTS.md are the agent's project instructions from its
-# first turn. The verifier reads only CLI state, the session log and the
-# agent's answer file, so it is the same for every agent. Only the verifier is
-# copied into tests: its self-check runs locally, never in the image.
+# first turn. The verifier reads only CLI state, the session log in
+# .spektacular/logs and the agent's answer file, so it is the same for every
+# agent. Only the verifier is copied into tests: its self-check runs locally,
+# never in the image.
 # Callers must set AGENT.
 _harbor-test-standing-rules:
 	@test -n "$(AGENT)" || (echo "AGENT is required" && exit 1)
@@ -340,8 +341,8 @@ harbor-test-implement-epic-bob-unlimited:
 # session-log helpers copied into its tests and the agent and its skill
 # invocation substituted into instruction.md, then runs harbor with that
 # agent's arguments. The verifier reads only CLI state, git, the app's behaviour
-# and the session log, so it is the same for every agent; its timeline of the
-# run is at the top of the results. Callers must set AGENT and
+# and the session log in .spektacular/logs, so it is the same for every agent;
+# its timeline of the run is at the top of the results. Callers must set AGENT and
 # SPEK_IMPLEMENT_EPIC; VARIANT names a second build of the same agent. Harbor
 # cuts a trial's name to 32 characters, so the results are found by that prefix.
 IMPLEMENT_EPIC_BUILD = tests/harbor/.build/implement-epic-workflow-$(AGENT)$(VARIANT)

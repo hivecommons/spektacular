@@ -44,7 +44,7 @@ DOCS_REPO_SPEK_DIR = PROJECT_DIR / "repos" / "docs" / ".spektacular"
 EXTERNAL_REPO_SOURCE = Path("/opt/docs-repo")
 
 TRANSCRIPT = Path("/logs/agent/claude-code.txt")
-DEBUG_DIR = PROJECT_SPEK_DIR / "debug"
+DEBUG_DIR = PROJECT_SPEK_DIR / "logs"
 
 # Constants pinned from the environment: project name from config.yaml,
 # plan name from state.json's data.name, member names from config.yaml's

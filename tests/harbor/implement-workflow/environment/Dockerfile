@@ -12,10 +12,6 @@ RUN uv python install 3.12 && uv tool install pytest==8.4.1
 COPY spektacular /usr/local/bin/spektacular
 RUN chmod +x /usr/local/bin/spektacular
 
-# Record every spektacular call, whichever agent drives the run, to
-# .spektacular/debug/, which comes back with the .spektacular artifact.
-ENV SPEKTACULAR_SESSION_LOG=on
-
 WORKDIR /app
 
 # --- Colocated project + repo footprint at /app -----------------------------
@@ -25,7 +21,10 @@ WORKDIR /app
 # project config and the repo config live under the same .spektacular/
 # directory, which is what happens naturally when a repo is a member of a
 # project that shares its working tree. init preserves an existing
-# config.yaml/repo.yaml, so pre-seeding here is safe.
+# config.yaml/repo.yaml, so pre-seeding here is safe. The config sets
+# log.level: verbose, which the agent's init keeps when it migrates the file,
+# so .spektacular/logs/ records the agent's run with every response and state
+# snapshot; it comes back with the .spektacular artifact.
 RUN mkdir -p /app/.spektacular/specs /app/.spektacular/plans/20260101000000-jwt-auth
 COPY config.yaml /app/.spektacular/config.yaml
 COPY repo.yaml /app/.spektacular/repo.yaml

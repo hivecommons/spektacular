@@ -8,9 +8,9 @@ multi-requirement feature idea. The instruction never mentions the repo
 registry, the CLI or specs-as-workflow, so whatever the agent did right came
 from the standing rules alone.
 
-Every rule reads the CLI's own debug session log, the project's state
-through the CLI, or the agent's answer file. None of them depends on which
-agent drove the run, so the same verifier serves Claude, Codex and Bob
+Every rule reads the CLI's own session log (.spektacular/logs/), the
+project's state through the CLI, or the agent's answer file. None of them
+depends on which agent drove the run, so the same verifier serves Claude, Codex and Bob
 without parsing a transcript.
 
 Each rule is a pure function returning a violation message, or None when the
@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import subprocess
 from pathlib import Path
@@ -30,7 +29,7 @@ from pathlib import Path
 import pytest
 
 PROJECT_DIR = Path("/app")
-DEBUG_DIR = PROJECT_DIR / ".spektacular" / "debug"
+DEBUG_DIR = PROJECT_DIR / ".spektacular" / "logs"
 ANSWERS = PROJECT_DIR / "answers.md"
 SPEC_DIGEST = Path("/tmp/spec.sha256")
 
@@ -161,17 +160,32 @@ def rule_feature_offers_spec(answers: dict[str, str]) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def cli_bytes(*args: str) -> subprocess.CompletedProcess:
-    """Run spektacular from the project root.
+_logging_off = False
 
-    SPEKTACULAR_SESSION_LOG=off keeps the verifier's own calls out of the
-    session log it is asserting against.
-    """
+
+def logging_off() -> None:
+    """Switch the project's logging off before the verifier's own first
+    `spektacular` call, so none of its calls appear in the session log it
+    asserts against. The level comes from the project's config alone, so
+    nothing else keeps them out. The log is read from disk, never through
+    the CLI, so this changes nothing the agent's run left behind."""
+    global _logging_off
+    if not _logging_off:
+        from loglevel import set_log_level
+
+        set_log_level(PROJECT_DIR / ".spektacular" / "config.yaml", "off")
+        _logging_off = True
+
+
+def cli_bytes(*args: str) -> subprocess.CompletedProcess:
+    """Run spektacular from the project root, with the project's logging
+    switched off first (see logging_off): the verifier's own `spec file
+    read` must not satisfy the rule it checks."""
+    logging_off()
     return subprocess.run(
         ["spektacular", *args],
         cwd=PROJECT_DIR,
         capture_output=True,
-        env={**os.environ, "SPEKTACULAR_SESSION_LOG": "off"},
     )
 
 

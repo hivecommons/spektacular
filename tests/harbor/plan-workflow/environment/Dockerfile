@@ -12,13 +12,16 @@ RUN uv python install 3.12 && uv tool install pytest==8.4.1
 COPY spektacular /usr/local/bin/spektacular
 RUN chmod +x /usr/local/bin/spektacular
 
-# Record every spektacular call, whichever agent drives the run, to
-# .spektacular/debug/, which comes back with the .spektacular artifact.
-ENV SPEKTACULAR_SESSION_LOG=on
-
 WORKDIR /app
 
 RUN mkdir -p /app/.spektacular/specs
+
+# Record the agent's run at the verbose level, so .spektacular/logs/ keeps
+# every response and state snapshot the verifier and tools read; it comes
+# back with the .spektacular artifact. The agent's own `spektacular init`
+# keeps an existing config, backfilling the name, the colocated repo and the
+# agent, so pre-seeding only the log level is safe.
+RUN mkdir -p /app/.spektacular && printf 'schema: 5\nlog:\n    level: verbose\n' > /app/.spektacular/config.yaml
 COPY 20260101000000-user-auth.md /app/.spektacular/specs/20260101000000-user-auth.md
 
 # Seed a distinctive always-apply convention relevant to the JWT auth spec so

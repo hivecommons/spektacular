@@ -15,7 +15,6 @@ this suite proves the orchestration around it.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -24,7 +23,7 @@ import pytest
 from sessionlog import SessionLog
 
 PROJECT_DIR = Path("/app")
-DEBUG_DIR = PROJECT_DIR / ".spektacular" / "debug"
+DEBUG_DIR = PROJECT_DIR / ".spektacular" / "logs"
 
 STORAGE = "20260101000001-storage"
 COMMANDS = "20260101000002-commands"
@@ -32,18 +31,32 @@ HELP = "20260101000003-help"
 SPECS = [STORAGE, COMMANDS, HELP]
 
 
-def cli(*args: str, parse: bool = True):
-    """Run spektacular from the project root.
+_logging_off = False
 
-    SPEKTACULAR_SESSION_LOG=off keeps the verifier's own calls out of the
-    session log it is asserting against.
-    """
+
+def logging_off() -> None:
+    """Switch the project's logging off before the verifier's own first
+    `spektacular` call, so none of its calls appear in the session log it
+    asserts against. The level comes from the project's config alone, so
+    nothing else keeps them out. The log is read from disk, never through
+    the CLI, so this changes nothing the agent's run left behind."""
+    global _logging_off
+    if not _logging_off:
+        from loglevel import set_log_level
+
+        set_log_level(PROJECT_DIR / ".spektacular" / "config.yaml", "off")
+        _logging_off = True
+
+
+def cli(*args: str, parse: bool = True):
+    """Run spektacular from the project root, with the project's logging
+    switched off first (see logging_off)."""
+    logging_off()
     result = subprocess.run(
         ["spektacular", *args],
         cwd=PROJECT_DIR,
         capture_output=True,
         text=True,
-        env={**os.environ, "SPEKTACULAR_SESSION_LOG": "off"},
     )
     if not parse:
         return result
@@ -111,8 +124,8 @@ class TestEverySpecPlanned:
 class TestOrchestration:
     def test_session_log_recorded(self, log):
         assert not log.empty, (
-            f"no session log under {DEBUG_DIR}: SPEKTACULAR_SESSION_LOG=on, set in "
-            "the image, did not reach the agent's spektacular calls"
+            f"no session log under {DEBUG_DIR}: the seeded project's log.level: verbose "
+            "did not reach the agent's spektacular calls"
         )
 
     @pytest.mark.parametrize("spec", SPECS)
@@ -153,11 +166,10 @@ class TestOrchestration:
             f"at {storage.finish.at:%H:%M:%S}"
         )
 
-    def test_orchestrator_polled_epic_status(self, log):
-        assert log.epic_polls(), (
-            "the orchestrator never ran `spektacular status <epic>`; the skill "
-            "drives its loop from that report"
-        )
+    # `spektacular status` is never logged (spec 000073), so the
+    # orchestrator's `status <epic>` polls are no longer in the session log
+    # and cannot be checked from it; spec 000074's sub-agent spans replace
+    # what they showed.
 
     def test_epic_order_run(self, log, epic):
         runs = [e for e in log.shared if e.is_verb("epic", "order") and epic in e.command and e.ok]

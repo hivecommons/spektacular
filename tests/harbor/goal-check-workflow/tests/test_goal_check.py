@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 
 PROJECT_DIR = Path("/app")
-DEBUG_DIR = PROJECT_DIR / ".spektacular" / "debug"
+DEBUG_DIR = PROJECT_DIR / ".spektacular" / "logs"
 SCENARIO_FILE = Path(__file__).resolve().parent / "scenario"
 
 PLAN = "20260301000000-todo-count"
@@ -257,13 +257,32 @@ def scenario() -> str:
     pytest.fail("no scenario: neither SPEK_SCENARIO nor tests/scenario is set")
 
 
+_logging_off = False
+
+
+def logging_off() -> None:
+    """Switch the project's logging off before the verifier's own first
+    `spektacular` call, so none of its calls appear in the session log it
+    asserts against. The level comes from the project's config alone, so
+    nothing else keeps them out. The log is read from disk, never through
+    the CLI, so this changes nothing the agent's run left behind."""
+    global _logging_off
+    if not _logging_off:
+        from loglevel import set_log_level
+
+        set_log_level(PROJECT_DIR / ".spektacular" / "config.yaml", "off")
+        _logging_off = True
+
+
 def cli(*args: str):
+    """Run spektacular from the project root, kept out of the session log
+    (see logging_off)."""
+    logging_off()
     result = subprocess.run(
         ["spektacular", *args],
         cwd=PROJECT_DIR,
         capture_output=True,
         text=True,
-        env={**os.environ, "SPEKTACULAR_SESSION_LOG": "off"},
     )
     return result
 
