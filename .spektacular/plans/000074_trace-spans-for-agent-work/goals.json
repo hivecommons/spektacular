@@ -1,0 +1,500 @@
+{
+  "plan": "000074_trace-spans-for-agent-work",
+  "items": [
+    {
+      "item": "b436d238-2219-447a-a109-8ee0d495e300",
+      "title": "Span records and run log reading",
+      "checks": [
+        {
+          "at": "2026-10-25T13:14:38Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "b436d238-2219-447a-a109-8ee0d495e300",
+            "title": "Span records and run log reading",
+            "criteria": [
+              "A span start serialises without an end time or status, a span end repeats every field of its start and adds the end time, status and end reason, and a command record serialises exactly as before.",
+              "A span id in the form `\u003c32 hex\u003e-\u003c16 hex\u003e` is accepted and split into its trace and span ids. Anything else is rejected with a reason.",
+              "Reading a run's log returns its span and command records in file order, and skips a partly written last line and malformed lines without failing.",
+              "Ending a span also closes every span still open beneath it, at any depth, and leaves spans elsewhere in the run alone. Ending a run closes every open span in it.",
+              "A step's last command is found among the commands nested under it, ignoring workflow-start commands and trace commands."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/record.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "go.mod"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/spanref.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/reader.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/index.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/spans.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.span.type"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/tracelog/record.go:96-109 makes EndTime and Status `omitzero`, so a span_start line has neither, and the other Record fields are unchanged, so command records (which always set both) serialise as before. endRecord (spans.go:68-82) copies the start and adds end_time, status and the spektacular.span.end_reason attribute. record_test.go TestSpanStartJSONShape and TestSpanEndRepeatsStart pin both shapes. go.mod declares go 1.25.0, so omitzero is available."
+            },
+            {
+              "criterion": 2,
+              "verdict": "not_met",
+              "evidence": "internal/tracelog/spanref.go:23-35 splits on the hyphen and checks lengths and lowercase hex, and rejects malformed input with a reason. But checkHexID (spanref.go:39-57) also rejects any all-zero trace or span id with 'must not be all zeros'. An all-zero id still matches the form \u003c32 hex\u003e-\u003c16 hex\u003e, which the criterion says is accepted, so the code rejects a string the criterion requires it to accept. The rule would need to be dropped or moved out of the parser."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "internal/tracelog/reader.go:55-97 scans the file in order, skips lines without the \"record\":\"span marker, skips lines where json.Unmarshal fails (which covers a partly written last line), keeps only span, span_start and span_end records, and treats a missing file as no records. A line over maxRecordLine ends the scan and returns the records read so far, with no error."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "internal/tracelog/index.go:78-100 OpenUnder walks children breadth-first at any depth and keeps open starts only. spans.go:84-93 EndUnder ends those via endEach (spans.go:108-113), which iterates the start order backwards so deepest-latest children end first. Spans in other branches are not in the set. spans.go:97-104 EndAll ends every open span in the run through OpenAll (index.go:103-111)."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "internal/tracelog/index.go:118-141 LastCommandUnder takes the latest EndTime among RecordSpan commands whose ParentSpanID equals the step id and whose name passes countsAsActivity. countsAsActivity drops names starting with 'trace ' or equal to 'trace', and two-word names ending in 'new' (the workflow-start commands such as 'spec new'). Only direct children are considered, which is the reading the 'nested under it' wording supports here, since criterion 4 explicitly says 'at any depth' and this one does not."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T13:16:24Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "b436d238-2219-447a-a109-8ee0d495e300",
+            "title": "Span records and run log reading",
+            "criteria": [
+              "A span start serialises without an end time or status, a span end repeats every field of its start and adds the end time, status and end reason, and a command record serialises exactly as before.",
+              "A span id in the form `\u003c32 hex\u003e-\u003c16 hex\u003e` is accepted and split into its trace and span ids. Anything else is rejected with a reason.",
+              "Reading a run's log returns its span and command records in file order, and skips a partly written last line and malformed lines without failing.",
+              "Ending a span also closes every span still open beneath it, at any depth, and leaves spans elsewhere in the run alone. Ending a run closes every open span in it.",
+              "A step's last command is found among the commands nested under it, ignoring workflow-start commands and trace commands."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/record.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "go.mod"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/spanref.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/reader.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/index.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/spans.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.span.type"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/tracelog/record.go:110-111 tags EndTime and Status with omitzero, so a span_start (no end time, zero Status) omits both; go.mod:3 is go 1.25.0, so omitzero is supported. internal/tracelog/spans.go:61-82 endRecord copies the start, sets Record=span_end, EndTime, Status and AttrEndReason. record_test.go:73-130 TestSpanStartJSONShape and TestSpanEndRepeatsStart pin the exact JSON. Command records are unchanged: cmd/root.go:285-301 always sets Status (ok or error) and EndTime (o.end.UTC()), so both still serialise as before."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "internal/tracelog/spanref.go:22-34 ParseSpanRef cuts on '-', checks the trace id is 32 chars and the span id 16 chars via checkHexID (lines 37-47), and returns SpanRef{TraceID, SpanID}. Anything else returns an error with a reason (no hyphen, wrong length, non-hex character). Note: only lowercase hex is accepted, which is a stricter reading of 'hex' that the criterion does not forbid. spanref_test.go covers the cases."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "internal/tracelog/reader.go:31-46 Records returns the run's file records in file order (day files for standalone runs, filtered by trace). readRecordFile (lines 55-97) scans line by line, skips lines without the span marker, skips any line where json.Unmarshal fails (a partly written last line or malformed line), keeps only record kinds span, span_start and span_end, and treats a missing file as no records. A scanner overflow returns the records read so far rather than an error."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "spans.go:86-93 EndUnder calls index.OpenUnder(parentID) (index.go:80-100), which walks children breadth-first at any depth, excludes the parent itself, and keeps only open spans. endEach (spans.go:108-113) writes span_end records latest-started first, so deepest spans end first, with the reason and status from ReasonStatus. Spans elsewhere are not in the descendant set, so they are untouched. spans.go:97-104 EndAll ends every open span via OpenAll. spans_test.go:66-120 TestSpansEndUnderClosesDescendantsOnly and TestSpansEndAllClosesEveryOpenSpan check the grandchild, child, sibling and EndAll cases. The closing sweep is a separate Spans.EndUnder call rather than a side effect of Spans.End; the single-span End in spans.go:63-66 only writes one record."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "index.go:118-131 LastCommandUnder takes the maximum EndTime among RecordSpan records whose ParentSpanID equals the given id and for which countsAsActivity holds (index.go:135-141). countsAsActivity drops names starting with 'trace ' or equal to 'trace', and two-word '\u003ckind\u003e new' names such as 'spec new'. spans.go:126-135 exposes it through the Spans wrapper. spans_test.go:122-132 TestSpansLastCommandUnder checks that 'plan new' (a later end) is skipped. The match is on direct children only (ParentSpanID == parentID), not at any depth; I read 'nested under it' as direct nesting, which matches the plan's definition (context.md:50), but a stricter reading that includes deeper descendants would not be met by this code."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 2,
+      "state": "accepted"
+    },
+    {
+      "item": "70be742b-f019-422a-aea6-ece15b1520ba",
+      "title": "Workflow engine marks every step as a span",
+      "checks": [
+        {
+          "at": "2026-10-25T13:20:41Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "70be742b-f019-422a-aea6-ece15b1520ba",
+            "title": "Workflow engine marks every step as a span",
+            "criteria": [
+              "Every move from one step to the next ends the old step span and starts a new one, in that order, and the run's state names the new open span.",
+              "A command that passes through several steps at once reports a span for each step it passed through.",
+              "Going to the current step reports the open step span as interrupted and starts a fresh one for the same step, while the current step and completed steps stay exactly as they were.",
+              "Reaching the last step records it as an instant span and reports the end of the run, leaving no step span open.",
+              "With no receiver, span ids are still kept in state and nothing else changes. A dry run reports nothing and saves nothing.",
+              "Abandoning an in-progress run reports its open spans as abandoned. Abandoning a finished or missing run reports nothing."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/state.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/spans.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/workflow.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "w.cfg"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "gotchas/goto-to-current-step-is-a-silent-noop.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/workflow_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/workflow/workflow.go:386-413 (moveSpans): when a step is left, Spans.Ended(ref, stepInfo(prev), now, EndMoved) runs first (lines 391-394), then the new OpenSpan is built and Spans.Started runs (lines 402-404), and state.StepSpan is set to the new open span (line 413). enter_state calls moveSpans at workflow.go:192, before the save at 194-196."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Chained moves go through Next/Goto (workflow.go:206-241), which recurse on pendingGoto. Each FSM event fires enter_state (workflow.go:186-197), which calls moveSpans (line 192) and so ends and starts a span for every step passed through. prepareSpan is called per hop (lines 212, 232). spans_test.go covers chained steps per the plan, but I did not verify that test body."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Goto to the current step calls renderStep (workflow.go:227-229). renderStep calls prepareSpan (line 327) and resumeSpans (line 335). resumeSpans (lines 420-445) reports Interrupted for the previous state.StepSpan (lines 431-435), opens a fresh OpenSpan with the same step name (lines 437-439), and saves. It does not touch CurrentStep or CompletedSteps, which matches the 'progress untouched' requirement."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "workflow.go:406-411: on entering the terminal step (dst == terminalStep()), the span is reported Started then Ended with EndFinished, which is the instant span. RunEnded is then called, and the function returns without setting state.StepSpan (so it stays nil from line 395), leaving no step span open. Caveat: RunEnded is passed EndAbandoned (line 409) even though the run finished normally. That label looks semantically wrong for a finished run, but the criterion does not test the reason."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "With no sink, reporting() is false (workflow.go:378-380), so no sink calls are made, but state.StepSpan and nextSpan are still set (lines 402-413, 437-439). Dry run: reporting() is false, and both saves are guarded by !cfg.DryRun (enter_state at workflow.go:194; resumeSpans at lines 442-444; commitTerminal at 464). So nothing is reported or saved on a dry run."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "internal/workflow/spans.go:78-95 (AbandonRun): returns nothing for a nil sink, a missing or unreadable state, a state where !InProgress(), or an empty RunID. Otherwise it reports Ended(..., EndAbandoned) for the open step span and open task span, then RunEnded(..., EndAbandoned). Gap: nothing in the workspace calls AbandonRun outside tests (grep finds only spans.go and spans_test.go:172-214). The plan places the restart call in cmd/resume.go clearState, which is outside this item's scope, so the function-level criterion is met but not wired into restart."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "c6327f6b-a3b6-45f8-b5ec-b9ff5a81ac77",
+      "title": "Implement tasks become spans",
+      "checks": [
+        {
+          "at": "2026-10-25T13:24:02Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "c6327f6b-a3b6-45f8-b5ec-b9ff5a81ac77",
+            "title": "Implement tasks become spans",
+            "criteria": [
+              "Entering `analyze` opens a task span named after the current task and carrying its id, and every step span through `update_changelog` is nested under it.",
+              "Looping back to `analyze` ends the task span and opens one for the next task. Moving on to the test plan or finishing ends it.",
+              "A goal-check retry that returns to `implement` stays inside the same task span.",
+              "Steps outside a task, such as `read_plan` and `test_plan`, have no parent span.",
+              "Resuming a step inside a task keeps the same task span open."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/workflow.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/spans.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/steps/implement/steps.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "goalcheck.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/plantask/plantask.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/steps/implement/steps_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "plantask_fixture_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "workflow_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/steps/implement/steps.go:45 sets Task: workflow.TaskStart on analyze and :46-51 set TaskWithin on implement through update_changelog. steps.go:111 stores currentTask(...) under workflow.TaskDataKey. The before_ callback runs before enter_state (workflow.go:156-167 vs :190-196), so the task data exists when moveSpans runs. moveSpans/moveTask/openTask (workflow.go:392-558) open the task span named from that data with its id as TaskID, and step spans inside it get Parent = TaskSpan.ID (workflow.go:412, 485-487). internal/steps/implement/task_spans_test.go:76-110 asserts the task name and id and that analyze through update_changelog parent to it."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "moveTask (workflow.go:516-533): TaskStart calls endTask (moved) then openTask for the next task, so looping back to analyze ends the old span and opens one for the next task. The default branch, used when dst is test_plan (TaskNone), calls endTask with moved, or finished when dst is the terminal step. task_spans_test.go:108-109 asserts 'task Count items moved' and 'task Another task moved'."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "check_goal and implement are both TaskWithin (steps.go:32, 46), so moveTask keeps TaskSpan on the check_goal -\u003e implement retry (workflow.go:523-525 only opens one if none is open). task_spans_test.go:112-126 (TestTaskSpans_GoalCheckRetryStaysInTheTask) asserts exactly one task span, the retry's step span parents to it, and no task span ends."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "read_plan (steps.go:44) and test_plan (steps.go:52) have no Task field, so TaskNone. In moveSpans, Parent is set only when role != TaskNone (workflow.go:485-487), so their step spans get no parent. task_spans_test.go:105-106 asserts Empty Parent for read_plan and test_plan."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "renderStep (workflow.go:325-345) calls prepareSpan and the callback, then resumeSpans (workflow.go:584-609). resumeSpans only changes StepSpan (interrupts the old step span, inherits its Parent) and never touches state.TaskSpan, so the task span stays open. task_spans_test.go:128-148 (TestTaskSpans_ResumeKeepsTheTaskSpan) asserts no new task span and that the same TaskSpan ID is kept, with the resumed step parented to it."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "0f6d5548-9fc2-4ec1-9c7a-3d2ffdd18e82",
+      "title": "Record step and task spans in every run's log",
+      "checks": [
+        {
+          "at": "2026-10-25T13:34:53Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "0f6d5548-9fc2-4ec1-9c7a-3d2ffdd18e82",
+            "title": "Record step and task spans in every run's log",
+            "criteria": [
+              "After a spec workflow moves through `new`, `interview` and `overview`, its log holds closed step spans for `new` and `interview`, each ending when the next began, and an open span for `overview`.",
+              "Every command recorded while a run is on a step names that step's span as its parent.",
+              "After a workflow reaches `finished`, no step span of that run is left open.",
+              "Running `spec new --force` while a run is mid-step closes that run's open step span, marked abandoned.",
+              "Resuming a run whose session stopped mid-step, with a helper span still open, closes the interrupted step at its last recorded command, marked interrupted, closes the helper span the same way, and records a new span for the resumed step.",
+              "Implementing a plan with two tasks leaves one task span per task, each named after its task and holding the step spans of its work, with no trace command run.",
+              "An orchestrated lane's step spans land in the lane's own run log.",
+              "With logging off, workflows behave exactly as before and nothing is written."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/spans.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.agent"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.workflow.kind"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.workflow.name"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "step_span.id"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/spec.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/plan.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/repo.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/implement.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/autocommit.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/resume.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/log_spans_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/spec_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/plantask_fixture_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/implement_task_run_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/log_spans_test.go:179-209 (TestLogSpans_StepSpansFollowTheWorkflow) asserts step spans new, interview, overview; new and interview end moved, each ends when the next starts (requireContiguous), overview is open and equals stateStepSpan. Mechanism: internal/workflow/workflow.go moveSpans (closes prev step span, opens dst's and stores it in state.StepSpan) called from enter_state at workflow.go:190-195; internal/workflow/spans.go and cmd/spans.go spanRecorder.Started/Ended write the records."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "cmd/root.go parentSpan (added near line 304-320) returns the before-state step span when in progress and same run, else the after-state step span when same run, else none; buildRecord sets ParentSpanID from it. cmd/log_spans_test.go:214-257 (TestLogSpans_CommandsNameTheirStepSpanAsParent) checks every command in the run, including the rejected `spec goto bogus` and the `spec file read` commands, names its step span as parent, and that each parent span_start precedes its command."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "internal/workflow/workflow.go moveSpans: entering the terminal step ends the previous step span (moved), records the terminal span as instant with EndFinished, calls RunEnded (EndAll abandoned for any leftovers) and does not set state.StepSpan, so none is open. cmd/log_spans_test.go:273-290 asserts every span is closed via tracelog.NewIndex(recs).OpenAll() being empty and the terminal span ended as finished. Test covers spec runs only; implement finish is not separately checked."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "cmd/resume.go:217-220 clearState now calls workflow.AbandonRun(statePath, activeSpans) before os.Remove; internal/workflow/spans.go AbandonRun ends the in-progress StepSpan with EndAbandoned (status error, message abandoned) and then RunEnded. clearState is called from cmd/spec.go:273 and :316 (and other workflows). cmd/log_spans_test.go:311-338 (TestLogSpans_ForceRestartAbandonsTheOpenStep) checks the old run's interview span ends abandoned and the new run opens its own span in its own file."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "A re-render (spec goto to the current step) reaches internal/workflow/workflow.go renderStep -\u003e resumeSpans (around lines 983-1012), which calls Interrupted on the stale StepSpan and opens a fresh step span. cmd/spans.go Interrupted ends the step at tracelog LastCommandUnder (internal/tracelog/index.go:118-141 excludes `X new` probes and trace commands) and EndUnder closes open helper spans with EndInterrupted. cmd/log_spans_test.go:345-414 (TestLogSpans_ResumeClosesTheInterruptedStep) checks the interrupted step and helper end at lastWork.EndTime (not the probe), status interrupted, and a new span for the resumed step, with progress unchanged."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "internal/steps/implement/steps.go marks analyze as TaskStart and implement..update_changelog as TaskWithin; analyze's callback sets the task via currentTask (steps.go ~line 445). workflow.go moveTask/openTask/endTask open one task span per task named by its title (Task A / Task B) and step spans nest under it via Parent. cmd/log_spans_test.go:433-508 (TestLogSpans_TaskSpansHoldEachTasksSteps) checks two task spans with ids, names, parent-linkage of steps, and that no trace command was recorded in any log."
+            },
+            {
+              "criterion": 7,
+              "verdict": "met",
+              "evidence": "Lane steps use the lane's own run state (RunRef from the lane's state via State.RunRef in internal/workflow/state.go) and the logger writes by that trace id. cmd/plan.go runPlanNew and runPlanGoto now wrap wfCfg with withSpans, so orchestrated lane runs get the sink. cmd/log_spans_test.go:510-560 (TestLogSpans_LaneStepSpansLandInTheLaneLog) checks the lane log holds its new/overview/discovery/architecture spans under the lane's run id and that the shared run's log is untouched."
+            },
+            {
+              "criterion": 8,
+              "verdict": "met",
+              "evidence": "cmd/root.go only builds the logger and sets activeSpans inside the level != LogLevelOff branch, and resets activeSpans = nil after ExecuteC; with logging off the sink is nil so workflow.reporting() is false and no span record is written. cmd/log_spans_test.go:616-622 (TestLogSpans_OffBehavesAsBeforeAndWritesNothing) asserts no logs dir and equal outputs, exit codes and normalised state versus logging on. Caveat: state.json gains step_span/task_span keys even with logging off (workflow.go moveSpans sets state.StepSpan regardless of reporting), so the file content is not byte-identical to before, though no log is written and outputs are unchanged."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    }
+  ]
+}

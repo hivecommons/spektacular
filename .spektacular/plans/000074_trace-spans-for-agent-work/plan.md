@@ -413,7 +413,7 @@ Its run resolution is shared with `runRoot`'s state-file choice: one helper maps
 
 **Validation point**: Integration tests show the step spans of a spec run through `new`, `interview` and `overview`, with commands parented to their steps. They also show two task spans parenting their steps in a two-task implement run, an abandoned step after `--force`, an interrupted step after a resume, and no open span after `finished`. The full Go suite passes.
 
-#### - [ ] Task: Span records and run log reading
+#### - [x] Task: Span records and run log reading
 **Id:** b436d238-2219-447a-a109-8ee0d495e300
 **Repo:** spektacular
 **Depends on:** none
@@ -424,13 +424,13 @@ Extends the trace log package from spec 000073 with spans that open in one comma
 *Technical detail:* [context.md#task-span-records-and-run-log-reading](./context.md#task-span-records-and-run-log-reading)
 
 **Acceptance criteria**:
-- [ ] A span start serialises without an end time or status, a span end repeats every field of its start and adds the end time, status and end reason, and a command record serialises exactly as before.
-- [ ] A span id in the form `<32 hex>-<16 hex>` is accepted and split into its trace and span ids. Anything else is rejected with a reason.
-- [ ] Reading a run's log returns its span and command records in file order, and skips a partly written last line and malformed lines without failing.
-- [ ] Ending a span also closes every span still open beneath it, at any depth, and leaves spans elsewhere in the run alone. Ending a run closes every open span in it.
-- [ ] A step's last command is found among the commands nested under it, ignoring workflow-start commands and trace commands.
+- [x] A span start serialises without an end time or status, a span end repeats every field of its start and adds the end time, status and end reason, and a command record serialises exactly as before.
+- [x] A span id in the form `<32 hex>-<16 hex>` is accepted and split into its trace and span ids. Anything else is rejected with a reason.
+- [x] Reading a run's log returns its span and command records in file order, and skips a partly written last line and malformed lines without failing.
+- [x] Ending a span also closes every span still open beneath it, at any depth, and leaves spans elsewhere in the run alone. Ending a run closes every open span in it.
+- [x] A step's last command is found among the commands nested under it, ignoring workflow-start commands and trace commands.
 
-#### - [ ] Task: Workflow engine marks every step as a span
+#### - [x] Task: Workflow engine marks every step as a span
 **Id:** 70be742b-f019-422a-aea6-ece15b1520ba
 **Repo:** spektacular
 **Depends on:** none
@@ -441,14 +441,14 @@ Teaches the workflow engine to give every step it enters a span id and to keep t
 *Technical detail:* [context.md#task-workflow-engine-marks-every-step-as-a-span](./context.md#task-workflow-engine-marks-every-step-as-a-span)
 
 **Acceptance criteria**:
-- [ ] Every move from one step to the next ends the old step span and starts a new one, in that order, and the run's state names the new open span.
-- [ ] A command that passes through several steps at once reports a span for each step it passed through.
-- [ ] Going to the current step reports the open step span as interrupted and starts a fresh one for the same step, while the current step and completed steps stay exactly as they were.
-- [ ] Reaching the last step records it as an instant span and reports the end of the run, leaving no step span open.
-- [ ] With no receiver, span ids are still kept in state and nothing else changes. A dry run reports nothing and saves nothing.
-- [ ] Abandoning an in-progress run reports its open spans as abandoned. Abandoning a finished or missing run reports nothing.
+- [x] Every move from one step to the next ends the old step span and starts a new one, in that order, and the run's state names the new open span.
+- [x] A command that passes through several steps at once reports a span for each step it passed through.
+- [x] Going to the current step reports the open step span as interrupted and starts a fresh one for the same step, while the current step and completed steps stay exactly as they were.
+- [x] Reaching the last step records it as an instant span and reports the end of the run, leaving no step span open.
+- [x] With no receiver, span ids are still kept in state and nothing else changes. A dry run reports nothing and saves nothing.
+- [x] Abandoning an in-progress run reports its open spans as abandoned. Abandoning a finished or missing run reports nothing.
 
-#### - [ ] Task: Implement tasks become spans
+#### - [x] Task: Implement tasks become spans
 **Id:** c6327f6b-a3b6-45f8-b5ec-b9ff5a81ac77
 **Repo:** spektacular
 **Depends on:**
@@ -460,13 +460,13 @@ Lets a workflow declare which steps make up the work on one task. For implement,
 *Technical detail:* [context.md#task-implement-tasks-become-spans](./context.md#task-implement-tasks-become-spans)
 
 **Acceptance criteria**:
-- [ ] Entering `analyze` opens a task span named after the current task and carrying its id, and every step span through `update_changelog` is nested under it.
-- [ ] Looping back to `analyze` ends the task span and opens one for the next task. Moving on to the test plan or finishing ends it.
-- [ ] A goal-check retry that returns to `implement` stays inside the same task span.
-- [ ] Steps outside a task, such as `read_plan` and `test_plan`, have no parent span.
-- [ ] Resuming a step inside a task keeps the same task span open.
+- [x] Entering `analyze` opens a task span named after the current task and carrying its id, and every step span through `update_changelog` is nested under it.
+- [x] Looping back to `analyze` ends the task span and opens one for the next task. Moving on to the test plan or finishing ends it.
+- [x] A goal-check retry that returns to `implement` stays inside the same task span.
+- [x] Steps outside a task, such as `read_plan` and `test_plan`, have no parent span.
+- [x] Resuming a step inside a task keeps the same task span open.
 
-#### - [ ] Task: Record step and task spans in every run's log
+#### - [x] Task: Record step and task spans in every run's log
 **Id:** 0f6d5548-9fc2-4ec1-9c7a-3d2ffdd18e82
 **Repo:** spektacular
 **Depends on:**
@@ -480,14 +480,14 @@ Connects the engine's span reports to the log, so every real run records its ste
 *Technical detail:* [context.md#task-record-step-and-task-spans-in-every-runs-log](./context.md#task-record-step-and-task-spans-in-every-runs-log)
 
 **Acceptance criteria**:
-- [ ] After a spec workflow moves through `new`, `interview` and `overview`, its log holds closed step spans for `new` and `interview`, each ending when the next began, and an open span for `overview`.
-- [ ] Every command recorded while a run is on a step names that step's span as its parent.
-- [ ] After a workflow reaches `finished`, no step span of that run is left open.
-- [ ] Running `spec new --force` while a run is mid-step closes that run's open step span, marked abandoned.
-- [ ] Resuming a run whose session stopped mid-step, with a helper span still open, closes the interrupted step at its last recorded command, marked interrupted, closes the helper span the same way, and records a new span for the resumed step.
-- [ ] Implementing a plan with two tasks leaves one task span per task, each named after its task and holding the step spans of its work, with no trace command run.
-- [ ] An orchestrated lane's step spans land in the lane's own run log.
-- [ ] With logging off, workflows behave exactly as before and nothing is written.
+- [x] After a spec workflow moves through `new`, `interview` and `overview`, its log holds closed step spans for `new` and `interview`, each ending when the next began, and an open span for `overview`.
+- [x] Every command recorded while a run is on a step names that step's span as its parent.
+- [x] After a workflow reaches `finished`, no step span of that run is left open.
+- [x] Running `spec new --force` while a run is mid-step closes that run's open step span, marked abandoned.
+- [x] Resuming a run whose session stopped mid-step, with a helper span still open, closes the interrupted step at its last recorded command, marked interrupted, closes the helper span the same way, and records a new span for the resumed step.
+- [x] Implementing a plan with two tasks leaves one task span per task, each named after its task and holding the step spans of its work, with no trace command run.
+- [x] An orchestrated lane's step spans land in the lane's own run log.
+- [x] With logging off, workflows behave exactly as before and nothing is written.
 
 ### Milestone 2: Agents can mark helper agents and waits on the user
 
@@ -660,3 +660,75 @@ No other implementation-time uncertainties remain. The design choices are settle
 - **Reworking the Harbor implement suite so it runs plan tasks.** It starts at `test_plan`. The per-task cost metric is read from suites that run tasks.
 - **Re-installing this repository's own skills or migrating its `.spektacular/`** (plans-never-change-the-active-install). The maintainer installs the new binary between workflows.
 - **Editing historical plans, test plans and changelog entries.**
+
+## Changelog
+
+
+### 2026-10-25 — Task: Span records and run log reading
+
+**What was done**: The trace log package gained the `span_start` and `span_end` record kinds, the step, task, sub-agent, user-wait and work span types, the end reasons with the status each gets, and the agent-held span id `<trace_id>-<span_id>` with its parser. The file logger gained a read side that returns a run's span records in file order, and a pure index plus a `Spans` service start and end spans, close every open span under a parent or in a whole run, and find a step's last command.
+
+**Deviations**: `ParseSpanRef` accepts any id of the right form, including all-zero parts; the context's "reject all-zero parts" note was dropped because the acceptance criterion accepts every `<32 hex>-<16 hex>` id (goal-check retry). `Spans.End` returns nothing; `StartRecord` (build without writing) and `Index()` were added so the workflow sink can end spans whose start was never logged and query the index once.
+
+**Files changed**:
+- `spektacular: internal/tracelog/record.go`
+- `spektacular: internal/tracelog/record_test.go`
+- `spektacular: internal/tracelog/spanref.go`
+- `spektacular: internal/tracelog/spanref_test.go`
+- `spektacular: internal/tracelog/reader.go`
+- `spektacular: internal/tracelog/reader_test.go`
+- `spektacular: internal/tracelog/index.go`
+- `spektacular: internal/tracelog/index_test.go`
+- `spektacular: internal/tracelog/spans.go`
+- `spektacular: internal/tracelog/spans_test.go`
+
+**Discoveries**: The reader returns every `span` (command) record, not only those with a parent, so the "command records in file order" criterion holds; the pre-filter is the `"record":"span` substring. `LastCommandUnder` looks at direct children only. A standalone run's records are read from its start day's file and the day before.
+
+### 2026-10-25 — Task: Workflow engine marks every step as a span
+
+**What was done**: The workflow engine now mints a span id for every step it enters, keeps the open step span in state (`step_span`, beside `run_id`), and reports each end and start to an optional `SpanSink` on `workflow.Config`. Before each step callback it puts the step span's composite id (`<run id>-<span id>`) on `Config.StepSpan`, empty on the terminal step. A goto to the current step reports the open span interrupted and opens a fresh one, saving state but leaving `current_step` and `completed_steps` alone; reaching the terminal step records an instant span and ends the run. `AbandonRun` reports an in-progress run's open spans as abandoned.
+
+**Deviations**: `OpenSpan` gained a `step` field (the step that opened a task span), so a task span's `spektacular.step` survives in state. The engine passes `abandoned` as the `RunEnded` reason; the sink closes every leftover span as abandoned in any case. The span lifecycle lives in new `moveSpans`/`resumeSpans`/`prepareSpan` helpers rather than a `taskTransition` hook; the task handling is added there by the next task. Tests are in a new `internal/workflow/spans_test.go` rather than `workflow_test.go`.
+
+**Files changed**:
+- `spektacular: internal/workflow/state.go`
+- `spektacular: internal/workflow/spans.go`
+- `spektacular: internal/workflow/workflow.go`
+- `spektacular: internal/workflow/spans_test.go`
+
+**Discoveries**: looplab/fsm reads `w.cfg` at callback time, so setting `w.cfg.StepSpan` before `FSM.Event` reaches the `before_` callback that renders the instruction. The implicit `done` event enters no step and is ignored by the span logic. Nothing calls `AbandonRun` yet; the restart wiring is the "Record step and task spans" task.
+
+### 2026-10-25 — Task: Implement tasks become spans
+
+**What was done**: Steps can now declare a task role (`TaskStart`, `TaskWithin`, or the default `TaskNone`). For implement, `analyze` starts a task and `implement` through `update_changelog` run within it, so the engine keeps a task span open over them and nests their step spans under it; looping back to `analyze` ends one task span and starts the next, and leaving to `test_plan` or `finished` ends it. `analyze` hands the engine the current task (the single-task run's task, or the goal check's current item, with a phase titled by its title or label) under `workflow.TaskDataKey`.
+
+**Deviations**: The engine also passes `finished` (not `abandoned`) as the `RunEnded` reason on reaching the terminal step, as the plan's context describes; the sink closes leftover spans as abandoned. Tests are in a new `internal/steps/implement/task_spans_test.go` and in `internal/workflow/spans_test.go`, reusing the goal-check fixtures, rather than in `steps_test.go`.
+
+**Files changed**:
+- `spektacular: internal/workflow/workflow.go`
+- `spektacular: internal/workflow/spans.go`
+- `spektacular: internal/workflow/spans_test.go`
+- `spektacular: internal/steps/implement/steps.go`
+- `spektacular: internal/steps/implement/task_spans_test.go`
+
+**Discoveries**: A run from before spans existed, resumed mid-task, has no task span; the first within-task step opens one from the data `analyze` left. Finding the task never fails `analyze`: an unreadable plan just names the span "task".
+
+### 2026-10-25 — Task: Record step and task spans in every run's log
+
+**What was done**: `cmd` now records the workflow's step and task spans in the run's log. When logging is on, `runRoot` builds the configured logger once, sets a package-level `spanRecorder` (a `workflow.SpanSink` over `tracelog.Spans`) before the command runs and clears it after; every spec, plan, implement and repo workflow config takes it. Each command record names the step span it ran in as `parent_span_id`, `clearState` abandons a restarted run's open spans, and the recorder closes spans open under an ending span as abandoned, ends an interrupted step at its last real command, and closes leftovers as abandoned when the run ends.
+
+**Deviations**: `recordCommand` now takes the logger `runRoot` built instead of building its own, so the command record and the spans share one logger. Command parents come from the state before the command when it belongs to the run, so a resuming `goto <current step>` and the resume probe are filed under the interrupted step span. Two existing log tests changed for the intended behaviour: `TestLog_SpecRunSharesOneTraceID` now accepts the old run's file gaining an abandoned `span_end` after `--force`, and `TestLog_ResponseAndStateOnlyAtVerbose` expects the new `step_span` key in the verbose state snapshots. `readRecords` in the cmd log tests now returns command records only; `readSpanLog` returns every record.
+
+**Files changed**:
+- `spektacular: cmd/spans.go`
+- `spektacular: cmd/root.go`
+- `spektacular: cmd/resume.go`
+- `spektacular: cmd/spec.go`
+- `spektacular: cmd/plan.go`
+- `spektacular: cmd/repo.go`
+- `spektacular: cmd/implement.go`
+- `spektacular: cmd/root_test.go`
+- `spektacular: cmd/log_test.go`
+- `spektacular: cmd/log_spans_test.go`
+
+**Discoveries**: Most cmd tests log at the standard level by default, so every workflow test now also writes span records; helpers that assumed one record kind had to filter. State gains `step_span`/`task_span` even with logging off (ids are kept, nothing is written). Repo workflow commands are snapshotted from `state.json`, not `repo-state.json` (000073 behaviour), so a repo run's step spans land in its own run file but its command records are not parented to them.
