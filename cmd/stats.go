@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hivecommons/spektacular/internal/agentusage"
+	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/runstats"
 	"github.com/spf13/cobra"
@@ -28,7 +30,13 @@ with --dir, and never change a log: stats commands are never logged.
 
 Every subcommand takes the same selection, combined with AND:
   --name <workflow name>   --kind spec|plan|implement|repo   --agent <agent>
-  --run <run id or a unique prefix of 8 or more hex characters> (repeatable)`,
+  --run <run id or a unique prefix of 8 or more hex characters> (repeatable)
+
+For runs driven by Claude Code, the reports also give tokens, cost and
+working time per thousand output tokens, read (never changed) from Claude
+Code's own session files in $CLAUDE_CONFIG_DIR/projects, ~/.claude/projects,
+or the folder given with --sessions-dir. Costs use the optional stats.prices
+table in .spektacular/config.yaml; no prices are built in.`,
 	RunE: runUnknownSubcommand,
 }
 
@@ -129,7 +137,10 @@ type statsRunResult struct {
 // decimal. Total figures, in order: wall_ms, working_ms, user_wait_ms,
 // helper_wait_ms, command_ms, commands, helpers, gap_ms. Step figures, in
 // order: duration_ms, entries, commands, command_ms, helper_wait_ms,
-// user_wait_ms. count is the runs a figure applies to (for a step, the runs
+// user_wait_ms. Spec 000078 appends to both lists input_tokens,
+// output_tokens, cache_read_tokens, cache_write_tokens, cost and
+// working_ms_per_1k_output, null for a run whose token use is unknown.
+// count is the runs a figure applies to (for a step, the runs
 // that entered it); median and p90 are numbers, null when count is 0.
 type statsCompareResult struct {
 	statsSource
@@ -232,6 +243,7 @@ func runStatsRun(cmd *cobra.Command, _ []string) error {
 		flags := statsSelectionFlags()
 		flags["gaps"] = &schemaProp{Type: "integer", Description: "the most gaps listed, longest first; at least 1 (default 10)"}
 		flags["gap-threshold"] = &schemaProp{Type: "string", Description: "a Go duration; gaps longer than it count toward gap_ms (default 5m)"}
+		flags["sessions-dir"] = statsSessionsDirFlag
 		return output.Write(cmd.OutOrStdout(), commandSchema{
 			Output: statsOutput(map[string]*schemaProp{
 				"gap_threshold_ms": {Type: "integer"},
@@ -243,6 +255,7 @@ func runStatsRun(cmd *cobra.Command, _ []string) error {
 				"helpers":          {Type: "array", Description: "every helper-agent launch"},
 				"user_waits":       {Type: "array", Description: "every wait on the user"},
 				"gaps":             {Type: "array", Description: "the longest gaps, longest first"},
+				"tokens":           {Type: "object", Description: "token use: status (known or unknown), reason_code, reason, agent, sessions, skipped_lines, total, outside_steps, session_overhead, session_overhead_reason, models, unmatched_helpers; steps, tasks and helpers rows each carry a tokens figure (input, output, cache_read, cache_write, cost, cost_complete, unpriced_models, working_ms_per_1k_output), null when unknown"},
 			}),
 			Flags: flags,
 		}, "")
@@ -255,6 +268,7 @@ func runStatsRun(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return statsError(err)
 	}
+	opts.Tokens = statsTokenInput(cmd, logs, []*runstats.Run{run})
 	rep := runstats.BuildReport(run, opts)
 	if format == statusFormatJSON {
 		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsRunResult{statsSource: source(logs), Report: rep})
@@ -333,10 +347,10 @@ func statsFigureSchema(figure *schemaProp) *schemaObj {
 	return statsOutput(map[string]*schemaProp{
 		"gap_threshold_ms": {Type: "integer"},
 		"runs":             {Type: "array", Items: statsRunSummarySchema, Description: "the runs, in the order compared (the first is the base)"},
-		"totals":           {Type: "array", Items: figure, Description: "wall_ms, working_ms, user_wait_ms, helper_wait_ms, command_ms, commands, helpers, gap_ms"},
+		"totals":           {Type: "array", Items: figure, Description: "wall_ms, working_ms, user_wait_ms, helper_wait_ms, command_ms, commands, helpers, gap_ms, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost, working_ms_per_1k_output"},
 		"steps": {Type: "array", Description: "one entry per step name", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
 			"step":    {Type: "string"},
-			"figures": {Type: "array", Items: figure, Description: "duration_ms, entries, commands, command_ms, helper_wait_ms, user_wait_ms"},
+			"figures": {Type: "array", Items: figure, Description: "duration_ms, entries, commands, command_ms, helper_wait_ms, user_wait_ms, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost, working_ms_per_1k_output"},
 		}}},
 	})
 }
@@ -344,6 +358,7 @@ func statsFigureSchema(figure *schemaProp) *schemaObj {
 func statsFigureFlags() map[string]*schemaProp {
 	flags := statsSelectionFlags()
 	flags["gap-threshold"] = &schemaProp{Type: "string", Description: "a Go duration; gaps longer than it count toward gap_ms (default 5m)"}
+	flags["sessions-dir"] = statsSessionsDirFlag
 	return flags
 }
 
@@ -352,8 +367,8 @@ func runStatsCompare(cmd *cobra.Command, _ []string) error {
 		return output.Write(cmd.OutOrStdout(), commandSchema{
 			Output: statsFigureSchema(&schemaProp{Type: "object", Properties: map[string]*schemaProp{
 				"figure":    {Type: "string"},
-				"values":    {Type: "array", Items: &schemaProp{Type: "integer"}, Description: "one per run; null where it does not apply"},
-				"delta":     {Type: "array", Items: &schemaProp{Type: "integer"}, Description: "each value less the first run's; null where either is null"},
+				"values":    {Type: "array", Items: &schemaProp{Type: "number"}, Description: "one per run; null where it does not apply or token use is unknown; whole numbers except cost"},
+				"delta":     {Type: "array", Items: &schemaProp{Type: "number"}, Description: "each value less the first run's; null where either is null"},
 				"delta_pct": {Type: "array", Items: &schemaProp{Type: "number"}, Description: "delta as a percentage of the first run's value, one decimal; null when that is null or 0"},
 			}}),
 			Flags: statsFigureFlags(),
@@ -367,6 +382,7 @@ func runStatsCompare(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return statsError(err)
 	}
+	opts.Tokens = statsTokenInput(cmd, logs, runs)
 	cmp := runstats.Compare(runs, opts)
 	if format == statusFormatJSON {
 		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsCompareResult{statsSource: source(logs), Comparison: cmp})
@@ -394,6 +410,7 @@ func runStatsSummary(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return statsError(err)
 	}
+	opts.Tokens = statsTokenInput(cmd, logs, runs)
 	sum := runstats.Summarise(runs, opts)
 	if format == statusFormatJSON {
 		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsSummaryResult{statsSource: source(logs), Summary: sum})
@@ -418,6 +435,63 @@ func statsSelect(cmd *cobra.Command) (format string, opts runstats.Options, logs
 		err = statsError(err)
 	}
 	return
+}
+
+var statsSessionsDirFlag = &schemaProp{Type: "string", Description: "Claude Code projects directory to read token use from; defaults to $CLAUDE_CONFIG_DIR/projects or ~/.claude/projects"}
+
+// statsTokenInput gathers what the reports need to give the runs' token
+// use: the Claude Code sessions with activity since the earliest run
+// started, each read once and read-only, from --sessions-dir (made
+// absolute) or Claude Code's own projects directory; and the project's
+// price table, when there is a project. Session data that cannot be read
+// is a reason in the report, never an error; the sessions are not read at
+// all when no run was driven by Claude Code (or by an unnamed agent).
+func statsTokenInput(cmd *cobra.Command, logs *runstats.Logs, runs []*runstats.Run) *runstats.TokenInput {
+	dir, _ := cmd.Flags().GetString("sessions-dir")
+	if dir != "" {
+		if abs, err := filepath.Abs(dir); err == nil {
+			dir = abs
+		}
+	} else {
+		dir = agentusage.DefaultClaudeDir()
+	}
+	in := &runstats.TokenInput{AllRuns: logs.Runs, Dir: dir}
+
+	var since time.Time
+	claude := false
+	for _, r := range runs {
+		if r.Agent == "claude" || r.Agent == "unknown" {
+			claude = true
+		}
+		if since.IsZero() || r.Start.Before(since) {
+			since = r.Start
+		}
+	}
+	if claude {
+		in.Sessions, in.Problems = agentusage.Claude{Dir: dir}.Sessions(since)
+	}
+
+	// The gate has already validated a project's config; one that cannot
+	// be read here leaves every cost unknown.
+	if projectConfigExists() {
+		if cfg, err := loadConfig(); err == nil {
+			in.Prices = statsPrices(cfg.Stats)
+		}
+	}
+	return in
+}
+
+// statsPrices converts the project's price table, which config validated,
+// into the report's.
+func statsPrices(s config.StatsConfig) runstats.Prices {
+	out := runstats.Prices{}
+	for model, p := range s.Prices {
+		if p.Input == nil || p.Output == nil || p.CacheRead == nil || p.CacheWrite == nil {
+			continue
+		}
+		out[model] = runstats.Price{Input: *p.Input, Output: *p.Output, CacheRead: *p.CacheRead, CacheWrite: *p.CacheWrite}
+	}
+	return out
 }
 
 func source(l *runstats.Logs) statsSource {
@@ -559,6 +633,7 @@ func init() {
 	statsCmd.PersistentFlags().String("agent", "", "Only runs by this agent")
 	statsCmd.PersistentFlags().StringSlice("run", nil, "A run id, or a unique prefix of 8 or more hex characters (repeatable)")
 	statsCmd.PersistentFlags().Duration("gap-threshold", 5*time.Minute, "Gaps longer than this count toward the gap total")
+	statsCmd.PersistentFlags().String("sessions-dir", "", "Claude Code projects directory to read token use from (default $CLAUDE_CONFIG_DIR/projects or ~/.claude/projects)")
 
 	statsRunCmd.Flags().Int("gaps", runstats.DefaultOptions.Gaps, "The most gaps to list, longest first")
 	for _, c := range []*cobra.Command{statsCommandsCmd, statsSpansCmd} {

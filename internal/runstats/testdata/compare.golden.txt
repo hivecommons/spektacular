@@ -9,13 +9,40 @@ interview  10m00s               12m00s (+2m00s, +20.0%)
 split      5m00s                -
 finished   0.0s                 0.0s (+0.0s)
 
+Steps (output tokens)
+STEP       aaaa0000 2026-10-25  bbbb0000 2026-10-25
+overview   1,000                2,000 (+1,000, +100.0%)
+interview  5,000                4,000 (-1,000, -20.0%)
+split      0                    -
+finished   0                    0 (+0)
+
+Steps (cost)
+STEP       aaaa0000 2026-10-25  bbbb0000 2026-10-25
+overview   0.01                 0.02 (+0.01, +100.0%)
+interview  0.05                 0.04 (-0.01, -20.0%)
+split      0.00                 -
+finished   0.00                 0.00 (+0.00)
+
+Steps (time per 1k output tokens)
+STEP       aaaa0000 2026-10-25  bbbb0000 2026-10-25
+overview   2m00s                1m00s (-1m00s, -50.0%)
+interview  2m00s                2m45s (+45.0s, +37.5%)
+split      -                    -
+finished   -                    -
+
 Totals
-FIGURE          aaaa0000 2026-10-25  bbbb0000 2026-10-25
-wall_ms         17m01s               14m01s (-3m00s, -17.6%)
-working_ms      17m01s               13m01s (-4m00s, -23.5%)
-user_wait_ms    0.0s                 1m00s (+1m00s)
-helper_wait_ms  0.0s                 0.0s (+0.0s)
-command_ms      4.0s                 3.0s (-1.0s, -25.0%)
-commands        4                    3 (-1, -25.0%)
-helpers         0                    0 (+0)
-gap_ms          9m59s                10m59s (+1m00s, +10.0%)
+FIGURE                    aaaa0000 2026-10-25  bbbb0000 2026-10-25
+wall_ms                   17m01s               14m01s (-3m00s, -17.6%)
+working_ms                17m01s               13m01s (-4m00s, -23.5%)
+user_wait_ms              0.0s                 1m00s (+1m00s)
+helper_wait_ms            0.0s                 0.0s (+0.0s)
+command_ms                4.0s                 3.0s (-1.0s, -25.0%)
+commands                  4                    3 (-1, -25.0%)
+helpers                   0                    0 (+0)
+gap_ms                    9m59s                10m59s (+1m00s, +10.0%)
+input_tokens              0                    0 (+0)
+output_tokens             6,000                6,000 (+0, +0.0%)
+cache_read_tokens         0                    0 (+0)
+cache_write_tokens        0                    0 (+0)
+cost                      0.06                 0.06 (+0.00, +0.0%)
+working_ms_per_1k_output  2m50s                2m10s (-40.0s, -23.5%)

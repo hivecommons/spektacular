@@ -7,13 +7,16 @@ import (
 	"github.com/hivecommons/spektacular/internal/tracelog"
 )
 
-// Options tune a report's gap figures.
+// Options tune a report's gap figures and carry its token input.
 type Options struct {
 	// Gaps is the most gaps listed; 0 lists every gap.
 	Gaps int
 	// GapThreshold is the length a gap must exceed to count toward the gap
 	// total.
 	GapThreshold time.Duration
+	// Tokens is the agent session data token use is read from; nil reports
+	// token use as unknown (not_read), and changes no other figure.
+	Tokens *TokenInput
 }
 
 // DefaultOptions list the 10 longest gaps and total those over 5 minutes.
@@ -66,21 +69,29 @@ func (r *Run) Summary() RunSummary {
 //	 "gaps":[{"started_at","ended_at","duration_ms","step",
 //	          "after":{"event","type","name"},"before":{"event","type","name"}}]}
 //
+// Spec 000078 adds token use, without changing any field above: each steps,
+// tasks and helpers row gains "tokens", a token figure (TokenFigure; null
+// when token use is unknown, or for a helper launch with no transcript), and
+// the report gains a top-level "tokens" section (TokenSection). With those
+// keys removed the JSON is byte for byte what it was before
+// (TestTokenFieldsAreAdditive, against testdata/pre-tokens).
+//
 // status is finished, interrupted or in_progress; end_reason is moved,
 // finished, stopped, abandoned, interrupted, or open for a span never
 // closed; complete is true for moved, finished and stopped. Renaming a
 // field breaks TestReportJSONFieldNamesAndUnits and the golden file
 // testdata/report.golden.json before it breaks a consumer.
 type Report struct {
-	GapThresholdMS int64       `json:"gap_threshold_ms"`
-	Run            RunSummary  `json:"run"`
-	Totals         Totals      `json:"totals"`
-	Steps          []StepRow   `json:"steps"`
-	StepEntries    []StepEntry `json:"step_entries"`
-	Tasks          []TaskRow   `json:"tasks"`
-	Helpers        []Wait      `json:"helpers"`
-	UserWaits      []Wait      `json:"user_waits"`
-	Gaps           []Gap       `json:"gaps"`
+	GapThresholdMS int64        `json:"gap_threshold_ms"`
+	Run            RunSummary   `json:"run"`
+	Totals         Totals       `json:"totals"`
+	Steps          []StepRow    `json:"steps"`
+	StepEntries    []StepEntry  `json:"step_entries"`
+	Tasks          []TaskRow    `json:"tasks"`
+	Helpers        []HelperRow  `json:"helpers"`
+	UserWaits      []Wait       `json:"user_waits"`
+	Gaps           []Gap        `json:"gaps"`
+	Tokens         TokenSection `json:"tokens"`
 }
 
 // Totals are a run's whole-run figures. Waits are the union of completed
@@ -111,6 +122,8 @@ type StepRow struct {
 	HelperWaitMS int64  `json:"helper_wait_ms"`
 	UserWaitMS   int64  `json:"user_wait_ms"`
 	Incomplete   int    `json:"incomplete"`
+	// Tokens is the step's token use over every entry; nil when unknown.
+	Tokens *TokenFigure `json:"tokens"`
 }
 
 // StepEntry is one entry into a step.
@@ -137,6 +150,16 @@ type TaskRow struct {
 	UserWaitMS   int64     `json:"user_wait_ms"`
 	EndReason    string    `json:"end_reason"`
 	Complete     bool      `json:"complete"`
+	// Tokens is the task's token use; nil when unknown.
+	Tokens *TokenFigure `json:"tokens"`
+}
+
+// HelperRow is one helper-agent launch: its wait, and the tokens of the
+// helper transcript matched to it, with every helper it started (nil when
+// token use is unknown, or no transcript matched the launch).
+type HelperRow struct {
+	Wait
+	Tokens *TokenFigure `json:"tokens"`
 }
 
 // Wait is one helper-agent launch or one wait on the user.
@@ -182,7 +205,7 @@ func BuildReport(r *Run, o Options) Report {
 		Steps:          []StepRow{},
 		StepEntries:    []StepEntry{},
 		Tasks:          []TaskRow{},
-		Helpers:        []Wait{},
+		Helpers:        []HelperRow{},
 		UserWaits:      []Wait{},
 		Gaps:           []Gap{},
 	}
@@ -302,7 +325,7 @@ func BuildReport(r *Run, o Options) Report {
 		}
 		w := waitRow(s, byID, steps, tasks)
 		if s.Type == tracelog.TypeSubAgent {
-			rep.Helpers = append(rep.Helpers, w)
+			rep.Helpers = append(rep.Helpers, HelperRow{Wait: w})
 		} else {
 			rep.UserWaits = append(rep.UserWaits, w)
 		}
@@ -332,6 +355,19 @@ func BuildReport(r *Run, o Options) Report {
 			StartedAt: g.from.UTC(), EndedAt: g.to.UTC(), DurationMS: ms(g.to.Sub(g.from)),
 			Step: stepAt(steps, g.from), After: g.after, Before: g.before,
 		})
+	}
+
+	// Token use, from the figures above; it changes none of them.
+	var rows tokenRows
+	rep.Tokens, rows = buildTokens(r, &rep, o.Tokens)
+	for i := range rep.Steps {
+		rep.Steps[i].Tokens = rows.steps[rep.Steps[i].Step]
+	}
+	for i := range rep.Tasks {
+		rep.Tasks[i].Tokens = rows.tasks[taskKey(rep.Tasks[i].TaskID, rep.Tasks[i].SpanID)]
+	}
+	for i := range rep.Helpers {
+		rep.Helpers[i].Tokens = rows.helpers[rep.Helpers[i].SpanID]
 	}
 	return rep
 }

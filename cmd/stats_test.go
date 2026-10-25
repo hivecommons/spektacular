@@ -299,9 +299,9 @@ func TestStatsPrettyShowsTheSameFigures(t *testing.T) {
 		name := row["step"].(string)
 		require.Equal(t, want[name], row["duration_ms"], name)
 	}
-	require.Regexp(t, `(?m)^first\s+1\s+9m00s\s+1\s+1m00s\s+3m00s\s+0\.0s\s+0$`, pretty)
-	require.Regexp(t, `(?m)^second\s+1\s+50m00s\s+1\s+1m00s\s+0\.0s\s+0\.0s\s+0$`, pretty)
-	require.Regexp(t, `(?m)^research\s+first\s+2026-10-25 10:02:00\s+3m00s\s+stopped$`, pretty)
+	require.Regexp(t, `(?m)^first\s+1\s+9m00s\s+1\s+1m00s\s+3m00s\s+0\.0s\s+0\s+\?\s+\?\s+\?$`, pretty)
+	require.Regexp(t, `(?m)^second\s+1\s+50m00s\s+1\s+1m00s\s+0\.0s\s+0\.0s\s+0\s+\?\s+\?\s+\?$`, pretty)
+	require.Regexp(t, `(?m)^research\s+first\s+2026-10-25 10:02:00\s+3m00s\s+stopped\s+\?\s+\?\s+\?$`, pretty)
 }
 
 // copyLogs copies the regular files of src into a new directory.
@@ -546,8 +546,11 @@ func TestStatsSummaryDefaultsAndKind(t *testing.T) {
 	// second lasts 50, 10, 20, 30 and 40 minutes.
 	require.Equal(t, map[string]any{"figure": "duration_ms", "count": float64(5), "median": float64(30 * 60000), "p90": float64(50 * 60000)},
 		figure(t, stepFigures(t, m, "second"), "duration_ms"))
-	for _, f := range m["totals"].([]any) {
+	for _, f := range m["totals"].([]any)[:8] {
 		require.Equal(t, float64(5), f.(map[string]any)["count"])
+	}
+	for _, f := range m["totals"].([]any)[8:] {
+		require.Equal(t, float64(0), f.(map[string]any)["count"], "no session drove these runs: token use is unknown, never zero")
 	}
 
 	resetRootCmd(t)
@@ -593,14 +596,16 @@ func TestStatsCompareAndSummaryFieldNames(t *testing.T) {
 		require.Equal(t, []string{"delta", "delta_pct", "figure", "values"}, dataKeys(f.(map[string]any)))
 		order = append(order, f.(map[string]any)["figure"].(string))
 	}
-	require.Equal(t, []string{"wall_ms", "working_ms", "user_wait_ms", "helper_wait_ms", "command_ms", "commands", "helpers", "gap_ms"}, order)
+	require.Equal(t, []string{"wall_ms", "working_ms", "user_wait_ms", "helper_wait_ms", "command_ms", "commands", "helpers", "gap_ms",
+		"input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cost", "working_ms_per_1k_output"}, order)
 	step := m["steps"].([]any)[0].(map[string]any)
 	require.Equal(t, []string{"figures", "step"}, dataKeys(step))
 	order = nil
 	for _, f := range step["figures"].([]any) {
 		order = append(order, f.(map[string]any)["figure"].(string))
 	}
-	require.Equal(t, []string{"duration_ms", "entries", "commands", "command_ms", "helper_wait_ms", "user_wait_ms"}, order)
+	require.Equal(t, []string{"duration_ms", "entries", "commands", "command_ms", "helper_wait_ms", "user_wait_ms",
+		"input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cost", "working_ms_per_1k_output"}, order)
 
 	resetRootCmd(t)
 	m = statsJSON(t, "summary")
@@ -842,4 +847,409 @@ func TestStatsListingsLeaveTheLogsByteIdentical(t *testing.T) {
 		stats(t, args...)
 	}
 	require.Equal(t, before, rawLogSnapshot(t, logsDir(dir)), "no file added, removed or changed")
+}
+
+// Token use (spec 000078). The token fixtures are a logs directory whose
+// command records carry their arguments, as real ones do, and a Claude Code
+// projects directory holding the session that drove the spec run.
+
+// tokenPrices is a stats.prices table pricing opus only.
+const tokenPrices = `stats:
+  prices:
+    claude-opus-5-5:
+      input: 5
+      output: 25
+      cache_read: 0.5
+      cache_write: 6.25
+`
+
+// withArgs gives every command record its process.command_args, the words
+// of its name, as the logger records them.
+func withArgs(rs []tracelog.Record) []tracelog.Record {
+	for i := range rs {
+		if rs[i].Record == tracelog.RecordSpan && rs[i].Attributes[tracelog.AttrSpanType] == tracelog.TypeCommand {
+			rs[i].Attributes[tracelog.AttrCommandArgs] = strings.Fields(rs[i].Name)
+		}
+	}
+	return rs
+}
+
+// seedTokenLogs writes the spec run (claude) and the implement run (codex)
+// of seedLogs, with their command arguments, into the logs directory dir.
+func seedTokenLogs(t *testing.T, dir string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	for _, f := range []struct {
+		fx  statsFixture
+		end time.Duration
+	}{
+		{statsFixture{statsSpecRun, "spec", "000001_demo", "claude", statsAt(8, 0)}, 30 * time.Minute},
+		{statsFixture{statsImplRun, "implement", "000001_demo", "codex", statsAt(10, 0)}, 60 * time.Minute},
+	} {
+		var b bytes.Buffer
+		for _, r := range withArgs(f.fx.records(f.end, true)) {
+			line, err := json.Marshal(r)
+			require.NoError(t, err)
+			b.Write(line)
+			b.WriteByte('\n')
+		}
+		require.NoError(t, os.WriteFile(filepath.Join(dir, f.fx.fileName()), b.Bytes(), 0o644))
+	}
+}
+
+// claudeLine is one Claude Code transcript record.
+func claudeLine(t *testing.T, rec map[string]any) string {
+	t.Helper()
+	b, err := json.Marshal(rec)
+	require.NoError(t, err)
+	return string(b) + "\n"
+}
+
+func claudeTime(at time.Time) string { return at.UTC().Format("2006-01-02T15:04:05.000Z") }
+
+// claudeResponse is an assistant record of opus with usage and content.
+func claudeResponse(t *testing.T, id string, at time.Time, in, out, cr, cw int, content ...map[string]any) string {
+	if content == nil {
+		content = []map[string]any{{"type": "text", "text": "ok"}}
+	}
+	return claudeLine(t, map[string]any{
+		"type": "assistant", "timestamp": claudeTime(at),
+		"message": map[string]any{"id": id, "model": "claude-opus-5-5", "content": content,
+			"usage": map[string]any{"input_tokens": in, "output_tokens": out, "cache_read_input_tokens": cr, "cache_creation_input_tokens": cw}},
+	})
+}
+
+// claudeBash is an assistant record running command, and the user record
+// carrying its result.
+func claudeBash(t *testing.T, id string, from, to time.Time, command string) string {
+	return claudeResponse(t, "msg_"+id, from, 0, 1, 0, 0, map[string]any{"type": "tool_use", "id": id, "name": "Bash", "input": map[string]any{"command": command}}) +
+		claudeLine(t, map[string]any{"type": "user", "timestamp": claudeTime(to),
+			"message": map[string]any{"role": "user", "content": []map[string]any{{"type": "tool_result", "tool_use_id": id, "content": "{}"}}}})
+}
+
+// seedSessions writes a Claude Code projects directory under dir holding the
+// session that drove the spec run of seedTokenLogs: Bash calls around its
+// `spec new` and two `spec goto` commands; requests before its first step,
+// in "first" and in "second"; a helper launched in "first" whose brief
+// names the run's research span, with its own transcript; and Claude Code's
+// own totals, which exceed the transcripts by 5 input and 50 output tokens.
+// Every file is dated after the run started. It returns the projects
+// directory.
+//
+// Token sums: first 2,000 + the helper's 400 output tokens; second 300 (the
+// Bash responses add one output token each, the second's to first, the
+// third's to second, the first's outside); outside 100 + 1 + 50 overhead.
+func seedSessions(t *testing.T, dir string) string {
+	t.Helper()
+	projects := filepath.Join(dir, "claude", "projects")
+	proj := filepath.Join(projects, "-tmp-demo")
+	sub := filepath.Join(proj, "s1", "subagents")
+	require.NoError(t, os.MkdirAll(sub, 0o755))
+	at := func(m, s int) time.Time { return statsAt(8, m).Add(time.Duration(s) * time.Second) }
+
+	main := claudeBash(t, "toolu_b1", at(0, 0).Add(-200*time.Millisecond), at(0, 31), `spektacular spec new --data '{"name":"000001_demo"}'`) +
+		claudeResponse(t, "msg_1", at(0, 45), 1, 100, 1000, 10) +
+		claudeResponse(t, "msg_2", at(2, 0), 0, 0, 0, 0, map[string]any{"type": "tool_use", "id": "toolu_a1", "name": "Agent",
+			"input": map[string]any{"description": "Research", "prompt": "Look around. Your parent span is " + statsSpecRun + "-abcd0000000000a1."}}) +
+		claudeResponse(t, "msg_3", at(5, 0), 2, 2000, 5000, 20) +
+		claudeBash(t, "toolu_b2", at(9, 0), at(10, 0), `spektacular spec goto --data '{"step":"second"}'`) +
+		claudeResponse(t, "msg_4", at(15, 0), 3, 300, 3000, 30) +
+		claudeBash(t, "toolu_b3", at(29, 0), at(30, 0), `spektacular spec goto --data '{"step":"finished"}'`) +
+		claudeLine(t, map[string]any{"type": "cost-state", "modelUsage": map[string]any{"claude-opus-5-5": map[string]any{
+			"inputTokens": 15, "outputTokens": 2853, "cacheReadInputTokens": 9400, "cacheCreationInputTokens": 100}}})
+	helper := claudeResponse(t, "msg_h1", at(3, 0), 4, 400, 400, 40)
+	files := map[string]string{
+		filepath.Join(proj, "s1.jsonl"):                main,
+		filepath.Join(sub, "agent-h1.jsonl"):           helper,
+		filepath.Join(sub, "agent-h1.meta.json"):       `{"agentType":"Explore","description":"Research","toolUseId":"toolu_a1","spawnDepth":1}`,
+		filepath.Join(proj, "unrelated-session.jsonl"): claudeResponse(t, "msg_x", at(40, 0), 9, 9, 9, 9),
+	}
+	for path, body := range files {
+		require.NoError(t, os.WriteFile(path, []byte(body), 0o644))
+		require.NoError(t, os.Chtimes(path, statsAt(9, 0), statsAt(9, 0)))
+	}
+	return projects
+}
+
+// tokenProject makes a project with the token logs and sessions, with
+// config body extra (such as tokenPrices), and changes into it. It returns
+// the project and the sessions directory.
+func tokenProject(t *testing.T, extra string) (dir, sessions string) {
+	t.Helper()
+	dir = t.TempDir()
+	t.Chdir(dir)
+	writeSpecCommandConfig(t, dir, "log:\n  level: standard\n"+extra)
+	seedTokenLogs(t, logsDir(dir))
+	resetRootCmd(t)
+	return dir, seedSessions(t, t.TempDir())
+}
+
+// treeSnapshot maps every file under dir to its bytes.
+func treeSnapshot(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	snap := map[string]string{}
+	require.NoError(t, filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		snap[path] = string(readBytes(t, path))
+		return nil
+	}))
+	return snap
+}
+
+// tokenFig is a token figure of a JSON report.
+func tokenFig(t *testing.T, v any) map[string]any {
+	t.Helper()
+	m, ok := v.(map[string]any)
+	require.True(t, ok, "%v is not a token figure", v)
+	return m
+}
+
+func stepRow(t *testing.T, m map[string]any, step string) map[string]any {
+	t.Helper()
+	for _, r := range m["steps"].([]any) {
+		if row := r.(map[string]any); row["step"] == step {
+			return row
+		}
+	}
+	t.Fatalf("no step %s", step)
+	return nil
+}
+
+// withoutTokens is a JSON report with every token key removed.
+func withoutTokens(m map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range m {
+		if k == "tokens" {
+			continue
+		}
+		if list, ok := v.([]any); ok && (k == "steps" || k == "tasks" || k == "helpers") {
+			rows := []any{}
+			for _, r := range list {
+				row := map[string]any{}
+				for rk, rv := range r.(map[string]any) {
+					if rk != "tokens" {
+						row[rk] = rv
+					}
+				}
+				rows = append(rows, row)
+			}
+			v = rows
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// Token criterion 1: a run driven by Claude Code, with no change to how the
+// agent works, gets token, cost and time-per-token figures in both forms.
+func TestStatsRunGivesTokenUseForAClaudeRun(t *testing.T) {
+	_, sessions := tokenProject(t, tokenPrices)
+	m := statsJSON(t, "run", "--run", statsSpecRun, "--sessions-dir", sessions)
+
+	tk := m["tokens"].(map[string]any)
+	require.Equal(t, "known", tk["status"])
+	require.Nil(t, tk["reason_code"])
+	sess := tk["sessions"].([]any)
+	require.Len(t, sess, 1)
+	require.Equal(t, "s1", sess[0].(map[string]any)["session_id"])
+	require.Equal(t, "main", sess[0].(map[string]any)["transcript"])
+
+	total := tokenFig(t, tk["total"])
+	require.Equal(t, float64(15), total["input"])
+	require.Equal(t, float64(2853), total["output"])
+	require.Equal(t, float64(9400), total["cache_read"])
+	require.Equal(t, float64(100), total["cache_write"])
+	// (15*5 + 2853*25 + 9400*0.5 + 100*6.25) / 1e6
+	require.Equal(t, 0.0767250, total["cost"])
+	require.Equal(t, true, total["cost_complete"])
+	require.Equal(t, []any{}, total["unpriced_models"])
+	overhead := tokenFig(t, tk["session_overhead"])
+	require.Equal(t, float64(5), overhead["input"])
+	require.Equal(t, float64(50), overhead["output"])
+
+	first := tokenFig(t, stepRow(t, m, "first")["tokens"])
+	require.Equal(t, float64(2000+400+1), first["output"], "the step's requests and its helper")
+	// 9m of working time over 2,401 output tokens.
+	require.Equal(t, float64(224906), first["working_ms_per_1k_output"])
+	require.Equal(t, float64(301), tokenFig(t, stepRow(t, m, "second")["tokens"])["output"])
+	require.Equal(t, float64(151), tokenFig(t, tk["outside_steps"])["output"])
+	require.Nil(t, tokenFig(t, stepRow(t, m, "finished")["tokens"])["working_ms_per_1k_output"], "no output tokens: not applicable")
+
+	helper := m["helpers"].([]any)[0].(map[string]any)
+	require.Equal(t, "research", helper["name"])
+	ht := tokenFig(t, helper["tokens"])
+	require.Equal(t, float64(400), ht["output"])
+	require.Equal(t, float64(450000), ht["working_ms_per_1k_output"], "3m over 400 output tokens")
+
+	models := tk["models"].([]any)
+	require.Len(t, models, 1)
+	require.Equal(t, "claude-opus-5-5", models[0].(map[string]any)["model"])
+
+	resetRootCmd(t)
+	pretty := stats(t, "run", "--run", statsSpecRun, "--sessions-dir", sessions)
+	require.Regexp(t, `(?m)^first\s+1\s+9m00s\s+.*\s2,401\s+0\.06\s+3m44s$`, pretty)
+	require.Regexp(t, `(?m)^research\s+first\s+.*stopped\s+400\s+0\.01\s+7m30s$`, pretty)
+	require.Contains(t, pretty, "\nTokens\nRead from session s1 (main)\n")
+	require.Regexp(t, `(?m)^TOTAL\s+15\s+2,853\s+9,400\s+100\s+0\.08$`, pretty)
+	require.Regexp(t, `(?m)^claude-opus-5-5\s+15\s+2,853\s+9,400\s+100\s+0\.08$`, pretty)
+}
+
+// Token criterion 2: costs use the project's price table; with no table,
+// or outside a project, every cost is unknown and the table says why.
+func TestStatsRunCostsComeFromTheProjectsPrices(t *testing.T) {
+	dir, sessions := tokenProject(t, "")
+	m := statsJSON(t, "run", "--run", statsSpecRun, "--sessions-dir", sessions)
+	total := tokenFig(t, m["tokens"].(map[string]any)["total"])
+	require.Equal(t, float64(2853), total["output"])
+	require.Nil(t, total["cost"])
+	require.Equal(t, false, total["cost_complete"])
+	require.Equal(t, []any{"claude-opus-5-5"}, total["unpriced_models"])
+
+	resetRootCmd(t)
+	pretty := stats(t, "run", "--run", statsSpecRun, "--sessions-dir", sessions)
+	require.Regexp(t, `(?m)^first\s+1\s+9m00s\s+.*\s2,401\s+\?\s+3m44s$`, pretty)
+	require.Contains(t, pretty, "incomplete, no price for claude-opus-5-5 (prices per million tokens go under stats.prices in .spektacular/config.yaml)")
+
+	// Outside a project, reading the same logs with --dir.
+	t.Chdir(t.TempDir())
+	resetRootCmd(t)
+	m = statsJSON(t, "run", "--dir", logsDir(dir), "--run", statsSpecRun, "--sessions-dir", sessions)
+	total = tokenFig(t, m["tokens"].(map[string]any)["total"])
+	require.Equal(t, float64(2853), total["output"])
+	require.Nil(t, total["cost"])
+}
+
+// Token criterion 3: a run driven by another agent has unknown token use,
+// with the reason, in both forms.
+func TestStatsRunOtherAgentIsUnknown(t *testing.T) {
+	_, sessions := tokenProject(t, tokenPrices)
+	m := statsJSON(t, "run", "--run", statsImplRun, "--sessions-dir", sessions)
+	tk := m["tokens"].(map[string]any)
+	require.Equal(t, "unknown", tk["status"])
+	require.Equal(t, "agent_unsupported", tk["reason_code"])
+	require.Contains(t, tk["reason"], "codex")
+	require.Nil(t, tk["total"])
+	require.Nil(t, stepRow(t, m, "first")["tokens"])
+
+	resetRootCmd(t)
+	pretty := stats(t, "run", "--run", statsImplRun, "--sessions-dir", sessions)
+	require.Contains(t, pretty, "\nTokens\nunknown (agent_unsupported): token use is read only for Claude Code sessions; this run's agent is codex\n")
+}
+
+// Token criterion 4: with the agent's session removed, token use is
+// unknown with the reason, and every timing equals the report with tokens.
+func TestStatsRunWithTheSessionRemovedIsUnknownWithTheSameTimings(t *testing.T) {
+	_, sessions := tokenProject(t, tokenPrices)
+	known := statsJSON(t, "run", "--run", statsSpecRun, "--sessions-dir", sessions)
+	require.NoError(t, os.Remove(filepath.Join(sessions, "-tmp-demo", "s1.jsonl")))
+
+	resetRootCmd(t)
+	gone := statsJSON(t, "run", "--run", statsSpecRun, "--sessions-dir", sessions)
+	tk := gone["tokens"].(map[string]any)
+	require.Equal(t, "unknown", tk["status"])
+	require.Equal(t, "session_not_found", tk["reason_code"])
+	require.Contains(t, tk["reason"], sessions)
+	require.Equal(t, withoutTokens(known), withoutTokens(gone))
+}
+
+// Token criterion 5: no log file and no agent session file changes.
+func TestStatsRunLeavesTheLogsAndSessionsByteIdentical(t *testing.T) {
+	dir, sessions := tokenProject(t, tokenPrices)
+	logsBefore, sessionsBefore := rawLogSnapshot(t, logsDir(dir)), treeSnapshot(t, sessions)
+	for _, args := range [][]string{
+		{"run", "--run", statsSpecRun, "--sessions-dir", sessions},
+		{"run", "--run", statsSpecRun, "--sessions-dir", sessions, "--format", "json"},
+		{"run", "--sessions-dir", sessions},
+	} {
+		resetRootCmd(t)
+		stats(t, args...)
+	}
+	require.Equal(t, logsBefore, rawLogSnapshot(t, logsDir(dir)))
+	require.Equal(t, sessionsBefore, treeSnapshot(t, sessions))
+}
+
+// Token criterion 6: the cmd tests never read the developer's own Claude
+// Code sessions: without --sessions-dir a report reads the empty directory
+// TestMain sets, and the flag does not outlive the command it was given to.
+func TestStatsRunNeverReadsTheDevelopersSessions(t *testing.T) {
+	_, sessions := tokenProject(t, tokenPrices)
+	require.NotEmpty(t, os.Getenv("CLAUDE_CONFIG_DIR"))
+	home, err := os.UserHomeDir()
+	if err == nil {
+		require.NotEqual(t, filepath.Join(home, ".claude"), os.Getenv("CLAUDE_CONFIG_DIR"))
+	}
+
+	m := statsJSON(t, "run", "--run", statsSpecRun, "--sessions-dir", sessions)
+	require.Equal(t, "known", m["tokens"].(map[string]any)["status"])
+
+	resetRootCmd(t)
+	m = statsJSON(t, "run", "--run", statsSpecRun)
+	tk := m["tokens"].(map[string]any)
+	require.Equal(t, "unknown", tk["status"])
+	require.Equal(t, "sessions_dir_missing", tk["reason_code"], "the flag was reset with the command tree")
+	require.Contains(t, tk["reason"], filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "projects"))
+}
+
+func TestStatsRunSchemaListsTokens(t *testing.T) {
+	t.Chdir(t.TempDir())
+	resetRootCmd(t)
+	out, _, code := runRootCmd(t, "stats", "run", "--schema")
+	require.Equal(t, 0, code)
+	require.Contains(t, out, `"tokens"`)
+	require.Contains(t, out, `"sessions-dir"`)
+}
+
+// Comparisons and summaries criterion 1, 2 and 3 at the command line: the
+// token figures for both runs in both forms, the codex run absent.
+func TestStatsCompareAndSummaryCarryTokens(t *testing.T) {
+	_, sessions := tokenProject(t, tokenPrices)
+	m := statsJSON(t, "compare", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions)
+	out := figure(t, m["totals"], "output_tokens")
+	require.Equal(t, []any{float64(2853), nil}, out["values"], "the codex run's token use is unknown")
+	require.Equal(t, []any{float64(0), nil}, out["delta"])
+	require.Equal(t, []any{0.076725, nil}, figure(t, m["totals"], "cost")["values"])
+	first := figure(t, stepFigures(t, m, "first"), "output_tokens")
+	require.Equal(t, []any{float64(2401), nil}, first["values"])
+	require.Equal(t, []any{float64(224906), nil}, figure(t, stepFigures(t, m, "first"), "working_ms_per_1k_output")["values"])
+	// The timings are those of a comparison without token use.
+	require.Equal(t, []any{float64(1800000), float64(3600000)}, figure(t, m["totals"], "wall_ms")["values"])
+
+	resetRootCmd(t)
+	pretty := stats(t, "compare", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions)
+	require.Contains(t, pretty, "\nSteps (output tokens)\n")
+	require.Regexp(t, `(?m)^first\s+2,401\s+-$`, pretty)
+	require.Regexp(t, `(?m)^output_tokens\s+2,853\s+-$`, pretty)
+	require.Regexp(t, `(?m)^cost\s+0\.08\s+-$`, pretty)
+
+	resetRootCmd(t)
+	m = statsJSON(t, "summary", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions)
+	require.Equal(t, map[string]any{"figure": "output_tokens", "count": float64(1), "median": float64(2853), "p90": float64(2853)},
+		figure(t, m["totals"], "output_tokens"), "the unknown run is left out, not counted as zero")
+	require.Equal(t, float64(2), figure(t, m["totals"], "wall_ms")["count"])
+	require.Equal(t, map[string]any{"figure": "cost", "count": float64(1), "median": 0.076725, "p90": 0.076725},
+		figure(t, m["totals"], "cost"))
+
+	resetRootCmd(t)
+	pretty = stats(t, "summary", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions)
+	require.Regexp(t, `(?m)^output_tokens\s+1\s+2,853\s+2,853$`, pretty)
+	require.Regexp(t, `(?m)^first\s+1\s+2,401\s+2,401$`, pretty)
+}
+
+// Comparisons and summaries criterion 5: no log or session file changes.
+func TestStatsCompareAndSummaryLeaveTheLogsAndSessionsByteIdentical(t *testing.T) {
+	dir, sessions := tokenProject(t, tokenPrices)
+	logsBefore, sessionsBefore := rawLogSnapshot(t, logsDir(dir)), treeSnapshot(t, sessions)
+	for _, args := range [][]string{
+		{"compare", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions},
+		{"compare", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions, "--format", "json"},
+		{"summary", "--run", statsSpecRun, "--run", statsImplRun, "--sessions-dir", sessions},
+		{"summary", "--sessions-dir", sessions, "--format", "json"},
+	} {
+		resetRootCmd(t)
+		stats(t, args...)
+	}
+	require.Equal(t, logsBefore, rawLogSnapshot(t, logsDir(dir)))
+	require.Equal(t, sessionsBefore, treeSnapshot(t, sessions))
 }

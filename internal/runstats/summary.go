@@ -47,11 +47,11 @@ func Summarise(runs []*Run, o Options) Summary {
 	return s
 }
 
-func newStat(name string, values []*int64) Stat {
+func newStat(name string, values []*float64) Stat {
 	var vs []float64
 	for _, v := range values {
 		if v != nil {
-			vs = append(vs, float64(*v))
+			vs = append(vs, *v)
 		}
 	}
 	st := Stat{Figure: name, Count: len(vs)}

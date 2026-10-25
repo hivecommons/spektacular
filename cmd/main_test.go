@@ -29,5 +29,17 @@ func TestMain(m *testing.M) {
 	}
 	forcedLogLevel = *testLogLevel
 	version = "0.20.0"
-	os.Exit(m.Run())
+	// No cmd test may read the developer's own Claude Code sessions: the
+	// stats reports' default sessions directory is $CLAUDE_CONFIG_DIR/projects,
+	// so point it at an empty directory for the whole package. Tests that
+	// need sessions pass --sessions-dir.
+	claudeDir, err := os.MkdirTemp("", "spektacular-cmd-claude-")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "creating an empty Claude Code directory: %v\n", err)
+		os.Exit(2)
+	}
+	os.Setenv("CLAUDE_CONFIG_DIR", claudeDir)
+	code := m.Run()
+	os.RemoveAll(claudeDir)
+	os.Exit(code)
 }

@@ -77,7 +77,7 @@ func TestRenderListEmpty(t *testing.T) {
 }
 
 func TestRenderReportGolden(t *testing.T) {
-	rep := reportOf(t, DefaultOptions, goldenRun())
+	rep := reportOf(t, goldenOptions(), goldenRun())
 	var b bytes.Buffer
 	require.NoError(t, RenderReport(&b, rep, 1))
 	out := b.String()

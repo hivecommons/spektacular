@@ -1,0 +1,235 @@
+{
+  "gap_threshold_ms": 300000,
+  "runs": [
+    {
+      "run_id": "00010000000000000000000000000000",
+      "kind": "implement",
+      "name": "000001_demo",
+      "agent": "claude",
+      "log_file": "",
+      "started_at": "2026-10-25T09:00:00Z",
+      "ended_at": "2026-10-25T09:01:11Z",
+      "wall_ms": 71000,
+      "status": "finished"
+    },
+    {
+      "run_id": "00020000000000000000000000000000",
+      "kind": "implement",
+      "name": "000001_demo",
+      "agent": "claude",
+      "log_file": "",
+      "started_at": "2026-10-25T10:00:00Z",
+      "ended_at": "2026-10-25T10:01:21Z",
+      "wall_ms": 81000,
+      "status": "finished"
+    },
+    {
+      "run_id": "00030000000000000000000000000000",
+      "kind": "implement",
+      "name": "000001_demo",
+      "agent": "claude",
+      "log_file": "",
+      "started_at": "2026-10-25T11:00:00Z",
+      "ended_at": "2026-10-25T11:01:31Z",
+      "wall_ms": 91000,
+      "status": "finished"
+    },
+    {
+      "run_id": "00040000000000000000000000000000",
+      "kind": "implement",
+      "name": "000001_demo",
+      "agent": "claude",
+      "log_file": "",
+      "started_at": "2026-10-25T12:00:00Z",
+      "ended_at": "2026-10-25T12:00:41Z",
+      "wall_ms": 41000,
+      "status": "finished"
+    },
+    {
+      "run_id": "00050000000000000000000000000000",
+      "kind": "implement",
+      "name": "000001_demo",
+      "agent": "claude",
+      "log_file": "",
+      "started_at": "2026-10-25T13:00:00Z",
+      "ended_at": "2026-10-25T13:00:51Z",
+      "wall_ms": 51000,
+      "status": "finished"
+    }
+  ],
+  "totals": [
+    {
+      "figure": "wall_ms",
+      "count": 5,
+      "median": 71000,
+      "p90": 91000
+    },
+    {
+      "figure": "working_ms",
+      "count": 5,
+      "median": 71000,
+      "p90": 91000
+    },
+    {
+      "figure": "user_wait_ms",
+      "count": 5,
+      "median": 0,
+      "p90": 0
+    },
+    {
+      "figure": "helper_wait_ms",
+      "count": 5,
+      "median": 0,
+      "p90": 0
+    },
+    {
+      "figure": "command_ms",
+      "count": 5,
+      "median": 3000,
+      "p90": 3000
+    },
+    {
+      "figure": "commands",
+      "count": 5,
+      "median": 3,
+      "p90": 3
+    },
+    {
+      "figure": "helpers",
+      "count": 5,
+      "median": 0,
+      "p90": 0
+    },
+    {
+      "figure": "gap_ms",
+      "count": 5,
+      "median": 0,
+      "p90": 0
+    }
+  ],
+  "steps": [
+    {
+      "step": "analyze",
+      "figures": [
+        {
+          "figure": "duration_ms",
+          "count": 5,
+          "median": 30000,
+          "p90": 50000
+        },
+        {
+          "figure": "entries",
+          "count": 5,
+          "median": 1,
+          "p90": 1
+        },
+        {
+          "figure": "commands",
+          "count": 5,
+          "median": 1,
+          "p90": 1
+        },
+        {
+          "figure": "command_ms",
+          "count": 5,
+          "median": 1000,
+          "p90": 1000
+        },
+        {
+          "figure": "helper_wait_ms",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "user_wait_ms",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        }
+      ]
+    },
+    {
+      "step": "verify",
+      "figures": [
+        {
+          "figure": "duration_ms",
+          "count": 3,
+          "median": 60000,
+          "p90": 60000
+        },
+        {
+          "figure": "entries",
+          "count": 3,
+          "median": 1,
+          "p90": 1
+        },
+        {
+          "figure": "commands",
+          "count": 3,
+          "median": 1,
+          "p90": 1
+        },
+        {
+          "figure": "command_ms",
+          "count": 3,
+          "median": 1000,
+          "p90": 1000
+        },
+        {
+          "figure": "helper_wait_ms",
+          "count": 3,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "user_wait_ms",
+          "count": 3,
+          "median": 0,
+          "p90": 0
+        }
+      ]
+    },
+    {
+      "step": "finished",
+      "figures": [
+        {
+          "figure": "duration_ms",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "entries",
+          "count": 5,
+          "median": 1,
+          "p90": 1
+        },
+        {
+          "figure": "commands",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "command_ms",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "helper_wait_ms",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        },
+        {
+          "figure": "user_wait_ms",
+          "count": 5,
+          "median": 0,
+          "p90": 0
+        }
+      ]
+    }
+  ]
+}

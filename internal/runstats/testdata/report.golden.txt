@@ -8,21 +8,37 @@ Command time     3m00s   (6 commands)
 Gaps over 5m00s  15m00s  (2 gaps)
 
 Steps
-STEP      ENTRIES  DURATION  COMMANDS  CMD TIME  HELPER WAIT  USER WAIT  INCOMPLETE
-setup     1        1m00s     1         30.0s     0.0s         0.0s       0
-analyze   2        16m00s    2         1m00s     3m00s        0.0s       1
-verify    1        12m00s    2         1m00s     0.0s         2m00s      0
-finished  1        0.0s      0         0.0s      0.0s         0.0s       0
+STEP      ENTRIES  DURATION  COMMANDS  CMD TIME  HELPER WAIT  USER WAIT  INCOMPLETE  OUT TOKENS  COST   TIME/1K OUT
+setup     1        1m00s     1         30.0s     0.0s         0.0s       0           200         0.01   5m00s
+analyze   2        16m00s    2         1m00s     3m00s        0.0s       1           2,400       0.07   6m40s
+verify    1        12m00s    2         1m00s     0.0s         2m00s      0           450         0.01*  22m13s
+finished  1        0.0s      0         0.0s      0.0s         0.0s       0           0           0.00   n/a
+
+Tokens
+Read from session bc997d3b (main)
+STEP                         INPUT  OUTPUT  CACHE READ  CACHE WRITE  COST
+setup                        5      200     2,000       50           0.01
+analyze                      13     2,400   15,000      150          0.07
+verify                       4      450     4,000       10           0.01*
+finished                     0      0       0           0            0.00
+(outside any step)           131    165     1,100       100          0.01*
+  of which session overhead  120    55      0           0            0.00*
+TOTAL                        153    3,215   22,100      310          0.09*
+
+Models
+MODEL             INPUT  OUTPUT  CACHE READ  CACHE WRITE  COST
+claude-haiku-5-5  21     55      0           0            ?
+claude-opus-5-5   132    3,160   22,100      310          0.09
 
 Tasks
-TASK               STARTED              DURATION  HELPER WAIT  USER WAIT  END
-Trace log package  2026-10-25 09:02:00  18m00s    3m00s        2m00s      moved
-Report builder     2026-10-25 09:20:00  10m00s    0.0s         0.0s       moved
+TASK               STARTED              DURATION  HELPER WAIT  USER WAIT  END    OUT TOKENS  COST   TIME/1K OUT
+Trace log package  2026-10-25 09:02:00  18m00s    3m00s        2m00s      moved  2,250       0.06*  7m06s
+Report builder     2026-10-25 09:20:00  10m00s    0.0s         0.0s       moved  600         0.02   16m40s
 
 Helpers
-NAME      STEP     STARTED              DURATION  END
-research  analyze  2026-10-25 09:03:00  3m00s     stopped
-review    analyze  2026-10-25 09:22:00  8m00s     open*
+NAME      STEP     STARTED              DURATION  END      OUT TOKENS  COST  TIME/1K OUT
+research  analyze  2026-10-25 09:03:00  3m00s     stopped  500         0.01  6m00s
+review    analyze  2026-10-25 09:22:00  8m00s     open*    ?           ?     ?
 
 User waits
 NAME      STEP    STARTED              DURATION  END
@@ -42,5 +58,7 @@ DURATION  STEP     STARTED              AFTER                       BEFORE
 30.0s     setup    2026-10-25 09:01:00  start step setup            start command implement goto
 
 * did not finish: counted up to where it was cut off, and left out of every wait total.
+
+* after a cost: incomplete, no price for claude-haiku-5-5 (prices per million tokens go under stats.prices in .spektacular/config.yaml).
 
 Skipped lines: 1

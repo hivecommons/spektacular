@@ -74,41 +74,52 @@ func RenderReport(w io.Writer, rep Report, skipped int) error {
 		fmt.Fprintln(b, "none recorded")
 	} else {
 		tw = table(b)
-		fmt.Fprintln(tw, "STEP\tENTRIES\tDURATION\tCOMMANDS\tCMD TIME\tHELPER WAIT\tUSER WAIT\tINCOMPLETE")
+		fmt.Fprintln(tw, "STEP\tENTRIES\tDURATION\tCOMMANDS\tCMD TIME\tHELPER WAIT\tUSER WAIT\tINCOMPLETE\t"+tokenHeads)
 		for _, s := range rep.Steps {
-			fmt.Fprintf(tw, "%s\t%d\t%s\t%d\t%s\t%s\t%s\t%d\n", s.Step, s.Entries, fmtMS(s.DurationMS),
-				s.Commands, fmtMS(s.CommandMS), fmtMS(s.HelperWaitMS), fmtMS(s.UserWaitMS), s.Incomplete)
+			fmt.Fprintf(tw, "%s\t%d\t%s\t%d\t%s\t%s\t%s\t%d\t%s\n", s.Step, s.Entries, fmtMS(s.DurationMS),
+				s.Commands, fmtMS(s.CommandMS), fmtMS(s.HelperWaitMS), fmtMS(s.UserWaitMS), s.Incomplete, tokenCells(s.Tokens))
 		}
 		tw.Flush()
 	}
+
+	renderTokens(b, rep)
 
 	if len(rep.Tasks) > 0 {
 		section(b, "Tasks")
 		tw = table(b)
-		fmt.Fprintln(tw, "TASK\tSTARTED\tDURATION\tHELPER WAIT\tUSER WAIT\tEND")
+		fmt.Fprintln(tw, "TASK\tSTARTED\tDURATION\tHELPER WAIT\tUSER WAIT\tEND\t"+tokenHeads)
 		for _, k := range rep.Tasks {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", k.Name, k.StartedAt.Format(timeLayout), fmtMS(k.DurationMS),
-				fmtMS(k.HelperWaitMS), fmtMS(k.UserWaitMS), mark(k.EndReason, k.Complete))
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", k.Name, k.StartedAt.Format(timeLayout), fmtMS(k.DurationMS),
+				fmtMS(k.HelperWaitMS), fmtMS(k.UserWaitMS), mark(k.EndReason, k.Complete), tokenCells(k.Tokens))
 		}
 		tw.Flush()
 	}
 
-	waits := func(title string, ws []Wait) {
-		section(b, title)
-		if len(ws) == 0 {
-			fmt.Fprintln(b, "none")
-			return
+	section(b, "Helpers")
+	if len(rep.Helpers) == 0 {
+		fmt.Fprintln(b, "none")
+	} else {
+		tw := table(b)
+		fmt.Fprintln(tw, "NAME\tSTEP\tSTARTED\tDURATION\tEND\t"+tokenHeads)
+		for _, x := range rep.Helpers {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", x.Name, orDash(x.Step), x.StartedAt.Format(timeLayout),
+				fmtMS(x.DurationMS), mark(x.EndReason, x.Complete), tokenCells(x.Tokens))
 		}
+		tw.Flush()
+	}
+
+	section(b, "User waits")
+	if len(rep.UserWaits) == 0 {
+		fmt.Fprintln(b, "none")
+	} else {
 		tw := table(b)
 		fmt.Fprintln(tw, "NAME\tSTEP\tSTARTED\tDURATION\tEND")
-		for _, x := range ws {
+		for _, x := range rep.UserWaits {
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", x.Name, orDash(x.Step), x.StartedAt.Format(timeLayout),
 				fmtMS(x.DurationMS), mark(x.EndReason, x.Complete))
 		}
 		tw.Flush()
 	}
-	waits("Helpers", rep.Helpers)
-	waits("User waits", rep.UserWaits)
 
 	section(b, "Longest gaps")
 	if len(rep.Gaps) == 0 {
@@ -125,6 +136,10 @@ func RenderReport(w io.Writer, rep Report, skipped int) error {
 
 	if unfinished {
 		fmt.Fprintf(b, "\n%s did not finish: counted up to where it was cut off, and left out of every wait total.\n", unfinishedMark)
+	}
+	if t := rep.Tokens.Total; t != nil && !t.CostComplete {
+		fmt.Fprintf(b, "\n%s after a cost: incomplete, no price for %s (prices per million tokens go under stats.prices in .spektacular/config.yaml).\n",
+			incompleteMark, strings.Join(t.UnpricedModels, ", "))
 	}
 	skippedLine(b, skipped)
 	_, err := io.WriteString(w, b.String())
@@ -216,6 +231,19 @@ func RenderComparison(w io.Writer, c Comparison, skipped int) error {
 		tw.Flush()
 	}
 
+	// The steps' token figures, when any run's token use is known.
+	if comparedTokens(c) {
+		for _, tf := range stepTokenTables {
+			section(b, "Steps ("+tf.title+")")
+			tw := table(b)
+			fmt.Fprintln(tw, head)
+			for _, s := range c.Steps {
+				fmt.Fprintf(tw, "%s\t%s\n", s.Step, figureCells(namedFigure(s.Figures, tf.figure)))
+			}
+			tw.Flush()
+		}
+	}
+
 	section(b, "Totals")
 	tw := table(b)
 	fmt.Fprintln(tw, "FIGURE"+strings.TrimPrefix(head, "STEP"))
@@ -248,6 +276,20 @@ func RenderSummary(w io.Writer, s Summary, skipped int) error {
 			fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n", st.Step, d.Count, statValue(d.Figure, d.Median), statValue(d.Figure, d.P90))
 		}
 		tw.Flush()
+	}
+
+	// The steps' token figures, when any run's token use is known.
+	if summarisedTokens(s) {
+		for _, tf := range stepTokenTables {
+			section(b, "Steps ("+tf.title+")")
+			tw := table(b)
+			fmt.Fprintln(tw, "STEP\tRUNS\tMEDIAN\tP90")
+			for _, st := range s.Steps {
+				d := namedStat(st.Figures, tf.figure)
+				fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n", st.Step, d.Count, statValue(d.Figure, d.Median), statValue(d.Figure, d.P90))
+			}
+			tw.Flush()
+		}
 	}
 
 	section(b, "Totals")
@@ -293,13 +335,23 @@ func figureCells(f Figure) string {
 }
 
 // isDuration reports whether a figure is in milliseconds.
-func isDuration(figure string) bool { return strings.HasSuffix(figure, "_ms") }
+func isDuration(figure string) bool {
+	return strings.HasSuffix(figure, "_ms") || figure == "working_ms_per_1k_output"
+}
 
-func figureValue(figure string, v int64) string {
-	if isDuration(figure) {
-		return fmtMS(v)
+// figureValue prints one value of a figure: a duration as a time, a token
+// count with thousands separators, a cost with 2 decimals, and any other
+// count as a number.
+func figureValue(figure string, v float64) string {
+	switch {
+	case isDuration(figure):
+		return fmtMS(int64(math.Round(v)))
+	case strings.HasSuffix(figure, "_tokens"):
+		return fmtTokens(int64(math.Round(v)))
+	case figure == "cost":
+		return strconv.FormatFloat(v, 'f', 2, 64)
 	}
-	return fmt.Sprintf("%d", v)
+	return strconv.FormatFloat(v, 'f', -1, 64)
 }
 
 // statValue prints a median or percentile, which may be fractional.
@@ -307,10 +359,48 @@ func statValue(figure string, v *float64) string {
 	if v == nil {
 		return "-"
 	}
-	if isDuration(figure) {
-		return fmtMS(int64(math.Round(*v)))
+	return figureValue(figure, *v)
+}
+
+// stepTokenTables are the step token figures a comparison or summary shows
+// beside the steps' durations.
+var stepTokenTables = []struct{ figure, title string }{
+	{"output_tokens", "output tokens"},
+	{"cost", "cost"},
+	{"working_ms_per_1k_output", "time per 1k output tokens"},
+}
+
+func namedFigure(fs []Figure, name string) Figure {
+	for _, f := range fs {
+		if f.Figure == name {
+			return f
+		}
 	}
-	return strconv.FormatFloat(*v, 'f', -1, 64)
+	return Figure{Figure: name}
+}
+
+func namedStat(fs []Stat, name string) Stat {
+	for _, f := range fs {
+		if f.Figure == name {
+			return f
+		}
+	}
+	return Stat{Figure: name}
+}
+
+// comparedTokens reports whether any compared run's token use is known.
+func comparedTokens(c Comparison) bool {
+	for _, v := range namedFigure(c.Totals, "output_tokens").Values {
+		if v != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// summarisedTokens reports whether any summarised run's token use is known.
+func summarisedTokens(s Summary) bool {
+	return namedStat(s.Totals, "output_tokens").Count > 0
 }
 
 // RenderCommands draws the command records as one table, oldest first as
@@ -368,4 +458,132 @@ func runCell(id *string) string {
 		return "-"
 	}
 	return shortID(*id)
+}
+
+// incompleteMark follows a cost that leaves out unpriced models.
+const incompleteMark = "*"
+
+// tokenHeads are the token columns beside a step's, task's or helper's
+// timings.
+const tokenHeads = "OUT TOKENS\tCOST\tTIME/1K OUT"
+
+// tokenCells are a token figure's columns: output tokens, cost and time per
+// thousand output tokens, each "?" when token use is unknown.
+func tokenCells(f *TokenFigure) string {
+	if f == nil {
+		return "?\t?\t?"
+	}
+	return fmtTokens(f.Output) + "\t" + fmtCost(f) + "\t" + fmtPace(f.WorkingMSPer1kOutput)
+}
+
+// fmtTokens prints a token count with thousands separators.
+func fmtTokens(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	neg := strings.HasPrefix(s, "-")
+	s = strings.TrimPrefix(s, "-")
+	var out []byte
+	for i := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			out = append(out, ',')
+		}
+		out = append(out, s[i])
+	}
+	if neg {
+		return "-" + string(out)
+	}
+	return string(out)
+}
+
+// fmtCost prints a figure's cost with 2 decimals: "?" when unknown, marked
+// when it leaves out unpriced models.
+func fmtCost(f *TokenFigure) string {
+	if f == nil || f.Cost == nil {
+		return "?"
+	}
+	c := strconv.FormatFloat(*f.Cost, 'f', 2, 64)
+	if !f.CostComplete {
+		c += incompleteMark
+	}
+	return c
+}
+
+// fmtPace prints working time per thousand output tokens, "n/a" when it
+// does not apply.
+func fmtPace(v *int64) string {
+	if v == nil {
+		return "n/a"
+	}
+	return fmtMS(*v)
+}
+
+// tokenRow is a figure's four token types and cost, as table cells.
+func tokenRow(f *TokenFigure) string {
+	if f == nil {
+		return "?\t?\t?\t?\t?"
+	}
+	return fmt.Sprintf("%s\t%s\t%s\t%s\t%s", fmtTokens(f.Input), fmtTokens(f.Output),
+		fmtTokens(f.CacheRead), fmtTokens(f.CacheWrite), fmtCost(f))
+}
+
+// renderTokens draws the Tokens block: the sessions read, each step's four
+// token types and cost, the tokens outside any step (with the session
+// overhead in them), the total, the models used and any helper no launch
+// matched. For unknown token use it prints only the reason.
+func renderTokens(b *strings.Builder, rep Report) {
+	tk := rep.Tokens
+	section(b, "Tokens")
+	if tk.Status != TokensKnown {
+		code, reason := "", ""
+		if tk.ReasonCode != nil {
+			code = *tk.ReasonCode
+		}
+		if tk.Reason != nil {
+			reason = *tk.Reason
+		}
+		fmt.Fprintf(b, "unknown (%s): %s\n", code, reason)
+		return
+	}
+	var from []string
+	for _, s := range tk.Sessions {
+		from = append(from, "session "+shortID(s.SessionID)+" ("+s.Transcript+")")
+	}
+	fmt.Fprintf(b, "Read from %s\n", strings.Join(from, ", "))
+
+	tw := table(b)
+	fmt.Fprintln(tw, "STEP\tINPUT\tOUTPUT\tCACHE READ\tCACHE WRITE\tCOST")
+	for _, s := range rep.Steps {
+		fmt.Fprintf(tw, "%s\t%s\n", s.Step, tokenRow(s.Tokens))
+	}
+	fmt.Fprintf(tw, "(outside any step)\t%s\n", tokenRow(tk.OutsideSteps))
+	if tk.SessionOverhead != nil {
+		fmt.Fprintf(tw, "  of which session overhead\t%s\n", tokenRow(tk.SessionOverhead))
+	} else if tk.SessionOverheadReason != nil {
+		fmt.Fprintf(tw, "  session overhead unknown (%s)\t\t\t\t\t\n", *tk.SessionOverheadReason)
+	}
+	fmt.Fprintf(tw, "TOTAL\t%s\n", tokenRow(tk.Total))
+	tw.Flush()
+
+	section(b, "Models")
+	tw = table(b)
+	fmt.Fprintln(tw, "MODEL\tINPUT\tOUTPUT\tCACHE READ\tCACHE WRITE\tCOST")
+	for _, m := range tk.Models {
+		cost := "?"
+		if m.Cost != nil {
+			cost = strconv.FormatFloat(*m.Cost, 'f', 2, 64)
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", m.Model, fmtTokens(m.Input), fmtTokens(m.Output),
+			fmtTokens(m.CacheRead), fmtTokens(m.CacheWrite), cost)
+	}
+	tw.Flush()
+
+	if len(tk.UnmatchedHelpers) > 0 {
+		section(b, "Unmatched helpers")
+		tw = table(b)
+		fmt.Fprintln(tw, "NAME\tSTEP\tSTARTED\tDURATION\t"+tokenHeads)
+		for _, h := range tk.UnmatchedHelpers {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", h.Name, orDash(h.Step), h.StartedAt.Format(timeLayout),
+				fmtMS(h.DurationMS), tokenCells(h.Tokens))
+		}
+		tw.Flush()
+	}
 }

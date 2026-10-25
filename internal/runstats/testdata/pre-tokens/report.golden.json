@@ -1,0 +1,354 @@
+{
+  "gap_threshold_ms": 300000,
+  "run": {
+    "run_id": "9a1b2c3d000000000000000000000075",
+    "kind": "implement",
+    "name": "000075_run-stats-command",
+    "agent": "claude",
+    "log_file": "",
+    "started_at": "2026-10-25T09:00:00Z",
+    "ended_at": "2026-10-25T09:30:00Z",
+    "wall_ms": 1800000,
+    "status": "finished"
+  },
+  "totals": {
+    "wall_ms": 1800000,
+    "working_ms": 1680000,
+    "user_wait_ms": 120000,
+    "helper_wait_ms": 180000,
+    "command_ms": 180000,
+    "commands": 6,
+    "helpers": 2,
+    "user_waits": 1,
+    "gap_ms": 900000,
+    "gaps_over_threshold": 2
+  },
+  "steps": [
+    {
+      "step": "setup",
+      "entries": 1,
+      "duration_ms": 60000,
+      "commands": 1,
+      "command_ms": 30000,
+      "helper_wait_ms": 0,
+      "user_wait_ms": 0,
+      "incomplete": 0
+    },
+    {
+      "step": "analyze",
+      "entries": 2,
+      "duration_ms": 960000,
+      "commands": 2,
+      "command_ms": 60000,
+      "helper_wait_ms": 180000,
+      "user_wait_ms": 0,
+      "incomplete": 1
+    },
+    {
+      "step": "verify",
+      "entries": 1,
+      "duration_ms": 720000,
+      "commands": 2,
+      "command_ms": 60000,
+      "helper_wait_ms": 0,
+      "user_wait_ms": 120000,
+      "incomplete": 0
+    },
+    {
+      "step": "finished",
+      "entries": 1,
+      "duration_ms": 0,
+      "commands": 0,
+      "command_ms": 0,
+      "helper_wait_ms": 0,
+      "user_wait_ms": 0,
+      "incomplete": 0
+    }
+  ],
+  "step_entries": [
+    {
+      "step": "setup",
+      "span_id": "p0",
+      "task_id": null,
+      "started_at": "2026-10-25T09:01:00Z",
+      "ended_at": "2026-10-25T09:02:00Z",
+      "duration_ms": 60000,
+      "end_reason": "moved",
+      "complete": true
+    },
+    {
+      "step": "analyze",
+      "span_id": "a1",
+      "task_id": "df1bade8-0000-4000-8000-000000000001",
+      "started_at": "2026-10-25T09:02:00Z",
+      "ended_at": "2026-10-25T09:08:00Z",
+      "duration_ms": 360000,
+      "end_reason": "moved",
+      "complete": true
+    },
+    {
+      "step": "verify",
+      "span_id": "b1",
+      "task_id": "df1bade8-0000-4000-8000-000000000001",
+      "started_at": "2026-10-25T09:08:00Z",
+      "ended_at": "2026-10-25T09:20:00Z",
+      "duration_ms": 720000,
+      "end_reason": "moved",
+      "complete": true
+    },
+    {
+      "step": "analyze",
+      "span_id": "a2",
+      "task_id": "df1bade8-0000-4000-8000-000000000002",
+      "started_at": "2026-10-25T09:20:00Z",
+      "ended_at": "2026-10-25T09:30:00Z",
+      "duration_ms": 600000,
+      "end_reason": "interrupted",
+      "complete": false
+    },
+    {
+      "step": "finished",
+      "span_id": "f",
+      "task_id": null,
+      "started_at": "2026-10-25T09:30:00Z",
+      "ended_at": "2026-10-25T09:30:00Z",
+      "duration_ms": 0,
+      "end_reason": "finished",
+      "complete": true
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "df1bade8-0000-4000-8000-000000000001",
+      "name": "Trace log package",
+      "span_id": "t1",
+      "started_at": "2026-10-25T09:02:00Z",
+      "ended_at": "2026-10-25T09:20:00Z",
+      "duration_ms": 1080000,
+      "helper_wait_ms": 180000,
+      "user_wait_ms": 120000,
+      "end_reason": "moved",
+      "complete": true
+    },
+    {
+      "task_id": "df1bade8-0000-4000-8000-000000000002",
+      "name": "Report builder",
+      "span_id": "t2",
+      "started_at": "2026-10-25T09:20:00Z",
+      "ended_at": "2026-10-25T09:30:00Z",
+      "duration_ms": 600000,
+      "helper_wait_ms": 0,
+      "user_wait_ms": 0,
+      "end_reason": "moved",
+      "complete": true
+    }
+  ],
+  "helpers": [
+    {
+      "span_id": "h1",
+      "parent_span_id": "a1",
+      "name": "research",
+      "step": "analyze",
+      "task_id": "df1bade8-0000-4000-8000-000000000001",
+      "started_at": "2026-10-25T09:03:00Z",
+      "ended_at": "2026-10-25T09:06:00Z",
+      "duration_ms": 180000,
+      "end_reason": "stopped",
+      "status": "ok",
+      "message": null,
+      "complete": true
+    },
+    {
+      "span_id": "h2",
+      "parent_span_id": "a2",
+      "name": "review",
+      "step": "analyze",
+      "task_id": "df1bade8-0000-4000-8000-000000000002",
+      "started_at": "2026-10-25T09:22:00Z",
+      "ended_at": "2026-10-25T09:30:00Z",
+      "duration_ms": 480000,
+      "end_reason": "open",
+      "status": null,
+      "message": null,
+      "complete": false
+    }
+  ],
+  "user_waits": [
+    {
+      "span_id": "u1",
+      "parent_span_id": null,
+      "name": "approval",
+      "step": "verify",
+      "task_id": "df1bade8-0000-4000-8000-000000000001",
+      "started_at": "2026-10-25T09:10:00Z",
+      "ended_at": "2026-10-25T09:12:00Z",
+      "duration_ms": 120000,
+      "end_reason": "stopped",
+      "status": "ok",
+      "message": null,
+      "complete": true
+    }
+  ],
+  "gaps": [
+    {
+      "started_at": "2026-10-25T09:12:00Z",
+      "ended_at": "2026-10-25T09:19:30Z",
+      "duration_ms": 450000,
+      "step": "verify",
+      "after": {
+        "event": "end",
+        "type": "user-wait",
+        "name": "approval"
+      },
+      "before": {
+        "event": "start",
+        "type": "command",
+        "name": "implement goto"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:22:00Z",
+      "ended_at": "2026-10-25T09:29:30Z",
+      "duration_ms": 450000,
+      "step": "analyze",
+      "after": {
+        "event": "start",
+        "type": "sub-agent",
+        "name": "review"
+      },
+      "before": {
+        "event": "start",
+        "type": "command",
+        "name": "implement status"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:03:00Z",
+      "ended_at": "2026-10-25T09:06:00Z",
+      "duration_ms": 180000,
+      "step": "analyze",
+      "after": {
+        "event": "start",
+        "type": "sub-agent",
+        "name": "research"
+      },
+      "before": {
+        "event": "end",
+        "type": "sub-agent",
+        "name": "research"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:10:00Z",
+      "ended_at": "2026-10-25T09:12:00Z",
+      "duration_ms": 120000,
+      "step": "verify",
+      "after": {
+        "event": "start",
+        "type": "user-wait",
+        "name": "approval"
+      },
+      "before": {
+        "event": "end",
+        "type": "user-wait",
+        "name": "approval"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:20:00Z",
+      "ended_at": "2026-10-25T09:22:00Z",
+      "duration_ms": 120000,
+      "step": "analyze",
+      "after": {
+        "event": "end",
+        "type": "command",
+        "name": "implement goto"
+      },
+      "before": {
+        "event": "start",
+        "type": "sub-agent",
+        "name": "review"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:06:00Z",
+      "ended_at": "2026-10-25T09:07:30Z",
+      "duration_ms": 90000,
+      "step": "analyze",
+      "after": {
+        "event": "end",
+        "type": "sub-agent",
+        "name": "research"
+      },
+      "before": {
+        "event": "start",
+        "type": "command",
+        "name": "implement goto"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:02:00Z",
+      "ended_at": "2026-10-25T09:03:00Z",
+      "duration_ms": 60000,
+      "step": "analyze",
+      "after": {
+        "event": "end",
+        "type": "command",
+        "name": "implement goto"
+      },
+      "before": {
+        "event": "start",
+        "type": "sub-agent",
+        "name": "research"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:08:00Z",
+      "ended_at": "2026-10-25T09:09:00Z",
+      "duration_ms": 60000,
+      "step": "verify",
+      "after": {
+        "event": "end",
+        "type": "command",
+        "name": "implement goto"
+      },
+      "before": {
+        "event": "start",
+        "type": "command",
+        "name": "implement status"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:00:30Z",
+      "ended_at": "2026-10-25T09:01:00Z",
+      "duration_ms": 30000,
+      "step": null,
+      "after": {
+        "event": "end",
+        "type": "command",
+        "name": "implement new"
+      },
+      "before": {
+        "event": "start",
+        "type": "step",
+        "name": "setup"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:01:00Z",
+      "ended_at": "2026-10-25T09:01:30Z",
+      "duration_ms": 30000,
+      "step": "setup",
+      "after": {
+        "event": "start",
+        "type": "step",
+        "name": "setup"
+      },
+      "before": {
+        "event": "start",
+        "type": "command",
+        "name": "implement goto"
+      }
+    }
+  ]
+}
