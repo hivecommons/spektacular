@@ -1,0 +1,5 @@
+RUN       KIND       NAME                      AGENT   STARTED              WALL    STATUS
+4bf92f35  implement  000075_run-stats-command  claude  2026-10-25 09:50:00  41m12s  in_progress
+9d0e0e47  plan       000075_run-stats-command  codex   2026-10-25 09:00:00  41m00s  finished
+
+Skipped lines: 2

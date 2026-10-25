@@ -1,0 +1,46 @@
+implement 000075_run-stats-command  agent claude  run 9a1b2c3d  finished  started 2026-10-25 09:00:00
+
+Wall time        30m00s
+Working time     28m00s
+User wait        2m00s   (1 wait)
+Helper wait      3m00s   (2 helpers)
+Command time     3m00s   (6 commands)
+Gaps over 5m00s  15m00s  (2 gaps)
+
+Steps
+STEP      ENTRIES  DURATION  COMMANDS  CMD TIME  HELPER WAIT  USER WAIT  INCOMPLETE
+setup     1        1m00s     1         30.0s     0.0s         0.0s       0
+analyze   2        16m00s    2         1m00s     3m00s        0.0s       1
+verify    1        12m00s    2         1m00s     0.0s         2m00s      0
+finished  1        0.0s      0         0.0s      0.0s         0.0s       0
+
+Tasks
+TASK               STARTED              DURATION  HELPER WAIT  USER WAIT  END
+Trace log package  2026-10-25 09:02:00  18m00s    3m00s        2m00s      moved
+Report builder     2026-10-25 09:20:00  10m00s    0.0s         0.0s       moved
+
+Helpers
+NAME      STEP     STARTED              DURATION  END
+research  analyze  2026-10-25 09:03:00  3m00s     stopped
+review    analyze  2026-10-25 09:22:00  8m00s     open*
+
+User waits
+NAME      STEP    STARTED              DURATION  END
+approval  verify  2026-10-25 09:10:00  2m00s     stopped
+
+Longest gaps
+DURATION  STEP     STARTED              AFTER                       BEFORE
+7m30s     verify   2026-10-25 09:12:00  end user-wait approval      start command implement goto
+7m30s     analyze  2026-10-25 09:22:00  start sub-agent review      start command implement status
+3m00s     analyze  2026-10-25 09:03:00  start sub-agent research    end sub-agent research
+2m00s     verify   2026-10-25 09:10:00  start user-wait approval    end user-wait approval
+2m00s     analyze  2026-10-25 09:20:00  end command implement goto  start sub-agent review
+1m30s     analyze  2026-10-25 09:06:00  end sub-agent research      start command implement goto
+1m00s     analyze  2026-10-25 09:02:00  end command implement goto  start sub-agent research
+1m00s     verify   2026-10-25 09:08:00  end command implement goto  start command implement status
+30.0s     -        2026-10-25 09:00:30  end command implement new   start step setup
+30.0s     setup    2026-10-25 09:01:00  start step setup            start command implement goto
+
+* did not finish: counted up to where it was cut off, and left out of every wait total.
+
+Skipped lines: 1
