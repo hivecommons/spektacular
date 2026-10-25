@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spektacular run</title>
+<style>/*@CSS@*/</style>
+</head>
+<body>
+<header class="head">
+  <div class="ident">
+    <h1 id="run-title">Spektacular run</h1>
+    <p id="run-meta" class="meta"></p>
+    <p id="run-skipped" class="meta warn" hidden></p>
+  </div>
+  <dl id="totals" class="totals"></dl>
+</header>
+<div class="toolbar">
+  <div id="legend" class="legend" aria-label="Legend"></div>
+</div>
+<main class="main">
+  <div id="waterfall" class="waterfall" tabindex="0" aria-label="Run waterfall">
+    <canvas id="chart" class="chart"></canvas>
+    <div id="spacer" class="spacer"></div>
+  </div>
+  <aside id="details" class="details" aria-live="polite">
+    <h2>Details</h2>
+    <p id="details-empty" class="meta">Select a bar to see its details.</p>
+    <dl id="details-list" hidden></dl>
+    <p id="details-note" class="meta" hidden></p>
+  </aside>
+</main>
+<script type="application/json" id="run-data">@DATA@</script>
+<script>/*@JS@*/</script>
+</body>
+</html>

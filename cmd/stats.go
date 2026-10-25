@@ -564,7 +564,7 @@ func init() {
 	for _, c := range []*cobra.Command{statsCommandsCmd, statsSpansCmd} {
 		c.Flags().Bool("outside-runs", false, "Only the records written outside any workflow run (not combined with a selection)")
 	}
-	for _, c := range []*cobra.Command{statsListCmd, statsRunCmd, statsCompareCmd, statsSummaryCmd, statsCommandsCmd, statsSpansCmd} {
+	for _, c := range []*cobra.Command{statsListCmd, statsRunCmd, statsCompareCmd, statsSummaryCmd, statsCommandsCmd, statsSpansCmd, statsViewCmd} {
 		c.Flags().Bool("schema", false, "Print the input/output schema and exit")
 		statsCmd.AddCommand(c)
 	}

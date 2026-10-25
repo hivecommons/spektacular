@@ -411,7 +411,7 @@ func TestStatsRefusals(t *testing.T) {
 
 	resetRootCmd(t)
 	er = runRefused(t, "stats")
-	require.Equal(t, "run one of: commands, compare, list, run, spans, summary", er.NextAction)
+	require.Equal(t, "run one of: commands, compare, list, run, spans, summary, view", er.NextAction)
 
 	t.Chdir(t.TempDir())
 	resetRootCmd(t)
@@ -422,7 +422,7 @@ func TestStatsRefusals(t *testing.T) {
 
 func TestStatsSchema(t *testing.T) {
 	t.Chdir(t.TempDir())
-	for _, sub := range []string{"list", "run", "compare", "summary", "commands", "spans"} {
+	for _, sub := range []string{"list", "run", "compare", "summary", "commands", "spans", "view"} {
 		resetRootCmd(t)
 		out := runOK(t, "stats", sub, "--schema")
 		var s commandSchema
