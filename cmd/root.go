@@ -430,7 +430,7 @@ func snapshotStatePath(argv []string) string {
 	}
 	shared := stateFilePath(dir)
 
-	var kind, verb, data string
+	var kind, verb, data, parent string
 	var args []string
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
@@ -442,7 +442,15 @@ func snapshotStatePath(argv []string) string {
 			}
 		case strings.HasPrefix(a, "--data="):
 			data = strings.TrimPrefix(a, "--data=")
-		case a == "--fields" || a == "--stdin" || a == "--file":
+		case a == "--parent":
+			if i+1 < len(argv) {
+				parent = argv[i+1]
+				i++
+			}
+		case strings.HasPrefix(a, "--parent="):
+			parent = strings.TrimPrefix(a, "--parent=")
+		case a == "--fields" || a == "--stdin" || a == "--file" ||
+			a == "--type" || a == "--status" || a == "--message":
 			i++ // these take a value, which is not a subcommand
 		case strings.HasPrefix(a, "-"):
 		case kind == "":
@@ -452,6 +460,9 @@ func snapshotStatePath(argv []string) string {
 		default:
 			args = append(args, a)
 		}
+	}
+	if kind == "trace" {
+		return traceSnapshotPath(dir, verb, args, parent, shared)
 	}
 	if kind != "plan" && kind != "implement" {
 		return laneNamedByArgs(dir, kind, append([]string{verb}, args...), shared)
@@ -488,6 +499,25 @@ func snapshotStatePath(argv []string) string {
 		}
 	}
 	return laneNamedByArgs(dir, kind, args, shared)
+}
+
+// traceSnapshotPath is the state file a trace command's record follows: the
+// in-progress run its span id names (the positional id of a stop, the
+// --parent of a start), so the command's record lands in the same run file
+// as the span it writes; otherwise fallback.
+func traceSnapshotPath(dir, verb string, args []string, parent, fallback string) string {
+	id := parent
+	if verb == "stop" && len(args) > 0 {
+		id = args[0]
+	}
+	ref, err := tracelog.ParseSpanRef(id)
+	if err != nil {
+		return fallback
+	}
+	if path, _ := resolveTraceRun(dir, &ref); path != "" {
+		return path
+	}
+	return fallback
 }
 
 // laneNamedByArgs is the state file of a running lane whose spec one of args
