@@ -50,7 +50,7 @@ spektacular trace stop <id> [--status ok|error] [--message <text>]
 
 A span nests under the current step unless `--parent` names another open span, and one left open is closed, marked abandoned, when its step ends or its run finishes. With logging off both commands succeed and record nothing. See [Logging and debugging](https://spektacular.dev/debugging/).
 
-**Run statistics.** Ask the logs where a run's time went, without reading any agent transcript:
+**Run statistics.** Ask the logs where a run's time went; the timings need no agent transcript:
 
 ```bash
 spektacular stats list                     # every recorded run, newest first
@@ -61,6 +61,8 @@ spektacular stats commands                 # every recorded command, with its st
 spektacular stats spans                    # helpers and waits, including an epic orchestrator's
 spektacular stats view [--name <spec>]     # the run as a single-file HTML waterfall you can open or share
 ```
+
+For runs driven by Claude Code, `stats run`, `compare` and `summary` also show tokens, cost and time per thousand output tokens for each step, task and helper, read from Claude Code's own session files with no extra setup (`--sessions-dir <path>` reads them from another folder). Set prices per million tokens under `stats.prices` in `.spektacular/config.yaml`; none are built in. Other agents show these figures as unknown.
 
 Every form takes the same selection (`--name`, `--kind`, `--agent`, and a repeatable `--run <id or 8+ character prefix>`), prints a readable table by default, and gives the structured report with `--format json`, whose durations are integer milliseconds and whose field names are stable. `--dir <path>` reads a logs directory copied from anywhere, such as a test run's, with no project needed. Reporting never changes a log, and `stats` commands are never logged. The figures are defined on the documentation site's [Run statistics](https://spektacular.dev/run-stats/) page. `stats view` writes a single HTML file that opens in any browser without a server; see the [Run viewer](https://spektacular.dev/run-viewer/) page on the documentation site.
 
