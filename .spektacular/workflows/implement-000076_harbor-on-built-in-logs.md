@@ -31,3 +31,6 @@ Pass counts out of 5 (Claude):
 - harbor-test-repo-one-at-a-time: 0/5
 - harbor-test-spec-claude: 0/5 (fails `TestUserWaits::test_constraints_question_is_a_user_wait` and `TestVerificationStep::test_review_was_a_briefed_child` every run)
 These counts also go into this task's plan changelog entry and the test plan's before/after comparison.
+- Tasks done and accepted so far: Go listings, CLI, docs, baseline (orchestrator-run), pin totals, run log reader, metrics schema 3. Milestone 1 committed by the CLI (bb1fd67 / docs 90e2050).
+- Placement helpers (lane_for, window_of, lane_windows, PlacedChild, place_children) left in metrics.py and claude_messages/goto_step_of in transcripts.py only for delegation.py; the delegation task removes the dependency, the removal task deletes them.
+- Delegation task plan: delegation rules take children/log/lanes/spans; also update the verifiers' delegation call sites (epic, implement-epic, goal-check, spec) in that task so the self-checks stay green; the rest of the SessionLog uses move in the verifier task.

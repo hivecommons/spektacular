@@ -536,7 +536,7 @@ Adds a characterisation self-test that records the token usage, models and cost 
 
 **Validation point**: The run-log reader, recorder, rule and wiring self-tests pass under `pytest tests/harbor`, together with the integration test against a throwaway binary. That test shows the record's steps equal to `stats run` on the same logs, and a missing log giving unknown measures. The characterisation test still passes with identical token figures.
 
-#### - [ ] Task: Harbor run log reader
+#### - [x] Task: Harbor run log reader
 **Id:** db80ecd4-547e-4e8b-8845-dea9901a726a
 **Repo:** spektacular
 **Depends on:**
@@ -548,13 +548,13 @@ Adds the one shared helper through which Harbor reads Spektacular's logs. It run
 *Technical detail:* [context.md#task-harbor-run-log-reader](./context.md#task-harbor-run-log-reader)
 
 **Acceptance criteria**:
-- [ ] Given `stats` output for an epic trial, the reader shows each lane's start, finish, children and the step each earlier child stopped at, with a resume counted from a failed workflow start in that lane.
-- [ ] Each child is matched to the orchestrator helper span open when it began, including a resumed lane's later child, children launched together and a span never stopped, and the orchestrator's next command or span after a finished lane is found.
-- [ ] Merges, the steps a plan entered and changelog writes per repo match what the old session-log rules gave for the same run.
-- [ ] A missing binary, a missing logs directory, a `stats` refusal, a timeout or unreadable output each produce a stated reason rather than an empty result.
-- [ ] The reader reads the logs only through `stats`, and an integration test with a freshly built binary over fixture logs gives the same answers as the canned responses.
+- [x] Given `stats` output for an epic trial, the reader shows each lane's start, finish, children and the step each earlier child stopped at, with a resume counted from a failed workflow start in that lane.
+- [x] Each child is matched to the orchestrator helper span open when it began, including a resumed lane's later child, children launched together and a span never stopped, and the orchestrator's next command or span after a finished lane is found.
+- [x] Merges, the steps a plan entered and changelog writes per repo match what the old session-log rules gave for the same run.
+- [x] A missing binary, a missing logs directory, a `stats` refusal, a timeout or unreadable output each produce a stated reason rather than an empty result.
+- [x] The reader reads the logs only through `stats`, and an integration test with a freshly built binary over fixture logs gives the same answers as the canned responses.
 
-#### - [ ] Task: Metrics record from Spektacular's logs
+#### - [x] Task: Metrics record from Spektacular's logs
 **Id:** 706125e3-2526-433c-8cd3-4ee71d792436
 **Repo:** spektacular
 **Depends on:**
@@ -573,14 +573,14 @@ It keeps the transcript's tokens, models, cost and child briefs. The transcript-
 *Technical detail:* [context.md#task-metrics-record-from-spektaculars-logs](./context.md#task-metrics-record-from-spektaculars-logs)
 
 **Acceptance criteria**:
-- [ ] For a trial whose logs hold a spec run with a helper and a user wait, the record's steps and step timings equal the run statistics report for those logs, and each step shows working, helper-wait and user-wait time adding up to its duration.
-- [ ] Every helper is listed with its spec and step, including one an epic orchestrator started outside any run, and each step shows how many helpers it started.
-- [ ] The record reports total user-wait, helper-wait and gap time in place of the single longest gap.
-- [ ] With the logs removed, every step, helper and wait measure is unknown with a reason, none is filled in from the transcript, the recorder exits successfully, and the reward is untouched.
-- [ ] Token usage, models and cost equal the pinned figures for every reference run.
-- [ ] The same logs paired with a Claude, a Bob and a Codex transcript give identical steps and helper sections.
+- [x] For a trial whose logs hold a spec run with a helper and a user wait, the record's steps and step timings equal the run statistics report for those logs, and each step shows working, helper-wait and user-wait time adding up to its duration.
+- [x] Every helper is listed with its spec and step, including one an epic orchestrator started outside any run, and each step shows how many helpers it started.
+- [x] The record reports total user-wait, helper-wait and gap time in place of the single longest gap.
+- [x] With the logs removed, every step, helper and wait measure is unknown with a reason, none is filled in from the transcript, the recorder exits successfully, and the reward is untouched.
+- [x] Token usage, models and cost equal the pinned figures for every reference run.
+- [x] The same logs paired with a Claude, a Bob and a Codex transcript give identical steps and helper sections.
 
-#### - [ ] Task: Delegation checks judge from spans
+#### - [x] Task: Delegation checks judge from spans
 **Id:** 86f58e38-51a5-47ef-bf2b-a9927f501170
 **Repo:** spektacular
 **Depends on:**
@@ -596,13 +596,13 @@ The hand-kept list of which steps require a helper is unchanged. The checks on w
 *Technical detail:* [context.md#task-delegation-checks-judge-from-spans](./context.md#task-delegation-checks-judge-from-spans)
 
 **Acceptance criteria**:
-- [ ] A run whose required step started a helper passes, and one whose required step completed without a helper span fails, naming the workflow, spec, step and attempt.
-- [ ] A resumed step is still judged as one attempt, and the step a lane ended on is not judged.
-- [ ] An epic lane with no orchestrator helper running when it started fails, naming the spec.
-- [ ] A spec review child whose brief lacks the staged spec, and an implementing child whose brief lacks its worktree folder, are still reported.
-- [ ] Self-checks fail if the worktree-folder constant or the required-step list drifts from the code and templates they mirror.
+- [x] A run whose required step started a helper passes, and one whose required step completed without a helper span fails, naming the workflow, spec, step and attempt.
+- [x] A resumed step is still judged as one attempt, and the step a lane ended on is not judged.
+- [x] An epic lane with no orchestrator helper running when it started fails, naming the spec.
+- [x] A spec review child whose brief lacks the staged spec, and an implementing child whose brief lacks its worktree folder, are still reported.
+- [x] Self-checks fail if the worktree-folder constant or the required-step list drifts from the code and templates they mirror.
 
-#### - [ ] Task: Suite verifiers read the logs through stats
+#### - [x] Task: Suite verifiers read the logs through stats
 **Id:** 251726e2-dd95-44de-ac4f-9855da375968
 **Repo:** spektacular
 **Depends on:**
@@ -622,12 +622,12 @@ The span checks 000074 added (each launch marked, the scripted question marked a
 *Technical detail:* [context.md#task-suite-verifiers-read-the-logs-through-stats](./context.md#task-suite-verifiers-read-the-logs-through-stats)
 
 **Acceptance criteria**:
-- [ ] No suite verifier or verifier self-check imports the old session-log reader or reads `.spektacular/debug`.
-- [ ] Every check that read a response or a state snapshot now reads a fact recorded at the default log level, and its pass and fail outcomes are unchanged on the self-check fixtures.
-- [ ] The epic suite no longer checks for `status <epic>` polls, and no verifier reads a `status` command from the logs.
-- [ ] Each suite's self-check passes against fake readers built from canned `stats` output.
+- [x] No suite verifier or verifier self-check imports the old session-log reader or reads `.spektacular/debug`.
+- [x] Every check that read a response or a state snapshot now reads a fact recorded at the default log level, and its pass and fail outcomes are unchanged on the self-check fixtures.
+- [x] The epic suite no longer checks for `status <epic>` polls, and no verifier reads a `status` command from the logs.
+- [x] Each suite's self-check passes against fake readers built from canned `stats` output.
 
-#### - [ ] Task: Suite images record at the default level
+#### - [x] Task: Suite images record at the default level
 **Id:** 581898a1-0209-4fd4-8202-e45182d2c69a
 **Repo:** spektacular
 **Depends on:**
@@ -640,9 +640,9 @@ Removes the verbose log level that 000073 sets in the config of every test proje
 *Technical detail:* [context.md#task-suite-images-record-at-the-default-level](./context.md#task-suite-images-record-at-the-default-level)
 
 **Acceptance criteria**:
-- [ ] No suite's seeded test-project config sets a log level other than the default, and the wiring self-test fails if one does.
-- [ ] Every suite that runs Spektacular collects the project's `.spektacular`, so its logs come back in the trial's artifacts.
-- [ ] Metrics gathering is still the last step after the reward, and its failure is ignored.
+- [x] No suite's seeded test-project config sets a log level other than the default, and the wiring self-test fails if one does.
+- [x] Every suite that runs Spektacular collects the project's `.spektacular`, so its logs come back in the trial's artifacts.
+- [x] Metrics gathering is still the last step after the reward, and its failure is ignored.
 
 ### Milestone 3: Harbor's timeline and cross-run reports use the new measures, and the old parsers are gone
 
@@ -860,3 +860,103 @@ Baseline pass counts out of 5 (Claude):
 - `spektacular: tests/harbor/shared/tests/test_transcripts_summary.py`
 
 **Discoveries**: `pytest tests/harbor` as a whole errors at collection, before this plan, because the in-container suite verifiers and the goal-check seed projects need their container paths; the runnable local self-tests are `tests/harbor/shared/tests` plus each suite's `test_verifier_selfcheck.py`.
+
+### 2026-10-25 — Task: Harbor run log reader
+
+**What was done**: Added `tests/harbor/shared/runlog.py`, Harbor's only route to Spektacular's logs: it runs `spektacular stats list|run|commands|spans --dir <logs> --format json` through an injectable runner (from a folder outside any project), parses the JSON into `Command`, `Span` and `Lane` records, caches each answer per reader, and raises `Unavailable` with a reason naming the fix for a missing binary, a missing directory, a refusal, a timeout or unreadable output. On top it gives lanes (start, finish, last, resumes from a refused `<kind> new`, restarts, child starts, stops), the orchestrator's outside-run commands and `sub-agent` spans, the span each child was launched under, the orchestrator's reaction after a lane, merges, steps entered and changelog writes per repo. Self-tests run it over the Go golden files and a hand-built epic trial (`runlog_fixtures.py`), check it agrees with the old session-log rules on a verbose copy of the same trial, and an integration module builds a throwaway binary and proves its answers equal the canned ones, also on a copied directory.
+
+**Deviations**: `Lane.children` is derived from `child_starts`; `Command` gains an `entered` property (`step_to`, else the goto's data step) and a module-level `event_at` gives when a reaction happened, since `orchestrator_reaction` may return a span. The fixture module lives beside the tests as `runlog_fixtures.py`. The plan's `LAUNCH_SPAN_WINDOW_S` is left to the delegation task.
+
+**Files changed**:
+- `spektacular: tests/harbor/shared/runlog.py`
+- `spektacular: tests/harbor/shared/tests/runlog_fixtures.py`
+- `spektacular: tests/harbor/shared/tests/test_runlog.py`
+- `spektacular: tests/harbor/shared/tests/test_runlog_integration.py`
+
+**Discoveries**: `stats` is not exempt from the upgrade gate and refuses inside a spec worktree, so the reader runs the binary from a temp directory with `--dir`; the integration test's `go build` is quick once the Go build cache is warm.
+
+### 2026-10-25 — Task: Metrics record from Spektacular's logs
+
+**What was done**: `metrics.py` writes record schema 3. `read_logs` builds one run log reader and takes, the same way for every agent: one `steps.workflows` entry per workflow run (each `stats run` step row in seconds, with `working_s = max(0, duration - helper wait - user wait)` beside the helper-wait and user-wait time, and a per-step helper count); trial totals of user wait, helper wait and gap time and count with the gap threshold; `subagents` counts and `helpers` from the `sub-agent` spans (an orchestrator's helper outside any run gets `outside_run`, `step: null` and the spec of the child launched under it); and `trace_calls` from the `trace` commands. Briefs (kind, description, models, prompt) still come from the transcript. When the logs cannot be read every log-sourced field is null and listed unknown with the reader's reason, never filled from the transcript, and a recorder error inside the log reader does the same. `--log-dir` replaces `--debug-dir`, kept as a hidden alias. `transcripts.py` loses the sub-agent count readers, the launch-root map, ATIF messages and `Child.output`; `claude_children` takes child models from their own messages. The README's Run metrics section describes schema 3. Tests (written by a test sub-agent) cover the split against the run report, helpers and their placement, totals, every unavailable cause, the five agents giving identical log sections, briefs, the reference runs' pinned totals, and an integration run against a built binary.
+
+**Deviations**: `lane_for`, `window_of`, `lane_windows`, `PlacedChild` and `place_children` stay in `metrics.py`, and `claude_messages`/`goto_step_of` in `transcripts.py`, only for `delegation.py` until the next task moves it onto spans; the record no longer uses them. An orchestrator helper's spec is taken from `RunLog.child_span` first (the plan's time-window rule is the fallback), so two children launched together get their own specs. `trim_reference.measured` passes `log_dir` and names the logs directory as `<logs>` in reasons so a trim into another folder compares equal. The run's own log-section unknowns are `steps`, `subagents.started`, `subagents.helpers`, `totals.user_wait_s`, `totals.helper_wait_s`, `totals.gap_s` and `totals.trace_calls`.
+
+**Files changed**:
+- `spektacular: tests/harbor/shared/metrics.py`
+- `spektacular: tests/harbor/shared/transcripts.py`
+- `spektacular: README.md`
+- `spektacular: tests/harbor/shared/tests/trim_reference.py`
+- `spektacular: tests/harbor/shared/tests/runlog_fixtures.py`
+- `spektacular: tests/harbor/shared/tests/test_metrics.py`
+- `spektacular: tests/harbor/shared/tests/test_transcripts_summary.py`
+- `spektacular: tests/harbor/shared/tests/test_runlog_integration.py`
+- `spektacular: tests/harbor/shared/tests/test_reference_runs.py`
+- `spektacular: tests/harbor/shared/tests/test_readme_metrics.py`
+- `spektacular: tests/harbor/shared/tests/test_delegation.py`
+- `spektacular: tests/harbor/shared/tests/test_sessionlog_rules.py`
+
+**Discoveries**: A step's split adds up to its duration only when its helper and user waits do not overlap; overlapping waits floor working time at 0. Tests that build a metrics record must pin the reader (a fake `RunLog`, or `SPEKTACULAR_BIN`), or the unknown reasons depend on whichever `spektacular` is on PATH.
+
+### 2026-10-25 — Task: Delegation checks judge from spans
+
+**What was done**: `delegation.py` no longer places transcript children by time. `read_run(transcript, log_dir)` gives the transcript's children, turns and wake-ups plus a run log reader, its spans and lanes (or why the logs could not be read). A required step passes when a completed attempt (consecutive entries of one step, so a resumed entry is not a new attempt) holds a `sub-agent` span of that run and step; the step a lane ended on is not judged. A per-spec lane passes when its first command is matched to an orchestrator `sub-agent` span outside any run (`RunLog.child_span`). Brief checks still read prompts: epic children are found by the spec their prompt names (every top-level child when the run worked one spec), an implementing child's brief must name its worktree folder `<root>/.spektacular/worktrees/<spec>` (`WORKTREE_DIR`, tied to `internal/worktree`'s `Dir` by a self-check), and a review child is joined to its span by launch time (`match_spans`, 000074's window, `LAUNCH_SPAN_WINDOW_S = 120`). Unreadable logs fail the span rules as `logs_unavailable` naming why. The wake-up and foreground rules take the children directly. `test_delegation.py` and `test_epic_children.py` build their logs as canned `stats` answers.
+
+**Deviations**: The per-spec rule matches each lane to its own orchestrator span through `child_span` rather than "any span open at the lane's start", so two children launched together each need a span (otherwise one span would pass both lanes). The verifiers' delegation call sites (epic, implement-epic, goal-check, spec) and the goal-check verifier self-check's delegation cases moved here, so the self-checks stay green; the rest of their log reading moves in the next task. `unmarked_launches` names the child instead of the spec and step it was placed in. `lane_for` moved from `metrics.py` to `delegation.py`, and the transcript placement helpers were deleted from `metrics.py`. The reference runs keep only their transcript-rule cases, with their lanes given by hand.
+
+**Files changed**:
+- `spektacular: tests/harbor/shared/delegation.py`
+- `spektacular: tests/harbor/shared/metrics.py`
+- `spektacular: tests/harbor/shared/tests/test_delegation.py`
+- `spektacular: tests/harbor/shared/tests/test_epic_children.py`
+- `spektacular: tests/harbor/shared/tests/test_metrics.py`
+- `spektacular: tests/harbor/epic-workflow/tests/test_epic_workflow.py`
+- `spektacular: tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py`
+- `spektacular: tests/harbor/goal-check-workflow/tests/test_goal_check.py`
+- `spektacular: tests/harbor/goal-check-workflow/tests/test_verifier_selfcheck.py`
+- `spektacular: tests/harbor/spec-workflow/tests/test_spec_workflow.py`
+
+**Discoveries**: An implementing child's worktree folder names both its spec and the project root, so a brief missing either is also missing the folder.
+
+### 2026-10-25 — Task: Suite verifiers read the logs through stats
+
+**What was done**: Every suite verifier that built the old session log reads Spektacular's logs through the run log reader, with its assertions unchanged: the epic and implement-epic orchestration checks (lanes, one child per spec, ordering, parallelism, worktrees, merges), the implement-epic goal record before each plan update (now from the command's `step` instead of its state snapshot), the goal-check event rules, the plan walkthrough check (`steps_entered`), the implement changelog writes, the standing-rules command list and the spec suite's constraints user wait (a `user-wait` span the reader places in the constraints step). `RunLog` gained `lane()` and `empty` for them, and `LOG_DIR` replaces `DEBUG_DIR`. The epic suite's `status <epic>` poll check was already retired by 000073. Self-checks over canned `stats` answers cover the plan, implement, epic, implement-epic and spec verifiers (in `test_runlog.py`), the goal-check events (its verifier self-check, now built on `runlog.Command`) and the standing-rules command list; guards check that no verifier or verifier self-check imports the old readers, reads a verbose-only fact or a `status` command, and that every verifier reading the logs goes through the reader.
+
+**Deviations**: The goal check took three attempts: the first found the old session-log rules file still importing the old reader and three suites without a canned-reader self-check; the second asked for the plan verifier's transcript tool-result reader to be shown as not a log read. `test_sessionlog_rules.py` was deleted here rather than in the removal task, with its rules already ported to `test_runlog.py`; the one reader-versus-old-reader parity test moved to `test_runlog_vs_sessionlog.py`, which goes with `sessionlog.py`.
+
+**Files changed**:
+- `spektacular: tests/harbor/shared/runlog.py`
+- `spektacular: tests/harbor/epic-workflow/tests/test_epic_workflow.py`
+- `spektacular: tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py`
+- `spektacular: tests/harbor/goal-check-workflow/tests/test_goal_check.py`
+- `spektacular: tests/harbor/goal-check-workflow/tests/test_verifier_selfcheck.py`
+- `spektacular: tests/harbor/plan-workflow/tests/test_plan_workflow.py`
+- `spektacular: tests/harbor/implement-workflow/tests/test_implement_workflow.py`
+- `spektacular: tests/harbor/standing-rules/tests/test_standing_rules.py`
+- `spektacular: tests/harbor/standing-rules/tests/test_verifier_selfcheck.py`
+- `spektacular: tests/harbor/spec-workflow/tests/test_spec_workflow.py`
+- `spektacular: tests/harbor/shared/tests/test_runlog.py`
+- `spektacular: tests/harbor/shared/tests/test_runlog_vs_sessionlog.py`
+- `spektacular: tests/harbor/shared/tests/test_sessionlog_rules.py` (deleted)
+
+**Discoveries**: A suite verifier module imports `RunLog` by name (`from runlog import RunLog`), so a self-check points it at canned answers by patching the module's own `RunLog`; a verifier that imports inside a test patches `runlog.RunLog` instead.
+
+### 2026-10-25 — Task: Suite images record at the default level
+
+**What was done**: The seeded test projects no longer set the verbose level 000073 gave them. The four seed scripts still switch logging off while they seed, and now switch it back to the default (`set_log_level standard`) at the end; the spec, plan and repo images no longer write a config that only set the level; the implement image's copied `config.yaml` drops its `log` block. `loglevel.py`'s docstring and the seed and Dockerfile comments say the agent's run is recorded at the default level. The wiring self-test now fails if any suite's seed script, Dockerfile or seeded config sets a level other than `standard` (or sets `SPEKTACULAR_SESSION_LOG`), and if a suite that copies the binary does not collect `/app/.spektacular`; the metrics-last check is unchanged.
+
+**Deviations**: The spec, plan and repo Dockerfiles' config lines were removed rather than set to `standard`, returning those images to how they were before 000073; the seed scripts set `standard` explicitly because seeding turns logging off. The two `task.toml` timeline comments needed no change.
+
+**Files changed**:
+- `spektacular: tests/harbor/epic-workflow/environment/seed/seed.sh`
+- `spektacular: tests/harbor/implement-epic-workflow/environment/seed/seed.sh`
+- `spektacular: tests/harbor/goal-check-workflow/environment/seed/seed.sh`
+- `spektacular: tests/harbor/standing-rules/environment/seed/seed.sh`
+- `spektacular: tests/harbor/spec-workflow/environment/Dockerfile`
+- `spektacular: tests/harbor/plan-workflow/environment/Dockerfile`
+- `spektacular: tests/harbor/repo-workflow/environment/Dockerfile`
+- `spektacular: tests/harbor/implement-workflow/environment/Dockerfile`
+- `spektacular: tests/harbor/implement-workflow/environment/config.yaml`
+- `spektacular: tests/harbor/shared/loglevel.py`
+- `spektacular: tests/harbor/shared/tests/test_suite_wiring.py`
+
+**Discoveries**: None.
