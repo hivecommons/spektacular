@@ -25,7 +25,7 @@ func TestParseSpanRef(t *testing.T) {
 		{"long span", "4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7ff", "16 lowercase hex"},
 		{"uppercase", "4BF92F3577B34DA6A3CE929D0E0E4736-00f067aa0ba902b7", "lowercase hex"},
 		{"not hex", "4bf92f3577b34da6a3ce929d0e0e473z-00f067aa0ba902b7", "lowercase hex"},
-		{"extra hyphen", "4bf92f3577b34da6a3ce929d0e0e4736-00f067aa-0ba902b7", "16 lowercase hex"},
+		{"extra hyphen", "4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba9-02b7", "16 lowercase hex"},
 	}
 	for _, tc := range bad {
 		t.Run(tc.name, func(t *testing.T) {
