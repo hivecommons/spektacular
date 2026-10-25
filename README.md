@@ -196,7 +196,7 @@ Running `spektacular init <agent>` creates:
 
 ```
 .spektacular/
-├── config.yaml              # agent, command, debug, store settings, and the repo registry
+├── config.yaml              # agent, command, log, store settings, and the repo registry
 ├── repo.yaml                # the colocated repo's own configuration
 ├── specs/                   # your specification files
 ├── plans/                   # generated plans (plan.md, research.md, context.md)
@@ -285,7 +285,7 @@ Configuration is split across two files, and a colocated single-repo project sim
 ### Project configuration (`config.yaml`)
 
 ```yaml
-schema: 3                           # settings format version, written by Spektacular; `migrate` raises it
+schema: 5                           # settings format version, written by Spektacular; `migrate` raises it
 written_by: 0.16.0                  # the Spektacular version that last wrote this file (informational)
 skills_version: 0.16.0              # the Spektacular version that last installed the agent skills
 name: my-project                    # required, slug-safe; namespaces changelog entries
@@ -293,8 +293,12 @@ source: git@example.com:org/my-project.git  # optional; the project's git addres
 command: spektacular
 agent: claude
 auto_commit: "off"                  # off | workflow | full: automatic git commits (local only)
-debug:
-  enabled: false                    # true records every command and response to a session log; SPEKTACULAR_SESSION_LOG=off leaves one call out, =on records it even when false
+log:
+  provider: file                    # the logger; only file ships
+  level: standard                   # off | standard | verbose (full responses and state); status is never logged
+  retention: 10                     # most recent workflow runs kept, and as many days of standalone commands
+  config:
+    directory: logs                 # relative to the folder holding config.yaml
 spec:
   provider: file
   id_method: timestamp              # timestamp + random suffix; counter is legacy and branch-local
