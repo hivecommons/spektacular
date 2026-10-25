@@ -339,7 +339,7 @@ Adds `knowledge prune` and `knowledge prune verdict`. The first pass removes ent
 
 **Validation point**: The full Go test suite passes with the rewritten template-contract tests, and initialising a throwaway project installs guidance with no "offer and wait" wording.
 
-#### - [ ] Task: Rewrite the installed instructions to write knowledge, then report it
+#### - [x] Task: Rewrite the installed instructions to write knowledge, then report it
 **Id:** 3f3644b0-86f5-424d-98e0-285470de7180
 **Repo:** spektacular
 **Depends on:**
@@ -351,13 +351,13 @@ Changes every source template that tells an agent to offer knowledge and wait. T
 *Technical detail:* [context.md#task-rewrite-the-installed-instructions-to-write-knowledge-then-report-it](./context.md#task-rewrite-the-installed-instructions-to-write-knowledge-then-report-it)
 
 **Acceptance criteria**:
-- [ ] The guidance a fresh `init` installs tells agents to write durable knowledge themselves and report it, and no longer tells them to offer it and wait for a decision.
-- [ ] No plan, implement or epic instruction asks the user whether to save knowledge, in standalone or orchestrated runs.
-- [ ] Each instruction tells the agent to name the entry it wrote, its store and path, and why it was worth keeping.
-- [ ] The AGENTS.md knowledge section keeps its heading and stays within the compact-section limits.
-- [ ] The plan discovery step's knowledge reads name the plan's spec.
+- [x] The guidance a fresh `init` installs tells agents to write durable knowledge themselves and report it, and no longer tells them to offer it and wait for a decision.
+- [x] No plan, implement or epic instruction asks the user whether to save knowledge, in standalone or orchestrated runs.
+- [x] Each instruction tells the agent to name the entry it wrote, its store and path, and why it was worth keeping.
+- [x] The AGENTS.md knowledge section keeps its heading and stays within the compact-section limits.
+- [x] The plan discovery step's knowledge reads name the plan's spec.
 
-#### - [ ] Task: Make the knowledge skill write directly and drive prune
+#### - [x] Task: Make the knowledge skill write directly and drive prune
 **Id:** 7e7bd29f-237e-44f2-9ba5-b6b97cb6ef43
 **Repo:** spektacular
 **Depends on:**
@@ -369,12 +369,12 @@ Updates the `spek-knowledge` skill. Contributing and updating now write the entr
 *Technical detail:* [context.md#task-make-the-knowledge-skill-write-directly-and-drive-prune](./context.md#task-make-the-knowledge-skill-write-directly-and-drive-prune)
 
 **Acceptance criteria**:
-- [ ] The installed skill writes a new or revised entry without asking and then tells the user the tier, store, path, tags and reason.
-- [ ] Asking whether the knowledge base is still accurate leads the agent to the prune command, with the dry run offered as a preview.
-- [ ] The tag audit still proposes and confirms one entry at a time, exactly as before.
-- [ ] Every command the skill tells the agent to run is a real knowledge subcommand.
+- [x] The installed skill writes a new or revised entry without asking and then tells the user the tier, store, path, tags and reason.
+- [x] Asking whether the knowledge base is still accurate leads the agent to the prune command, with the dry run offered as a preview.
+- [x] The tag audit still proposes and confirms one entry at a time, exactly as before.
+- [x] Every command the skill tells the agent to run is a real knowledge subcommand.
 
-#### - [ ] Task: Drop the obsolete knowledge-offer line from the end-to-end suites
+#### - [x] Task: Drop the obsolete knowledge-offer line from the end-to-end suites
 **Id:** f9150144-92e1-4ac8-8908-c38ba4132052
 **Repo:** spektacular
 **Depends on:**
@@ -386,8 +386,8 @@ Three headless end-to-end suites tell the agent to decline knowledge offers, and
 *Technical detail:* [context.md#task-drop-the-obsolete-knowledge-offer-line-from-the-end-to-end-suites](./context.md#task-drop-the-obsolete-knowledge-offer-line-from-the-end-to-end-suites)
 
 **Acceptance criteria**:
-- [ ] No end-to-end suite instruction mentions declining an offer to save knowledge.
-- [ ] The suites' instructions still tell the headless agent not to wait for a person.
+- [x] No end-to-end suite instruction mentions declining an offer to save knowledge.
+- [x] The suites' instructions still tell the headless agent not to wait for a person.
 
 ### Milestone 4: The documentation describes self-written knowledge, the usage index and prune
 
@@ -542,3 +542,55 @@ None. Every design choice was settled while planning and recorded as an assumpti
 - `spektacular: templates/knowledge_prune_template_test.go`
 
 **Discoveries**: After `--force`, entries the discarded run already removed are not listed in the new run's report (their removal already happened). `ForgetRecords` stamps its reconcile with the wall clock rather than prune's injected clock, so an entry first tracked during a prune's removal update gets the real time as `tracked_since`.
+
+### 2026-10-25 — Task: Rewrite the installed instructions to write knowledge, then report it
+
+**What was done**: The knowledge-trigger standing rule (full and short forms), memory-context, the plan discovery and walkthrough steps, the implement update_changelog and finished steps, the orchestrated-stop partial and both epic orchestrator skills now tell agents to write durable knowledge through `spek-knowledge` without asking and then tell the user which entry, its tier, store and path, and why. The partial `implement-knowledge-candidates` became `implement-knowledge-written` (a `## Knowledge written` list reported once at the finish). The discovery step passes `--spec {{plan_name}}` to `knowledge always-applied` and `"spec":"{{plan_name}}"` to `knowledge read`. Phrase tests moved to the new wording, and a new `templates/knowledge_capture_wording_test.go` bans the old offer phrases across agents/, steps/plan, steps/implement, partials/ and both epic skills.
+
+**Deviations**: The goal check's first attempt found memory-context did not name the entry, store, path and reason; it now does, and the short rule says "which entry, where (tier, store, path) and why". The plan-epic skill test needed no change (its allowlist did not cover the replaced sentence). The harbor plan suite and the legacy AGENTS.md fixtures were left untouched.
+
+**Files changed**:
+- `spektacular: templates/agents/knowledge-trigger.md`
+- `spektacular: templates/agents/short/knowledge-trigger.md`
+- `spektacular: templates/agents/memory-context.md`
+- `spektacular: templates/steps/plan/02-discovery.md`
+- `spektacular: templates/steps/plan/18-walkthrough.md`
+- `spektacular: templates/steps/plan/19-finished.md`
+- `spektacular: templates/steps/implement/07-update_changelog.md`
+- `spektacular: templates/steps/implement/12-finished.md`
+- `spektacular: templates/partials/implement-knowledge-written.md` (renamed from `implement-knowledge-candidates.md`)
+- `spektacular: templates/partials/orchestrated-stop.md`
+- `spektacular: templates/skills/workflows/spek-plan-epic/SKILL.md`
+- `spektacular: templates/skills/workflows/spek-implement-epic/SKILL.md`
+- `spektacular: internal/agent/standing_rules_test.go`
+- `spektacular: internal/steps/plan/steps_test.go`
+- `spektacular: internal/steps/implement/steps_test.go`
+- `spektacular: templates/implement_epic_skill_test.go`
+- `spektacular: templates/knowledge_capture_wording_test.go`
+
+**Discoveries**: Until the next task lands, the `spek-knowledge` skill these instructions hand off to still gates contribute/update on confirmation (the reviewer flagged this); the skill task removes that gate. This repository's own installed AGENTS.md and guidance keep the old wording until the maintainer reinstalls between workflows.
+
+### 2026-10-25 — Task: Make the knowledge skill write directly and drive prune
+
+**What was done**: The `spek-knowledge` skill's contribute and update intents now write straight away and then tell the user the tier, store, path, tags and reason (update also summarises the change). The maintenance review became `# Intent: prune`, which runs `knowledge prune` (or `--dry-run` as the preview), follows each returned instruction, answers with `knowledge prune verdict`, presents the final report, and keeps the report-only category-drift check. Decline handling now covers only the audit, the one remaining confirmation gate, whose per-entry flow is unchanged. `instruction_surface_test.go` was rewritten to pin the new wording, the prune intent and its slicing, and checks every `knowledge <verb>` the skill names against the registered subcommands (now including `usage` and `prune`).
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: templates/skills/workflows/spek-knowledge/SKILL.md`
+- `spektacular: internal/agent/instruction_surface_test.go`
+
+**Discoveries**: `internal/agent/instruction_surface_test.go` keeps a hand-maintained `knowledgeSubcommands` map (cmd imports internal/agent, so it cannot be read from cmd); any new knowledge subcommand must be added there or skill invocations of it fail the test.
+
+### 2026-10-25 — Task: Drop the obsolete knowledge-offer line from the end-to-end suites
+
+**What was done**: Removed "If you are offered to save something to the knowledge base, decline." from the epic, implement-epic and goal-check Harbor suite instructions; their headless "never end your turn waiting for a reply" guidance is unchanged.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: tests/harbor/epic-workflow/instruction.md`
+- `spektacular: tests/harbor/implement-epic-workflow/instruction.md`
+- `spektacular: tests/harbor/goal-check-workflow/instruction.md`
+
+**Discoveries**: None.

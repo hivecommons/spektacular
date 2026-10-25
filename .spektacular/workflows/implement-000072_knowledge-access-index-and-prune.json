@@ -13,11 +13,12 @@
     "update_changelog"
   ],
   "created_at": "2026-10-25T11:01:43.362648667Z",
-  "updated_at": "2026-10-25T11:35:00.048421227Z",
+  "updated_at": "2026-10-25T11:45:41.373683101Z",
   "data": {
     "committed_milestones": [
       1,
-      2
+      2,
+      3
     ],
     "goal_item": "",
     "name": "000072_knowledge-access-index-and-prune",

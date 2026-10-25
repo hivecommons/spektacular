@@ -466,6 +466,421 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "3f3644b0-86f5-424d-98e0-285470de7180",
+      "title": "Rewrite the installed instructions to write knowledge, then report it",
+      "checks": [
+        {
+          "at": "2026-10-25T11:39:45Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "3f3644b0-86f5-424d-98e0-285470de7180",
+            "title": "Rewrite the installed instructions to write knowledge, then report it",
+            "criteria": [
+              "The guidance a fresh `init` installs tells agents to write durable knowledge themselves and report it, and no longer tells them to offer it and wait for a decision.",
+              "No plan, implement or epic instruction asks the user whether to save knowledge, in standalone or orchestrated runs.",
+              "Each instruction tells the agent to name the entry it wrote, its store and path, and why it was worth keeping.",
+              "The AGENTS.md knowledge section keeps its heading and stays within the compact-section limits.",
+              "The plan discovery step's knowledge reads name the plan's spec."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "AGENTS.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/agents/knowledge-trigger.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/standing_rules_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/agents/short/knowledge-trigger.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "standing_rules_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/agents/memory-context.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/plan/02-discovery.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/steps/plan/steps_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/plan/18-walkthrough.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/implement/07-update_changelog.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/implement-knowledge-candidates.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/implement-knowledge-written.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/implement/12-finished.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/plan/19-finished.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/orchestrated-stop.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/workflows/spek-plan-epic/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/workflows/spek-implement-epic/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/plan_epic_skill_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/implement_epic_skill_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/steps/implement/steps_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/testdata/agents-md-legacy.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/testdata/agents-md-legacy.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "templates/agents/knowledge-trigger.md:16-21 now says 'write the entry yourself — do not offer it and do not wait for a decision', and lines 23-28 say to tell the user which entry, where and why. templates/agents/short/knowledge-trigger.md:4-6 reads 'write it via `spek-knowledge` yourself, then tell the user which entry, where and why. Do not ask first.' memory-context.md:12 now says 'reporting what it wrote'. The old offer-and-wait wording is gone from these sources. Note: untracked templates/knowledge_capture_wording_test.go is not in the item's file scope."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Grep of templates/steps/plan, templates/steps/implement, templates/partials and both epic SKILL.md files for 'offer to save', 'save it only if the user accepts', 'explicit acceptance', 'not offered again', 'knowledge candidates' and 'propose-then-confirm' finds nothing. Rewritten sources: steps/plan/02-discovery.md:76-78, steps/plan/18-walkthrough.md:435, steps/implement/07-update_changelog.md:350-356 (both branches), partials/orchestrated-stop.md:299-300, skills/workflows/spek-plan-epic/SKILL.md:328,337, skills/workflows/spek-implement-epic/SKILL.md:309,318. Remaining 'offer'/'wait' wording in templates/steps/spec/05-technical_approach.md is in the spec workflow, outside plan, implement and epic."
+            },
+            {
+              "criterion": 3,
+              "verdict": "not_met",
+              "evidence": "Most instructions name the entry, store/tier, path and why: knowledge-trigger.md:23-25, plan/02-discovery.md:422, plan/18-walkthrough.md:435, implement/07-update_changelog.md:351 and 356, partials/implement-knowledge-written.md:4, implement/12-finished.md:376 and 392, plan/19-finished.md:448, both epic SKILL.md files. The exception is templates/agents/memory-context.md:10-13, which tells the agent to route writes through spek-knowledge and only says 'reporting what it wrote'. It does not name the entry, store, path or reason. The short section (templates/agents/short/knowledge-trigger.md:6) says 'which entry, where and why', which is thin but acceptable."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The short section heading '## Knowledge-Worthy Discovery Recognition' is kept (templates/agents/short/knowledge-trigger.md:1, and standing_rules_test.go:614 expects its compact phrases). The new short text is 4 lines (the test's line limit and the 5120-byte budget are at standing_rules_test.go:813-822), and it contains the needles 'write it via `spek-knowledge` yourself', 'tell the user which entry, where' and 'Do not ask first.' The installed repo-root AGENTS.md still has the old offer wording, but it is regenerated by init/migrate and is not part of the template source this criterion covers."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "templates/steps/plan/02-discovery.md:404 sets '--spec {{plan_name}}' on the always-applied read. Line 413 sets '\"spec\":\"{{plan_name}}\"' on the knowledge read. The knowledge search commands do not name the spec because the CLI takes --spec only on always-applied, conventions and read (cmd/knowledge_usage.go:62-68, cmd/knowledge.go:779), so search cannot carry it."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T11:41:31Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "3f3644b0-86f5-424d-98e0-285470de7180",
+            "title": "Rewrite the installed instructions to write knowledge, then report it",
+            "criteria": [
+              "The guidance a fresh `init` installs tells agents to write durable knowledge themselves and report it, and no longer tells them to offer it and wait for a decision.",
+              "No plan, implement or epic instruction asks the user whether to save knowledge, in standalone or orchestrated runs.",
+              "Each instruction tells the agent to name the entry it wrote, its store and path, and why it was worth keeping.",
+              "The AGENTS.md knowledge section keeps its heading and stays within the compact-section limits.",
+              "The plan discovery step's knowledge reads name the plan's spec."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "AGENTS.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/agents/knowledge-trigger.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/standing_rules_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/agents/short/knowledge-trigger.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "standing_rules_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/agents/memory-context.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/plan/02-discovery.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/steps/plan/steps_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/plan/18-walkthrough.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/implement/07-update_changelog.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/implement-knowledge-candidates.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/implement-knowledge-written.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/implement/12-finished.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/plan/19-finished.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/orchestrated-stop.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/workflows/spek-plan-epic/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/workflows/spek-implement-epic/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/plan_epic_skill_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/implement_epic_skill_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/steps/implement/steps_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/testdata/agents-md-legacy.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/testdata/agents-md-legacy.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "templates/agents/knowledge-trigger.md:16-20 now reads 'write the entry yourself — do not offer it and do not wait for a decision', invoking the spek-knowledge skill and writing through `{{command}} knowledge write`. The old Accept/Defer/Decline outcomes are removed (diff hunk at lines 190-220). templates/agents/short/knowledge-trigger.md:4-6 (the AGENTS.md compact form) says 'write it via spek-knowledge yourself, then tell the user ... Do not ask first.' templates/agents/memory-context.md:12-14 also writes then reports. Caveat: the spek-knowledge skill it hands off to (templates/skills/workflows/spek-knowledge/SKILL.md:92-93, 115, 167) still requires explicit user confirmation before any `knowledge write`. That skill is outside this item's scope, so the instruction text is met, but the guidance may stall in practice."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Grep of templates/steps/plan, templates/steps/implement, templates/partials and the two spek-*-epic SKILL.md files finds no remaining knowledge offer or ask. Plan: steps/plan/02-discovery.md:423 'Do not stop to ask first'; steps/plan/18-walkthrough.md:436 'Do not ask first'; steps/plan/19-finished.md:449 reports entries. Implement: steps/implement/07-update_changelog.md:351-357 writes via spek-knowledge without asking in both standalone and orchestrated branches; partials/implement-knowledge-written.md:4 is a report, not a question; steps/implement/12-finished.md:18,60 use the written partial. Epic: skills/workflows/spek-plan-epic/SKILL.md:108 and spek-implement-epic/SKILL.md:320 report entries instead of offering. partials/orchestrated-stop.md:301 says never ask. Remaining 'offer' hits are spec-workflow or repo/design items, not knowledge in plan, implement or epic. The same caveat as criterion 1 applies to the spek-knowledge skill's own confirmation step."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Each instruction names entry, store/tier and path, and why: knowledge-trigger.md:215-217 ('which entry (its path), where it lives (its tier and store), and why it is worth keeping'); short/knowledge-trigger.md:6-7 ('which entry, where (tier, store, path) and why'); memory-context.md:12-14; steps/plan/02-discovery.md:423 ('which entry you wrote, its tier, store and path, and why'); steps/plan/18-walkthrough.md:436; steps/plan/19-finished.md:449; steps/implement/07-update_changelog.md:352 and 357 (tier, store, path and why); partials/implement-knowledge-written.md:4; steps/implement/12-finished.md:377,392; partials/orchestrated-stop.md:301; both epic SKILL.md files (spek-plan-epic:330,108; spek-implement-epic:311,320)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Root AGENTS.md:50 keeps the heading '## Knowledge-Worthy Discovery Recognition'. The compact template templates/agents/short/knowledge-trigger.md is 3 lines, and internal/agent/standing_rules_test.go:614 sets its compact needles to match it, with the line budget enforced at standing_rules_test.go:822-898. Note: the installed root AGENTS.md:53 still holds the old 'offer to save ... never write unprompted' text because it has not been regenerated by init. That is not a criterion failure, since this criterion covers only heading and limits, and the template is updated."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "templates/steps/plan/02-discovery.md:405 runs `knowledge always-applied --tier repo --filter \u003cname\u003e --spec {{plan_name}}`, and line 414 reads `knowledge read --data '{...,\"spec\":\"{{plan_name}}\"}'`. internal/steps/plan/steps_test.go:121-122 asserts both forms with spec test."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 2,
+      "state": "accepted"
+    },
+    {
+      "item": "7e7bd29f-237e-44f2-9ba5-b6b97cb6ef43",
+      "title": "Make the knowledge skill write directly and drive prune",
+      "checks": [
+        {
+          "at": "2026-10-25T11:44:19Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "7e7bd29f-237e-44f2-9ba5-b6b97cb6ef43",
+            "title": "Make the knowledge skill write directly and drive prune",
+            "criteria": [
+              "The installed skill writes a new or revised entry without asking and then tells the user the tier, store, path, tags and reason.",
+              "Asking whether the knowledge base is still accurate leads the agent to the prune command, with the dry run offered as a preview.",
+              "The tag audit still proposes and confirms one entry at a time, exactly as before.",
+              "Every command the skill tells the agent to run is a real knowledge subcommand."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/workflows/spek-knowledge/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/instruction_surface_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "templates/skills/workflows/spek-knowledge/SKILL.md, contribute step 6 (line 77) reads 'Write it straight away; do not ask the user first', and step 7 (line 82) tells the user the tier, store name, path, tags and why. Update step 4 (line 92) and step 5 (line 97) follow the same pattern. The diff confirms the 'Write it straight away' contribute line is new (goal-check/spektacular.diff, hunk near line 822)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "SKILL.md line 22 lists 'Is the knowledge base still accurate?' and 'Prune the knowledge base.' as triggers under '# When to invoke'. The prune intent, step 1 (line 128), says to run 'knowledge prune --dry-run' as the preview when the user asks what prune would do or seems unsure, and otherwise to run 'knowledge prune'. Step 2 (line 129) describes the first pass. Prune is driven through the command loop in steps 3 and 4 (lines 130-135)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "The tag audit section (SKILL.md lines 100-122) still has step 4 'Propose per entry, and confirm per entry' (line 115) and step 5 'Only after explicit confirmation for that entry' (line 116). The diff does not touch these lines: the only removed 'Propose per entry' line (diff near line 875) belongs to the old maintenance review, which the diff replaces with prune. '# Decline handling' (lines 139-147) keeps the per-entry rule."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Every 'spektacular knowledge \u003cverb\u003e' the skill names is registered. cmd/knowledge.go:784 registers search, read, list, write, delete, sources, conventions, categories, always-applied, tags and usage. cmd/knowledge_prune.go:632 registers prune, and :631 registers its verdict subcommand. The --dry-run flag is defined at cmd/knowledge_prune.go:626. The 'init \u003cagent\u003e' reference is a top-level command, not a knowledge subcommand. internal/agent/instruction_surface_test.go:TestRenderedSpekKnowledgeEveryInvocationIsARealSubcommand enforces this against the rendered skill, and its hand-kept knowledgeSubcommands map (lines 542-555) matches the registrations."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "f9150144-92e1-4ac8-8908-c38ba4132052",
+      "title": "Drop the obsolete knowledge-offer line from the end-to-end suites",
+      "checks": [
+        {
+          "at": "2026-10-25T11:45:41Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "f9150144-92e1-4ac8-8908-c38ba4132052",
+            "title": "Drop the obsolete knowledge-offer line from the end-to-end suites",
+            "criteria": [
+              "No end-to-end suite instruction mentions declining an offer to save knowledge.",
+              "The suites' instructions still tell the headless agent not to wait for a person."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "architecture/testing-architecture.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/instruction.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/instruction.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/instruction.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "The staged diff removes the knowledge-offer line from all three in-scope suites: tests/harbor/epic-workflow/instruction.md:52 (`- If you are offered to save something to the knowledge base, decline.`), tests/harbor/goal-check-workflow/instruction.md:64 and tests/harbor/implement-epic-workflow/instruction.md:76 (diff hunks at .spektacular/tmp/000072_knowledge-access-index-and-prune/goal-check/spektacular.diff lines 1044-1077). Current files under /home/nicj/code/github.com/hivecommons/spektacular/.spektacular/worktrees/000072_knowledge-access-index-and-prune/spektacular/tests/harbor/ have no match for 'knowledge', 'offer' or 'decline' in those three files. Across the whole spektacular worktree, 'offered to save' appears only in .spektacular/plans/000072_knowledge-access-index-and-prune/context.md:179, a plan note outside the suites. The architecture doc (.spektacular/knowledge/architecture/testing-architecture.md, the file the scope's architecture/testing-architecture.md resolves to) has no match for 'offered to save', 'decline', 'offer', or 'knowledge'."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The 'Never end your turn waiting for a reply' rule is still present in the three in-scope suites: epic-workflow/instruction.md:58, implement-epic-workflow/instruction.md:58 and goal-check-workflow/instruction.md:43. Each also keeps 'This session is headless: no one replies between your turns' or 'nothing will answer', and the diff hunks only delete the single offer line, leaving the surrounding lines unchanged."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }
