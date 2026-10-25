@@ -12,3 +12,4 @@
 - Task 3 done (Milestone 1 complete, committed). knowledgeNow clock var in cmd/knowledge_usage.go; writeTemp/readUsage/fixKnowledgeClock helpers in cmd/knowledge_usage_test.go.
 - Tasks 4-5 done (Milestone 2 committed). Prune refuses a mode mismatch with knowledge_prune_in_progress (deviation).
 - Tasks 6-8 done (Milestone 3 committed). Remaining: README/docs (task 9), website in docs repo (task 10).
+- Tasks 9-10 done (Milestone 4). All tasks ticked; moving to test_plan.

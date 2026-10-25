@@ -881,6 +881,185 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "ccc22bb9-b485-4b1d-be15-06a360ae8440",
+      "title": "Update the README and the maintainer knowledge-base doc",
+      "checks": [
+        {
+          "at": "2026-10-25T11:47:32Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "ccc22bb9-b485-4b1d-be15-06a360ae8440",
+            "title": "Update the README and the maintainer knowledge-base doc",
+            "criteria": [
+              "Neither document says the agent waits for confirmation before writing knowledge.",
+              "Both list `knowledge usage` and `knowledge prune` with what they do, and the knowledge-base doc explains the two prune passes, the dry run and the age setting.",
+              "The existing documentation pin tests still pass."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/docs_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "docs/knowledge-base.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/ranking_docs_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "not_met",
+              "evidence": "README.md is clean: its capture paragraph (README.md:270 in the working tree) says 'Nothing waits for your approval', and the only other README hits for approv/confirm (line 42, plan strict-spec staleness; line 335, repo add confirmation) are unrelated to knowledge. docs/knowledge-base.md still says the agent waits for confirmation before writing knowledge: line 245 ('The spek-knowledge skill proposes tags when it captures an entry ... and shows them alongside the destination for confirmation before anything is written'), line 361 ('The flow is read-only until you approve something') and line 371 ('Changes are proposed and confirmed one entry at a time') in the tag-audit section. The staged diff rewrote the contribution paragraph at knowledge-base.md ~343-352 but did not touch these three passages. Line 245 directly states the confirmation gate before writing, so the doc still says it. Fix: reword line 245 to match the no-wait write behaviour, and reword the audit section at 361 and 371 so the audit's writes are not described as waiting for approval (or confirm that audit edits are intentionally gated, in which case the criterion's wording still forbids the claim for knowledge writing)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "README.md diff hunk @@ -260 adds bullets 'knowledge usage' (line 9 of diff, what it shows, --tier/--filter) and 'knowledge prune' (line 10, two-step removal, verdict command, --dry-run); docs/knowledge-base.md diff hunk @@ -378 adds '### Pruning the knowledge base' covering pass one (unused entries, max_age_days 90 default from .spektacular/config.yaml, tracking clock), pass two (current/corrected/deleted verdicts), and '--dry-run is the preview ... changes nothing'; the command reference table in that doc also lists knowledge usage and knowledge prune. The age setting is also documented in the README config example (knowledge.prune.max_age_days: 90)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Verification summary reports go test -shuffle=on ./... passing, including cmd/docs_test.go and internal/knowledge/ranking_docs_test.go, and go vet passing. Neither pin test file is in the staged diff (spektacular.status lists only README.md and docs/knowledge-base.md). A grep of cmd/docs_test.go and internal/knowledge/ranking_docs_test.go for confirm/wait/approv/knowledge usage/prune returned no matches, so the pins do not depend on the rewritten sentences. I could not re-run the tests myself; this verdict rests on the reported pass result."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T11:48:41Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "ccc22bb9-b485-4b1d-be15-06a360ae8440",
+            "title": "Update the README and the maintainer knowledge-base doc",
+            "criteria": [
+              "Neither document says the agent waits for confirmation before writing knowledge.",
+              "Both list `knowledge usage` and `knowledge prune` with what they do, and the knowledge-base doc explains the two prune passes, the dry run and the age setting.",
+              "The existing documentation pin tests still pass."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/docs_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "docs/knowledge-base.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/ranking_docs_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "README.md:270 now says the agent writes knowledge itself and that 'Nothing waits for your approval'. docs/knowledge-base.md capture text (lines 45-47 and 343-351 of the diff) was changed to 'writes the entry without asking'. A grep of both files for confirm/waits for/approv/propos/before writing finds no capture-time confirmation gate. The only remaining confirmation language is in the tag-audit section (knowledge-base.md ~lines 358-375, 'Changes are proposed and confirmed one entry at a time'), which is the audit flow the spec lists as an unchanged Non-Goal, so it is out of scope for this criterion."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "README.md diff lines 9-10 list `knowledge usage` (creation date, discovery and retrieval history, --tier/--filter) and `knowledge prune` (removes old unread entries, then checks each entry; --dry-run previews). The command table in docs/knowledge-base.md (diff ~line 206-207) also lists both. docs/knowledge-base.md '### Pruning the knowledge base' section (diff lines 110-161) explains Pass one (unused entries, created more than knowledge.prune.max_age_days ago, default 90, tracked by the usage index for that long, not retrieved), Pass two (per-entry current/corrected/deleted verdicts), the --dry-run preview (line 115-117), and the max_age_days setting (README.md config example diff lines 29-30 and the doc at line 120-121)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "The verification summary reports `go test -shuffle=on ./cmd ./internal/knowledge` passing, which includes cmd/docs_test.go and internal/knowledge/ranking_docs_test.go. I could not re-run tests (read-only). Reading the pins: cmd/docs_test.go checks README strings (repo.yaml, repos:, Breaking change, Knowledge lives in one of two tiers, --tier, --filter, auto_commit, recorded-amendment exemption) and knowledge.sources/superseded-shape rules, none of which the diff removes or rewrites. ranking_docs_test.go requires `tagWeight = …`, `minPrefixLen = …` etc. in docs/knowledge-base.md and the knowledge-search-ranking doc; the diff touches no such backtick statements. No test references the removed headings ('Reviewing whether entries are still true') or the removed maintenance-review wording (grep of *_test.go). docs.diff (the docs repo) is empty, so no changes there."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 2,
+      "state": "accepted"
+    },
+    {
+      "item": "7cf807cc-1f23-45ee-9d2d-b400af7cb0df",
+      "title": "Document self-written knowledge, the usage index and prune on the website",
+      "checks": [
+        {
+          "at": "2026-10-25T11:50:26Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "7cf807cc-1f23-45ee-9d2d-b400af7cb0df",
+            "title": "Document self-written knowledge, the usage index and prune on the website",
+            "criteria": [
+              "The knowledge-base page describes writing without asking, the usage index, the prune command, its preview mode and its age setting.",
+              "The configuration page documents `knowledge.prune.max_age_days` with its default of 90.",
+              "The site builds and type-checks without errors, and the new prose contains no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/knowledge-base.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/configuration.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "knowledge-trigger.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Staged docs diff src/pages/knowledge-base.mdx: 'How usage is recorded' section (hunk @@ -176,6 +179,99 @@) documents the usage index .usage-index.json and knowledge usage; the writing-without-asking prose at hunk @@ -113,9 +113,10 @@ says 'Nothing waits for your approval'; the 'Pruning the knowledge base' section documents the prune command, '--dry-run' as the preview mode (lines ~165-171 of the diff), and knowledge.prune.max_age_days (90 by default) in pass one and in the final 'How long unused knowledge is kept' block (hunk @@ -478,6 +574,18 @@)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "src/pages/configuration.mdx in the docs worktree: line 86-87 adds 'prune: max_age_days: 90' to the example config; line 344 sets the knowledge ConfigKey defaultValue to 'none; \u003ccode\u003eprune.max_age_days: 90\u003c/code\u003e'; lines 357-359 describe the key, that it defaults to 90 when absent and must be positive."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Verification summary reports npm run build pass (16 pages, 'Complete!') and npx astro check with 0 errors and 0 warnings (2 hints). I did not re-run them (read-only). Grep for the em dash character over docs.diff returned 0 matches, so the added prose contains no em dashes. Note: the goal lists knowledge-trigger.md as a changeable file, but it is absent from docs.diff and no criterion requires a change to it."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }

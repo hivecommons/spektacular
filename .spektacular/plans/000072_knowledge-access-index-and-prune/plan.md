@@ -395,7 +395,7 @@ Three headless end-to-end suites tell the agent to decline knowledge offers, and
 
 **Validation point**: The full Go test suite passes (the doc pin tests included), and the website builds and type-checks cleanly.
 
-#### - [ ] Task: Update the README and the maintainer knowledge-base doc
+#### - [x] Task: Update the README and the maintainer knowledge-base doc
 **Id:** ccc22bb9-b485-4b1d-be15-06a360ae8440
 **Repo:** spektacular
 **Depends on:**
@@ -410,11 +410,11 @@ Brings the README's knowledge section and the maintainer knowledge-base doc in l
 *Technical detail:* [context.md#task-update-the-readme-and-the-maintainer-knowledge-base-doc](./context.md#task-update-the-readme-and-the-maintainer-knowledge-base-doc)
 
 **Acceptance criteria**:
-- [ ] Neither document says the agent waits for confirmation before writing knowledge.
-- [ ] Both list `knowledge usage` and `knowledge prune` with what they do, and the knowledge-base doc explains the two prune passes, the dry run and the age setting.
-- [ ] The existing documentation pin tests still pass.
+- [x] Neither document says the agent waits for confirmation before writing knowledge.
+- [x] Both list `knowledge usage` and `knowledge prune` with what they do, and the knowledge-base doc explains the two prune passes, the dry run and the age setting.
+- [x] The existing documentation pin tests still pass.
 
-#### - [ ] Task: Document self-written knowledge, the usage index and prune on the website
+#### - [x] Task: Document self-written knowledge, the usage index and prune on the website
 **Id:** 7cf807cc-1f23-45ee-9d2d-b400af7cb0df
 **Repo:** docs
 **Depends on:**
@@ -447,9 +447,9 @@ Updates the website's knowledge-base page to describe writing without asking, th
 *Technical detail:* [context.md#task-document-self-written-knowledge-the-usage-index-and-prune-on-the-website](./context.md#task-document-self-written-knowledge-the-usage-index-and-prune-on-the-website)
 
 **Acceptance criteria**:
-- [ ] The knowledge-base page describes writing without asking, the usage index, the prune command, its preview mode and its age setting.
-- [ ] The configuration page documents `knowledge.prune.max_age_days` with its default of 90.
-- [ ] The site builds and type-checks without errors, and the new prose contains no em dashes.
+- [x] The knowledge-base page describes writing without asking, the usage index, the prune command, its preview mode and its age setting.
+- [x] The configuration page documents `knowledge.prune.max_age_days` with its default of 90.
+- [x] The site builds and type-checks without errors, and the new prose contains no em dashes.
 
 ## Open Questions
 
@@ -592,5 +592,29 @@ None. Every design choice was settled while planning and recorded as an assumpti
 - `spektacular: tests/harbor/epic-workflow/instruction.md`
 - `spektacular: tests/harbor/implement-epic-workflow/instruction.md`
 - `spektacular: tests/harbor/goal-check-workflow/instruction.md`
+
+**Discoveries**: None.
+
+### 2026-10-25 — Task: Update the README and the maintainer knowledge-base doc
+
+**What was done**: The README's knowledge CLI list gained `knowledge usage` and `knowledge prune`, its "Capturing knowledge" paragraph now describes writing without asking and reporting, the usage index and prune, and the project config example shows the optional `knowledge.prune.max_age_days`. `docs/knowledge-base.md` describes write-then-report capture, replaces the maintenance review with "### Pruning the knowledge base" (two passes, the tracking clock, verdicts, the unmet-standard rule, evidence, verdict checks, dry run, resume and `--force`), adds "## The usage index", and extends the command table with `usage`, `prune`, `prune verdict` and the `--spec`/`"spec"` attribution options.
+
+**Deviations**: The goal check's first attempt found the tags passage still said entries wait for confirmation; it now says the skill writes without asking and reports the tags, and the tag-audit passage says the audit is the one flow that still asks (a spec Non-Goal).
+
+**Files changed**:
+- `spektacular: README.md`
+- `spektacular: docs/knowledge-base.md`
+
+**Discoveries**: None.
+
+### 2026-10-25 — Task: Document self-written knowledge, the usage index and prune on the website
+
+**What was done**: The website's knowledge-base page now says agents write entries themselves and report them, gains "How usage is recorded" (surface) and "Pruning the knowledge base" bands after "The lifecycle of an entry", keeping the surface alternation, documents `knowledge.prune.max_age_days` in its Configuration band, and the tag passage says tags are chosen from the vocabulary and reported. The configuration page adds `prune.max_age_days: 90` to the example and documents the key under the project `knowledge` ConfigKey.
+
+**Deviations**: The guidance file list on the configuration page carries file names only, so it needed no wording change. Ran `npm ci` in the docs worktree to build.
+
+**Files changed**:
+- `docs: src/pages/knowledge-base.mdx`
+- `docs: src/pages/configuration.mdx`
 
 **Discoveries**: None.
