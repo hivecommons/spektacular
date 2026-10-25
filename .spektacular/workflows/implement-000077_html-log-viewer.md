@@ -28,3 +28,6 @@
 ## Task 4 (zoom/collapse/summary) done; Milestone 2 committed
 - Page controls ids: reset-zoom, expand-all, collapse-steps, gap-threshold, gap-summary, longest-steps, longest-gaps. Triangles are ▶/▼ glyphs in the label column.
 - Docs task: real look is task purple, step blue, sub-agent teal, user-wait amber hatched + band, work olive, command thin slate; problems failed red ✕, interrupted orange dashed ‖, abandoned grey dotted ∅, never closed fading end …; gap labels "gap 20m00s" at the foot.
+
+## Tasks 5-6 (docs page, README) done; all tasks ticked; Milestone 3 commit on advance to test_plan
+- docs worktree: npm ci done; `npm run build`, `npx astro check` (0 errors, 2 pre-existing hints) pass.

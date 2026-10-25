@@ -487,7 +487,7 @@ Drawing stays limited to the rows in view, so runs of thousands of spans stay qu
 
 **Validation point**: The site builds and `astro check` passes, with no layout HTML in the page body and no em dashes in the new text. The README shows `stats view`.
 
-#### - [ ] Task: Documentation site describes the run viewer
+#### - [x] Task: Documentation site describes the run viewer
 **Id:** 139a70b2-621d-4bc9-872d-f40a2e22dc21
 **Repo:** docs
 **Depends on:**
@@ -524,11 +524,11 @@ Adds a "Run viewer" page to the documentation site. It explains how to render a 
 *Technical detail:* [context.md#task-documentation-site-describes-the-run-viewer](./context.md#task-documentation-site-describes-the-run-viewer)
 
 **Acceptance criteria**:
-- [ ] The Run viewer page explains rendering a run, choosing it, rendering collected logs, and reading every part of the page: types, problems, gaps and the threshold, zoom, collapse, details, totals and the summary.
-- [ ] The Resources menu links to the page after Run statistics, and the Run statistics page points to it.
-- [ ] The site builds and type-checks without errors, and the page body has no layout HTML and no em dashes.
+- [x] The Run viewer page explains rendering a run, choosing it, rendering collected logs, and reading every part of the page: types, problems, gaps and the threshold, zoom, collapse, details, totals and the summary.
+- [x] The Resources menu links to the page after Run statistics, and the Run statistics page points to it.
+- [x] The site builds and type-checks without errors, and the page body has no layout HTML and no em dashes.
 
-#### - [ ] Task: README lists stats view
+#### - [x] Task: README lists stats view
 **Id:** 586b4c2b-2f35-41c6-b311-d6d25285fc47
 **Repo:** spektacular
 **Depends on:**
@@ -545,7 +545,7 @@ spektacular stats view [--name <spec>]     # the run as a single-file HTML water
 *Technical detail:* [context.md#task-readme-lists-stats-view](./context.md#task-readme-lists-stats-view)
 
 **Acceptance criteria**:
-- [ ] The README shows `stats view` beside the other `stats` commands, with a one-line description and a pointer to the Run viewer documentation.
+- [x] The README shows `stats view` beside the other `stats` commands, with a one-line description and a pointer to the Run viewer documentation.
 
 ## Open Questions
 
@@ -633,3 +633,27 @@ No other implementation-time uncertainties remain. Every design choice is settle
 - `spektacular: internal/runview/build_test.go`
 
 **Discoveries**: Measured in headless Chrome on the 5,000-span sample page, offline: first paint about 0.3 s, and every zoom, collapse, expand, summary pick and selection lands within two animation frames (33 to 66 ms). Headless Firefox renders the same page identically.
+
+### 2026-10-25 — Task: Documentation site describes the run viewer
+
+**What was done**: Added the "Run viewer" page (`src/pages/run-viewer.mdx`), built from `Hero`, `Prose` and `CtaBanner` and following the plan's content outline: rendering a run and where the file goes, choosing the run, logs from elsewhere, reading the waterfall (with a table of each type's look), problems, gaps and the threshold, zooming and collapsing, details, totals and the summary, and the JSON result for programs. The Resources menu links to it after Run statistics, and the Run statistics page's "Reporting on one run" section points to it.
+
+**Deviations**: The page also mentions the arrow keys and the collapsed row's hidden-row count, which the page has, and that writing again replaces the file. The CtaBanner carries a short body, as the Run statistics page's does.
+
+**Files changed**:
+- `docs: src/pages/run-viewer.mdx`
+- `docs: src/components/Nav.astro`
+- `docs: src/pages/run-stats.mdx`
+
+**Discoveries**: None.
+
+### 2026-10-25 — Task: README lists stats view
+
+**What was done**: Added `spektacular stats view [--name <spec>]` to the README's run statistics command block, with its one-line description, and a sentence after the block saying it writes a single HTML file that opens without a server, linking to the documentation site's Run viewer page.
+
+**Deviations**: None.
+
+**Files changed**:
+- `spektacular: README.md`
+
+**Discoveries**: None.

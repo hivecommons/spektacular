@@ -384,6 +384,110 @@
       "decisions": [],
       "attempts": 1,
       "state": "accepted"
+    },
+    {
+      "item": "139a70b2-621d-4bc9-872d-f40a2e22dc21",
+      "title": "Documentation site describes the run viewer",
+      "checks": [
+        {
+          "at": "2026-10-25T18:23:25Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "139a70b2-621d-4bc9-872d-f40a2e22dc21",
+            "title": "Documentation site describes the run viewer",
+            "criteria": [
+              "The Run viewer page explains rendering a run, choosing it, rendering collected logs, and reading every part of the page: types, problems, gaps and the threshold, zoom, collapse, details, totals and the summary.",
+              "The Resources menu links to the page after Run statistics, and the Run statistics page points to it.",
+              "The site builds and type-checks without errors, and the page body has no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-viewer.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-stats.mdx"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "run-viewer.mdx covers rendering (lines 18-34: `stats view` writing the HTML file), choosing the run (36-46: --name, --kind, --agent, --run), collected logs (48-57: --dir), and every part of the page: the waterfall, types table and legend (59-76), problems (78-90), gaps with threshold and gap-threshold box (92-99), zoom (101-106), collapse (108-111), details (115-117), header totals (119-121) and the side summary (123-125)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "src/components/Nav.astro:23-24 lists \"Run statistics\" followed by \"Run viewer\" with href \"/run-viewer/\" under the Resources children. src/pages/run-stats.mdx:68 links to the page: \"To see the same run as a picture, render it with [the run viewer](/run-viewer/).\" (diff hunk confirms the addition)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Build and astro check results are reported as passing (0 errors) and were not re-run, as I am read-only. Grep over src/pages/run-viewer.mdx for em dashes, div, section and class= returned no matches. The body uses only the same MDX component tags (Hero, Prose, CtaBanner, Button) as the existing run-stats.mdx, with no raw layout HTML. The symbols in the problems list (✕, ‖, ∅, …) are not em dashes."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "586b4c2b-2f35-41c6-b311-d6d25285fc47",
+      "title": "README lists stats view",
+      "checks": [
+        {
+          "at": "2026-10-25T18:24:22Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "586b4c2b-2f35-41c6-b311-d6d25285fc47",
+            "title": "README lists stats view",
+            "criteria": [
+              "The README shows `stats view` beside the other `stats` commands, with a one-line description and a pointer to the Run viewer documentation."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "README.md:62 lists `spektacular stats view [--name \u003cspec\u003e]     # the run as a single-file HTML waterfall you can open or share` inside the same code block as the other stats commands (stats list, run, compare, summary, commands, spans at lines 56-61), with the aligned one-line description. README.md:65 adds the pointer: `stats view` writes a single HTML file that opens in any browser without a server; see the [Run viewer](https://spektacular.dev/run-viewer/) page on the documentation site. The staged diff at spektacular.diff touches only README.md (hunk @@ -59,9 +59,10 @@), which matches the file the goal allows."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
     }
   ]
 }

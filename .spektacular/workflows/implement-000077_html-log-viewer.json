@@ -2,19 +2,11 @@
   "kind": "implement",
   "run_id": "93f8b822c657312f837dd6d9fbb32180",
   "step_span": {
-    "id": "dbef17b221a98935",
-    "name": "analyze",
-    "parent": "2ba01b95504fa491",
-    "start": "2026-10-25T18:16:29.676607351Z"
+    "id": "3c02a21d1a91b561",
+    "name": "test_plan",
+    "start": "2026-10-25T18:24:35.378452679Z"
   },
-  "task_span": {
-    "id": "2ba01b95504fa491",
-    "name": "Documentation site describes the run viewer",
-    "task": "139a70b2-621d-4bc9-872d-f40a2e22dc21",
-    "step": "analyze",
-    "start": "2026-10-25T18:16:29.676607351Z"
-  },
-  "current_step": "analyze",
+  "current_step": "test_plan",
   "completed_steps": [
     "new",
     "read_plan",
@@ -27,18 +19,19 @@
     "update_changelog"
   ],
   "created_at": "2026-10-25T17:50:08.145262199Z",
-  "updated_at": "2026-10-25T18:16:29.682916613Z",
+  "updated_at": "2026-10-25T18:24:35.38725652Z",
   "data": {
     "committed_milestones": [
       1,
-      2
+      2,
+      3
     ],
-    "goal_item": "",
+    "goal_item": "586b4c2b-2f35-41c6-b311-d6d25285fc47",
     "name": "000077_html-log-viewer",
     "orchestrated": true,
     "trace_task": {
-      "id": "139a70b2-621d-4bc9-872d-f40a2e22dc21",
-      "title": "Documentation site describes the run viewer"
+      "id": "586b4c2b-2f35-41c6-b311-d6d25285fc47",
+      "title": "README lists stats view"
     }
   }
 }
