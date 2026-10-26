@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/hivecommons/spektacular/internal/output"
@@ -79,9 +81,85 @@ const (
 	DefaultRepoChangelogDir      = "changelog"
 )
 
-// DebugConfig holds debug logging configuration.
-type DebugConfig struct {
-	Enabled bool `yaml:"enabled"`
+// Log levels, defaults and loggers for the log section.
+const (
+	// LogLevelOff records nothing.
+	LogLevelOff = "off"
+	// LogLevelStandard records each command's identity, timing and outcome.
+	LogLevelStandard = "standard"
+	// LogLevelVerbose also records each command's full response and the
+	// workflow state before and after it.
+	LogLevelVerbose = "verbose"
+	// DefaultLogDir is the log directory, relative to the folder holding
+	// config.yaml.
+	DefaultLogDir = "logs"
+	// DefaultLogRetention is how many recent workflow runs (and, separately,
+	// days of standalone commands) are kept.
+	DefaultLogRetention = 10
+)
+
+// LogProviders are the accepted log.provider names. It mirrors
+// tracelog.Providers(), which this package cannot import; a test in
+// internal/tracelog pins the two equal.
+var LogProviders = []string{ProviderFile}
+
+// LogConfig configures the command log: which logger writes it, how much
+// each record holds, how many runs are kept and the logger's own settings.
+type LogConfig struct {
+	Provider  string        `yaml:"provider"`
+	Level     string        `yaml:"level"`
+	Retention int           `yaml:"retention"`
+	Config    FileLogConfig `yaml:"config"`
+}
+
+// FileLogConfig is the file logger's configuration.
+type FileLogConfig struct {
+	// Directory is where logs are written: relative to the folder holding
+	// config.yaml, or absolute. It is not a store, so it is never bound to
+	// the project root.
+	Directory string `yaml:"directory"`
+}
+
+// EffectiveLevel returns the configured level, resolving an absent one to
+// the standard level.
+func (l LogConfig) EffectiveLevel() string {
+	if l.Level == "" {
+		return LogLevelStandard
+	}
+	return l.Level
+}
+
+// Validate checks the log section names a known logger and level, keeps at
+// least one run, and names a directory.
+func (l LogConfig) Validate() error {
+	if !slices.Contains(LogProviders, l.Provider) {
+		valid := strings.Join(LogProviders, ", ")
+		return output.NewError("config_invalid",
+			fmt.Sprintf("log.provider %q is not a known logger; accepted loggers are %s", l.Provider, valid)).
+			WithResource("log.provider").
+			WithNextAction(fmt.Sprintf("set log.provider in .spektacular/config.yaml to one of: %s", valid))
+	}
+	switch l.Level {
+	case "", LogLevelOff, LogLevelStandard, LogLevelVerbose:
+	default:
+		return output.NewError("config_invalid",
+			fmt.Sprintf("log.level must be one of %q, %q or %q, not %q", LogLevelOff, LogLevelStandard, LogLevelVerbose, l.Level)).
+			WithResource("log.level").
+			WithNextAction(fmt.Sprintf("set log.level in .spektacular/config.yaml to %s, %s or %s (or remove the key to use %s)",
+				LogLevelOff, LogLevelStandard, LogLevelVerbose, LogLevelStandard))
+	}
+	if l.Retention < 1 {
+		return output.NewError("config_invalid",
+			fmt.Sprintf("log.retention must be at least 1, not %d", l.Retention)).
+			WithResource("log.retention").
+			WithNextAction(fmt.Sprintf("set log.retention in .spektacular/config.yaml to a whole number of runs to keep, 1 or more (or remove the key to keep %d)", DefaultLogRetention))
+	}
+	if strings.TrimSpace(l.Config.Directory) == "" {
+		return output.NewError("config_invalid", "log.config.directory is empty").
+			WithResource("log.config.directory").
+			WithNextAction(fmt.Sprintf("set log.config.directory in .spektacular/config.yaml to a folder for logs (or remove the key to use %s)", DefaultLogDir))
+	}
+	return nil
 }
 
 // SpecConfig holds configuration for specification creation. It names a
@@ -158,8 +236,113 @@ type EpicConfig struct {
 // the project turns it off, including in a config written before the key
 // existed, since configs are parsed over NewDefault. Epic runs always use
 // worktrees, whatever it says.
+//
+// GoalCheck is the implement.goal_check subsection. Like worktrees it needs no
+// settings-format bump or migration step: a config written before the key
+// existed parses over NewDefault and so gets the check switched on.
 type ImplementConfig struct {
-	Worktrees bool `yaml:"worktrees"`
+	Worktrees bool            `yaml:"worktrees"`
+	GoalCheck GoalCheckConfig `yaml:"goal_check"`
+}
+
+// GoalCheckConfig configures the implement workflow's goal check, in which a
+// separate read-only reviewer judges each task's acceptance criteria before
+// any is ticked. Enabled is on unless the project switches it off, including
+// in a config written before the key existed, since configs are parsed over
+// NewDefault. Models maps a coding agent's name to the model its installed
+// reviewer runs on; an agent absent from it keeps its default reviewer model.
+type GoalCheckConfig struct {
+	Enabled bool              `yaml:"enabled"`
+	Models  map[string]string `yaml:"models,omitempty"`
+}
+
+// SupportedAgentNames are the coding agents Spektacular installs for, the
+// valid keys of implement.goal_check.models. It mirrors agent.Supported(),
+// which this package cannot import; a test in internal/agent pins the two
+// equal.
+var SupportedAgentNames = []string{"bob", "claude", "codex", "copilot", "omp"}
+
+// Validate checks the goal-check models map names only supported agents and
+// gives each a model.
+func (g GoalCheckConfig) Validate() error {
+	names := make([]string, 0, len(g.Models))
+	for name := range g.Models {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	valid := strings.Join(SupportedAgentNames, ", ")
+	for _, name := range names {
+		if !slices.Contains(SupportedAgentNames, name) {
+			return output.NewError("config_invalid",
+				fmt.Sprintf("implement.goal_check.models names %q, which is not a supported agent; valid agents are %s", name, valid)).
+				WithResource("implement.goal_check.models").
+				WithNextAction(fmt.Sprintf("rename implement.goal_check.models.%s in .spektacular/config.yaml to one of %s, or remove it", name, valid))
+		}
+		if strings.TrimSpace(g.Models[name]) == "" {
+			return output.NewError("config_invalid",
+				fmt.Sprintf("implement.goal_check.models.%s has no model", name)).
+				WithResource("implement.goal_check.models").
+				WithNextAction(fmt.Sprintf("set implement.goal_check.models.%s in .spektacular/config.yaml to a model name, or remove it to use %s's default reviewer model", name, name))
+		}
+	}
+	return nil
+}
+
+// StatsConfig configures the run reports of `spektacular stats`. It is
+// optional, has no default and is never written by init or migrate, so a
+// project without it loads and saves exactly as before.
+type StatsConfig struct {
+	// Prices are each model's prices per million tokens, keyed by the model
+	// name exactly as a run report lists it, in any one currency. No prices
+	// are built in: a model with none has an unknown cost.
+	Prices map[string]ModelPrice `yaml:"prices,omitempty"`
+}
+
+// ModelPrice is one model's price per million tokens of each type. Every
+// price is required; a pointer tells a missing price from 0.
+type ModelPrice struct {
+	Input      *float64 `yaml:"input"`
+	Output     *float64 `yaml:"output"`
+	CacheRead  *float64 `yaml:"cache_read"`
+	CacheWrite *float64 `yaml:"cache_write"`
+}
+
+// IsZero reports whether the section sets nothing, so a config without it
+// is saved without a stats key.
+func (s StatsConfig) IsZero() bool { return len(s.Prices) == 0 }
+
+// Validate checks every model in the price table has all four prices, none
+// negative, and a name.
+func (s StatsConfig) Validate() error {
+	models := make([]string, 0, len(s.Prices))
+	for m := range s.Prices {
+		models = append(models, m)
+	}
+	sort.Strings(models)
+	for _, m := range models {
+		if strings.TrimSpace(m) == "" {
+			return output.NewError("config_invalid", "stats.prices has a model with no name").
+				WithResource("stats.prices").
+				WithNextAction("name each model under stats.prices in .spektacular/config.yaml exactly as `spektacular stats run` lists it, or remove the entry")
+		}
+		p := s.Prices[m]
+		for _, f := range []struct {
+			key string
+			v   *float64
+		}{{"input", p.Input}, {"output", p.Output}, {"cache_read", p.CacheRead}, {"cache_write", p.CacheWrite}} {
+			if f.v == nil {
+				return output.NewError("config_invalid", fmt.Sprintf("stats.prices.%s has no %s price", m, f.key)).
+					WithResource("stats.prices").
+					WithNextAction(fmt.Sprintf("set stats.prices.%s.%s in .spektacular/config.yaml to its price per million tokens, or remove the model to report its cost as unknown", m, f.key))
+			}
+			if *f.v < 0 {
+				return output.NewError("config_invalid", fmt.Sprintf("stats.prices.%s.%s is %g, and a price must not be negative", m, f.key, *f.v)).
+					WithResource("stats.prices").
+					WithNextAction(fmt.Sprintf("set stats.prices.%s.%s in .spektacular/config.yaml to its price per million tokens, 0 or more", m, f.key))
+			}
+		}
+	}
+	return nil
 }
 
 // FileEpicConfig is the file-provider configuration for the epic section.
@@ -191,8 +374,34 @@ type FileChangelogConfig struct {
 // KnowledgeConfig holds the ordered list of the project's own shared knowledge
 // stores. It is the project-tier declaration; a repo declares its single store
 // with RepoKnowledgeConfig instead.
+//
+// Prune is the knowledge.prune subsection. Like implement.worktrees it needs no
+// settings-format bump or migration step: it is optional, a config written
+// before the key existed parses with it absent, and PruneMaxAgeDays supplies
+// the default.
 type KnowledgeConfig struct {
-	Sources []SourceConfig `yaml:"sources,omitempty"`
+	Sources []SourceConfig       `yaml:"sources,omitempty"`
+	Prune   KnowledgePruneConfig `yaml:"prune,omitempty"`
+}
+
+// DefaultKnowledgePruneMaxAgeDays is the prune age used when a project sets
+// none.
+const DefaultKnowledgePruneMaxAgeDays = 90
+
+// KnowledgePruneConfig configures `knowledge prune`. MaxAgeDays is how many
+// days an entry may go unretrieved before prune removes it (an entry must also
+// have been tracked that long); zero or absent means the default.
+type KnowledgePruneConfig struct {
+	MaxAgeDays int `yaml:"max_age_days,omitempty"`
+}
+
+// PruneMaxAgeDays is the prune age in days: the configured value, or
+// DefaultKnowledgePruneMaxAgeDays when none is set.
+func (k KnowledgeConfig) PruneMaxAgeDays() int {
+	if k.Prune.MaxAgeDays == 0 {
+		return DefaultKnowledgePruneMaxAgeDays
+	}
+	return k.Prune.MaxAgeDays
 }
 
 // DesignConfig holds the ordered list of the design sources the project
@@ -304,6 +513,20 @@ func ProjectConfigDir(projectRoot string) string {
 	return filepath.Join(projectRoot, ProjectConfigDirName)
 }
 
+// LogDir returns the absolute log directory. An absolute
+// log.config.directory is returned cleaned; a relative one is resolved from
+// the folder holding config.yaml (see ProjectConfigDir).
+func (c Config) LogDir(projectRoot string) string {
+	d := c.Log.Config.Directory
+	if d == "" {
+		d = DefaultLogDir
+	}
+	if filepath.IsAbs(d) {
+		return filepath.Clean(d)
+	}
+	return filepath.Join(ProjectConfigDir(projectRoot), d)
+}
+
 // ResolvedLocation returns the entry's location as an absolute path. An
 // absolute location is returned cleaned; a relative one is resolved from the
 // folder holding config.yaml (see ProjectConfigDir), never from the process
@@ -342,7 +565,8 @@ type Config struct {
 	SpecTriggerThreshold string          `yaml:"spec_trigger_threshold"`
 	EpicSplitThreshold   string          `yaml:"epic_split_threshold"`
 	AutoCommit           string          `yaml:"auto_commit"`
-	Debug                DebugConfig     `yaml:"debug"`
+	Log                  LogConfig       `yaml:"log"`
+	Stats                StatsConfig     `yaml:"stats,omitempty"`
 	Spec                 SpecConfig      `yaml:"spec"`
 	Plan                 PlanConfig      `yaml:"plan"`
 	Changelog            ChangelogConfig `yaml:"changelog"`
@@ -370,8 +594,11 @@ func NewDefault() Config {
 		SpecTriggerThreshold: SpecTriggerThresholdModerate,
 		EpicSplitThreshold:   EpicSplitThresholdModerate,
 		AutoCommit:           AutoCommitOff,
-		Debug: DebugConfig{
-			Enabled: false,
+		Log: LogConfig{
+			Provider:  ProviderFile,
+			Level:     LogLevelStandard,
+			Retention: DefaultLogRetention,
+			Config:    FileLogConfig{Directory: DefaultLogDir},
 		},
 		Spec: SpecConfig{
 			Provider: ProviderFile,
@@ -393,7 +620,7 @@ func NewDefault() Config {
 				Directory: filepath.Join(ProjectConfigDirName, DefaultChangelogDir),
 			},
 		},
-		Implement: ImplementConfig{Worktrees: true},
+		Implement: ImplementConfig{Worktrees: true, GoalCheck: GoalCheckConfig{Enabled: true}},
 		Epic: EpicConfig{
 			Provider: ProviderFile,
 			Config: FileEpicConfig{
@@ -675,6 +902,15 @@ func (c Config) Validate() error {
 	if err := c.Epic.Validate(); err != nil {
 		return err
 	}
+	if err := c.Implement.GoalCheck.Validate(); err != nil {
+		return err
+	}
+	if err := c.Log.Validate(); err != nil {
+		return err
+	}
+	if err := c.Stats.Validate(); err != nil {
+		return err
+	}
 	// Only the project's store directories are bound to the project root; a
 	// repo.yaml's changelog is relative to that repo's own folder.
 	for _, d := range c.storeDirs() {
@@ -819,6 +1055,12 @@ func (c EpicConfig) Validate() error {
 // checked within this list rather than globally, so naming a shared store after
 // a repo is allowed: a store's identity is its tier and its name together.
 func (c KnowledgeConfig) Validate() error {
+	if c.Prune.MaxAgeDays < 0 {
+		return output.NewError("config_invalid",
+			fmt.Sprintf("knowledge.prune.max_age_days must be a positive number of days, got %d", c.Prune.MaxAgeDays)).
+			WithResource("knowledge.prune.max_age_days").
+			WithNextAction(fmt.Sprintf("set knowledge.prune.max_age_days in .spektacular/config.yaml to a positive number of days (or remove the key to use %d)", DefaultKnowledgePruneMaxAgeDays))
+	}
 	seen := make(map[string]bool, len(c.Sources))
 	for i, src := range c.Sources {
 		if src.Name == "" {

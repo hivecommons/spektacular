@@ -9,6 +9,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/agent"
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/migrate"
+	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/project"
 	"github.com/spf13/cobra"
 )
@@ -21,14 +22,25 @@ var initCmd = &cobra.Command{
 	RunE:        runInit,
 }
 
+// raiseBobTurnLimitFlag opts in to init changing the user's own Bob
+// settings; without it init only warns.
+const raiseBobTurnLimitFlag = "raise-bob-turn-limit"
+
 func init() {
 	initCmd.Flags().String("name", "", "project name (slug-safe); defaults to the directory name")
+	initCmd.Flags().Bool(raiseBobTurnLimitFlag, false, "bob only: set session.maxTurns to 0 (no limit) in your Bob settings, so Bob stops cutting off epic sub-agents")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
 	a, err := agent.Lookup(args[0])
 	if err != nil {
 		return err
+	}
+	raiseBobTurnLimit, _ := cmd.Flags().GetBool(raiseBobTurnLimitFlag)
+	if raiseBobTurnLimit && a.Name() != "bob" {
+		return output.NewError("flag_not_applicable",
+			fmt.Sprintf("--%s applies only to bob, not %s", raiseBobTurnLimitFlag, a.Name())).
+			WithNextAction(fmt.Sprintf("run `spektacular init %s` without --%s", a.Name(), raiseBobTurnLimitFlag))
 	}
 
 	cwd, err := os.Getwd()
@@ -84,6 +96,42 @@ func runInit(cmd *cobra.Command, args []string) error {
 	legacy := filepath.Join(config.ProjectConfigDir(cwd), "version")
 	if err := os.Remove(legacy); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("removing legacy version file %s: %w", legacy, err)
+	}
+
+	if a.Name() == "bob" {
+		return reportBobTurnLimit(cmd, raiseBobTurnLimit)
+	}
+	return nil
+}
+
+// reportBobTurnLimit deals with Bob Shell's per-task turn limit, which cuts
+// off an epic run's sub-agents mid-step: with raise it sets the limit to 0 in
+// the user's Bob settings, and otherwise it warns while any limit is in force.
+// The limit is a user setting, since Bob reads no per-project session
+// settings, so it is changed only when the user asks.
+func reportBobTurnLimit(cmd *cobra.Command, raise bool) error {
+	out := cmd.OutOrStdout()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(out, "  Notice:   could not find your home directory to check Bob's turn limit: %v\n", err)
+		return nil
+	}
+	path := agent.BobSettingsPath(home)
+	if raise {
+		if err := agent.RaiseBobTurnLimit(home); err != nil {
+			return fmt.Errorf("raising Bob's turn limit: %w", err)
+		}
+		fmt.Fprintf(out, "  Bob:      session.maxTurns set to 0 (no limit) in %s\n", path)
+		return nil
+	}
+	limit, err := agent.BobMaxTurns(home)
+	if err != nil {
+		fmt.Fprintf(out, "  Notice:   could not read Bob's turn limit: %v\n", err)
+		return nil
+	}
+	if limit > 0 {
+		fmt.Fprintf(out, "  Notice:   Bob stops every sub-agent after %d turns (session.maxTurns in %s) and hands back whatever it said last, so epic runs stall mid-step and have to be resumed. Rerun with --%s to set it to 0 (no limit), or change it yourself.\n",
+			limit, path, raiseBobTurnLimitFlag)
 	}
 	return nil
 }

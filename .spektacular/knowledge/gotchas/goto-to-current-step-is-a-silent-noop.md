@@ -18,3 +18,10 @@ response — identical in shape to a real advance — so an agent that
 mis-derives the next step name as the current one gets no feedback that it
 failed to progress. Worth checking for when diagnosing an agent stuck
 re-reading the same instruction repeatedly.
+
+Since spec 000074 such a goto still leaves `current_step` and
+`completed_steps` alone, but it is also how a stopped session resumes, so it
+closes the step's open span as interrupted (at its last recorded command)
+and opens a fresh span for the same step: `state.json`'s `step_span`
+changes and the state file is saved. The progress is unchanged; only the
+span id moves.

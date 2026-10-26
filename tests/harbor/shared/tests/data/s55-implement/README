@@ -1,0 +1,2 @@
+s55-implement: trimmed from harbor job s55-claude-implement, trial implement-workflow-claude__QQaSJXT, by trim_reference.py
+Its Spektacular session log, recorded in the debug format Harbor read before spec 000076, is not kept: the run carries no logs/, so its record's log-sourced measures are unknown.

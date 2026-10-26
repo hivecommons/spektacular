@@ -1,0 +1,1518 @@
+{
+  "plan": "000076_harbor-on-built-in-logs",
+  "items": [
+    {
+      "item": "49fb2534-0645-4447-a50e-92865db63a87",
+      "title": "List commands and spans in the run statistics package",
+      "checks": [
+        {
+          "at": "2026-10-25T15:00:37Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "49fb2534-0645-4447-a50e-92865db63a87",
+            "title": "List commands and spans in the run statistics package",
+            "criteria": [
+              "Listing commands over a logs directory with two runs and a day of standalone commands gives every command, oldest first. Each carries its run, workflow, step, step moved to, arguments, timing, exit code and any error message, and a standalone command has no run.",
+              "Listing spans gives every helper, user-wait and work span in runs and outside them, each with its run, step, task, parent and outcome. An unfinished span is capped and marked exactly as the run report marks it.",
+              "A run selection narrows both listings to that run's records, and asking only for records outside runs gives just the orchestrator's.",
+              "The run report, comparison and summary output is unchanged for the same logs.",
+              "The structured form of both listings uses exactly the field names in the plan's Data Structures section."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/load.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/assemble.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.workflow.kind"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/listings.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.step"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.step.to"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/render.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/listings_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/testdata/commands.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spans.golden.json"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "listings.go:87-112 Commands gathers every run's Commands plus l.Outside command records (listed() includes outside records when no selection is given), then sorts by StartedAt. commandRow (listings.go:115-142) fills run_id/kind/name only when run != nil, so standalone commands get nulls. It carries step (AttrStep), step_to (AttrStepTo), args (stringsAttr over AttrCommandArgs), duration, exit code (intAttr, with 1 for an error status lacking an exit code) and message (kept only for StatusError). listings_test.go:93-133 asserts the seven-command oldest-first order over the two-run plus standalone fixture (listingLogs, lines 38-83) and checks the standalone fields, the goto's step/step_to, and the refused command's exit 1 and message."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "listings.go:147-175 AgentSpans covers run spans and l.Outside spans, filtered by tracelog.AgentTypes (record.go:45: sub-agent, user-wait, work). Each row is built by waitRow, which supplies step, task, parent, end reason, status and complete, plus type, trace, run, kind and workflow. Outside spans are capped in outsideSpans (listings.go:180-221): an unfinished span ends at the last event of its own trace and never before its start. Run spans reuse capUnfinished from assemble.go:313-328, and the rendered end marker is the same unfinishedMark used by the run report (render.go:21, 183). listings_test.go:180-237 checks the open helper in the run (ih) matches the run report's helper row exactly, and the outside open span (oh2) is capped at its start."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "listings.go:73-84 listed(): a run selection (f.selected()) narrows to l.Candidates(f) with outside=false; outsideRuns with no selection returns only outside records (runs nil, outside true). listings_test.go:146-167 checks Filter{Name:\"000002_beta\"} gives 3 rows all with the implement run id, Filter{Runs:[prefix]} gives 2 rows, and Commands(Filter{}, true) gives exactly the two epic commands with nil run_id. listings_test.go:239-259 checks the same for AgentSpans. listings.go:75-76 refuses outsideRuns combined with a selection (CodeBadSelection, select.go:47-48)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The report, comparison and summary paths only move code without changing it. assemble.go splitTrace (lines 69-106) is the old buildRun loop moved into a helper, and report.go waitRow (lines 229-243) is the old wait-building block moved verbatim. Load keeps the runs identical: assemble.go:96-108 only collects the outside records. listings_test.go:263-282 (TestOutsideRecordsLeaveRunsUnchanged) checks that runs, BuildReport, Compare and Summarise are equal with and without the outside records. The existing golden tests (report.golden.json, compare.golden.json, summary.golden.json, and the txt goldens) are not in the diff, so they are unchanged and still pass. Scope observation: report.go and select.go are modified but are not in the goal's file list. The changes are the waitRow extraction and the CodeBadSelection message, which the listings need, so this is not a criterion failure."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "The JSON field names come from struct tags. CommandRow (listings.go:32-49) has run_id, kind, name, agent, span_id, parent_span_id, command, args, step, step_to, started_at, ended_at, duration_ms, exit_code, status, message. SpanRow (listings.go:55-62) embeds Wait and adds type, trace_id, run_id, kind, workflow. listings_test.go:287-307 pins those key sets, and both golden files (testdata/commands.golden.json, testdata/spans.golden.json) use exactly those keys. The code comment at listings.go:16-29 quotes the contract as the plan's Data Structures section. I did not open the plan itself because the repo's rules forbid reading store files with my own tools, so this verdict rests on the code's quoted contract and the pinning tests."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "1510a2c7-a35f-49f9-9fd4-ae8854c980dc",
+      "title": "List commands and spans from the command line",
+      "checks": [
+        {
+          "at": "2026-10-25T15:04:26Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "1510a2c7-a35f-49f9-9fd4-ae8854c980dc",
+            "title": "List commands and spans from the command line",
+            "criteria": [
+              "`stats commands` and `stats spans` show the fixture project's records in table and JSON form, with the same figures in both, and the JSON honours `--fields`.",
+              "Pointing `--dir` at a copy of the logs from outside any project gives the same output as in the project.",
+              "Combining a run selection with the outside-runs switch is refused with a message naming the fix, and the other refusals match the rest of the group.",
+              "Every log file is byte-identical before and after both commands, run inside a project with logging on."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:272-316 (runStatsCommands and runStatsSpans) renders the same logs.Commands/logs.AgentSpans rows as a table (runstats.RenderCommands/RenderSpans, internal/runstats/render.go:572-619) or as JSON via output.New(...).WriteResult with globalFields, so --fields applies. cmd/stats_test.go:263-299 checks the pretty table columns and the JSON duration_ms (60000) and exit_code for the same record, and TestStatsCommandsListsEveryCommandInBothForms checks --fields [\"commands\"] yields only that key. cmd/stats_test.go:301-339 does the same for spans (25m00s / 25*60000 for the stopped orchestrator span, 3m00s / 180000 for the helper) and checks --fields [\"spans\"]. Table and JSON are asserted against the same fixture values, though no single test compares the two outputs directly."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "cmd/stats_test.go:400-416 (TestStatsListingsDirOnACopyGiveTheSameOutput) takes the in-project JSON for commands and spans, copies the logs with copyLogs (line 308) to a directory, does t.Chdir(t.TempDir()) outside any project, runs with --dir, and requires the output equal to the in-project output except log_dir. cmd/stats.go:476-514 (statsLogs) only needs a project when --dir is absent."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "A run selection with --outside-runs is refused in internal/runstats/listings.go:75-76 (CodeBadSelection). internal/runstats/select.go:47-48 gives the message \"--outside-runs lists only the records written outside any workflow run, so it cannot be combined with a run selection\" (names the flag). cmd/stats.go:539-542 maps it to stats_bad_selection with the next action \"use --outside-runs on its own, or drop it and select runs with --name, --kind, --agent or --run\", the same code and envelope as the other selection refusals (bad kind, bad run id, run not found, ambiguous) at cmd/stats.go:523-538. cmd/stats_test.go:370-398 checks the code, next action and message for both commands, and the other refusals (format, missing dir, bad kind, unknown and ambiguous run) for both subcommands."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:76-98 and 273-316: statsCommandsCmd and statsSpansCmd are added to statsCmd, so they inherit the logging-exempt annotation (cmd/stats.go:21-23, 25-27). cmd/stats_test.go:418-430 (TestStatsListingsLeaveTheLogsByteIdentical) runs useConfiguredLogLevel with a verbose project, snapshots every log with rawLogSnapshot, runs commands and spans in pretty, JSON, --outside-runs and --kind forms, and requires the snapshot unchanged. No code path in the diff writes to the logs directory."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "11b365fd-7097-426c-b440-623d7c2fd973",
+      "title": "Documentation site describes the two listings",
+      "checks": [
+        {
+          "at": "2026-10-25T15:05:51Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "11b365fd-7097-426c-b440-623d7c2fd973",
+            "title": "Documentation site describes the two listings",
+            "criteria": [
+              "The Run statistics page explains both listings, how to narrow them, the outside-runs switch and their structured fields.",
+              "The site builds and type-checks without errors, and the new text has no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-stats.mdx"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "docs/src/pages/run-stats.mdx lines 115-138 (new section \"Listing commands and spans\", added in the staged diff hunk at @@ -112,6 +112,31 @@) explain both listings: `stats commands` (lines 117-119) and `stats spans` (lines 118-121). Narrowing: lines 129-131 say both take the same --name, --kind, --agent, --run, --dir and --format as the other commands, with no selection listing everything and a selection narrowing to the selected runs. Outside-runs switch: lines 126 and 132-134 explain `--outside-runs` and that it cannot be combined with a run selection. Structured fields: lines 134-138 list the JSON fields for commands (run_id, step, step_to, args, exit_code, message) and spans (type, run_id, workflow, step, task_id, end_reason, complete), plus null handling outside runs. The diff also adds a JSON-records note at lines 205-209 referencing the commands and spans arrays."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Grep of src/pages/run-stats.mdx for the em dash character and for \u003cdiv, \u003csection, class=, \u003cspan, \u003cp\u003e, \u003cbr returned no matches. The added lines in docs.diff (lines 9-42 of that file) contain only plain markdown and inline code, with no HTML and no em dashes. The build and type-check are not re-run here, since this review is read-only; the claimed passing results (npm run build: 17 pages, Complete; npx astro check: 0 errors, 0 warnings) are taken from the verification summary and were not independently confirmed."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "9ce541c6-1a0c-4bfb-8ba7-b3b42e231ceb",
+      "title": "Record baseline Harbor pass rates",
+      "checks": [
+        {
+          "at": "2026-10-25T16:27:59Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "9ce541c6-1a0c-4bfb-8ba7-b3b42e231ceb",
+            "title": "Record baseline Harbor pass rates",
+            "criteria": [
+              "Five collected Claude runs exist for every Harbor suite, from a build that includes 000073 to 000075 and none of this plan's Harbor changes.",
+              "Each suite's pass count out of 5 is noted where the later comparison will find it."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "verifier/reward.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "build.json"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Fifty trial directories exist under tests/harbor/jobs/base76-{spec-claude,plan-claude,implement,repo-one-at-a-time,repo-delegated,epic-claude,implement-epic-claude,standing-rules-claude,goal-check-claude,background-child}-r{1..5}, each with a verifier/reward.txt (Glob of base76-*/**/verifier/reward.txt returned 50 files, 5 per suite). All 50 verifier/metrics.json files record \"commit\": \"bfd5dc1b52bfa2392f40826d8c0bc42df4f7491a\" and \"spektacular_version\": \"0.28.0-103-gbfd5dc1\" (no -dirty suffix), so the build is the committed tree, not this plan's uncommitted working-tree changes. bfd5dc1 is the merge of spek/000075 (.git/logs/HEAD line 139), and 000073 (merged at e8903123) and 000074 (merged at 7984b0a, .git/logs/HEAD line 134) are in its history per the same log and .spektacular/changelog/000073 to 000075 entries. I could not run git merge-base to confirm ancestry directly, so that part rests on the reflog."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The per-suite counts are noted in .spektacular/workflows/implement-000076_harbor-on-built-in-logs.md lines 19-33, under the heading 'Baseline Harbor pass rates (task 9ce541c6), for the before/after comparison'. I recounted reward.txt for the base76 jobs and every count matches: background-child 5/5, epic-claude 5/5, implement 5/5, standing-rules-claude 5/5, goal-check-claude 4/5 (r4=0), plan-claude 3/5, implement-epic-claude 2/5, repo-delegated 1/5 (r4 only), repo-one-at-a-time 0/5, spec-claude 0/5. Caveat: the note also says the counts go into the plan changelog entry and the test plan's before/after comparison; neither exists yet (no changelog entry for 000076 and no before/after comparison found under .spektacular), so those copies are still to be written. The later comparison reads the job directories by prefix (context.md:126), which the note's section is written to support."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "70054b85-d967-47e6-ac0d-e5c7a1741288",
+      "title": "Pin today's token, model and cost figures",
+      "checks": [
+        {
+          "at": "2026-10-25T16:29:36Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "70054b85-d967-47e6-ac0d-e5c7a1741288",
+            "title": "Pin today's token, model and cost figures",
+            "criteria": [
+              "For every reference run, the self-test pins the token counts, model, models used and cost as today's code computes them, and passes on the unchanged harness.",
+              "The pinned values come from the transcripts alone and do not depend on Spektacular's logs."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "claude-code.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/transcripts.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_transcripts_summary.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "not_met",
+              "evidence": "The four runs in RUNS (tests/harbor/shared/tests/test_reference_runs.py:36) are pinned in PINNED_TOTALS and PINNED_MODELS_USED (lines 90-117), and test_reference_totals_are_pinned and test_reference_record_totals_match_the_pins_without_spektacular_logs check them. The probe run tests/harbor/shared/tests/data/probe-background-child/ is also a trimmed reference run with a claude-code.txt and build.json (model claude-sonnet-5-5; test_reference_runs.py:346-361 and 379-398). It is not in RUNS and has no pinned token, model, models-used or cost values, so the self-test does not pin every reference run. The staged diff adds no probe pin. The verification pass (55 passed) covers only the four pinned runs. For the four pinned runs the values are checked by passing tests, so the gap is the probe alone."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "test_reference_totals_are_pinned (test_reference_runs.py:199-205 in the staged diff) calls transcripts.claude_summary(transcript(DATA / name)), which reads only the claude-code.txt lines. claude_summary at tests/harbor/shared/transcripts.py:286 takes only the list of transcript objects. transcripts.py is not in the staged diff. The record check at lines 208-217 passes debug_dir=NONE and bob_logs=NONE, so it cannot read Spektacular's debug logs. The diff does not touch any claude-code.txt fixture."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T16:31:01Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "70054b85-d967-47e6-ac0d-e5c7a1741288",
+            "title": "Pin today's token, model and cost figures",
+            "criteria": [
+              "For every reference run, the self-test pins the token counts, model, models used and cost as today's code computes them, and passes on the unchanged harness.",
+              "The pinned values come from the transcripts alone and do not depend on Spektacular's logs."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "claude-code.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/transcripts.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_transcripts_summary.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/tests/test_reference_runs.py:85-126 pins PINNED_TOTALS and PINNED_MODELS_USED for all five runs (m70-epic, s55-epic, s55-plan, s55-implement, probe-background-child), via PINNED_RUNS = [*RUNS, 'probe-background-child'] at line 126. test_reference_totals_are_pinned (lines 213-219) checks every pinned field against transcripts.claude_summary, the models used via totals.model.split('+'), and unknowns == []. test_every_reference_run_is_pinned (lines 208-210) checks the set of runs matches the data directory. The staged diff (spektacular.diff lines 691-781) shows only additions to this file, and transcripts.py and metrics.py do not appear in the diff, so the harness is unchanged. I could not run pytest (read-only), so the pass rests on the verification line 'tests/harbor/shared/tests → 545 passed', which I take as covering these tests."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The token and model pins are checked through transcripts.claude_summary(transcript(DATA / name)) (test_reference_runs.py:215), which takes only the parsed claude-code.txt objects. The record-level test (lines 222-231) calls metrics.build_record with debug_dir=NONE and bob_logs=NONE (line 226), so no Spektacular debug or Bob log is read. In metrics.py, totals come from read_agent_log's claude_summary (metrics.py:160), and the bob-log and debug fallback for wall time (metrics.py:610-620) runs only when wall_time_s is None. For these runs claude_summary sets wall_time_s from duration_ms or timestamps (transcripts.py:308-313), so the fallback does not fire. transcripts.py is unchanged in the staged diff."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 2,
+      "state": "accepted"
+    },
+    {
+      "item": "db80ecd4-547e-4e8b-8845-dea9901a726a",
+      "title": "Harbor run log reader",
+      "checks": [
+        {
+          "at": "2026-10-25T16:35:38Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "db80ecd4-547e-4e8b-8845-dea9901a726a",
+            "title": "Harbor run log reader",
+            "criteria": [
+              "Given `stats` output for an epic trial, the reader shows each lane's start, finish, children and the step each earlier child stopped at, with a resume counted from a failed workflow start in that lane.",
+              "Each child is matched to the orchestrator helper span open when it began, including a resumed lane's later child, children launched together and a span never stopped, and the orchestrator's next command or span after a finished lane is found.",
+              "Merges, the steps a plan entered and changelog writes per repo match what the old session-log rules gave for the same run.",
+              "A missing binary, a missing logs directory, a `stats` refusal, a timeout or unreadable output each produce a stated reason rather than an empty result.",
+              "The reader reads the logs only through `stats`, and an integration test with a freshly built binary over fixture logs gives the same answers as the canned responses."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/runlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/sessionlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "sessionlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "lane.last.end"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_runlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "commands.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spans.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_runlog_integration.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "standalone_20261025.jsonl"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "runlog.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/runlog.py:166-175 (Lane fields start, finish, children, stops) and :377-385 (_settle): start is the first successful `\u003ckind\u003e new`, finish the first successful move to `finished`, stops has one entry per later child (failed new gives its step or \"?\", a restart gives \"restart\"). tests/harbor/shared/tests/test_runlog.py:200-212 asserts alpha and beta start, finish, children 2, stops [\"architecture\"] and the resume at at(11) against the fixture trial. A failed `new` after the start is counted as a resume (runlog.py:383), so the resume-from-failed-start rule holds."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "runlog.py:277-297 (_child_spans) matches children in first-command order to the earliest unmatched orchestrator span open at the child's start, with open_at (runlog.py:149-152) treating a never-stopped span as open from its start. runlog.py:307-326 (orchestrator_reaction) takes the first outside-run epic/trace command, other-spec command or orchestrator span edge after lane.last.end. test_runlog.py:246-263 covers launched-together (ob1 for beta, oa kept by alpha), the resumed later child (ob2, not complete), and no open span. test_runlog.py:274-296 covers the reaction rules."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "test_runlog.py:403-439 (test_the_reader_agrees_with_the_old_session_log_rules) runs the old tests/harbor/shared/sessionlog.py rules over a verbose copy of the same fixture trial and asserts equality of start, finish, children, stops, resume times, merge per spec, plan_steps_entered vs steps_entered(\"plan\"), and changelog_writes_by_repo for ALPHA, BETA and None. The reader mirrors the old rules: runlog.py:332-339 vs sessionlog.py:283-290 and runlog.py:341-363 vs sessionlog.py:294-316. The verification run reports test_runlog.py 44 passed. Minor divergence, not a failure: runlog.py:385 always reports a successful later `new` as \"restart\", while sessionlog.py:226 uses that segment's first state_before step when present; the parity fixture does not exercise this."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "runlog.py:215 (no binary: reason naming SPEKTACULAR_BIN), :217 (no logs directory: \"no Spektacular logs at \u003cdir\u003e\"), :234 (refusal: \"stats \u003csub\u003e: \u003ccode\u003e: \u003cmessage\u003e\"), :223-224 (timeout: \"took longer than 60s\"), :225-230 (OSError and non-JSON output each raise Unavailable with a reason). test_runlog.py:137-182 asserts each of these reasons, including the parametrised unreadable-output cases."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "runlog.py:218-221 is the only route to the logs: it runs `\u003cbinary\u003e stats \u003csub\u003e ... --dir \u003clogs\u003e --format json`, and the module never opens files (test_runlog.py:397-400 asserts the source has no open(, read_text, glob, iterdir). tests/harbor/shared/tests/test_runlog_integration.py:36-40 builds a fresh binary with go build from the repo root, and :75-80 asserts views() from the real binary equal the canned answers from runlog_fixtures.stats(). Lines 84-87 check a copied logs directory gives the same answers. The verification run reports test_runlog_integration.py 3 passed, not skipped. The Go JSON field names used by runlog.py match the json tags in internal/runstats/listings.go:33-61."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "706125e3-2526-433c-8cd3-4ee71d792436",
+      "title": "Metrics record from Spektacular's logs",
+      "checks": [
+        {
+          "at": "2026-10-25T16:56:11Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "706125e3-2526-433c-8cd3-4ee71d792436",
+            "title": "Metrics record from Spektacular's logs",
+            "criteria": [
+              "For a trial whose logs hold a spec run with a helper and a user wait, the record's steps and step timings equal the run statistics report for those logs, and each step shows working, helper-wait and user-wait time adding up to its duration.",
+              "Every helper is listed with its spec and step, including one an epic orchestrator started outside any run, and each step shows how many helpers it started.",
+              "The record reports total user-wait, helper-wait and gap time in place of the single longest gap.",
+              "With the logs removed, every step, helper and wait measure is unknown with a reason, none is filled in from the transcript, the recorder exits successfully, and the reward is untouched.",
+              "Token usage, models and cost equal the pinned figures for every reference run.",
+              "The same logs paired with a Claude, a Bob and a Codex transcript give identical steps and helper sections."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_suite_wiring.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "u.reason"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "subagents.briefs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/transcripts.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "Child.output"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_transcripts_summary.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_runlog_integration.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_readme_metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "transcripts.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/metrics.py step_rows() (around line 425) takes duration_ms, helper_wait_ms and user_wait_ms from the `stats run` report and writes working_s = duration - helper - user. Those JSON keys match internal/runstats/report.go tags. test_metrics.py test_steps_equal_the_run_report_and_each_split_adds_up checks each step against fx.spec_report() and asserts the split sums to duration_s on the spec trial, which has both a 120 s user wait and a 180 s helper wait. Caveat: working_s is floored at 0 (metrics.py max(0, ...)), so the sum only equals the duration when waits do not overlap; test_working_time_is_floored_at_zero_when_waits_overlap shows the overlap case. The criterion's trial has no overlap, so it holds for that trial."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "metrics.py helper_record() (around line 491) writes span_id, parent, name, spec, kind, step, task_id, outside_run, times and status for every sub-agent span. For a span with run_id None it takes spec from the child launched under it or the lane whose first run started during it, and sets step to null. read_logs() (around line 570) builds the helper list from log.spans(). step_rows() counts helpers per step from each run report's helpers list. test_metrics.py test_an_orchestrators_helpers_take_the_lane_of_their_child covers the epic trial's outside-run helpers, and test_each_step_counts_the_helpers_started_in_it covers the per-step counts."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "metrics.py read_logs() (around line 548) writes totals user_wait_s, helper_wait_s, gap_s, gaps and gap_threshold_s, summed over every workflow run. The idle_s field and its idle_seconds computation are removed from build_record. test_metrics.py test_totals_sum_the_waits_and_gaps_of_every_run asserts these totals and asserts 'idle_s' not in totals. README.md (Run metrics totals row, around line 16) documents the three measures."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "metrics.py no_logs() (around line 483) nulls the workflows, totals, subagents and trace sections and lists each LOG_FIELDS entry as Unknown with the reason. read_logs_safely() catches recorder errors the same way. read_logs() returns no_logs when runlog raises Unavailable, and never reads transcript data into those fields. main() always returns 0 and never writes the reward. test_metrics.py test_logs_that_cannot_answer_leave_every_log_measure_unknown and test_logs_removed_leave_the_log_measures_unknown_for_every_agent cover removed logs, and the reward is asserted unchanged; the transcript's totals and briefs are asserted to survive."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "test_reference_runs.py test_reference_totals_are_pinned and test_reference_record_totals_match_the_pins_without_spektacular_logs compare each record's model, token totals and cost to PINNED_TOTALS for every reference run. The PINNED_TOTALS block is unchanged in the diff. The verification summary reports 613 passed for tests/harbor/shared/tests. I did not re-run the tests; this verdict rests on the test code and the passing run."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "test_metrics.py test_the_same_logs_give_the_same_steps_and_helpers_for_every_agent runs claude, bob, codex, codex-rollout and oracle through agent_trial() with the same stats answers (spec and epic). It asserts steps, helpers and log_sections equal the Claude record for every agent, and that records differ only in transcript totals and briefs. The verification summary reports this suite passing. I did not re-run it."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "86f58e38-51a5-47ef-bf2b-a9927f501170",
+      "title": "Delegation checks judge from spans",
+      "checks": [
+        {
+          "at": "2026-10-25T17:05:24Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "86f58e38-51a5-47ef-bf2b-a9927f501170",
+            "title": "Delegation checks judge from spans",
+            "criteria": [
+              "A run whose required step started a helper passes, and one whose required step completed without a helper span fails, naming the workflow, spec, step and attempt.",
+              "A resumed step is still judged as one attempt, and the step a lane ended on is not judged.",
+              "An epic lane with no orchestrator helper running when it started fails, naming the spec.",
+              "A spec review child whose brief lacks the staged spec, and an implementing child whose brief lacks its worktree folder, are still reported.",
+              "Self-checks fail if the worktree-folder constant or the required-step list drifts from the code and templates they mirror."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/delegation.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "p.child.x"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "c.x"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_delegation.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/worktree/worktree.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_epic_children.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "delegation.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_delegation.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_epic_children.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "delegation.py missing_required (staged diff, roughly lines 524-562) judges each REQUIRED step against sub-agent spans started in its entries via _started_in, and names the failure f\"{kind}:{name}:{step}\" with \" (attempt N)\" when repeated. tests/harbor/shared/tests/test_delegation.py:282-293 parametrizes over every REQUIRED entry: a step with no helper span fails with missing(kind, step), and a step with a helper span started in it passes. Lines 296-311 cover other-step, other-lane and orchestrator helpers not satisfying a required step."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "delegation.py attempts() (diff roughly lines 499-511) merges consecutive entries of one step into one attempt, and missing_required iterates tried[:-1], so the lane's last step is never judged. test_delegation.py:321-324 (cut-off step not judged), 327-331 (a moved-from step is judged), 334-347 (retried step judged per attempt) and resumed_lane at 350-364 (two check_goal entries form one attempt) cover this."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "delegation.py missing_spec_children (diff roughly lines 587-606) fails a PER_SPEC_CHILD lane when runlog child_span(lane.start) returns None, i.e. no orchestrator sub-agent span was open when its first command ran. The message names the spec: \"missing_spec_child implement:{name}: no child of the orchestrator was started for spec {name}\". tests/harbor/shared/tests/test_epic_children.py:370-375 exercises it with skip_spec=B and asserts that exact failure. runlog.py:293-297 holds child_span."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Spec review: delegation.py review_context_gaps (diff roughly lines 657-677) joins children to spans via match_spans and reports a child in a spec's verification step whose prompt lacks the staged spec. test_delegation.py:584-588 asserts the failure for a missing staged spec, and 591-595 covers the missing review-only instruction. Implementing child: epic_context_gaps (diff roughly lines 645-646) reports \"its worktree folder {worktree_folder(name, root)}\" when absent. test_epic_children.py:361-366 and test_delegation.py:505-507 assert it. Both are called from the verifiers: spec-workflow test_spec_workflow.py:613 and the epic tests."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "Worktree folder: test_delegation.py:525-531 (test_worktree_dir_matches_go) reads internal/worktree/worktree.go and asserts delegation.WORKTREE_DIR == \".spektacular/\" + the Go `const Dir` value. worktree.go:37 declares `const Dir = \"worktrees\"`, which matches delegation.py's WORKTREE_DIR = \".spektacular/worktrees\". test_delegation.py:534-539 shows that a drifted value fails the tie. Required-step list: test_delegation.py:883-949 ties the REQUIRED oracle to the step templates through oracle_template_mismatches, with drift cases at 924-949 that fail on mismatch."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "251726e2-dd95-44de-ac4f-9855da375968",
+      "title": "Suite verifiers read the logs through stats",
+      "checks": [
+        {
+          "at": "2026-10-25T17:12:16Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "251726e2-dd95-44de-ac4f-9855da375968",
+            "title": "Suite verifiers read the logs through stats",
+            "criteria": [
+              "No suite verifier or verifier self-check imports the old session-log reader or reads `.spektacular/debug`.",
+              "Every check that read a response or a state snapshot now reads a fact recorded at the default log level, and its pass and fail outcomes are unchanged on the self-check fixtures.",
+              "The epic suite no longer checks for `status \u003cepic\u003e` polls, and no verifier reads a `status` command from the logs.",
+              "Each suite's self-check passes against fake readers built from canned `stats` output."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/tests/test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".../logs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.empty"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.shared"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_verifier_selfcheck.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-workflow/tests/test_implement_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_sessionlog_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_runlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/standing-rules/tests/test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "standing-rules/tests/test_verifier_selfcheck.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/spec-workflow/tests/test_spec_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spans.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_rules.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "not_met",
+              "evidence": "The suite verifiers themselves are clean: no tests/harbor/*/tests/test_*.py outside shared imports sessionlog or spans (grep), and test_runlog.py:538-543 guards that. But verifier self-checks still import the old reader. tests/harbor/shared/tests/test_sessionlog_rules.py:44 is `from sessionlog import SessionLog, changelog_writes_by_repo, plan_steps_entered, read_events`. That file pins the verifier rules 'through the verifier's own test function' and reads debug fixtures at lines 150 (`S55_PLAN / \"debug\"`) and 235 (`S55_IMPLEMENT / \"debug\"`). tests/harbor/shared/tests/test_runlog.py:426 also does `import sessionlog` inside the module that holds the verifier self-checks (from line 442). The diff leaves all of this in place."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The reads moved to default-level facts. test_goal_check.py:204 uses e.args instead of the logged command text. test_implement_epic_workflow.py:525 uses e.step != \"update_plan\" in place of state_before. test_plan_workflow.py:1390 uses RunLog.steps_entered (step_to of successful plan commands). test_spec_workflow.py:6541-6546 uses runs, report steps and user-wait spans. test_standing_rules.py:6584 uses c.args. The response-based worktree and walkthrough checks are gone. The reader's canned-answer self-checks in test_runlog.py:484-535 keep the old pass and fail cases (skips-walkthrough, finished-first, never-finished, no lane, changelog removed or failed). One caveat: test_plan_workflow.py:1341 (test_every_rendered_next_step_is_valid) still reads the tool_result from the agent transcript, not from the logs. It is not a log read, so I did not count it against this criterion."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "tests/harbor/epic-workflow/tests/test_epic_workflow.py:168-171 says status is never logged and the status polls are no longer checked, and no status-poll test exists in that file. test_runlog.py:546-550 (test_no_verifier_reads_a_status_command_from_the_logs) enforces that no verifier contains is_verb(\"status\"). The only `status` calls left in the suites are CLI state reads: test_epic_workflow.py:79, test_implement_epic_workflow.py:87 and 376, and test_plan_workflow.py:1173-1188, which read CLI state rather than logs."
+            },
+            {
+              "criterion": 4,
+              "verdict": "not_met",
+              "evidence": "Canned-stats self-checks exist for goal-check (test_verifier_selfcheck.py:257-376 builds a runner over canned `stats` answers), plan, implement, and epic (test_runlog.py:456-535 and 553 onward). They are missing for three suites. implement-epic: test_runlog.py:559 imports implement_epic_verifier, but nothing in test_runlog.py calls it (grep finds zero uses). standing-rules: tests/harbor/standing-rules/tests/test_verifier_selfcheck.py:106-119 calls the rule functions on hand-written argv lists and builds no fake reader from stats output. spec-workflow: no self-check file exists; only test.sh and test_spec_workflow.py are present in tests/harbor/spec-workflow/tests."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T17:15:15Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "251726e2-dd95-44de-ac4f-9855da375968",
+            "title": "Suite verifiers read the logs through stats",
+            "criteria": [
+              "No suite verifier or verifier self-check imports the old session-log reader or reads `.spektacular/debug`.",
+              "Every check that read a response or a state snapshot now reads a fact recorded at the default log level, and its pass and fail outcomes are unchanged on the self-check fixtures.",
+              "The epic suite no longer checks for `status \u003cepic\u003e` polls, and no verifier reads a `status` command from the logs.",
+              "Each suite's self-check passes against fake readers built from canned `stats` output."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/tests/test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".../logs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.empty"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.shared"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_verifier_selfcheck.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-workflow/tests/test_implement_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_sessionlog_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_runlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/standing-rules/tests/test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "standing-rules/tests/test_verifier_selfcheck.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/spec-workflow/tests/test_spec_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spans.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_rules.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Grep of tests/harbor/*/tests/*.py for sessionlog/SessionLog/spans imports and '.spektacular/debug' finds none in the seven suite verifiers (epic-workflow, implement-epic-workflow, goal-check-workflow, plan-workflow, implement-workflow, standing-rules, spec-workflow). The only remaining hits are in tests/harbor/shared (timeline.py, trim_reference.py, spans.py, sessionlog.py, test_spans.py, test_sessionlog_windows.py), which are shared helpers or the old reader itself, not suite verifiers. The suite verifiers read through `runlog` (test_standing_rules.py:194 `from runlog import RunLog`; test_plan_workflow.py:1390 `RunLog(LOG_DIR).steps_entered`) and `delegation`. test_runlog.py:499-504 asserts this for every suite verifier."
+            },
+            {
+              "criterion": 2,
+              "verdict": "not_met",
+              "evidence": "The plan suite's TestInstructionNextStepValidity still reads response text from the agent's own transcript, not from a default-level log fact: test_plan_workflow.py:486-509 (extract_tool_results walks the transcript's tool_result blocks via _iter_transcript_objects, line 418-427), and test_every_rendered_next_step_is_valid at lines 1341-1378 takes results.get(call.tool_use_id) and parses it with _step_payload (line 1308). The staged diff (spektacular.diff) has no hunk touching extract_tool_results or the tool_result reads in test_plan_workflow.py, so this check was not moved onto stats. Only the walkthrough check (lines 1380-1396, via RunLog.steps_entered) was moved. Nothing shows this check now reads a stats fact recorded at the default log level. The epic suite's status fixture (test_epic_workflow.py:78-79, `cli(\"status\", epic, \"--format\", \"json\")`) is a live CLI state read, not a log read, and is also not shown to be a default-level log fact."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "test_epic_workflow.py:168-171 comment says status polls are never logged (spec 000073) and are not checked; no status-poll test exists in TestOrchestration (lines 157-175 contain only commands-after-storage and epic-order checks). test_runlog.py:507-511 `test_no_verifier_reads_a_status_command_from_the_logs` asserts 'is_verb(\"status\"' is absent from every suite test file, and grep finds no is_verb(\"status\" in the suite verifiers."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Self-checks exist for every named suite: goal-check tests/harbor/goal-check-workflow/tests/test_verifier_selfcheck.py (canned runs/spans via a fake reader, diff lines ~328-341 and 383-390); standing-rules tests/harbor/standing-rules/tests/test_verifier_selfcheck.py (commands from RunLog with canned rows, lines 255-286); and in tests/harbor/shared/tests/test_runlog.py the canned_module_reader/FakeRunner-driven checks for plan (lines 417-447), implement (lines 449-495), epic (lines 514-604), implement-epic (lines 627-641) and spec (line 673). Reported pass counts for the self-check files (14, 40) corroborate this, though I did not run them."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T17:17:29Z",
+          "round": 1,
+          "attempt": 3,
+          "goal": {
+            "item": "251726e2-dd95-44de-ac4f-9855da375968",
+            "title": "Suite verifiers read the logs through stats",
+            "criteria": [
+              "No suite verifier or verifier self-check imports the old session-log reader or reads `.spektacular/debug`.",
+              "Every check that read a response or a state snapshot now reads a fact recorded at the default log level, and its pass and fail outcomes are unchanged on the self-check fixtures.",
+              "The epic suite no longer checks for `status \u003cepic\u003e` polls, and no verifier reads a `status` command from the logs.",
+              "Each suite's self-check passes against fake readers built from canned `stats` output."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/tests/test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".../logs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.empty"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.shared"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_verifier_selfcheck.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-workflow/tests/test_implement_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_sessionlog_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_runlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/standing-rules/tests/test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "standing-rules/tests/test_verifier_selfcheck.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/spec-workflow/tests/test_spec_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spans.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_rules.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "No suite verifier under tests/harbor/\u003csuite\u003e/tests/*.py imports sessionlog or reads .spektacular/debug. The suite files now import runlog (epic-workflow/tests/test_epic_workflow.py:23, implement-epic-workflow/tests/test_implement_epic_workflow.py:25, plan-workflow/tests/test_plan_workflow.py:52, implement-workflow/tests/test_implement_workflow.py:31, standing-rules/tests/test_standing_rules.py:194, goal-check-workflow/tests/test_goal_check.py:307, spec-workflow/tests/test_spec_workflow.py:502) and LOG_DIR is .spektacular/logs throughout. Self-checks goal-check-workflow/tests/test_verifier_selfcheck.py:23 and standing-rules/tests/test_verifier_selfcheck.py import runlog, not sessionlog. The staged diff deletes shared/tests/test_sessionlog_rules.py entirely. Caveat: shared/spans.py:28 still does `from sessionlog import parse_time` (spans.py is in scope and unchanged), but only shared/tests/test_spans.py imports spans and no suite verifier does; test_runlog.py:684-689 guards that no verifier self-check imports sessionlog or spans, and that test passes in the 618-pass shared run."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Response and state reads are replaced by default-level fields: implement-epic test_implement_epic_workflow.py:524-525 now uses `e.step != \"update_plan\"` instead of `(e.state_before or {}).get(\"current_step\")` (diff hunk @@ -410,10 +409,10 @@). The spec-workflow check (test_spec_workflow.py:499-506 in diff) now reads step from RunLog report/spans instead of spans-from-debug-dir. test_runlog.py:696-703 (test_no_verifier_reads_a_verbose_only_log_fact) asserts no verifier mentions state_before, state_after, spektacular.response, spektacular.state or .response, and it passes in the verified shared run. The plan verifier's extract_tool_results (test_plan_workflow.py:485-493) still reads the agent's own transcript, not Spektacular's logs, and its docstring says so. Pass/fail outcomes on the fixtures are covered by the passing self-checks (goal-check 14, standing-rules 40, shared 618), though I did not re-run them."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "epic-workflow/tests/test_epic_workflow.py has no status-poll check: the only `status` use is the `status` fixture calling cli(\"status\", ...) directly (line 78-81), which is not a log read. Lines 168-171 are a comment saying status polls are not in the log. test_runlog.py:507-511 (test_no_verifier_reads_a_status_command_from_the_logs) asserts no verifier has is_verb(\"status\". The implement-epic suite's status() is also a direct CLI call (line 86-87)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Each suite has a self-check over canned stats answers: plan, implement, epic, implement-epic and spec in shared/tests/test_runlog.py (canned_module_reader at 417-421; plan at 430-449; implement at 483-496; epic at 587-606; implement-epic at 627-645; spec at 672-681). goal-check-workflow/tests/test_verifier_selfcheck.py builds its run from stats_answers (diff lines 323-343, 364-376). standing-rules/tests/test_verifier_selfcheck.py adds canned_reader tests (diff lines 6905-6940). Recorded verification: shared 618 passed, goal-check selfcheck 14 passed, standing-rules selfcheck 40 passed. The repo-workflow self-check (31 passed) is not one of the seven suites named in the criterion."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 3,
+      "state": "accepted"
+    },
+    {
+      "item": "581898a1-0209-4fd4-8202-e45182d2c69a",
+      "title": "Suite images record at the default level",
+      "checks": [
+        {
+          "at": "2026-10-25T17:20:09Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "581898a1-0209-4fd4-8202-e45182d2c69a",
+            "title": "Suite images record at the default level",
+            "criteria": [
+              "No suite's seeded test-project config sets a log level other than the default, and the wiring self-test fails if one does.",
+              "Every suite that runs Spektacular collects the project's `.spektacular`, so its logs come back in the trial's artifacts.",
+              "Metrics gathering is still the last step after the reward, and its failure is ignored."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "seed/seed.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/environment/seed/seed.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/environment/seed/seed.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/environment/seed/seed.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/standing-rules/environment/seed/seed.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-workflow/environment/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_suite_wiring.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "task.toml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/task.toml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/task.toml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/logs"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "No verbose level remains in any tests/harbor/*/environment file: grep for verbose and log:/level: finds only comments, test code and shared helpers. The seed.sh files for epic-workflow (line 91), goal-check-workflow (line 132), implement-epic-workflow (line 100) and standing-rules (line 77) end with `set_log_level standard`. The implement-workflow config.yaml drops its log block (diff hunk at line 619). The repo-workflow and plan-workflow Dockerfiles no longer write a log level. The self-test `test_seeded_configs_use_the_default_level` (tests/harbor/shared/tests/test_suite_wiring.py:369-374) asserts every level set is `standard`, so a seeded verbose level fails it; `test_a_seeded_verbose_level_is_caught` (line 377) covers the detector. `standard` is the default, per the comment at cmd/log_test.go:377."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Every suite whose Dockerfile has `COPY spektacular /usr/local/bin/spektacular` has a `[[artifacts]]` block with `source = \"/app/.spektacular\"` in its task.toml: spec-workflow:48-49, repo-workflow:27-28, plan-workflow:22-23, implement-workflow:22-23, implement-epic-workflow:28-29, goal-check-workflow:24-25, epic-workflow:28-29, standing-rules:25-26. background-child runs no spektacular and is exempt. test_spektacular_suites_collect_their_logs (test_suite_wiring.py:389-396) enforces this per suite."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Every tests/harbor/*/tests/test.sh has the reward block (`if [ $? -eq 0 ]` writing 1 or 0 to /logs/verifier/reward.txt) directly after the single pytest line, then `python3 /tests/metrics.py || true` as the last command (e.g. epic-workflow/tests/test.sh:10-18, implement-epic-workflow/tests/test.sh:11-19). The script has no set -e or exit, so the recorder's failure is ignored. test_suite_wiring.py:234-254 enforces the order and the single recorder call, and the verification summary reports those tests passing."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "fc67375e-111c-4c2d-9b03-0bba26bde5b0",
+      "title": "Epic timeline from Spektacular's logs",
+      "checks": [
+        {
+          "at": "2026-10-25T17:23:56Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "fc67375e-111c-4c2d-9b03-0bba26bde5b0",
+            "title": "Epic timeline from Spektacular's logs",
+            "criteria": [
+              "For a fixture implement-epic trial with no debug directory, the timeline lists each spec's child start and finish, its slowest step and both hand-off gaps, measured from the orchestrator's helper spans, and the merge gap.",
+              "A child whose orchestrator helper span was never stopped takes its picked-up gap from the orchestrator's next recorded command or span, and a child with no orchestrator span shows no spawned-after or picked-up-after gap.",
+              "A resumed lane shows its extra child and the step the earlier one stopped at.",
+              "With the logs missing, it prints why and exits successfully."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "lane.start.at"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "lane.finish.end"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "lane.stops"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/tests/test.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/tests/test.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/standing-rules/tests/test.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_runlog_integration.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "timeline.report"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_suite_wiring.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "/app/.spektacular/logs"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/tests/test_timeline.py:147-155 (test_an_implement_epic_trial_with_no_debug_directory) asserts the implement trial's lane row (start +2m00s, finish +15m06s, slowest step discovery 7m54s) and hand-off row (spawned after 1m00s from span oa, picked up after 4m54s, merged after 6m54s). timeline.py:120-161 computes these from lane.start/finish, log.child_span (orchestrator sub-agent spans) and log.merge. The test also asserts the debug directory does not exist. Verification summary reports test_timeline.py 9 passed."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Unstopped span: runlog.py:152 treats a never-stopped span as open from its start, and runlog.py:319-338 (orchestrator_reaction) takes the first later command or span start/stop. timeline.py:155 uses it for picked-up. test_timeline.py:80-83 checks a child with no span shows 'no span' for spawned and picked-up, and test_timeline.py:68-77 checks beta's never-stopped ob2 gives 0m54s from the read at 17:00. Caveat: runlog.py:329-330 skips outside commands that name only the lane's own spec, so the reaction is not literally the next recorded command in every case. The fixture case still satisfies the criterion."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "runlog.py:394-397 sets lane.child_starts and lane.stops, with each refused later 'new' recorded at its failed step. timeline.py:163-171 prints 'N resume(s); stopped at: \u003cstep\u003e' for lanes with more than one child. test_timeline.py:96-100 asserts beta shows '1 resume(s); stopped at: architecture' and alpha is absent from that section. The fixture (runlog_fixtures.py:141-146) has beta's refused new at architecture."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "timeline.py:101-106 catches Unavailable from log.lanes()/runs() and prints 'No Spektacular logs under \u003cdir\u003e: \u003creason\u003e' from report(). timeline.py:182-189 (main) catches any other exception, prints the reason, and returns 0. runlog.py:215-226 raises Unavailable with reasons for a missing binary, a missing directory or an OSError. test_timeline.py:103-110 asserts both the missing-directory and missing-binary cases print the reason and main returns 0."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "b3638e0c-26e0-4c89-bc06-f086d7ca64e8",
+      "title": "Cross-run report shows the per-step split",
+      "checks": [
+        {
+          "at": "2026-10-25T17:30:22Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "b3638e0c-26e0-4c89-bc06-f086d7ca64e8",
+            "title": "Cross-run report shows the per-step split",
+            "criteria": [
+              "Comparing two trials shows each trial's per-step working, helper-wait and user-wait time and totals, with the second trial's difference from the first. A step only one trial entered shows as absent, not zero.",
+              "One run's breakdown shows its per-step split and helpers, and the run table shows user-wait and gap time.",
+              "Before-and-after medians include user wait, helper wait and gap time.",
+              "A schema-2 record still loads, with the new figures shown as unknown."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/report.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "subagents.briefs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_report.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_readme_metrics.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/report.py:453-501 compare_trials pairs each trial's workflows (pair_workflows, lines 431-450) and prints per step the secs, work, helper, user and helpers figures for A, B and B-A (STEP_FIGURES line 413). A step missing from one trial gets \"-\" on that side and in the difference column (side() lines 422-428, row loop lines 476-483). The Totals block (lines 487-500) prints wall, user wait, helper wait, gap, cost and total tokens with a B-A column. test_report.py:1238-1257 and the walkthrough assertion at 1266-1272 confirm the \"-\" rendering and the difference."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "report.py:358-408 breakdown() prints, for each workflow, wall, user wait, helper wait and gaps (lines 376-380), the per-step table with working, helper wait, user wait and helpers columns (step_table lines 301-312, STEP_HEADERS line 298), the totals line with gap threshold (lines 384-392), and the helper table (helpers_table lines 318-337). The run table has \"user wait m\" and \"gap m\" columns (TABLE_HEADERS lines 195-197, rows lines 217-219). test_report.py:1178-1190 and the breakdown expectations in the test file cover these."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "report.py:528-538 MEASURES lists \"user wait m\", \"helper wait m\" and \"gap m\" (lines 530-532) alongside wall m, and median()/compare() (lines 549-605) iterate over MEASURES, so before-and-after medians print them. test_report.py:1200-1210 asserts the labels and the printed user, helper and gap rows and the regression flag. README.md \"Comparing runs\" (in the diff) says the medians cover user wait, helper wait and gap time."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "report.py loads any record: load_run and total() read missing keys as None, and all new figures print through number()/seconds()/minutes(), which turn None into \"unknown\" (report.py:155-160, 294-295). helpers_table() prints \"Helper spans: not recorded (schema N)\" when the subagents record has no helpers key (report.py:318-321). test_report.py:1162-1190 builds a schema-2 record with the user/helper/gap totals deleted and no entries/split fields, and asserts the table row shows unknown for user wait and gap, the step row shows unknown for the split, and the helper spans line says schema 2. test_report.py:1281-1284 covers the same record in --compare, with unknown for the split figures."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "a49f5e7b-8b38-4224-a665-b462ecfc2c64",
+      "title": "Remove the old parsers and debug fixtures",
+      "checks": [
+        {
+          "at": "2026-10-25T17:42:35Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "a49f5e7b-8b38-4224-a665-b462ecfc2c64",
+            "title": "Remove the old parsers and debug fixtures",
+            "criteria": [
+              "The old session-log reader and span reader no longer exist, and nothing in the harness refers to them or to `.spektacular/debug`.",
+              "The reference runs keep their transcripts and pinned token, child and turn figures, and no longer carry old debug logs.",
+              "Trimming a collected trial keeps its Spektacular logs and leaves every log-sourced measure unchanged.",
+              "The shared measurement scripts total 3,000 lines or fewer, and a self-test fails if they grow past that.",
+              "The full Harbor self-test suite and the Go test suite pass."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/sessionlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/spans.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_windows.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_runlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/trim_reference.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "artifacts/spektacular/logs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/transcripts.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".build"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_suite_wiring.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Glob of tests/harbor/shared/*.py lists no sessionlog.py or spans.py (both staged as deleted in spektacular.status). Grep for sessionlog|SessionLog|spektacular/debug|DEBUG_DIR across tests/harbor (excluding __pycache__ and jobs) finds only guard tests: test_suite_wiring.py:445 (`assert not names \u0026 {\"sessionlog.py\", \"spans.py\"}`), test_runlog.py:503 (`assert \".spektacular/debug\" not in text`), and test_timeline.py:148 (`assert not (tmp_path / \"debug\").exists()`). The only other hits outside the harness are the root .gitignore:44 and docs/workflow-performance-investigation.md:53, which are outside tests/harbor. The data READMEs (s55-plan/README:2 and the others) say the old session log 'in the debug format Harbor read before spec 000076' is not kept; they do not name .spektacular/debug."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Glob of tests/harbor/shared/tests/data/** shows only README, build.json and claude-code.txt for m70-epic, s55-epic, s55-implement and s55-plan, plus the probe-background-child OUTCOME/README/build.json/claude-code.txt; no debug/ folder remains (status shows the debug/*.jsonl files as staged deletions). test_reference_runs.py:308-311 asserts each run has exactly README, build.json and claude-code.txt, and test_reference_totals_are_pinned (around line 273) and test_every_reference_run_is_pinned (line 267) keep the pinned token, child and turn figures."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/tests/test_runlog_integration.py:214-237 copies a logs directory into a collected trial, runs trim_reference.main, and asserts the copied log names match (line 230), each log file is byte-identical (lines 231-232), and measured() before and after are equal (lines 233-235), with non-empty step and helper sections (lines 236-237). trim_reference.py:175-186 copies logs unchanged with shutil.copyfile, and trim_reference.py:219-224 refuses to write when any measured value differs."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/tests/test_suite_wiring.py:423-440 sets SHARED_LINE_CEILING = 3000 and test_shared_scripts_stay_small fails when sum(len(lines)) over shared/*.py exceeds it. Line counts of the top-level scripts from Grep are transcripts.py 634, timeline.py 193, runlog.py 397, report.py 687, metrics.py 593, loglevel.py 47 and delegation.py 439, totalling 2,990. sessionlog.py and spans.py are absent."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "Not re-run, since this reviewer is read-only. The verification summary reports `uvx --with pytest pytest -p no:cacheprovider --import-mode=importlib tests/harbor/shared/tests` at 629 passed and 1 skipped, the three verifier self-check suites at 14, 31 and 40 passed, and `go test -shuffle=on ./...` with every package ok. The test files behind these results exist in the worktree (for example test_runlog_integration.py and test_suite_wiring.py), and nothing in the diff suggests a failure the summary omits."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "c855d276-ed7e-46bc-9418-3e426dac25e6",
+      "title": "README and knowledge describe Harbor on built-in logs",
+      "checks": [
+        {
+          "at": "2026-10-25T17:46:14Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "c855d276-ed7e-46bc-9418-3e426dac25e6",
+            "title": "README and knowledge describe Harbor on built-in logs",
+            "criteria": [
+              "The README's Harbor sections name `.spektacular/logs`, the default level, `stats` as the source, the timeline command, the two-trial comparison and how to run the self-tests, and no longer describe the debug log or `idle_s`.",
+              "The three knowledge entries read back through the knowledge CLI with the new arrangement and no current-tense mention of the debug session log or the override."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/logs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "architecture/testing-architecture.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/runlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/worktree.Dir"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "gotchas/harbor-agent-logs-and-artifacts.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "/app/.spektacular"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "gotchas/harbor-agent-log-fields.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "transcripts.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "CHANGELOG.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "README.md:536-542 names `.spektacular/logs/` and says every suite records at the default log level and that Harbor reads the logs only through `spektacular stats` (list, run, commands, spans). README.md:551-553 gives the timeline command `python3 tests/harbor/shared/timeline.py \u003cjob\u003e/\u003ctrial\u003e/artifacts/spektacular/logs ...`. README.md:630-635 documents the two-trial comparison (`--compare A B`). README.md:663-677 covers the self-tests, including the `uvx --with pytest pytest ... tests/harbor/shared/tests` command. A search of the whole README for `idle_s`, `SESSION_LOG` and `override` found nothing. The only remaining `debug` hit is README.md:514, `agent-logs/bob/ # Bob's own debug log, on Bob runs only`, which is Bob's own log and not the Spektacular debug session log. The `idle_s` mention at README.md:570 is not present; that line only refers to version 2's 'idle time' in history."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The three read-backs in .spektacular/tmp/000076_harbor-on-built-in-logs/goal-check/ each return an entry under \"content\". knowledge-harbor-agent-logs-and-artifacts.md (content, line 2): the 'Spektacular's own logs come back for every agent' paragraph describes the default level and `.spektacular/logs/` with `standalone_\u003cday\u003e.jsonl`. It mentions `SPEKTACULAR_SESSION_LOG` only as 'no longer exists', which is past-state, not a current-tense description of the override. knowledge-harbor-agent-log-fields.md (content): the 'Only tokens, models, cost, turns and briefs come from these logs now' paragraph describes the logs-through-`stats` arrangement. knowledge-testing-architecture.md (content): the epic-suite paragraph says logs are recorded 'at the default log level with no special setting' and are read through `spektacular stats` via `runlog.py`. None of the three contains 'debug session log' or an override described as current."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    }
+  ]
+}

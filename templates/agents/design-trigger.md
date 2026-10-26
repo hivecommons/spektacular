@@ -1,8 +1,9 @@
-## Design-Worthy Detail Recognition
+# Design-Worthy Detail Recognition
 
-> Managed by `{{command}} init` — edit `templates/agents/design-trigger.md`
-> in the Spektacular source, not this section in place. Hand edits will not
-> survive the next init.
+> Managed by `{{command}} init` and refreshed by `{{command}} migrate` — edit
+> `templates/agents/design-trigger.md` in the Spektacular source, not this file in
+> place. Hand edits will not survive the next init. Agents read this file
+> when its rule's short section in `AGENTS.md` sends them here, and never edit it.
 
 **Stay alert whenever a conversation is working out how something will
 actually behave** — an API's shape, a user-facing flow, a data format, or a

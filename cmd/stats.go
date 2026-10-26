@@ -1,0 +1,646 @@
+package cmd
+
+import (
+	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/hivecommons/spektacular/internal/agentusage"
+	"github.com/hivecommons/spektacular/internal/config"
+	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/runstats"
+	"github.com/spf13/cobra"
+)
+
+// statsCmd groups the run statistics reports (internal/runstats), which read
+// a logs directory and report where each workflow run's time went. The
+// group carries the logging-exempt annotation, and every subcommand inherits
+// it through logExempted's parent walk, so a `stats` command is never
+// logged: inside a project, reporting can never append to, or trigger the
+// retention sweep of, the logs it reads.
+var statsCmd = &cobra.Command{
+	Annotations: map[string]string{logAnnotation: logExempt},
+	Use:         "stats",
+	Short:       "Report where workflow runs' time went, from the project's logs",
+	Long: `Report where workflow runs' time went, from the logs Spektacular keeps.
+The reports read the project's logs directory, or any logs directory given
+with --dir, and never change a log: stats commands are never logged.
+
+Every subcommand takes the same selection, combined with AND:
+  --name <workflow name>   --kind spec|plan|implement|repo   --agent <agent>
+  --run <run id or a unique prefix of 8 or more hex characters> (repeatable)
+
+For runs driven by Claude Code, the reports also give tokens, cost and
+working time per thousand output tokens, read (never changed) from Claude
+Code's own session files in $CLAUDE_CONFIG_DIR/projects, ~/.claude/projects,
+or the folder given with --sessions-dir. Costs use the optional stats.prices
+table in .spektacular/config.yaml; no prices are built in.`,
+	RunE: runUnknownSubcommand,
+}
+
+var statsListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List the recorded workflow runs, newest first",
+	Args:  cobra.NoArgs,
+	RunE:  runStatsList,
+}
+
+var statsRunCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Report where one run's time went: totals, steps, tasks, helpers, waits and gaps",
+	Long: `Report where one run's time went: its totals, each step and plan task,
+every helper launch and wait on the user, and the longest gaps between
+recorded events. With no selection it reports the run that started most
+recently; otherwise the most recent run the selection matches.`,
+	Args: cobra.NoArgs,
+	RunE: runStatsRun,
+}
+
+var statsCompareCmd = &cobra.Command{
+	Use:   "compare",
+	Short: "Compare runs side by side, step by step and in total, against the first",
+	Long: `Compare two or more runs side by side, step by step and in total, with each
+run's difference from the first in time and percentage. A step a run never
+entered is absent (null), not zero. With no selection it compares the two
+most recent runs of the latest run's kind, oldest first; with two or more
+--run values, exactly those runs, in that order.`,
+	Args: cobra.NoArgs,
+	RunE: runStatsCompare,
+}
+
+var statsSummaryCmd = &cobra.Command{
+	Use:   "summary",
+	Short: "Summarise many runs: per step and in total, the count, median and 90th percentile",
+	Long: `Summarise a set of runs: for each step and for the totals, the number of runs
+it applies to, the median and the 90th percentile (nearest rank). With no
+selection it summarises every run of the latest run's kind; with --run
+values, exactly those runs.`,
+	Args: cobra.NoArgs,
+	RunE: runStatsSummary,
+}
+
+var statsCommandsCmd = &cobra.Command{
+	Use:   "commands",
+	Short: "List every recorded command, oldest first, with its run, step, arguments and exit code",
+	Long: `List every recorded command, oldest first: the run and step it ran in, the
+step it moved the run to, its arguments, how long it took, its exit code and
+any error message. With no selection it lists every command, in runs and
+outside them; with a selection, only the selected runs' commands. With
+--outside-runs it lists only the commands recorded outside any workflow run,
+such as an epic orchestrator's.`,
+	Args: cobra.NoArgs,
+	RunE: runStatsCommands,
+}
+
+var statsSpansCmd = &cobra.Command{
+	Use:   "spans",
+	Short: "List every helper agent, wait on the user and other marked span, oldest first",
+	Long: `List every span an agent marked with trace start (helper agents, waits on
+the user and other work), oldest first, with its run, step, task, parent and
+how it ended. An unfinished span is capped as the run report caps it. The
+selection and --outside-runs work as for stats commands.`,
+	Args: cobra.NoArgs,
+	RunE: runStatsSpans,
+}
+
+// statsSource is what every stats result carries beside its figures: the
+// logs directory read and the lines in it that could not be read.
+type statsSource struct {
+	LogDir       string `json:"log_dir"`
+	SkippedLines int    `json:"skipped_lines"`
+}
+
+type statsListResult struct {
+	statsSource
+	Runs []runstats.RunSummary `json:"runs"`
+}
+
+type statsRunResult struct {
+	statsSource
+	runstats.Report
+}
+
+// statsCompareResult and statsSummaryResult are the JSON of `stats compare`
+// and `stats summary`, a contract read by the Harbor harness (spec 000076)
+// and fixed by the Data Structures section of plan 000075_run-stats-command:
+//
+//	compare: {"log_dir","skipped_lines","gap_threshold_ms",
+//	          "runs":[<run summary>, base first],
+//	          "totals":[{"figure":"wall_ms","values":[..],"delta":[..],"delta_pct":[..]}],
+//	          "steps":[{"step":"discovery","figures":[{"figure":"duration_ms","values":[..],"delta":[..],"delta_pct":[..]}]}]}
+//	summary: the same top-level shape, each figure {"figure","count","median","p90"}
+//
+// Arrays line up with runs; a step a run never entered is null there, with
+// null deltas; delta_pct is null when the base is 0 or null, rounded to one
+// decimal. Total figures, in order: wall_ms, working_ms, user_wait_ms,
+// helper_wait_ms, command_ms, commands, helpers, gap_ms. Step figures, in
+// order: duration_ms, entries, commands, command_ms, helper_wait_ms,
+// user_wait_ms. Spec 000078 appends to both lists input_tokens,
+// output_tokens, cache_read_tokens, cache_write_tokens, cost and
+// working_ms_per_1k_output, null for a run whose token use is unknown.
+// count is the runs a figure applies to (for a step, the runs
+// that entered it); median and p90 are numbers, null when count is 0.
+type statsCompareResult struct {
+	statsSource
+	runstats.Comparison
+}
+
+type statsSummaryResult struct {
+	statsSource
+	runstats.Summary
+}
+
+// statsCommandsResult and statsSpansResult are the JSON of `stats commands`
+// and `stats spans`, a contract read by the Harbor harness and fixed by the
+// Data Structures section of plan 000076_harbor-on-built-in-logs (the rows
+// are documented on runstats.CommandRow and runstats.SpanRow).
+type statsCommandsResult struct {
+	statsSource
+	Commands []runstats.CommandRow `json:"commands"`
+}
+
+type statsSpansResult struct {
+	statsSource
+	Spans []runstats.SpanRow `json:"spans"`
+}
+
+// statsSelectionFlags are the flags every stats subcommand's schema lists.
+func statsSelectionFlags() map[string]*schemaProp {
+	return map[string]*schemaProp{
+		"dir":    {Type: "string", Description: "logs directory to read; defaults to the project's log.config.directory"},
+		"format": {Type: "string", Enum: []string{statusFormatPretty, statusFormatJSON}},
+		"name":   {Type: "string", Description: "only runs of this workflow name"},
+		"kind":   {Type: "string", Enum: runstats.Kinds},
+		"agent":  {Type: "string", Description: "only runs by this agent"},
+		"run":    {Type: "array", Items: &schemaProp{Type: "string", Pattern: "^[0-9a-f]{8,32}$"}, Description: "a run id or unique prefix; repeatable"},
+	}
+}
+
+var statsSourceProps = map[string]*schemaProp{
+	"log_dir":       {Type: "string", Description: "the absolute logs directory read"},
+	"skipped_lines": {Type: "integer", Description: "lines that could not be read as records"},
+}
+
+var statsRunSummarySchema = &schemaProp{Type: "object", Properties: map[string]*schemaProp{
+	"run_id":     {Type: "string"},
+	"kind":       {Type: "string"},
+	"name":       {Type: "string"},
+	"agent":      {Type: "string"},
+	"log_file":   {Type: "string"},
+	"started_at": {Type: "string", Description: "RFC 3339 UTC"},
+	"ended_at":   {Type: "string", Description: "RFC 3339 UTC"},
+	"wall_ms":    {Type: "integer"},
+	"status":     {Type: "string", Enum: []string{runstats.StatusFinished, runstats.StatusInterrupted, runstats.StatusInProgress}},
+}}
+
+// statsOutput is a stats result's schema: the source fields plus props.
+func statsOutput(props map[string]*schemaProp) *schemaObj {
+	all := map[string]*schemaProp{"error": {Type: "boolean"}}
+	for k, v := range statsSourceProps {
+		all[k] = v
+	}
+	for k, v := range props {
+		all[k] = v
+	}
+	return &schemaObj{Type: "object", Properties: all}
+}
+
+func runStatsList(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		return output.Write(cmd.OutOrStdout(), commandSchema{
+			Output: statsOutput(map[string]*schemaProp{
+				"runs": {Type: "array", Items: statsRunSummarySchema, Description: "newest first"},
+			}),
+			Flags: statsSelectionFlags(),
+		}, "")
+	}
+	format, err := statsFormat(cmd)
+	if err != nil {
+		return err
+	}
+	logs, err := statsLogs(cmd)
+	if err != nil {
+		return err
+	}
+	runs, err := logs.Candidates(statsFilter(cmd))
+	if err != nil {
+		return statsError(err)
+	}
+	if format == statusFormatJSON {
+		res := statsListResult{statsSource: source(logs), Runs: []runstats.RunSummary{}}
+		for _, r := range runs {
+			res.Runs = append(res.Runs, r.Summary())
+		}
+		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(res)
+	}
+	return runstats.RenderList(cmd.OutOrStdout(), logs, runs)
+}
+
+func runStatsRun(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		flags := statsSelectionFlags()
+		flags["gaps"] = &schemaProp{Type: "integer", Description: "the most gaps listed, longest first; at least 1 (default 10)"}
+		flags["gap-threshold"] = &schemaProp{Type: "string", Description: "a Go duration; gaps longer than it count toward gap_ms (default 5m)"}
+		flags["sessions-dir"] = statsSessionsDirFlag
+		return output.Write(cmd.OutOrStdout(), commandSchema{
+			Output: statsOutput(map[string]*schemaProp{
+				"gap_threshold_ms": {Type: "integer"},
+				"run":              statsRunSummarySchema,
+				"totals":           {Type: "object", Description: "wall_ms, working_ms, user_wait_ms, helper_wait_ms, command_ms, commands, helpers, user_waits, gap_ms, gaps_over_threshold"},
+				"steps":            {Type: "array", Description: "one row per step name, in order of first entry"},
+				"step_entries":     {Type: "array", Description: "every entry into a step"},
+				"tasks":            {Type: "array", Description: "one row per plan task"},
+				"helpers":          {Type: "array", Description: "every helper-agent launch"},
+				"user_waits":       {Type: "array", Description: "every wait on the user"},
+				"gaps":             {Type: "array", Description: "the longest gaps, longest first"},
+				"tokens":           {Type: "object", Description: "token use: status (known or unknown), reason_code, reason, agent, sessions, skipped_lines, total, outside_steps, session_overhead, session_overhead_reason, models, unmatched_helpers; steps, tasks and helpers rows each carry a tokens figure (input, output, cache_read, cache_write, cost, cost_complete, unpriced_models, working_ms_per_1k_output), null when unknown"},
+			}),
+			Flags: flags,
+		}, "")
+	}
+	format, opts, logs, c, _, err := statsSelect(cmd)
+	if err != nil {
+		return err
+	}
+	run, err := runstats.ForReport(c)
+	if err != nil {
+		return statsError(err)
+	}
+	opts.Tokens = statsTokenInput(cmd, logs, []*runstats.Run{run})
+	rep := runstats.BuildReport(run, opts)
+	if format == statusFormatJSON {
+		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsRunResult{statsSource: source(logs), Report: rep})
+	}
+	return runstats.RenderReport(cmd.OutOrStdout(), rep, logs.Skipped)
+}
+
+// statsListingFlags are the flags of the two listings' schemas.
+func statsListingFlags() map[string]*schemaProp {
+	flags := statsSelectionFlags()
+	flags["outside-runs"] = &schemaProp{Type: "boolean", Description: "only the records written outside any workflow run; not combined with a selection"}
+	return flags
+}
+
+func runStatsCommands(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		return output.Write(cmd.OutOrStdout(), commandSchema{
+			Output: statsOutput(map[string]*schemaProp{
+				"commands": {Type: "array", Description: "oldest first; each run_id, kind, name, agent, span_id, parent_span_id, command, args, step, step_to, started_at, ended_at, duration_ms, exit_code, status, message (run fields null outside any run)"},
+			}),
+			Flags: statsListingFlags(),
+		}, "")
+	}
+	format, logs, f, outside, err := statsListing(cmd)
+	if err != nil {
+		return err
+	}
+	rows, err := logs.Commands(f, outside)
+	if err != nil {
+		return statsError(err)
+	}
+	if format == statusFormatJSON {
+		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsCommandsResult{statsSource: source(logs), Commands: rows})
+	}
+	return runstats.RenderCommands(cmd.OutOrStdout(), rows, logs.Skipped)
+}
+
+func runStatsSpans(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		return output.Write(cmd.OutOrStdout(), commandSchema{
+			Output: statsOutput(map[string]*schemaProp{
+				"spans": {Type: "array", Description: "oldest first; each a run report's helpers entry plus type (sub-agent, user-wait or work), trace_id, run_id, kind and workflow (the last three null outside any run)"},
+			}),
+			Flags: statsListingFlags(),
+		}, "")
+	}
+	format, logs, f, outside, err := statsListing(cmd)
+	if err != nil {
+		return err
+	}
+	rows, err := logs.AgentSpans(f, outside)
+	if err != nil {
+		return statsError(err)
+	}
+	if format == statusFormatJSON {
+		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsSpansResult{statsSource: source(logs), Spans: rows})
+	}
+	return runstats.RenderSpans(cmd.OutOrStdout(), rows, logs.Skipped)
+}
+
+// statsListing does what both listings share: it validates the format and
+// reads the logs, the selection and --outside-runs.
+func statsListing(cmd *cobra.Command) (format string, logs *runstats.Logs, f runstats.Filter, outside bool, err error) {
+	if format, err = statsFormat(cmd); err != nil {
+		return
+	}
+	if logs, err = statsLogs(cmd); err != nil {
+		return
+	}
+	outside, _ = cmd.Flags().GetBool("outside-runs")
+	return format, logs, statsFilter(cmd), outside, nil
+}
+
+// statsFigureSchema is the schema of a comparison's or a summary's output.
+func statsFigureSchema(figure *schemaProp) *schemaObj {
+	return statsOutput(map[string]*schemaProp{
+		"gap_threshold_ms": {Type: "integer"},
+		"runs":             {Type: "array", Items: statsRunSummarySchema, Description: "the runs, in the order compared (the first is the base)"},
+		"totals":           {Type: "array", Items: figure, Description: "wall_ms, working_ms, user_wait_ms, helper_wait_ms, command_ms, commands, helpers, gap_ms, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost, working_ms_per_1k_output"},
+		"steps": {Type: "array", Description: "one entry per step name", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
+			"step":    {Type: "string"},
+			"figures": {Type: "array", Items: figure, Description: "duration_ms, entries, commands, command_ms, helper_wait_ms, user_wait_ms, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost, working_ms_per_1k_output"},
+		}}},
+	})
+}
+
+func statsFigureFlags() map[string]*schemaProp {
+	flags := statsSelectionFlags()
+	flags["gap-threshold"] = &schemaProp{Type: "string", Description: "a Go duration; gaps longer than it count toward gap_ms (default 5m)"}
+	flags["sessions-dir"] = statsSessionsDirFlag
+	return flags
+}
+
+func runStatsCompare(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		return output.Write(cmd.OutOrStdout(), commandSchema{
+			Output: statsFigureSchema(&schemaProp{Type: "object", Properties: map[string]*schemaProp{
+				"figure":    {Type: "string"},
+				"values":    {Type: "array", Items: &schemaProp{Type: "number"}, Description: "one per run; null where it does not apply or token use is unknown; whole numbers except cost"},
+				"delta":     {Type: "array", Items: &schemaProp{Type: "number"}, Description: "each value less the first run's; null where either is null"},
+				"delta_pct": {Type: "array", Items: &schemaProp{Type: "number"}, Description: "delta as a percentage of the first run's value, one decimal; null when that is null or 0"},
+			}}),
+			Flags: statsFigureFlags(),
+		}, "")
+	}
+	format, opts, logs, c, f, err := statsSelect(cmd)
+	if err != nil {
+		return err
+	}
+	runs, err := runstats.ForCompare(c, f)
+	if err != nil {
+		return statsError(err)
+	}
+	opts.Tokens = statsTokenInput(cmd, logs, runs)
+	cmp := runstats.Compare(runs, opts)
+	if format == statusFormatJSON {
+		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsCompareResult{statsSource: source(logs), Comparison: cmp})
+	}
+	return runstats.RenderComparison(cmd.OutOrStdout(), cmp, logs.Skipped)
+}
+
+func runStatsSummary(cmd *cobra.Command, _ []string) error {
+	if schema, _ := cmd.Flags().GetBool("schema"); schema {
+		return output.Write(cmd.OutOrStdout(), commandSchema{
+			Output: statsFigureSchema(&schemaProp{Type: "object", Properties: map[string]*schemaProp{
+				"figure": {Type: "string"},
+				"count":  {Type: "integer", Description: "the runs the figure applies to; for a step, the runs that entered it"},
+				"median": {Type: "number", Description: "null when count is 0"},
+				"p90":    {Type: "number", Description: "nearest rank; null when count is 0"},
+			}}),
+			Flags: statsFigureFlags(),
+		}, "")
+	}
+	format, opts, logs, c, f, err := statsSelect(cmd)
+	if err != nil {
+		return err
+	}
+	runs, err := runstats.ForSummary(c, f)
+	if err != nil {
+		return statsError(err)
+	}
+	opts.Tokens = statsTokenInput(cmd, logs, runs)
+	sum := runstats.Summarise(runs, opts)
+	if format == statusFormatJSON {
+		return output.New(cmd.OutOrStdout(), globalFields).WriteResult(statsSummaryResult{statsSource: source(logs), Summary: sum})
+	}
+	return runstats.RenderSummary(cmd.OutOrStdout(), sum, logs.Skipped)
+}
+
+// statsSelect does what every report shares: it validates the format and
+// options, reads the logs, and resolves the selection's candidates.
+func statsSelect(cmd *cobra.Command) (format string, opts runstats.Options, logs *runstats.Logs, c []*runstats.Run, f runstats.Filter, err error) {
+	if format, err = statsFormat(cmd); err != nil {
+		return
+	}
+	if opts, err = statsOptions(cmd); err != nil {
+		return
+	}
+	if logs, err = statsLogs(cmd); err != nil {
+		return
+	}
+	f = statsFilter(cmd)
+	if c, err = logs.Candidates(f); err != nil {
+		err = statsError(err)
+	}
+	return
+}
+
+var statsSessionsDirFlag = &schemaProp{Type: "string", Description: "Claude Code projects directory to read token use from; defaults to $CLAUDE_CONFIG_DIR/projects or ~/.claude/projects"}
+
+// statsTokenInput gathers what the reports need to give the runs' token
+// use: the Claude Code sessions with activity since the earliest run
+// started, each read once and read-only, from --sessions-dir (made
+// absolute) or Claude Code's own projects directory; and the project's
+// price table, when there is a project. Session data that cannot be read
+// is a reason in the report, never an error; the sessions are not read at
+// all when no run was driven by Claude Code (or by an unnamed agent).
+func statsTokenInput(cmd *cobra.Command, logs *runstats.Logs, runs []*runstats.Run) *runstats.TokenInput {
+	dir, _ := cmd.Flags().GetString("sessions-dir")
+	if dir != "" {
+		if abs, err := filepath.Abs(dir); err == nil {
+			dir = abs
+		}
+	} else {
+		dir = agentusage.DefaultClaudeDir()
+	}
+	in := &runstats.TokenInput{AllRuns: logs.Runs, Dir: dir}
+
+	var since time.Time
+	claude := false
+	for _, r := range runs {
+		if r.Agent == "claude" || r.Agent == "unknown" {
+			claude = true
+		}
+		if since.IsZero() || r.Start.Before(since) {
+			since = r.Start
+		}
+	}
+	if claude {
+		in.Sessions, in.Problems = agentusage.Claude{Dir: dir}.Sessions(since)
+	}
+
+	// The gate has already validated a project's config; one that cannot
+	// be read here leaves every cost unknown.
+	if projectConfigExists() {
+		if cfg, err := loadConfig(); err == nil {
+			in.Prices = statsPrices(cfg.Stats)
+		}
+	}
+	return in
+}
+
+// statsPrices converts the project's price table, which config validated,
+// into the report's.
+func statsPrices(s config.StatsConfig) runstats.Prices {
+	out := runstats.Prices{}
+	for model, p := range s.Prices {
+		if p.Input == nil || p.Output == nil || p.CacheRead == nil || p.CacheWrite == nil {
+			continue
+		}
+		out[model] = runstats.Price{Input: *p.Input, Output: *p.Output, CacheRead: *p.CacheRead, CacheWrite: *p.CacheWrite}
+	}
+	return out
+}
+
+func source(l *runstats.Logs) statsSource {
+	return statsSource{LogDir: l.Dir, SkippedLines: l.Skipped}
+}
+
+// statsFormat validates --format, as status does.
+func statsFormat(cmd *cobra.Command) (string, error) {
+	format, _ := cmd.Flags().GetString("format")
+	if format != statusFormatPretty && format != statusFormatJSON {
+		return "", output.NewError("stats_format_unsupported",
+			fmt.Sprintf("stats format %q is not supported; supported formats: %s, %s", format, statusFormatPretty, statusFormatJSON)).
+			WithResource(format).
+			WithNextAction(fmt.Sprintf("re-run with --format %s or --format %s", statusFormatPretty, statusFormatJSON))
+	}
+	return format, nil
+}
+
+// statsOptions reads the gap options. --gaps exists only on the commands
+// that list gaps.
+func statsOptions(cmd *cobra.Command) (runstats.Options, error) {
+	o := runstats.DefaultOptions
+	if f := cmd.Flags().Lookup("gaps"); f != nil {
+		n, _ := cmd.Flags().GetInt("gaps")
+		if n < 1 {
+			return o, output.NewError("stats_bad_option",
+				fmt.Sprintf("--gaps %d is not allowed: at least one gap is listed", n)).
+				WithResource("--gaps").
+				WithNextAction("re-run with --gaps 1 or more (the default is 10)")
+		}
+		o.Gaps = n
+	}
+	th, _ := cmd.Flags().GetDuration("gap-threshold")
+	if th <= 0 {
+		return o, output.NewError("stats_bad_option",
+			fmt.Sprintf("--gap-threshold %s is not allowed: the threshold must be longer than zero", th)).
+			WithResource("--gap-threshold").
+			WithNextAction("re-run with a positive Go duration such as --gap-threshold 5m (the default)")
+	}
+	o.GapThreshold = th
+	return o, nil
+}
+
+// statsFilter builds the run selection from the flags.
+func statsFilter(cmd *cobra.Command) runstats.Filter {
+	name, _ := cmd.Flags().GetString("name")
+	kind, _ := cmd.Flags().GetString("kind")
+	agent, _ := cmd.Flags().GetString("agent")
+	runs, _ := cmd.Flags().GetStringSlice("run")
+	return runstats.Filter{Name: name, Kind: kind, Agent: agent, Runs: runs}
+}
+
+// statsLogs reads the logs directory: --dir, made absolute, or else the
+// project's configured log directory. Only reading the project's own logs
+// needs a project.
+func statsLogs(cmd *cobra.Command) (*runstats.Logs, error) {
+	dir, _ := cmd.Flags().GetString("dir")
+	if dir != "" {
+		abs, err := filepath.Abs(dir)
+		if err != nil {
+			return nil, err
+		}
+		dir = abs
+	} else {
+		cfgPath, err := configFilePath()
+		if err != nil {
+			return nil, err
+		}
+		if !projectConfigExists() {
+			return nil, noProjectError(cfgPath).
+				WithNextAction("run from a Spektacular project, or pass --dir <logs directory>")
+		}
+		cfg, err := loadConfig()
+		if err != nil {
+			return nil, err
+		}
+		root, err := projectRoot()
+		if err != nil {
+			return nil, err
+		}
+		dir = cfg.LogDir(root)
+	}
+	logs, err := runstats.Load(dir)
+	if errors.Is(err, runstats.ErrNoLogDir) {
+		return nil, output.NewError("stats_log_dir_not_found",
+			fmt.Sprintf("the logs directory %s does not exist", dir)).
+			WithResource(dir).
+			WithNextAction("check the path given with --dir; a project's own logs are in its log.config.directory setting (.spektacular/logs by default), created when its first command is logged")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
+// statsError turns the run statistics package's refusals into the error
+// envelope, each with the fix.
+func statsError(err error) error {
+	var se *runstats.SelectionError
+	switch {
+	case errors.As(err, &se):
+		switch se.Code {
+		case runstats.CodeBadKind:
+			return output.NewError("stats_bad_selection", se.Error()).
+				WithResource(se.Value).
+				WithNextAction(fmt.Sprintf("re-run with --kind set to one of: %s", strings.Join(runstats.Kinds, ", ")))
+		case runstats.CodeBadRunID:
+			return output.NewError("stats_bad_selection", se.Error()).
+				WithResource(se.Value).
+				WithNextAction("give --run a run id, or its first 8 or more hex characters, as `spektacular stats list` shows")
+		case runstats.CodeRunNotFound:
+			return output.NewError("stats_run_not_found", se.Error()).
+				WithResource(se.Value).
+				WithNextAction("run `spektacular stats list` to see recorded runs and their ids")
+		case runstats.CodeRunAmbiguous:
+			return output.NewError("stats_run_ambiguous", se.Error()).
+				WithResource(se.Value).
+				WithNextAction(fmt.Sprintf("give more characters of the run id; it matches %s", strings.Join(se.Matches, ", ")))
+		case runstats.CodeBadSelection:
+			return output.NewError("stats_bad_selection", se.Error()).
+				WithResource(se.Value).
+				WithNextAction("use --outside-runs on its own, or drop it and select runs with --name, --kind, --agent or --run")
+		}
+	case errors.Is(err, runstats.ErrNoRuns):
+		return output.NewError("stats_no_runs", "no recorded run matches the selection").
+			WithNextAction("run `spektacular stats list` to see recorded runs, or widen the selection")
+	case errors.Is(err, runstats.ErrTooFew):
+		return output.NewError("stats_compare_needs_two", "a comparison needs at least two runs, and the selection gives fewer").
+			WithNextAction("name two runs with --run <id> --run <id> (see `spektacular stats list`), or widen the selection")
+	}
+	return err
+}
+
+func init() {
+	statsCmd.PersistentFlags().String("dir", "", "Logs directory to read (default: the project's log directory)")
+	statsCmd.PersistentFlags().String("format", statusFormatPretty, "Output format: pretty or json")
+	statsCmd.PersistentFlags().String("name", "", "Only runs of this workflow name")
+	statsCmd.PersistentFlags().String("kind", "", "Only runs of this kind: spec, plan, implement or repo")
+	statsCmd.PersistentFlags().String("agent", "", "Only runs by this agent")
+	statsCmd.PersistentFlags().StringSlice("run", nil, "A run id, or a unique prefix of 8 or more hex characters (repeatable)")
+	statsCmd.PersistentFlags().Duration("gap-threshold", 5*time.Minute, "Gaps longer than this count toward the gap total")
+	statsCmd.PersistentFlags().String("sessions-dir", "", "Claude Code projects directory to read token use from (default $CLAUDE_CONFIG_DIR/projects or ~/.claude/projects)")
+
+	statsRunCmd.Flags().Int("gaps", runstats.DefaultOptions.Gaps, "The most gaps to list, longest first")
+	for _, c := range []*cobra.Command{statsCommandsCmd, statsSpansCmd} {
+		c.Flags().Bool("outside-runs", false, "Only the records written outside any workflow run (not combined with a selection)")
+	}
+	for _, c := range []*cobra.Command{statsListCmd, statsRunCmd, statsCompareCmd, statsSummaryCmd, statsCommandsCmd, statsSpansCmd, statsViewCmd} {
+		c.Flags().Bool("schema", false, "Print the input/output schema and exit")
+		statsCmd.AddCommand(c)
+	}
+}

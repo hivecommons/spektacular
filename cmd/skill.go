@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hivecommons/spektacular/internal/output"
+	"github.com/hivecommons/spektacular/internal/stepkit"
 	"github.com/hivecommons/spektacular/templates"
 	"github.com/spf13/cobra"
 )
@@ -49,11 +50,19 @@ func runSkill(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	filename := "skills/skill_" + name + ".md"
 
-	content, err := templates.FS.ReadFile(filename)
-	if err != nil {
+	if _, err := templates.FS.ReadFile(filename); err != nil {
 		// List available skills for the error message.
 		available := listSkills()
 		return fmt.Errorf("unknown skill %q — available skills: %s", name, strings.Join(available, ", "))
+	}
+	// A library skill may include a shared partial ({{> partials/<name>}}),
+	// such as the goal reviewer's brief that the installed reviewer helpers
+	// embed too, so there is one source text for both.
+	// They render with the configured command, as workflow skills do, so a
+	// shared partial reads the same here as in a step instruction.
+	content, err := stepkit.RenderTemplate(filename, map[string]any{"command": traceCommand()})
+	if err != nil {
+		return err
 	}
 
 	out := output.New(cmd.OutOrStdout(), globalFields)

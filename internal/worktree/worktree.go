@@ -662,10 +662,10 @@ func (m Manager) Find(spec string) (SpecWorktrees, bool, error) {
 // Merge merges spec's branch into every touched repo's current branch, as one
 // unit. It first checks every repo: none may have a merge in progress, a
 // spec worktree with uncommitted work, or uncommitted changes in its main
-// copy that the merge would touch; the branch may change nothing under a
-// .spektacular directory in any repo; and a dry run must merge cleanly. When
-// any repo would conflict, nothing is merged anywhere and the conflicts are
-// returned per repo. Otherwise each repo is merged with --no-ff, and every
+// copy that the merge would touch; the branch may change nothing in a
+// Spektacular store directory in any repo; and a dry run must merge
+// cleanly. When any repo would conflict, nothing is merged anywhere and the
+// conflicts are returned per repo. Otherwise each repo is merged with --no-ff, and every
 // worktree and branch of the spec is removed.
 func (m Manager) Merge(spec string) (MergeResult, error) {
 	sw, ok, err := m.Find(spec)
@@ -760,12 +760,43 @@ func (m Manager) Merge(spec string) (MergeResult, error) {
 	return result, nil
 }
 
-// spektacularPathspec matches every path under a .spektacular directory at
-// any depth of a checkout, the checkout's top included.
-const spektacularPathspec = ":(glob)**/.spektacular/**"
+// storePathspecs lists, as literal pathspecs relative to the main checkout
+// top, every Spektacular store directory inside it: the project's own when
+// the project lives there, and each registered repo's location that does, at
+// whatever depth the project or repo sits in the checkout. Only these hold
+// Spektacular's files; a directory that merely shares the name, such as the
+// template `init` installs or a test fixture, is code.
+func (m Manager) storePathspecs(top string) []string {
+	dirs := []string{filepath.Join(m.ProjectRoot, ".spektacular")}
+	if m.Repos != nil {
+		for _, e := range m.Config.Repos {
+			if loc, ok := m.Repos.LocalRoot(e.Name); ok {
+				dirs = append(dirs, loc)
+			}
+		}
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, d := range dirs {
+		d, err := filepath.EvalSymlinks(d)
+		if err != nil {
+			continue
+		}
+		rel, err := filepath.Rel(top, d)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		spec := ":(literal)" + filepath.ToSlash(rel)
+		if !seen[spec] {
+			seen[spec] = true
+			out = append(out, spec)
+		}
+	}
+	return out
+}
 
 // refuseSpektacularChanges refuses a merge when the spec's branch changes
-// anything under a .spektacular directory in any repo. Spektacular's files
+// anything in a Spektacular store directory in any repo. Spektacular's files
 // are only ever written in the project itself, so such a change is a
 // mistake to undo, never something to merge. Every repo is checked first,
 // so the refusal names all the offending paths at once.
@@ -774,7 +805,12 @@ func (m Manager) refuseSpektacularChanges(sw SpecWorktrees) error {
 	var parts []string
 	var first RepoWorktree
 	for _, rw := range sw.Repos {
-		out, err := m.git(rw.Top, "diff", "--name-only", "HEAD..."+branch, "--", spektacularPathspec)
+		stores := m.storePathspecs(rw.Top)
+		if len(stores) == 0 {
+			continue
+		}
+		args := append([]string{"diff", "--name-only", "HEAD..." + branch, "--"}, stores...)
+		out, err := m.git(rw.Top, args...)
 		if err != nil {
 			return err
 		}

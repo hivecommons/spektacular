@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -277,6 +278,15 @@ func newStoreFileCmd(k storeFileKind) *cobra.Command {
 				opts.Plan = prov.Plan
 			}
 			body := stripLeadingFrontmatterBlocks(content)
+			// An empty body would replace the stored document with nothing,
+			// as `--from /dev/null` once did to a plan's research document
+			// mid-run. Removing a document is `file delete`'s job.
+			if len(bytes.TrimSpace(body)) == 0 {
+				return output.NewError("empty_document",
+					fmt.Sprintf("%q has no content to write to %s", fromPath, addressString(addr))).
+					WithResource(addressString(addr)).
+					WithNextAction(fmt.Sprintf("stage the whole document at the --from path and write it again; to remove a document, run `%s file delete %s`", k.kind, addressString(addr)))
+			}
 			if k.validate != nil {
 				if err := k.validate(cfg, addr, body); err != nil {
 					return err

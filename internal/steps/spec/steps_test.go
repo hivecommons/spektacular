@@ -136,6 +136,16 @@ func TestVerificationStepPassesSpecTemplate(t *testing.T) {
 	require.NotEmpty(t, writer.result.Instruction)
 }
 
+func TestVerificationStepRequiresSubAgentReview(t *testing.T) {
+	out := renderStep(t, verification())
+	require.Contains(t, out, "**If your agent can start sub-agents, this review is done only by one.**")
+	require.Contains(t, out, "Reviewing the staged file in your own context does not complete this step")
+	// The brief handed to the reviewer, and the no-subagent fallback, are unchanged.
+	require.Contains(t, out, "`.spektacular/tmp/spec_template.md`")
+	require.Contains(t, out, "review only what is written in that file")
+	require.Contains(t, out, "If you have no way to spawn a subagent, fall back to reviewing the staged file yourself")
+}
+
 func TestNewStepWritesScaffold(t *testing.T) {
 	tmp := t.TempDir()
 

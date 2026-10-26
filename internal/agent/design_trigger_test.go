@@ -20,12 +20,23 @@ import (
 func fixtureDesignTriggerFS() fs.FS {
 	return fstest.MapFS{
 		designTriggerTemplatePath: &fstest.MapFile{
+			Data: []byte("# Design-Worthy Detail Recognition\n\nFull guidance: route through {{command}} design write.\n"),
+		},
+		designTriggerShortTemplatePath: &fstest.MapFile{
 			Data: []byte("## Design-Worthy Detail Recognition\n\nRoute writes through {{command}} design write.\n"),
 		},
 	}
 }
 
 const fixtureDesignTriggerRenderedDefault = "## Design-Worthy Detail Recognition\n\nRoute writes through go run . design write.\n"
+
+// designTriggerShortTemplatePath is the embedded path of the rule's short
+// AGENTS.md section, hand-written here rather than taken from the standing-rule table.
+const designTriggerShortTemplatePath = "agents/short/design-trigger.md"
+
+// fixtureDesignTriggerGuidanceDefault is the fixture's full guidance rendered
+// for cfg.Command = "go run .": it lands in .spektacular/guidance/design-trigger.md, not in AGENTS.md.
+const fixtureDesignTriggerGuidanceDefault = "# Design-Worthy Detail Recognition\n\nFull guidance: route through go run . design write.\n"
 
 func TestInstallDesignTriggerSection_CreatesFromMissing(t *testing.T) {
 	withSourceFS(t, fixtureDesignTriggerFS())
@@ -37,6 +48,8 @@ func TestInstallDesignTriggerSection_CreatesFromMissing(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
 	require.Equal(t, fixtureDesignTriggerRenderedDefault, string(got))
+	require.Equal(t, fixtureDesignTriggerGuidanceDefault, readGuidanceFile(t, tmp, "design-trigger"),
+		"the full guidance lands in its own guidance file, not in AGENTS.md")
 }
 
 func TestInstallDesignTriggerSection_AppendsAfterTesslBlock(t *testing.T) {
@@ -128,6 +141,8 @@ func TestInstallDesignTriggerSection_PicksUpTemplateChange(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 	require.NoError(t, err)
 	require.Equal(t, want, string(got))
+	require.Equal(t, "# Design-Worthy Detail Recognition\n\nFull guidance: route through spektacular design write.\n", readGuidanceFile(t, tmp, "design-trigger"),
+		"the guidance file is re-rendered with the new command")
 }
 
 func TestInstallDesignTriggerSection_CrossAgentIdempotency(t *testing.T) {
@@ -150,10 +165,11 @@ func TestInstallDesignTriggerSection_CrossAgentIdempotency(t *testing.T) {
 }
 
 // renderDesignTriggerSection installs the real, embedded design-trigger
-// template through the production install path into a directory the test owns
-// and returns the rendered AGENTS.md. Rendering rather than reading the
-// committed AGENTS.md is deliberate: a guard that read the committed copy would
-// still pass when someone edited the template and never re-ran init.
+// templates through the production install path into a directory the test
+// owns and returns the rendered AGENTS.md, which holds only the rule's short
+// section. Rendering rather than reading the committed AGENTS.md is
+// deliberate: a guard that read the committed copy would still pass when
+// someone edited the template and never re-ran init.
 //
 // The command is a hand-chosen literal rather than config.NewDefault()'s so the
 // placeholder-rendering assertions cannot be satisfied by an unrendered
@@ -169,6 +185,17 @@ func renderDesignTriggerSection(t *testing.T) string {
 	return string(body)
 }
 
+// renderDesignTriggerGuidance is renderDesignTriggerSection for the rule's
+// guidance file: the full text the short section links to, which is where the
+// detailed instruction now lives.
+func renderDesignTriggerGuidance(t *testing.T) string {
+	t.Helper()
+
+	tmp := t.TempDir()
+	require.NoError(t, installDesignTriggerSection(tmp, config.Config{Command: "go run ."}, io.Discard))
+	return readGuidanceFile(t, tmp, "design-trigger")
+}
+
 // designTriggerAcceptBranch returns the body of the rendered section's
 // `**Accept**` bullet — from its marker up to the `**Defer**` bullet that
 // follows it. Scoping the command assertions to that branch is what makes them
@@ -181,11 +208,11 @@ func designTriggerAcceptBranch(t *testing.T, rendered string) string {
 	const deferMarker = "- **Defer**"
 
 	start := strings.Index(rendered, acceptMarker)
-	require.NotEqual(t, -1, start, "the rendered design-trigger section has no %q bullet", acceptMarker)
+	require.NotEqual(t, -1, start, "the rendered design-trigger guidance has no %q bullet", acceptMarker)
 
 	branch := rendered[start:]
 	end := strings.Index(branch, deferMarker)
-	require.NotEqual(t, -1, end, "the rendered design-trigger section has no %q bullet after %q", deferMarker, acceptMarker)
+	require.NotEqual(t, -1, end, "the rendered design-trigger guidance has no %q bullet after %q", deferMarker, acceptMarker)
 	return branch[:end]
 }
 
@@ -196,7 +223,7 @@ func designTriggerAcceptBranch(t *testing.T, rendered string) string {
 // is the exact behaviour the section exists to prevent. Expected substrings are
 // hand-maintained literals, never derived from the template.
 func TestRenderedDesignTriggerSectionOffersRatherThanWrites(t *testing.T) {
-	rendered := renderDesignTriggerSection(t)
+	rendered := renderDesignTriggerGuidance(t)
 
 	anchors := []string{
 		"offer — never write a design document",
@@ -205,7 +232,7 @@ func TestRenderedDesignTriggerSectionOffersRatherThanWrites(t *testing.T) {
 	for _, needle := range anchors {
 		count := strings.Count(rendered, needle)
 		require.Equalf(t, 1, count,
-			"the rendered Design-Worthy Detail Recognition section must contain %q exactly once (found %d)", needle, count)
+			"the rendered Design-Worthy Detail Recognition guidance must contain %q exactly once (found %d)", needle, count)
 	}
 }
 
@@ -213,7 +240,7 @@ func TestRenderedDesignTriggerSectionOffersRatherThanWrites(t *testing.T) {
 // outcomes survive an edit, and that a decline is stated to be final for that
 // detail rather than a "not now" the agent may re-raise.
 func TestRenderedDesignTriggerSectionNamesThreeOutcomes(t *testing.T) {
-	rendered := renderDesignTriggerSection(t)
+	rendered := renderDesignTriggerGuidance(t)
 
 	anchors := []string{
 		"one of three outcomes",
@@ -225,7 +252,7 @@ func TestRenderedDesignTriggerSectionNamesThreeOutcomes(t *testing.T) {
 	for _, needle := range anchors {
 		count := strings.Count(rendered, needle)
 		require.Equalf(t, 1, count,
-			"the rendered Design-Worthy Detail Recognition section must contain %q exactly once (found %d)", needle, count)
+			"the rendered Design-Worthy Detail Recognition guidance must contain %q exactly once (found %d)", needle, count)
 	}
 }
 
@@ -237,7 +264,7 @@ func TestRenderedDesignTriggerSectionNamesThreeOutcomes(t *testing.T) {
 // with nowhere to land, a supplied document silently rewritten, or a document
 // nothing references and so invisible to the plan workflow.
 func TestRenderedDesignTriggerAcceptBranchNamesTheWriteCommands(t *testing.T) {
-	branch := designTriggerAcceptBranch(t, renderDesignTriggerSection(t))
+	branch := designTriggerAcceptBranch(t, renderDesignTriggerGuidance(t))
 
 	for _, needle := range []string{"go run . design author", "go run . design write", "go run . design ref add"} {
 		require.Contains(t, branch, needle,
@@ -251,22 +278,50 @@ func TestRenderedDesignTriggerAcceptBranchNamesTheWriteCommands(t *testing.T) {
 // templates/skills/workflows/, so an instruction to load one would send the
 // agent down a path that errors instead of capturing the design.
 func TestRenderedDesignTriggerSectionNamesCommandsDirectly(t *testing.T) {
-	rendered := renderDesignTriggerSection(t)
-
-	require.NotContains(t, rendered, "skill spek-",
-		"the Design-Worthy Detail Recognition section must name the design commands directly, not fetch a skill")
+	for surface, rendered := range map[string]string{
+		"AGENTS.md section": renderDesignTriggerSection(t),
+		"guidance file":     renderDesignTriggerGuidance(t),
+	} {
+		require.NotContainsf(t, rendered, "skill spek-",
+			"the Design-Worthy Detail Recognition %s must name the design commands directly, not fetch a skill", surface)
+	}
 }
 
 // TestRenderedDesignTriggerSectionLeavesNoUnrenderedPlaceholder asserts the
 // section's mustache placeholders are substituted, so the installed AGENTS.md
 // never hands an agent a literal `{{command}}` to type.
 func TestRenderedDesignTriggerSectionLeavesNoUnrenderedPlaceholder(t *testing.T) {
+	require.Contains(t, renderDesignTriggerGuidance(t), "go run . design sources",
+		"the {{command}} placeholder must render to the configured command in the guidance file")
+	require.Contains(t, renderDesignTriggerSection(t), "Managed by `go run . init`",
+		"the {{command}} placeholder must render to the configured command in the AGENTS.md section")
+	for surface, rendered := range map[string]string{
+		"AGENTS.md section": renderDesignTriggerSection(t),
+		"guidance file":     renderDesignTriggerGuidance(t),
+	} {
+		require.NotContainsf(t, rendered, "{{",
+			"the rendered design-trigger %s must not leak a mustache placeholder", surface)
+	}
+}
+
+// TestRenderedDesignTriggerSectionStatesTheBindingRuleInline asserts the short
+// AGENTS.md section carries the obligation itself: offer rather than write,
+// through the design skill, and read the guidance before offering. An agent
+// that never opens the guidance file must still not write a design document
+// unprompted.
+func TestRenderedDesignTriggerSectionStatesTheBindingRuleInline(t *testing.T) {
 	rendered := renderDesignTriggerSection(t)
 
-	require.Contains(t, rendered, "go run . design sources",
-		"the {{command}} placeholder must render to the configured command")
-	require.NotContains(t, rendered, "{{command}}",
-		"the rendered section must not leak the {{command}} placeholder")
+	for _, needle := range []string{
+		"offer to capture it",
+		"`spek-design` skill",
+		"never write a design document unprompted",
+		"Before offering, read the full",
+		"[.spektacular/guidance/design-trigger.md](.spektacular/guidance/design-trigger.md)",
+	} {
+		require.Containsf(t, rendered, needle,
+			"the short Design-Worthy Detail Recognition section must contain %q", needle)
+	}
 }
 
 // TestRenderedDesignTriggerSectionSeparatesAlertnessFromOffering asserts the
@@ -278,7 +333,7 @@ func TestRenderedDesignTriggerSectionLeavesNoUnrenderedPlaceholder(t *testing.T)
 // Expected substrings are hand-maintained literals, never derived from the
 // template.
 func TestRenderedDesignTriggerSectionSeparatesAlertnessFromOffering(t *testing.T) {
-	rendered := renderDesignTriggerSection(t)
+	rendered := renderDesignTriggerGuidance(t)
 
 	anchors := []string{
 		"Stay alert whenever a conversation is working out",
@@ -287,7 +342,7 @@ func TestRenderedDesignTriggerSectionSeparatesAlertnessFromOffering(t *testing.T
 	for _, needle := range anchors {
 		count := strings.Count(rendered, needle)
 		require.Equalf(t, 1, count,
-			"the rendered Design-Worthy Detail Recognition section must contain %q exactly once (found %d)", needle, count)
+			"the rendered Design-Worthy Detail Recognition guidance must contain %q exactly once (found %d)", needle, count)
 	}
 }
 
@@ -297,7 +352,7 @@ func TestRenderedDesignTriggerSectionSeparatesAlertnessFromOffering(t *testing.T
 // changing, and design talk with no spec yet in existence. Losing any one of
 // them narrows the instruction back to a design emerging fresh in conversation.
 func TestRenderedDesignTriggerSectionNamesThreeEntryCases(t *testing.T) {
-	rendered := renderDesignTriggerSection(t)
+	rendered := renderDesignTriggerGuidance(t)
 
 	anchors := []string{
 		"- **The user already has the document.**",
@@ -307,7 +362,7 @@ func TestRenderedDesignTriggerSectionNamesThreeEntryCases(t *testing.T) {
 	for _, needle := range anchors {
 		count := strings.Count(rendered, needle)
 		require.Equalf(t, 1, count,
-			"the rendered Design-Worthy Detail Recognition section must contain %q exactly once (found %d)", needle, count)
+			"the rendered Design-Worthy Detail Recognition guidance must contain %q exactly once (found %d)", needle, count)
 	}
 }
 
@@ -317,7 +372,7 @@ func TestRenderedDesignTriggerSectionNamesThreeEntryCases(t *testing.T) {
 // design out before any spec was written, so this is the phrase most likely to
 // be lost silently in a future reword.
 func TestRenderedDesignTriggerAcceptBranchConditionsTheReferenceOnASpec(t *testing.T) {
-	branch := designTriggerAcceptBranch(t, renderDesignTriggerSection(t))
+	branch := designTriggerAcceptBranch(t, renderDesignTriggerGuidance(t))
 
 	require.Contains(t, branch, "if a spec exists**, record the reference",
 		"the accept branch must make recording the design reference conditional on a spec existing")
@@ -330,7 +385,7 @@ func TestRenderedDesignTriggerAcceptBranchConditionsTheReferenceOnASpec(t *testi
 // TestRenderedDesignTriggerSectionNamesCommandsDirectly is the matching guard
 // that the hand-off stays prose and never becomes a command-line skill fetch.
 func TestRenderedDesignTriggerAcceptBranchHandsOffToTheSkillByName(t *testing.T) {
-	branch := designTriggerAcceptBranch(t, renderDesignTriggerSection(t))
+	branch := designTriggerAcceptBranch(t, renderDesignTriggerGuidance(t))
 
 	require.Contains(t, branch, "invoke the `spek-design` skill",
 		"the accept branch must hand off to the design skill by name")
@@ -350,7 +405,7 @@ func TestRenderedDesignTriggerAcceptBranchHandsOffToTheSkillByName(t *testing.T)
 //
 // The expected strings are hand-copied from templates/agents/design-trigger.md.
 func TestRenderedDesignTriggerRoutesTheDesignPointerToConstraints(t *testing.T) {
-	rendered := renderDesignTriggerSection(t)
+	rendered := renderDesignTriggerGuidance(t)
 
 	require.Contains(t, rendered, "three homes for the *content*, not three degrees of how binding",
 		"the guidance must say the three homes sort content by size, not by how binding it is")

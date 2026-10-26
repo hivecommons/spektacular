@@ -1,8 +1,9 @@
-## Spektacular's Files Are Reached Through Spektacular
+# Spektacular's Files Are Reached Through Spektacular
 
-> Managed by `{{command}} init` — edit `templates/agents/store-access.md`
-> in the Spektacular source, not this section in place. Hand edits will not
-> survive the next init.
+> Managed by `{{command}} init` and refreshed by `{{command}} migrate` — edit
+> `templates/agents/store-access.md` in the Spektacular source, not this file in
+> place. Hand edits will not survive the next init. Agents read this file
+> when its rule's short section in `AGENTS.md` sends them here, and never edit it.
 
 Every file Spektacular manages is reached through its CLI, never with your own
 file tools. This covers specs, plans, their context and research documents,
@@ -47,6 +48,12 @@ are scratch and hand-off surfaces rather than stores:
   it succeeds.
 - `.spektacular/work/<name>/` — a workflow's per-section working files.
 - `.spektacular/working-context.md` — the notes a resumed session reads back.
+
+The guidance files under `.spektacular/guidance/`, this one included, are not a
+store either. Read them with your own file tools whenever a rule's short section
+in `AGENTS.md` points you there. Never edit, move or delete them: `{{command}} init`
+writes them and `{{command}} migrate` rewrites them, so a change made by hand is
+lost.
 
 This rule binds everywhere: inside the spec, plan and implement workflows, and
 equally in ad-hoc questions, unrelated skills and general exploration. It also

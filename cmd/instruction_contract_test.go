@@ -37,6 +37,20 @@ type stepTemplateRow struct {
 	nextStep     string
 }
 
+// contractFooterlessSteps is a hand-maintained copy of stepkit's footerless
+// steps: the continuing steps, per workflow kind, that do work the plan
+// already describes and so carry no working-context footer.
+var contractFooterlessSteps = map[string]map[string]bool{
+	"plan":      {"assemble": true, "write_plan": true, "write_context": true, "write_research": true},
+	"implement": {"analyze": true, "implement": true, "test": true, "verify": true, "check_goal": true, "update_plan": true},
+}
+
+// carriesFooter reports whether a rendered step should end with the
+// working-context footer: every continuing step but the footerless ones.
+func (ri renderedInstruction) carriesFooter() bool {
+	return ri.nextStep != "" && !contractFooterlessSteps[ri.workflow][ri.stepName]
+}
+
 // stepTemplateTable is hand-maintained to mirror the writeStep calls in
 // internal/steps/{spec,plan,implement,repo}/steps.go. It is deliberately not
 // derived from Steps(): a step whose next step changes must be reflected here
@@ -79,7 +93,8 @@ var stepTemplateTable = []stepTemplateRow{
 	{"implement", "analyze", "steps/implement/02-analyze.md", "implement"},
 	{"implement", "implement", "steps/implement/03-implement.md", "test"},
 	{"implement", "test", "steps/implement/04-test.md", "verify"},
-	{"implement", "verify", "steps/implement/05-verify.md", "update_plan"},
+	{"implement", "verify", "steps/implement/05-verify.md", "check_goal"},
+	{"implement", "check_goal", "steps/implement/05b-check_goal.md", "update_plan"},
 	{"implement", "update_plan", "steps/implement/06-update_plan.md", "update_changelog"},
 	{"implement", "update_changelog", "steps/implement/07-update_changelog.md", "test_plan"},
 	{"implement", "test_plan", "steps/implement/09-test_plan.md", "update_feature_changelog"},
@@ -164,6 +179,15 @@ func renderAllStepInstructionsMode(t *testing.T, command, autoCommit string) []r
 // can be rendered as a standalone run or as a lane of an orchestrated one.
 func renderAllStepInstructionsWith(t *testing.T, command, autoCommit string, orchestrated bool) []renderedInstruction {
 	t.Helper()
+	return renderAllStepInstructionsSpan(t, command, autoCommit, orchestrated, "")
+}
+
+// renderAllStepInstructionsSpan is renderAllStepInstructionsWith with a step
+// span id on the config, as the workflow engine sets it before rendering a
+// step: every continuing step is rendered with stepSpan, and a terminal step
+// (no next step) with none, as the engine gives the terminal step no span.
+func renderAllStepInstructionsSpan(t *testing.T, command, autoCommit string, orchestrated bool, stepSpan string) []renderedInstruction {
+	t.Helper()
 	requireStepTableComplete(t)
 
 	out := make([]renderedInstruction, 0, len(stepTemplateTable))
@@ -173,6 +197,10 @@ func renderAllStepInstructionsWith(t *testing.T, command, autoCommit string, orc
 			renderData["orchestrated"] = true
 		}
 		capture := &contractCapture{}
+		span := stepSpan
+		if row.nextStep == "" {
+			span = ""
+		}
 		err := stepkit.WriteStepResult(
 			stepkit.StepRequest{
 				StepName:     row.stepName,
@@ -181,7 +209,7 @@ func renderAllStepInstructionsWith(t *testing.T, command, autoCommit string, orc
 				Strategy:     contractStrategy{},
 			},
 			renderData,
-			capture, nil, workflow.Config{Command: command, Kind: row.workflow, AutoCommit: autoCommit},
+			capture, nil, workflow.Config{Command: command, Kind: row.workflow, AutoCommit: autoCommit, StepSpan: span},
 			func(_, _, _, instruction string) any { return instruction },
 		)
 		require.NoErrorf(t, err, "rendering %s", row.templatePath)
@@ -223,9 +251,9 @@ func requireStepTableComplete(t *testing.T) {
 
 func TestContinuingStepsEndWithIdenticalFooter(t *testing.T) {
 	for _, ri := range renderAllStepInstructions(t, "spektacular") {
-		if ri.nextStep == "" {
+		if !ri.carriesFooter() {
 			require.NotContainsf(t, ri.body, "**Before you advance:**",
-				"%s is terminal and must carry no working-context footer", ri.templatePath)
+				"%s is terminal or footerless and must carry no working-context footer", ri.templatePath)
 			continue
 		}
 		require.Equalf(t, 1, strings.Count(ri.body, contractWorkingContextFooter),
@@ -348,9 +376,10 @@ func TestNextCommandsCarryPrefix(t *testing.T) {
 const oldWorkingContextPath = ".spektacular/context.md"
 
 // agentFacingCorpus extends workflowInstructionCorpus with the rest of the
-// text an agent reads: the managed AGENTS.md sections the claude install
-// writes and every helper skill served through the skill command. It chdirs
-// into a fresh skill project fixture, so callers must not run in parallel.
+// text an agent reads: the managed AGENTS.md sections and standing-rule
+// guidance files the claude install writes and every helper skill served
+// through the skill command. It chdirs into a fresh skill project fixture, so
+// callers must not run in parallel.
 func agentFacingCorpus(t *testing.T, command string) []instructionSource {
 	t.Helper()
 	corpus, _, _ := agentFacingCorpusWithRoots(t, command)
@@ -367,6 +396,17 @@ func agentFacingCorpusWithRoots(t *testing.T, command string) (corpus []instruct
 	agentsMD, err := os.ReadFile(filepath.Join(installDir, "AGENTS.md"))
 	require.NoError(t, err, "the claude install must write the managed AGENTS.md sections")
 	corpus = append(corpus, instructionSource{"AGENTS.md (managed sections)", string(agentsMD)})
+
+	// The short sections link to each standing rule's full guidance, which an
+	// agent reads on demand: keep that text under the same guards.
+	guidanceFiles, err := filepath.Glob(filepath.Join(installDir, ".spektacular", "guidance", "*.md"))
+	require.NoError(t, err)
+	require.Len(t, guidanceFiles, 8, "the claude install must write one guidance file per standing rule")
+	for _, path := range guidanceFiles {
+		body, err := os.ReadFile(path)
+		require.NoError(t, err)
+		corpus = append(corpus, instructionSource{"guidance " + filepath.Base(path), string(body)})
+	}
 
 	skillProject(t)
 	projectDir, err = os.Getwd()

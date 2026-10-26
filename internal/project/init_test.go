@@ -61,8 +61,15 @@ func TestInit_CreatesGitignore(t *testing.T) {
 	require.NoError(t, err)
 
 	gitignorePath := filepath.Join(dir, ".spektacular", ".gitignore")
-	_, err = os.Stat(gitignorePath)
+	raw, err := os.ReadFile(gitignorePath)
 	require.NoError(t, err)
+	count := 0
+	for _, line := range strings.Split(string(raw), "\n") {
+		if strings.TrimSpace(line) == "logs/" {
+			count++
+		}
+	}
+	require.Equal(t, 1, count, "the installed .gitignore ignores the logs folder exactly once")
 }
 
 func TestInit_SeedsConventionsDirectory(t *testing.T) {
@@ -306,7 +313,7 @@ func TestInit_BackfillsMissingNamePreservingOtherSettings(t *testing.T) {
 
 	// A hand-written config with no name and a non-default spec directory,
 	// written relative to the folder holding config.yaml.
-	raw := "schema: 4\nspec:\n  provider: file\n  config:\n    directory: ../docs/specs\n"
+	raw := "schema: 5\nspec:\n  provider: file\n  config:\n    directory: ../docs/specs\n"
 	require.NoError(t, os.WriteFile(filepath.Join(spektacularDir, "config.yaml"), []byte(raw), 0644))
 
 	// Force is required because .spektacular already exists.
@@ -406,7 +413,7 @@ func TestInit_SeedsReposIntoOlderConfigWithoutRegistry(t *testing.T) {
 	require.NoError(t, os.MkdirAll(spektacularDir, 0755))
 
 	// An older config: name present, repos absent.
-	raw := "schema: 4\nname: legacy-proj\nspec:\n  provider: file\n  config:\n    directory: ../docs/specs\n"
+	raw := "schema: 5\nname: legacy-proj\nspec:\n  provider: file\n  config:\n    directory: ../docs/specs\n"
 	require.NoError(t, os.WriteFile(filepath.Join(spektacularDir, "config.yaml"), []byte(raw), 0644))
 
 	// Force is required because .spektacular already exists.
@@ -506,7 +513,7 @@ func TestInit_UnversionedExistingConfigIsRefusedAsFormatError(t *testing.T) {
 	require.True(t, ok, "expected a *config.FormatError, got %T: %v", err, err)
 	require.Equal(t, "project", fe.Kind)
 	require.Equal(t, 1, fe.Found)
-	require.Equal(t, 4, fe.Want)
+	require.Equal(t, config.CurrentProjectSchema, fe.Want)
 	require.False(t, fe.Newer())
 
 	after, err := os.ReadFile(configPath)

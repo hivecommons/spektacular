@@ -23,5 +23,5 @@ const (
 // inherits AGENTS.md but not the skill that spawned it. The skills now name
 // only the commands their own store needs.
 func installStoreAccessSection(projectPath string, cfg config.Config, out io.Writer) error {
-	return installManagedSection(projectPath, cfg, out, storeAccessTemplatePath, storeAccessHeading, "Spektacular file access section")
+	return installStandingRule(projectPath, cfg, out, "store-access")
 }

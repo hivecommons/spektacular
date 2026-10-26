@@ -9,6 +9,10 @@ description: Plan every outstanding spec of an epic in one request, running the 
 > - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
 > - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
+**Mark spans.** Before you launch a helper agent, run `spektacular trace start <helper> --type sub-agent` and put the id it prints in the helper's brief: "Your parent span is `<id>`: start any span of your own with `--parent <id>`." When the helper returns, run `spektacular trace stop <id>` (add `--status error` if it failed), chained with your next command.
+
+Before you ask the user a question, run `spektacular trace start <question> --type user-wait`, and once they answer run `spektacular trace stop <id>`, chained with your next command.
+
 > **STOP. Read this before running any command below.**
 > Planning an epic is a loop over many specs, and every spec is its own multi-step plan workflow. Starting the first child agent, or seeing the first spec finish, is **NOT** completion. Keep driving the loop below until `spektacular status <epic> --format json` reports no spec left to plan, or the run has stopped, and only then give the final report.
 
@@ -47,7 +51,11 @@ Repeat until nothing is left to start and no child is running:
 
 Use your agent's own way of running sub-agents in the background, so independent specs are planned in overlapping time. Start every ready spec; there is no limit on how many run at once.
 
-A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not.
+**In a headless session, keep every child inside your turn.** A session is headless when no one replies between your turns: you were started non-interactively, or your prompt says so. Being told that no one will answer is not on its own a reason to hold children in your turn; the reason is what a headless session does to a background child once your turn ends. Headless Claude Code stopped one about ten minutes after the main agent ended its turn, and its completion notice never woke the session (recorded on 2026-10-24 with Claude Code 2.1.310 by the background-child harbor probe). So instead of starting children in the background, start the ready specs as foreground sub-agents in a single message, so they still run in overlapping time, and handle every hand-back (Step 4) before you end the turn.
+
+**Never set a timed wake-up while children run.** Do not use a scheduled wake-up, a timer, a recurring job or a command that sleeps to check on your children: each child's hand-back, or its completion notice, is what wakes you. A wake-up still pending once the work is done keeps the session running with nothing left to do.
+
+A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not. A child that ended without a hand-back is no longer running (Step 4).
 
 # Step 3: The child prompt
 
@@ -57,6 +65,7 @@ Give each child exactly what it needs, because it inherits nothing from you:
 - to **start**: run `spektacular plan new --data '{"name":"<spec>","orchestrated":true}'`;
 - to **resume**: run the same `plan new` command. It returns a resume report for the spec's lane instead of starting over; read back what the report names (the plan's working files and the lane's notes), then run the `goto` it gives, `spektacular plan goto --data '{"step":"<current_step>","name":"<spec>"}'`;
 - "Follow the `spek-plan` skill. This run is orchestrated: every `goto` carries `\"name\":\"<spec>\"`, and you never ask the user anything yourself.";
+- its parent span: the id `spektacular trace start` printed when you marked this child's launch, given as "Your parent span is `<id>`: start any span of your own with `--parent <id>`.";
 - the store-access rule above, word for word;
 - that only you write the epic's planning summary, so the child never runs `spektacular epic summary write`;
 - the hand-back contract and the definition of a genuine open question, below.
@@ -65,7 +74,7 @@ Give each child exactly what it needs, because it inherits nothing from you:
 
 A child ends every turn that stops its work with a final message whose **first line** is exactly one of:
 
-- `DONE: <spec>`, followed by the plan summary its walkthrough step prepares (in an orchestrated run the walkthrough prepares a summary instead of asking for sign-off): the approach, the milestones and tasks (naming any task a person must do), what is out of scope, the drafting assumptions, the project-wide rules it relies on or decides, one per line, and the manual checks its Testing Approach sends to the test plan (success metrics and reviews a person must make), one per line. Then any durable discovery worth saving to the knowledge base.
+- `DONE: <spec>`, followed by the plan summary its walkthrough step prepares (in an orchestrated run the walkthrough prepares a summary instead of asking for sign-off): the approach, the milestones and tasks (naming any task a person must do), what is out of scope, the drafting assumptions, the project-wide rules it relies on or decides, one per line, and the manual checks its Testing Approach sends to the test plan (success metrics and reviews a person must make), one per line. Then every knowledge entry it wrote (tier, store, path, why): a child writes durable knowledge itself through the `spek-knowledge` skill.
 - `QUESTION: <spec>`, followed by the question, the options, and the default it recommends. It then waits for your answer and carries on from the same step.
 - `FAILED: <spec>`, followed by the step it reached and the reason it cannot go on.
 
@@ -76,9 +85,10 @@ Only a stop the plan workflow itself defines earns a question: a design referenc
 # Step 4: Handling a hand-back
 
 - **`DONE:`** — keep its summary for Step 6; nothing is written to the epic's planning summary yet, because the summary is produced only once every decision between the plans is settled. Re-read `status` and start any spec that has just become ready.
-- **`QUESTION:`** — put the question to the user. Present it as ordinary text first, naming the spec, the options and the recommended default, then ask. While the user considers it, the other children keep going. Send the user's answer back to the same child, so it continues where it stopped. If your agent cannot continue a stopped child, start a fresh child on the same spec with the answer included in its prompt; it resumes the plan from its lane with the `goto` above.
+- **`QUESTION:`** — put the question to the user. Present it as ordinary text first, naming the spec, the options and the recommended default, then ask. While the user considers it, the other children keep going. Send the user's answer back to the same child, so it continues where it stopped. If your agent cannot continue a stopped child, start a fresh child on the same spec with the answer included in its prompt; it resumes the plan from its lane with the `goto` above. In a headless session, always start the fresh child, in the foreground: a stopped child that is continued may carry on in the background, where it can be stopped. Do one or the other, never both: if you start a fresh child, the stopped one must not also be continued, because only one child may work on a spec at a time.
 - **The user declines to answer now** ("not now", "I'll think about it") — enter stopping mode.
 - **`FAILED:`** — enter stopping mode.
+- **No hand-back at all** — a child whose final message does not open with `DONE:`, `QUESTION:` or `FAILED:` (typically a sentence announcing its next action, such as "Now run the next goto") did not stop: it was cut off by the agent's own limit on how long one sub-agent may run. Nothing is lost, since its plan stays in progress in its lane. Start a fresh child on the same spec straight away, on your own and without waiting for the user, with the **resume** prompt; it carries on from the step its lane records. Name the resume in your next progress line. If a spec is cut off twice in a row at the same step in `status`, treat it as `FAILED:`.
 
 **Stopping mode:** start no new child, let the children already running finish, then go to the final report. A child waiting on a question the user declined to answer is not resumed: its plan stays in progress in its lane, and repeating the request picks it up. Name the spec that stopped the run and why. Before the final report, still run Step 6 when its conditions hold.
 
@@ -104,7 +114,7 @@ When no child is running and nothing is left to start, read the summary with `sp
 
 A change to a plan document, where `<doc>` is `plan`, `context` or `research`: read it with `spektacular plan file read <spec> <doc>`, stage the edited document under `.spektacular/tmp/`, write it back with `spektacular plan file write <spec> <doc> --from <path>`, and remove the scratch file. A change to the summary goes through `spektacular epic summary write` the same way.
 
-Offer to save any durable discovery the children reported with the `spek-knowledge` skill, and save it only if the user accepts. Close the review on a direct confirmation question.
+Report every knowledge entry the children wrote (tier, store, path, why), so the user sees how the knowledge base changed. Close the review on a direct confirmation question.
 
 Skip the review if no plan was produced in this run.
 
@@ -116,5 +126,6 @@ End every run, finished or stopped, with:
 - **Skipped:** each spec that already had a plan.
 - **Dependencies added for shared files:** how many `epic order` added, each named in the summary.
 - **Still outstanding:** each spec not planned, and why: blocked on which specs, stopped by which failure, or waiting on a question the user chose not to answer.
+- **Resumed after being cut off:** each spec whose child had to be restarted because it ended without a hand-back, and how many times. When there are any, say that the agent limits how long one sub-agent may run, and that raising that limit avoids the restarts (for Bob, `session.maxTurns` in `~/.bob/settings/settings.json`; `0` means no limit).
 
 When everything is planned, say the epic is ready to implement with "implement this epic".

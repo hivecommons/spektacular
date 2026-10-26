@@ -9,9 +9,13 @@ description: Search, contribute to, or update the project's knowledge base.
 > - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
 > - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
+**Mark spans.** Before you launch a helper agent, run `spektacular trace start <helper> --type sub-agent` and put the id it prints in the helper's brief: "Your parent span is `<id>`: start any span of your own with `--parent <id>`." When the helper returns, run `spektacular trace stop <id>` (add `--status error` if it failed), chained with your next command.
+
+Before you ask the user a question, run `spektacular trace start <question> --type user-wait`, and once they answer run `spektacular trace stop <id>`, chained with your next command.
+
 # What this skill does
 
-This skill orchestrates the existing `spektacular knowledge` CRUD surface for ad-hoc read, contribute, update, audit, and maintenance operations on the project's knowledge store, without starting a spec/plan/implement flow. Unlike `spek-new`, `spek-plan`, and `spek-implement`, it does not drive an interactive CLI state machine — it is a static playbook. The agent recognises the user's natural-language intent, picks one of five branches (lookup / contribute / update / audit / maintenance), and calls the matching `spektacular knowledge` command directly.
+This skill orchestrates the existing `spektacular knowledge` CRUD surface for ad-hoc read, contribute, update, audit, and prune operations on the project's knowledge store, without starting a spec/plan/implement flow. Unlike `spek-new`, `spek-plan`, and `spek-implement`, it does not drive an interactive CLI state machine — it is a static playbook. The agent recognises the user's natural-language intent, picks one of five branches (lookup / contribute / update / audit / prune), and calls the matching `spektacular knowledge` command directly.
 
 # When to invoke
 
@@ -23,7 +27,7 @@ Invoke this skill any time the user references the knowledge base, an entry, a c
 - "Update what we have on W."
 - "Recall the convention for V."
 - "Check the tags on our entries." / "Are our knowledge entries tagged properly?"
-- "Is the knowledge base still accurate?" / "Are these entries still true?" / "Review the knowledge base for anything out of date."
+- "Is the knowledge base still accurate?" / "Are these entries still true?" / "Review the knowledge base for anything out of date." / "Prune the knowledge base."
 
 One skill handles all five intents. Discriminate by what the user actually said — do not ask the user to pick a slash command per intent.
 
@@ -78,12 +82,12 @@ Triggered when the user wants to record something new.
    ```
 
    Tags travel in the file, not in `--data`, so the write invocation below is unchanged by them. An entry with no tags simply has no block. Do not pipe the body via stdin; the only supported invocation is `--file <staged>`.
-6. **Show the user the destination, the proposed tags, and the body before writing.** The destination must state the **tier**, the **store name**, and the **path** — approval is for where the entry lands, not just what it is called — and the **tags** alongside them, since they decide whether the entry is ever found again. This is one gate, not two: tags are confirmed with everything else, not separately. Wait for **explicit confirmation** ("yes", "go ahead", or equivalent). If the user asks for changes, revise the staged body and re-show — never write on an implicit signal.
-7. Only after explicit confirmation, run:
+6. Write it straight away; do not ask the user first:
    ```
    spektacular knowledge write --data '{"tier":"<tier>","name":"<name>","path":"<category>/<slug>.md"}' --file .spektacular/tmp/<slug>.md
    ```
    A write that leaves out the tier or the store name is refused, and the refusal lists the names available in that tier.
+7. **Then tell the user what you wrote**, in your normal reply: the **tier**, the **store name**, the **path**, the **tags**, and why the entry is worth keeping. The write is not a proposal awaiting approval; this report is how the user sees the knowledge base change. A user who disagrees can ask for it to be revised or deleted, and the project's version history holds every earlier state.
 8. Remove the scratch file after a successful write: `rm .spektacular/tmp/<slug>.md`.
 
 # Intent: update
@@ -93,12 +97,12 @@ Triggered when the user wants to revise an existing entry.
 1. Identify the target entry. Run `spektacular knowledge search <query>` (or read the user-supplied path directly) to locate it. A hit carries its own `tier`, `name` and `path`, which is everything a read needs, so no further disambiguation is required. Confirm the store and path with the user if there is any ambiguity.
 2. Read the current body with `spektacular knowledge read --data '{"tier":"<tier>","name":"<name>","path":"<path>"}'`.
 3. Apply the user's revision intent to produce new content. Stage the revised body under `.spektacular/tmp/<slug>.md` using the `Write` tool. **Carry the entry's existing frontmatter block through unchanged** unless the revision is itself about the tags: a write replaces the whole file, so dropping the block silently strips the entry's tags and makes it harder to find. If the revision changes what the entry is about, revise the tags with it, following the tag-form rules in the contribute intent.
-4. **Show the user the tier, store name, path, tags, and proposed new body (or a diff against the current body) before writing.** Wait for **explicit confirmation**.
-5. Only after explicit confirmation, run:
+4. Write the revision straight away; do not ask the user first:
    ```
    spektacular knowledge write --data '{"tier":"<tier>","name":"<name>","path":"<path>"}' --file .spektacular/tmp/<slug>.md
    ```
    The tier, name and path must all match the original — that is what makes this an update rather than a new entry somewhere else.
+5. **Then tell the user what changed**: the **tier**, the **store name**, the **path**, the **tags**, a short summary of the change against the previous body, and why. A rewrite keeps the entry's creation date and its usage history.
 6. Remove the scratch file after a successful write: `rm .spektacular/tmp/<slug>.md`.
 
 # Intent: audit
@@ -123,49 +127,29 @@ Triggered when the user wants the tags on existing entries reviewed — entries 
    ```
 6. Remove the scratch file after each successful write: `rm .spektacular/tmp/<slug>.md`. Then move to the next entry.
 
-An audit that reaches `spektacular knowledge write` without passing the per-entry confirmation in step 4 is a bug in the skill's execution, exactly as it would be in the contribute and update intents.
+An audit that reaches `spektacular knowledge write` without passing the per-entry confirmation in step 4 is a bug in the skill's execution: the audit is the one intent that confirms before it writes.
 
-# Intent: maintenance
+# Intent: prune
 
-Triggered when the user wants to know whether the knowledge base is still **true** — not whether it is well labelled, which is the audit intent one section above. Maintenance **reads and proposes only**. It composes the primitives the other intents already use plus `spektacular knowledge delete`, and adds no bulk operation, no recursive operation and no second write path.
+Triggered when the user wants to know whether the knowledge base is still **true**, or wants unused knowledge cleared out — not whether it is well labelled, which is the audit intent one section above. Prune is driven by `spektacular knowledge prune`, which hands you one instruction at a time; you follow each and answer it, and the command checks every answer against the store.
 
-1. Enumerate the entries in scope with `spektacular knowledge list`, narrowing with `--tier` and a repeatable `--filter` when the user names particular stores.
-2. Read each entry in scope with `spektacular knowledge read --data '{"tier":"<tier>","name":"<name>","path":"<path>"}'`.
-3. Classify each entry as exactly one of four verdicts:
-   - **current** — the entry still describes how the project works, or states a standard it is meant to meet.
-   - **stale** — the entry's subject no longer exists. The file, command, flag, package or behaviour it is about is gone.
-   - **incorrect** — the subject still exists but the entry describes it wrongly.
-   - **unverifiable** — the entry cannot be checked from the code, for example a claim about intent, process or an external system.
-
-4. **The classification rule that decides whether this review helps or harms.** An entry stating a standard the code has not yet met is **current**, not stale. In this project an entry states the target and the code is what has yet to meet it, so a difference between an entry and the code is work to do, never evidence against the entry. Only an entry whose **subject no longer exists** is stale.
-
-   The failure mode to avoid, concretely: an architecture entry says every store write goes through the CLI, and you find three places writing files directly. That entry is **current** and the code is out of step with it. Proposing its removal would delete the entry doing the most work in the knowledge base. Say the code disagrees with it, and leave the entry alone.
-
-   Likewise, never classify from age or tone. "Looks old", "seems outdated" and "probably superseded" are not findings.
-
-5. **State the evidence for every stale or incorrect verdict.** Name the specific file, command or behaviour that changed, so the user can check the finding rather than take it on trust. A verdict you cannot attach evidence to is **unverifiable**, not stale.
-6. **Report drifted category descriptions.** A category's own `README.md` is generated from the project's definition of that category, and one that no longer matches has drifted. Enumerate them with `spektacular knowledge list`, read each with `spektacular knowledge read`, and compare against `spektacular knowledge categories`. Report any mismatch naming the store, the path, and `spektacular init <agent>` as the remedy. The review **reports drift and never repairs it** — bringing a store back into line stays something the user runs deliberately.
-7. **Propose per entry, and confirm per entry.** Show the user one entry's tier, store name, path, verdict and the evidence for it, together with what you propose: leave it, correct it, or remove it. Wait for **explicit confirmation for that entry**. Accepting one entry's outcome never applies another's, and declining one never carries to the next — each entry is its own decision.
-8. Only after explicit confirmation for that entry:
-   - To **correct** it, stage the revised body under `.spektacular/tmp/<slug>.md` with the `Write` tool and write it at the entry's **original** tier, name and path:
-     ```
-     spektacular knowledge write --data '{"tier":"<tier>","name":"<name>","path":"<path>"}' --file .spektacular/tmp/<slug>.md
-     ```
-     Remove the scratch file after a successful write: `rm .spektacular/tmp/<slug>.md`.
-   - To **remove** it, delete it through the tool and never with your own file tools:
-     ```
-     spektacular knowledge delete --data '{"tier":"<tier>","name":"<name>","path":"<path>"}'
-     ```
-9. Move to the next entry.
-
-A maintenance review that reaches `spektacular knowledge write` or `spektacular knowledge delete` without passing the per-entry confirmation in step 7 is a bug in the skill's execution, exactly as it would be in the contribute, update and audit intents.
+1. **Offer the preview when it fits.** If the user asks what prune would do, or seems unsure, run `spektacular knowledge prune --dry-run`: the dry run (the preview) produces the full report and changes nothing, not an entry and not a usage record. Otherwise run `spektacular knowledge prune`. Narrow either with `--tier` and a repeatable `--filter` when the user names particular stores.
+2. **The first pass runs in the command.** It removes every entry created longer ago than the project's `knowledge.prune.max_age_days` (90 days by default) that has been tracked by the usage index for at least that long and was not retrieved in that time, even if searches surfaced it. You do nothing for this pass; its removals come back in the result's `removed` list, with each entry's age and usage as evidence.
+3. **The second pass is yours, one entry at a time.** The result's `instruction` names one remaining entry, carries its full text, and gives the verdict rules: an entry stating a standard the code has not yet met is **current**, only an entry whose subject no longer exists is deleted, an entry describing its subject wrongly is corrected, and every change needs evidence. Follow it exactly. Do not run `spektacular knowledge read` or `spektacular knowledge search` for the entry: its text is in the instruction, and prune's own reads must not count as usage.
+4. Make the change the instruction calls for (in a real run, correct with `spektacular knowledge write` or delete with `spektacular knowledge delete`; in a dry run, change nothing), then answer with the exact verdict command it gives:
+   ```
+   spektacular knowledge prune verdict --data '{"tier":"<tier>","name":"<name>","path":"<path>","verdict":"<current|corrected|deleted>","evidence":"<what you checked and what you found>"}'
+   ```
+   The command refuses a verdict the store contradicts, a verdict for an entry other than the one it handed you, and a change without evidence; each refusal says how to fix it. Each accepted verdict returns the next entry's instruction.
+5. **Present the final report.** When every entry has a verdict the command returns the report: every entry with its verdict — removed, corrected, deleted or current (in a dry run, would remove, would correct, would delete or current) — and the evidence for every change. Show it to the user in full. Prune acts without asking; recovery from any of its changes is through the project's version history. If prune is interrupted, running `spektacular knowledge prune` again resumes it at the same entry, and `--force` discards it and starts again.
+6. **Report drifted category descriptions.** A category's own `README.md` is generated from the project's definition of that category, and one that no longer matches has drifted. Prune never queues these files. Enumerate them with `spektacular knowledge list`, read each with `spektacular knowledge read`, and compare against `spektacular knowledge categories`. Report any mismatch naming the store, the path, and `spektacular init <agent>` as the remedy. Prune **reports drift and never repairs it** — bringing a store back into line stays something the user runs deliberately.
 
 # Decline handling
 
-If the user declines, asks for changes, or expresses uncertainty at any propose-then-confirm checkpoint, **do not invoke `spektacular knowledge write`**. Either loop back to refine the proposal — adjust the tier, store name, path, or body and re-show — or stop and leave the knowledge store untouched. Removing the staged scratch file at `.spektacular/tmp/<slug>.md` is fine either way; a half-finished proposal should not linger on disk.
+The contribute, update and prune intents write without asking and then report what they wrote. The audit intent is the one confirmation gate left: it proposes tag changes and applies each only on the user's agreement.
 
-In the audit and maintenance intents the same rule applies **per entry**. A decline on one entry stops that entry's change and nothing else: do not carry it forward as a decline of the whole review, and never treat approval of an earlier entry as approval of a later one. Move on to the next entry and propose it on its own merits.
+If the user declines, asks for changes, or expresses uncertainty at an audit checkpoint, **do not invoke `spektacular knowledge write`** for that entry. Either loop back to refine the proposal — adjust the proposed tags and re-show — or leave that entry untouched. Removing the staged scratch file at `.spektacular/tmp/<slug>.md` is fine either way; a half-finished proposal should not linger on disk.
 
-Maintenance is the first intent that can **remove** an entry rather than only rewrite one, so the rule binds harder there. A decline in maintenance means the entry is left exactly as it is — nothing is written and, above all, nothing is deleted. `spektacular knowledge delete` is reached only after explicit agreement for that one entry, and agreement to remove one entry is never agreement to remove another.
+In the audit intent the rule applies **per entry**. A decline on one entry stops that entry's change and nothing else: do not carry it forward as a decline of the whole review, and never treat approval of an earlier entry as approval of a later one. Move on to the next entry and propose it on its own merits.
 
-The propose-then-confirm contract is enforced by this prose, not by a CLI guard. Treat it as load-bearing: a write without explicit user approval is a bug in the skill's execution, not an acceptable shortcut.
+The audit's propose-then-confirm contract is enforced by this prose, not by a CLI guard. Treat it as load-bearing: an audit write without explicit user approval is a bug in the skill's execution, not an acceptable shortcut.

@@ -1,0 +1,1011 @@
+{
+  "plan": "000075_run-stats-command",
+  "items": [
+    {
+      "item": "dad1813d-55e1-4a5e-9ee0-667f48f26a41",
+      "title": "Load logs into runs",
+      "checks": [
+        {
+          "at": "2026-10-25T14:11:26Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "dad1813d-55e1-4a5e-9ee0-667f48f26a41",
+            "title": "Load logs into runs",
+            "criteria": [
+              "Records from run files and day files are grouped into one run per workflow run, and commands run outside any workflow are not reported as runs.",
+              "Each run has the kind, name, agent and log file its records name, and its wall time runs from its first recorded event to its last, ignoring the moment a later restart closed its leftover spans.",
+              "A run that reached its last step is finished. One that was restarted or overtaken by a later run of the same workflow is interrupted. Any other is in progress.",
+              "A malformed line, a line missing its identifiers and a partly written last line are each skipped and counted, and every run's figures are unchanged by them.",
+              "Runs can be picked by workflow name, by kind, by agent, by these combined, and by a full run id or a unique prefix of one. An unknown, ambiguous or malformed id is refused with a reason.",
+              "With no selection, a report picks the latest run, a comparison the two latest runs of that run's kind, and a summary every run of that kind.",
+              "Reading never creates, changes, moves or deletes a file in the logs directory."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/doc.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/load.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/assemble.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.workflow.kind"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.agent"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.span.type"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.step"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.task.id"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/select.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/load_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "assemble_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "select_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/runstats/load.go:39-75 reads every *.jsonl in the dir and groups records by trace id across files (assemble.go:83-99). assemble.go:112-129 (buildRun) returns nil unless a record carries spektacular.workflow.kind, so standalone traces (load_test.go:46 checks the standalone trace is not a run) are not reported."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "assemble.go:179-181: timeline() excludes abandoned span ends (assemble.go:245, unfinished() at 227-229), so extent() gives Start/End from the first and last recorded events and Wall() (assemble.go:48) is End minus Start. capUnfinished (290-305) caps abandoned spans at the run's last other event. Agent, kind, name come from the records (assemble.go:115-132) and LogFile from the first record (133). load_test.go:55-56 checks Start and End."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "assemble.go:311-328 ownStatus: finished when a step has EndFinished or a command has step.to=finished; interrupted when a step has EndAbandoned (the restart sweep, workflow/spans.go:108-113); else in_progress. markOvertaken (332-344) turns an in-progress run interrupted when a later run of the same kind and name started after its End. Caveat: tracelog.EndInterrupted (record.go:59-61) is not counted as interrupted, but no non-test code emits it (grep finds only its definitions), so this does not affect current output."
+            },
+            {
+              "criterion": 4,
+              "verdict": "not_met",
+              "evidence": "Malformed JSON, a missing trace_id, a missing or zero start_time, a span_end with no end_time, a bad record kind and a partly written last line are all skipped and counted (load.go:108-126, readFile 79-103; load_test.go:59-92 checks Skipped==6 and unchanged figures). But a span record with a trace_id and no span_id is not rejected: parseLine accepts it, and assemble.go:144-147 gives it a synthetic key ('an unidentifiable span cannot be paired: it stands alone'). It is then added to run.Spans and the timeline, which changes the run's figures. The spec requires a line missing its identifiers to be skipped and counted with figures unchanged. No test covers a missing span_id (load_test.go has only noTrace, noStart, badKind, endNoTime). Fix: reject span/span_start/span_end lines with an empty SpanID in parseLine and add a test case."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "select.go:58 pattern ^[0-9a-f]{8,32}$; select.go:105-127 resolve() matches by prefix, returns CodeRunNotFound for zero matches and CodeRunAmbiguous with the matching ids for several; CodeBadRunID for malformed (select.go:106-109). Error text (select.go:37-49) gives the reason. Filter (53-56) combines name, kind and agent (select.go:69-73, 96-100) and runs by id. Note: a prefix shorter than 8 hex characters is refused as malformed, which is a stricter reading than the criterion requires, but it does not contradict it."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "select.go:131-136 ForReport returns c[0], the newest run (Runs are newest first, assemble.go:101-106). select.go:142-160 ForCompare with no selection takes ofKind of c[0].Kind and returns the two latest, oldest first ([kind[1], kind[0]]). select.go:165-175 ForSummary returns every run of c[0].Kind, oldest first, via ofKind and Reverse."
+            },
+            {
+              "criterion": 7,
+              "verdict": "met",
+              "evidence": "load.go only calls os.ReadDir and os.Open (read-only, load.go:45, 80); there are no write, rename, remove or chmod calls anywhere in internal/runstats. load_test.go:124-146 TestLoadNeverChangesTheLogs compares directory contents and mtimes before and after Load. internal/tracelog is not in the staged status, so nothing there changed."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T14:13:02Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "dad1813d-55e1-4a5e-9ee0-667f48f26a41",
+            "title": "Load logs into runs",
+            "criteria": [
+              "Records from run files and day files are grouped into one run per workflow run, and commands run outside any workflow are not reported as runs.",
+              "Each run has the kind, name, agent and log file its records name, and its wall time runs from its first recorded event to its last, ignoring the moment a later restart closed its leftover spans.",
+              "A run that reached its last step is finished. One that was restarted or overtaken by a later run of the same workflow is interrupted. Any other is in progress.",
+              "A malformed line, a line missing its identifiers and a partly written last line are each skipped and counted, and every run's figures are unchanged by them.",
+              "Runs can be picked by workflow name, by kind, by agent, by these combined, and by a full run id or a unique prefix of one. An unknown, ambiguous or malformed id is refused with a reason.",
+              "With no selection, a report picks the latest run, a comparison the two latest runs of that run's kind, and a summary every run of that kind.",
+              "Reading never creates, changes, moves or deletes a file in the logs directory."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/doc.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/load.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/assemble.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.workflow.kind"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.agent"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.span.type"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.step"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.task.id"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/select.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/load_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "assemble_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "select_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "assemble.go:83-108 groups records by TraceID across all files; buildRun (assemble.go:127-129) returns nil when no workflow.kind attribute is present, so standalone command/span traces are not runs. load.go:52-72 reads every *.jsonl file, so run files and day files both feed the same grouping. Test load_test.go:31-57 (TestLoadGroupsRunFilesAndDayFiles) checks a run split across two files becomes one run and the standalone trace is excluded."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Kind/Name/Agent are read from workflow attributes in buildRun (assemble.go:116-132), with Agent falling back to \"unknown\" when absent; LogFile is the earliest record's file (assemble.go:133). Wall() is End-Start (assemble.go:48). Start/End come from timeline() extent (assemble.go:181, 271-285), and timeline() omits the end event of abandoned spans (assemble.go:246-248, unfinished() at 228-230), so a later restart's sweep does not stretch the run. Test assemble_test.go:79 (TestAssembleAbandonedEndDoesNotStretchTheRun) covers this; load_test.go:55-56 checks run Start/End."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "ownStatus (assemble.go:312-329) returns finished when a step span ends finished or a command has step_to=finished, interrupted when a step span was abandoned, and otherwise in_progress. markOvertaken (assemble.go:333-345) turns an in-progress run interrupted when a later run of the same kind and name starts after its End. Caveat: 'later' is taken as starting after the earlier run's last recorded event, so a run overtaken while still recording events would stay in_progress; the goal wording does not settle this, so I did not mark it not_met."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "readFile (load.go:79-103) counts unparsable lines and blank lines are skipped uncounted; parseLine (load.go:108-126) rejects lines without trace_id, span_id or start time, and unknown record kinds or span_end without end time. A partly written last line fails JSON decoding and is counted. Skipped records never enter the recs slice, so figures are not affected. Test load_test.go:59-94 checks Skipped==7 and that every run figure equals the clean-file run."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "Candidates (select.go:65-102) applies kind, name and agent filters both to the no-id listing and to named runs. resolve (select.go:105-127) accepts a full 32-hex id or a prefix of 8-32 lowercase hex, and returns SelectionError with CodeRunNotFound for no match and CodeRunAmbiguous with the matching ids for several. Bad kinds return CodeBadKind and malformed ids return CodeBadRunID, both with reasons (select.go:37-49). Tests: select_test.go:40-95 (TestCandidatesNarrowTheRuns, TestCandidatesRefusals)."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "ForReport (select.go:131-136) returns the first candidate, the most recent with no selection. ForCompare (select.go:142-160) with no named runs returns the two newest runs of c[0].Kind, oldest first. ForSummary (select.go:165-175) with no named runs returns every run of c[0].Kind, oldest first. Tests: select_test.go:97-150 (TestDefaultsPerMode)."
+            },
+            {
+              "criterion": 7,
+              "verdict": "met",
+              "evidence": "Load uses os.ReadDir and os.Open only (load.go:45, 80). A grep of internal/runstats for Create, OpenFile, WriteFile, Remove, Rename, Mkdir, Truncate, Chmod and Chtimes found writes only inside test fixtures (load_test.go:39,40,103,130; fixtures_test.go:116), never in production code. TestLoadNeverChangesTheLogs (load_test.go:126-148) snapshots names, contents and mod times before and after Load. Nothing outside internal/runstats is changed; the worktree status lists only the eight runstats files as new."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 2,
+      "state": "accepted"
+    },
+    {
+      "item": "d2c23d18-d5b3-4e67-9c65-c8c3354474b9",
+      "title": "Report on one run",
+      "checks": [
+        {
+          "at": "2026-10-25T14:22:30Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "d2c23d18-d5b3-4e67-9c65-c8c3354474b9",
+            "title": "Report on one run",
+            "criteria": [
+              "For a run with known waits, working time equals wall time less the user waits, and the user-wait and helper-wait totals equal the sums of those periods. Two helpers running at the same time are counted once.",
+              "A step entered twice shows two entries, its total duration, its command count, its command time, and its helper and user wait.",
+              "An implement run of a two-task plan shows both tasks, each with its duration and waits.",
+              "A run with three helper launches lists all three, each with its name, step and duration.",
+              "A 20-minute pause between two commands is listed first among the longest gaps, with its step and the events either side. At most the requested number of gaps is listed, longest first. The pause counts toward the total over the default 5-minute threshold, but not over a 30-minute one.",
+              "An interrupted step is marked and counted up to where it was cut off. A helper launch or user wait that never finished is listed and marked, and left out of every wait total and per-step wait.",
+              "The structured form of the report uses exactly the field names and units given in the plan's Data Structures section."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/intervals.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/report.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/gaps.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/report_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "gaps_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "intervals_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/testdata/report.golden.json"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/runstats/report.go:183-189 unions the completed helper and user-wait intervals before totalling them, so overlapping helpers count once; WorkingMS = WallMS - UserWaitMS at report.go:189. intervals.go:13-31 merges overlapping and touching intervals. report_test.go:48-68 (knownWaits: 20 min wall, 5 min user waits, 4 min helper, working 900000) and report_test.go:82-93 (two overlapping helpers, 6 min not 8, working unchanged) check this."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "report.go:208-239 keeps one StepEntry per step span and rolls the entries into one StepRow per step name, adding duration, commands (cmdsBySpan keyed by span id), command time, clipped helper and user waits, and an incomplete count. report_test.go:116-127 (TestReportStepEnteredTwice) expects interview with Entries 2, DurationMS 1140000, Commands 6, CommandMS 210000, HelperWaitMS 120000, UserWaitMS 60000, and two StepEntry rows; the figures match the fixture arithmetic."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "report.go:241-267 builds one TaskRow per plan task (keyed by task id), each with duration and clipped helper and user waits. report_test.go:141-190 (twoTasks, TestReportTwoTasks) expects task-1 with DurationMS 600000 and UserWaitMS 120000, and task-2 with DurationMS 1140000 and HelperWaitMS 300000."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "report.go:269-291 lists every sub-agent span in Helpers, each with Name, Step (from the step attribute, else the step containing its start), DurationMS and parent. report_test.go:192-231 (threeHelpers, TestReportThreeHelpers) expects research/interview 60000, review/interview 180000, draft/approach 90000 and totals Helpers 3."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "gaps.go:20-38 finds each stretch with no event and no command running; report.go:293-317 counts gaps over o.GapThreshold (strict \u003e, so a gap equal to the threshold is excluded), sorts longest first, truncates to o.Gaps when non-zero, and labels each gap with its step (stepAt) and its before and after edges. report_test.go:72-121 checks the 20-minute pause at 3-23 is first with step walkthrough and edges plan goto end and start, that the 30-minute threshold drops it (GapMS 0), and that the 5-minute total is 1980000 (20+7+6 min). report_test.go:123-140 checks the zero-means-all case."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "Interrupted step: assemble.go:226-230 and report.go:227 mark it incomplete; its span end is kept at the last command (interrupted() fixture closes s1 at 6 min), so the entry is 300000 ms with end_reason interrupted and complete false (report_test.go:253-286). Open helper and abandoned user wait: capUnfinished (assemble.go:291-306) ends the open helper at the run end and the abandoned wait at its close; report.go:169-173 and 172-174 include only Complete spans in the helper and wait interval sets, and the per-step and per-task waits use only those sets (report.go:236-238, 248). Both are listed with complete false and end_reason open or abandoned (report.go:269-291; report_test.go:277-285). Totals.Helpers and UserWaits count them as items (report.go:168, 173). Their absence from every wait total is asserted at report_test.go:255-261."
+            },
+            {
+              "criterion": 7,
+              "verdict": "not_met",
+              "evidence": "The field names and units are internally consistent and pinned by a test: the JSON tags in report.go:23-146 are snake_case, every duration is an *_ms integer, times are RFC 3339 UTC (report.go:150-158 and the UTC() calls), and absent values are null (*string fields). report_test.go:400-471 (TestReportJSONFieldNamesAndUnits) and testdata/report.golden.json check these names. However, the goal's reference is the plan's Data Structures section, and the reviewer could not compare against it: reading the plan is a store-file read, which the store-access rule does not let this review do, and no CLI command was available. Nothing else in the work shows the field names match that section, so this stays not_met until someone compares the struct tags against that section (the plan is under .spektacular/plans/000075_run-stats-command/)."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T14:26:09Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "d2c23d18-d5b3-4e67-9c65-c8c3354474b9",
+            "title": "Report on one run",
+            "criteria": [
+              "For a run with known waits, working time equals wall time less the user waits, and the user-wait and helper-wait totals equal the sums of those periods. Two helpers running at the same time are counted once.",
+              "A step entered twice shows two entries, its total duration, its command count, its command time, and its helper and user wait.",
+              "An implement run of a two-task plan shows both tasks, each with its duration and waits.",
+              "A run with three helper launches lists all three, each with its name, step and duration.",
+              "A 20-minute pause between two commands is listed first among the longest gaps, with its step and the events either side. At most the requested number of gaps is listed, longest first. The pause counts toward the total over the default 5-minute threshold, but not over a 30-minute one.",
+              "An interrupted step is marked and counted up to where it was cut off. A helper launch or user wait that never finished is listed and marked, and left out of every wait total and per-step wait.",
+              "The structured form of the report uses exactly the field names and units given in the plan's Data Structures section."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/intervals.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/report.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/gaps.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/report_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "gaps_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "intervals_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/testdata/report.golden.json"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/runstats/report.go:212 unions the completed helper and user-wait intervals so overlapping helpers count once (intervals.go:13-32 merges overlaps), :216-218 sets UserWaitMS=total(waits), HelperWaitMS=total(helpers) and WorkingMS=WallMS-UserWaitMS. report_test.go:48-68 (TestReportKnownWaits: wall 1200000, working 900000, user 300000, helper 240000) and report_test.go:82-93 (TestReportOverlappingHelpersCountOnce: two overlapping helpers give helper_wait 360000, not 480000). Diff note: the staged diff files are empty because every file is untracked, so I read the files directly."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "report.go:239-268 builds one StepEntry per step span and rolls them into one StepRow per name (rowIndex map), adding duration, incomplete count, commands and command time (cmdsBySpan keyed by ParentSpanID, :220-263) and helper/user waits clipped to each entry (:265-267). report_test.go:95-127 (stepTwice: interview Entries 2, DurationMS 1140000, Commands 6, CommandMS 210000, HelperWaitMS 120000, UserWaitMS 60000) covers the twice-entered step; hand-check of the fixture matches."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "report.go:270-296 gives one TaskRow per task span with duration, helper_wait_ms and user_wait_ms, merging spans of the same task id. report_test.go:141-190 (twoTasks, TestReportTwoTasks) expects task-1 DurationMS 600000 with UserWaitMS 120000 and task-2 DurationMS 1140000 with HelperWaitMS 300000, and checks both tasks are listed."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "report.go:298-320 lists every sub-agent span into Helpers with name, step (via stepAt fallback) and duration_ms. report_test.go:192-231 (threeHelpers, TestReportThreeHelpers) expects three rows: research/interview/60000, review/interview/180000, draft/approach/90000, and Totals.Helpers 3."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "gaps.go:20-38 walks the timeline for idle stretches. report.go:322-346 counts every gap over the threshold into GapMS/GapsOverThreshold, sorts longest first (stable by start), truncates to o.Gaps when Gaps\u003e0, and fills After/Before and Step. report_test.go:DefaultOptions is 10 gaps and 5 minutes (report.go:20). gaps_test.go:59-89 (twentyMinutePause) expects the 20-minute gap (3 to 23 min, step walkthrough, after plan goto end, before plan goto start) first, three gaps listed, GapMS 1980000 at 5 minutes; gaps_test.go:91-113 expects 0 over 30 minutes. gaps_test.go:115-121 confirms unlisted gaps still count in totals."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "An interrupted step keeps its recorded end (assemble.go:204-224, capUnfinished :291-306 leaves interrupted spans alone), so report.go:256 counts Incomplete and the entry runs to its last command: report_test.go:253-286 (TestReportInterrupted) expects s1 DurationMS 300000, EndReason interrupted, Complete false, Incomplete 1. Open helper h1 is listed with end_reason open, complete false, and runs to run end (2220000 ms). Abandoned user wait u1 is listed with complete false. Waits are unioned only over Complete spans (report.go:199-205, 212), and the per-step and per-task waits use only those (waitsIn :232-235), so the unfinished waits add 0 to HelperWaitMS, UserWaitMS and every step row (test expects Totals 0 for both and StepRow HelperWaitMS/UserWaitMS absent)."
+            },
+            {
+              "criterion": 7,
+              "verdict": "met",
+              "evidence": "The JSON tags match the contract reproduced in report.go:43-73 field for field: report.go:75-84 (gap_threshold_ms, run, totals, steps, step_entries, tasks, helpers, user_waits, gaps); RunSummary :24-32; Totals :91-100 (*_ms integers, counts as int); StepRow :106-113; StepEntry :118-125; TaskRow :130-139; Wait :144-155; Gap :161-167; GapEdge :171-175. Durations are int64 milliseconds via ms() (report.go:396) and times are UTC (.UTC() calls). golden file testdata/report.golden.json lines 1-354 agree with those names. TestReportJSONFieldNamesAndUnits (report_test.go:403-474) pins the key sets. Caveat: I did not open the plan's Data Structures section itself, because store files are read through the spektacular CLI and I only have read tools here. The check is against the reproduction in the report.go doc comment, which the code cites as the plan's text, so the plan itself is not independently confirmed."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 2,
+      "state": "accepted"
+    },
+    {
+      "item": "a49a4d72-79d8-4ce2-b320-6a6b63eca363",
+      "title": "Keep the stats commands out of the logs",
+      "checks": [
+        {
+          "at": "2026-10-25T14:28:37Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "a49a4d72-79d8-4ce2-b320-6a6b63eca363",
+            "title": "Keep the stats commands out of the logs",
+            "criteria": [
+              "Running `stats` inside a project leaves every log file as it was, even with logging at the verbose level.",
+              "A normal command run straight after it is still logged exactly as before, and its output and exit code are unchanged."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:13-14 gives statsCmd the annotation logAnnotation=logExempt. cmd/root.go:118 computes level via logExempted(target), and logLevel (cmd/root.go:220-222) returns off for an exempt command inside a project, so no logger, no snapshot/EnsureRunID, no verbose buffer and no record is produced at any configured level. cmd/root.go:163 repeats the exemption check before recording. logExempted (cmd/root.go:201-208) walks parents, so any future stats subcommand inherits the exemption. cmd/stats_test.go:14-49 (TestStatsWritesNoRecord) runs bare `stats` and `stats nope` at standard and verbose levels and asserts the raw log snapshot is byte-identical before and after, and that the record names are unchanged."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The spektacular.diff touches cmd/root.go only by adding one line, rootCmd.AddCommand(statsCmd) at cmd/root.go:711, and changes no logging, output or exit-code logic. Logging for non-exempt commands is unchanged: logExempted(executedCmd) is false for them (cmd/root.go:163). cmd/stats_test.go:25-45 runs `spec file list` before and after a stats call and asserts the same exit code, the same stdout, and that its record is appended (recordNames expects 'spec file list' twice). The test is present in the working tree; I did not run it, but the verification summary reports the full suite passing."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "ad0176a5-97fb-47c0-98b1-7267765659a2",
+      "title": "List runs and report on one from the command line",
+      "checks": [
+        {
+          "at": "2026-10-25T14:35:53Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "ad0176a5-97fb-47c0-98b1-7267765659a2",
+            "title": "List runs and report on one from the command line",
+            "criteria": [
+              "In a project whose logs hold three finished runs and one in progress, `stats list` shows all four, newest first, each with kind, name, agent, start time, wall time and status.",
+              "`stats run` with no selection reports the run that started most recently, and each selection reports only the runs it names.",
+              "The JSON output parses in the same envelope as other commands and honours `--fields`, and the table output shows the same figures.",
+              "Pointing `--dir` at a copy of the logs directory, from outside any project, gives the same figures as reporting in the project.",
+              "A malformed log line leaves every figure unchanged, and the report shows one skipped line.",
+              "Every log file is byte-identical before and after `stats list` and `stats run`, run inside a project with logging on.",
+              "An unsupported format, no project without `--dir`, a missing directory, no matching run, an unknown or ambiguous run id, a bad kind, and a bad gap count or threshold are each refused with a message naming the fix. A bare `stats` names its subcommands."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/status.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/output/writer.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/spec.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/summary_types.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "report.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/render.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "text/tabwriter"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "12.3s"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/testdata/list.golden.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "report.golden.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "standalone_20261025.jsonl"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "render.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/stats_test.go:58-169 seeds three finished runs (spec, plan, implement) and one in-progress plan run. TestStatsListShowsEveryRunNewestFirst (cmd/stats_test.go:210-236) asserts the order [statsOpenPlan, statsImplRun, statsPlanRun, statsSpecRun], and the JSON row for each run carries kind, name, agent, started_at, wall_ms and status. Pretty rows (lines 231-235) show the RUN, KIND, NAME, AGENT, STARTED, WALL and STATUS columns. Newest-first ordering comes from internal/runstats/assemble.go:101 (sort.SliceStable on runs), used by Candidates (internal/runstats/select.go:76-82)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "With no selection, ForReport takes c[0] (internal/runstats/select.go:131-136), and Candidates returns l.Runs in newest-first order. TestStatsRunDefaultsToTheLatestRun (cmd/stats_test.go:238-248) asserts the run is statsOpenPlan, the latest start. TestStatsSelectionsNarrowTheRuns (cmd/stats_test.go:250-273) checks each selection (--name, --kind, --agent, combined, full --run, unique prefix) lists exactly the runs it names and reports the first of them."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "JSON goes through output.New(...,globalFields).WriteResult in cmd/stats.go:137 and :184, the same envelope as other commands (error:false is asserted in cmd/stats_test.go:197). --fields is honoured by internal/output/writer.go:98-151, and TestStatsFieldsFilter (cmd/stats_test.go:275-282) checks it. The table shares the same figures from fmtMS and Summary (internal/runstats/render.go:22-39, internal/runstats/report.go:36-41), and TestStatsPrettyShowsTheSameFigures (cmd/stats_test.go:284-304) cross-checks pretty against JSON. The field filter is not exercised on the list command itself, only on run."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:242-280 reads --dir made absolute, with no project needed. TestStatsDirOnACopyGivesTheSameFigures (cmd/stats_test.go:319-341) copies the logs, runs from outside any project, and asserts list and run JSON equal the in-project output apart from log_dir. It also checks a relative --dir."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "internal/runstats/load.go:108-126 parseLine rejects unparsable lines and counts them in Skipped (load.go:89-93); the report and list then print Skipped lines (render.go:136-140 and render.go:36/127). TestStatsSkipsAMalformedLine (cmd/stats_test.go:343-363) appends a bad line, asserts skipped_lines is 1, asserts every other figure equals the clean run, and checks the pretty 'Skipped lines: 1' line."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "No write path exists in the stats code: Load opens files read-only (load.go:79-84, os.Open), and statsCmd carries the logExempt annotation (cmd/stats.go:21-23), so the command is never logged. TestStatsListAndRunLeaveTheLogsByteIdentical (cmd/stats_test.go:365-377) snapshots every log before and after list and run at the verbose level, and TestStatsWritesNoRecord (cmd/stats_test.go:21-56) checks the same for stats at both standard and verbose levels."
+            },
+            {
+              "criterion": 7,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:282-314 maps refusals to envelopes with a next_action: stats_format_unsupported (statsFormat, cmd/stats.go:194-203), no_project with a --dir hint (cmd/stats.go:255-258), stats_log_dir_not_found (cmd/stats.go:270-275), stats_no_runs (cmd/stats.go:306-308), stats_run_not_found, stats_run_ambiguous (naming matches) and stats_bad_selection for bad run id and bad kind (cmd/stats.go:289-304), and stats_bad_option for --gaps 0 and --gap-threshold 0s (cmd/stats.go:207-228). A bare stats goes to runUnknownSubcommand (cmd/stats.go:32), and the message 'run one of: list, run' is asserted. TestStatsRefusals (cmd/stats_test.go:379-420) asserts each code and a non-empty NextAction, plus the no_project case outside a project. Verdict is by reading; the tests were not re-run here."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "8c6b6ead-cdbf-48a4-b7f3-ce6a3a5ac516",
+      "title": "Compare and summarise runs",
+      "checks": [
+        {
+          "at": "2026-10-25T14:39:49Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "8c6b6ead-cdbf-48a4-b7f3-ce6a3a5ac516",
+            "title": "Compare and summarise runs",
+            "criteria": [
+              "Comparing two spec runs shows each step's duration for both runs, and the second run's difference from the first in time and percentage. The totals are shown the same way.",
+              "A step only one run entered is shown as absent for the other, never as zero, and a difference against a zero or absent base has no percentage.",
+              "Summarising five implement runs shows, for each step and for the totals, a count of 5, the median and the 90th percentile.",
+              "A step entered by only some of the summarised runs shows how many runs entered it."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/compare.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/summary.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/render.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/compare_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "summary_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "testdata/compare.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "summary.golden.json"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/runstats/compare.go:43-57 Compare builds a Figure per step (stepFigures incl. duration_ms) and per total (totalFigures incl. wall_ms); newFigure (compare.go:108-126) computes Delta = value minus base and DeltaPct rounded to one decimal. render.go:192-229 RenderComparison prints each run's cell with its difference and percentage via figureCells (render.go:272-293), for both the 'Steps (duration)' and 'Totals' sections. compare_test.go:75-127 TestCompareTwoSpecRuns asserts interview 10m00s vs 12m00s (+2m00s, +20%) and wall 17m01s vs 14m01s (-3m00s, -17.6%)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "compare.go:69-96 buildTable leaves a step's value nil for each run that did not enter it (vals initialised to nil, only set when the row exists), so the JSON value is null, and render.go:279-281 prints '-' for it. compare.go:110-124 newFigure returns no Delta when the base is nil, leaves Delta nil when either side is nil, and sets DeltaPct only when base != 0. compare_test.go:98-109 checks split absent for run 2 (Values nil, Delta nil, DeltaPct nil), TestCompareStepOrderAddsLaterRunsSteps (compare_test.go:129-143) checks an absent base gives no difference or percentage, and the zero-base wait figure gets nil DeltaPct."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "summary.go:34-48 Summarise gives every total and every step figure a Stat; summary.go:50-70 newStat sets Count to the number of non-nil values, Median (middle value, or mean of the two middles) and P90 (nearest rank, index ceil(0.9n)-1). For five runs P90 is the 5th smallest value. summary_test.go:49-70 TestSummariseFiveImplementRuns asserts analyze duration Count 5, Median 30000, P90 50000, and every total Count 5 with wall_ms Median 71000 and P90 91000. render.go:233-263 RenderSummary prints a RUNS, MEDIAN and P90 row for each step and each total. summary_test.go:102-105 checks the text lines 'analyze 5 30.0s 50.0s' and 'wall_ms 5 1m11s 1m31s'."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "A step appears in a run's values only when the run's report has that step (compare.go:80-93, summary.go via buildTable). Count is the number of non-nil values (summary.go:52-57), so a step entered by only some runs gets a Count of that many. summary_test.go:59-60 asserts verify has Count 3 when entered by 3 of 5 runs, and render.go:248 prints that count in the RUNS column of the step table."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "d2baacfc-4bdf-4150-8660-4e6a52befcbc",
+      "title": "Compare and summarise from the command line",
+      "checks": [
+        {
+          "at": "2026-10-25T14:42:42Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "d2baacfc-4bdf-4150-8660-4e6a52befcbc",
+            "title": "Compare and summarise from the command line",
+            "criteria": [
+              "`stats compare` with no selection compares the two most recent runs of the latest run's kind, oldest first. With two or more `--run` values, it compares exactly those, in that order.",
+              "`stats summary` with no selection summarises every run of the latest run's kind, and accepts the same selection as the other commands.",
+              "Both commands give the same figures in table and JSON form, and the JSON uses the field names in the plan's Data Structures section.",
+              "Asking to compare fewer than two runs is refused with a message saying how to name two.",
+              "Every log file is byte-identical before and after `stats compare` and `stats summary`."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:262 calls runstats.ForCompare(c, f). internal/runstats/select.go:142-159: with two or more --run values it returns the candidates in the order given, which Candidates builds from the named order (select.go:85-100). With no selection it takes kind[1], kind[0] from the latest run's kind, which is oldest first because Candidates is newest first. cmd/stats_test.go:489-502 checks the default pair [statsPlanRun, statsOpenPlan] and the named order [statsImplRun, statsSpecRun]."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:289 calls runstats.ForSummary(c, f). select.go:165-175 returns every candidate of the latest run's kind, reversed to oldest first, or the named runs in order. Selection flags go through statsSelect (cmd/stats.go:302-317), which is shared with the other commands. cmd/stats_test.go:533-564 covers the default, --kind implement, --agent codex and the no-match refusal."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Both commands build one value and pass it to a JSON writer and a renderer: cmd/stats.go:267-270 (Comparison) and cmd/stats.go:294-297 (Summary). The renderers are internal/runstats/render.go (RenderComparison, RenderSummary) and read the same struct. JSON keys match the contract on statsCompareResult (cmd/stats.go:93-109): compare.go:20-39 has figure, values, delta, delta_pct, step, figures, gap_threshold_ms, runs, totals, steps. summary.go:9-28 has figure, count, median, p90, step, figures and the same top level. The plan's Data Structures section was not read directly (store file), so the match relies on the contract comment; cmd/stats_test.go:580-613 checks the key names and figure order."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "select.go:142-159 returns ErrTooFew for fewer than two runs. cmd/stats.go:439-441 maps it to code stats_compare_needs_two with the message 'a comparison needs at least two runs, and the selection gives fewer' and the next action 'name two runs with --run \u003cid\u003e --run \u003cid\u003e ...'. cmd/stats_test.go:519-531 exercises a single --run, a kind with one run, and a narrowed selection."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "The stats group carries the logging-exempt annotation (cmd/stats.go:21-22), so its subcommands are never logged. cmd/stats.go compare and summary only read through runstats.Load and Candidates, and the diff adds no write calls. cmd/stats_test.go:566-578 (TestStatsCompareAndSummaryLeaveTheLogsByteIdentical) takes a raw snapshot before and after six compare and summary invocations at the verbose level and requires them equal."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "a86aebb6-e10d-48b7-9fbb-a7e273e0a257",
+      "title": "Documentation site describes run statistics",
+      "checks": [
+        {
+          "at": "2026-10-25T14:45:18Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "a86aebb6-e10d-48b7-9fbb-a7e273e0a257",
+            "title": "Documentation site describes run statistics",
+            "criteria": [
+              "The Run statistics page explains listing, reporting on, comparing and summarising runs, choosing runs, and reporting on a copied logs directory.",
+              "The page defines every figure the report shows, and how unfinished work and skipped lines appear.",
+              "The Resources menu links to the page, and the logging page points to it.",
+              "The site builds and type-checks without errors, and the page body has no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-stats.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "run-stats.mdx covers listing (\"## Listing runs\", lines 18-35), reporting on one run (\"## Reporting on one run\", lines 37-65), choosing runs (\"## Choosing runs\", lines 67-81), comparing (\"## Comparing runs\", lines 83-101), summarising (\"## Summarising runs\", lines 103-112) and reporting on a copied logs directory (\"## Logs from elsewhere\", lines 164-173, using --dir)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "not_met",
+              "evidence": "run-stats.mdx lines 114-131 define wall time, working time, user wait, helper wait, command time, entries, gap and gap total, and lines 133-143 cover interrupted/abandoned/open items marked with * and skipped_lines. Figures still shown in the sample report with no definition: the per-step COMMANDS column (lines 55-57), the INCOMPLETE column count (only implied by the * rule, never said to be a count of unfinished entries), and the parenthesised counts '(2 waits)', '(3 helpers)', '(3 gaps)' (lines 49-52). Those need one-line definitions in the 'What each figure means' section."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Nav.astro:13 places the item under label \"Resources\", and line 23 adds { label: \"Run statistics\", href: \"/run-stats/\" } inside that group (diff hunk at Nav.astro lines 20-25). debugging.mdx diff adds a link \"[Run statistics](/run-stats/)\" after the records description (debugging.mdx diff hunk at line 258 onward)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Build and astro check results are reported as passing in the verification summary; I did not re-run them (read-only). run-stats.mdx body uses the same Hero/Prose/CtaBanner components as every other page (e.g. debugging.mdx:11,16,273) and has no raw div/section/class markup. No em dash appears in run-stats.mdx; the only non-ASCII symbol is the arrow in the button label at line 186. The Nav.astro diff adds no em dash."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T14:46:40Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "a86aebb6-e10d-48b7-9fbb-a7e273e0a257",
+            "title": "Documentation site describes run statistics",
+            "criteria": [
+              "The Run statistics page explains listing, reporting on, comparing and summarising runs, choosing runs, and reporting on a copied logs directory.",
+              "The page defines every figure the report shows, and how unfinished work and skipped lines appear.",
+              "The Resources menu links to the page, and the logging page points to it.",
+              "The site builds and type-checks without errors, and the page body has no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-stats.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "docs/src/pages/run-stats.mdx sections 'Listing runs' (lines 18-35, stats list), 'Reporting on one run' (37-65, stats run), 'Choosing runs' (67-81, selection flags and prefix rules), 'Comparing runs' (83-101, stats compare), 'Summarising runs' (103-112, stats summary) and 'Logs from elsewhere' (176-185, stats run --dir on a copied logs directory) cover every item the criterion names."
+            },
+            {
+              "criterion": 2,
+              "verdict": "not_met",
+              "evidence": "Most figures are defined (run-stats.mdx lines 114-143) and match render.go. But lines 147-149 say steps, tasks, helpers and waits that did not finish are marked with '*' in the tables and have \"complete\": false in the JSON. The code does not do this for steps: render.go:77-81 prints the Steps table with no mark() call, only the INCOMPLETE count column, and report.go StepRow (lines 103-113) has no Complete field. Tasks, helpers and waits are marked (render.go:91, 106), so the page must drop the step claim or the code must change. The unfinished-run footnote and skipped-lines behaviour (render.go:126-129, 138-142) are described accurately at lines 145-155, but the page's 'Skipped lines' wording differs slightly from the printed 'Skipped lines: N' and the JSON key is skipped_lines, which the page does name."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "docs/src/components/Nav.astro:23 adds { label: \"Run statistics\", href: \"/run-stats/\" } inside the 'Resources' children array (lines 13-24). docs/src/pages/debugging.mdx:21-23 adds 'To turn these records into timings per step, task and helper, see [Run statistics](/run-stats/).' (diff hunk @@ -258,6 +258,9 @@)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Build and check results are taken from the supplied verification summary (npm run build pass, 17 pages; npx astro check 0 errors), which I could not re-run as a read-only reviewer. Em dashes: grep for U+2014 in run-stats.mdx returned no matches. Raw layout HTML: grep for \u003cdiv, \u003csection and class= across src/pages/*.mdx returned no matches for those tags. The page body does use Astro layout components (Hero, Prose, CtaBanner, Fragment, Button, run-stats.mdx lines 6-9, 11-14, 16, 189-202), the same pattern used by the other pages, so this is read as component use rather than layout HTML."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T14:48:21Z",
+          "round": 1,
+          "attempt": 3,
+          "goal": {
+            "item": "a86aebb6-e10d-48b7-9fbb-a7e273e0a257",
+            "title": "Documentation site describes run statistics",
+            "criteria": [
+              "The Run statistics page explains listing, reporting on, comparing and summarising runs, choosing runs, and reporting on a copied logs directory.",
+              "The page defines every figure the report shows, and how unfinished work and skipped lines appear.",
+              "The Resources menu links to the page, and the logging page points to it.",
+              "The site builds and type-checks without errors, and the page body has no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-stats.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "run-stats.mdx covers each topic under its own heading: '## Listing runs' (line 18, stats list), '## Reporting on one run' (line 37, stats run), '## Choosing runs' (line 68, --name/--kind/--agent/--run), '## Comparing runs' (line 84, stats compare) and '## Summarising runs' (line 104, stats summary). '## Logs from elsewhere' (line 184) covers reporting on a copied logs directory via --dir."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "run-stats.mdx '## What each figure means' (lines 115-144) defines wall time, working time, user wait, helper wait, command time, commands, duration, entries, incomplete, helpers and waits, gap, and gap total. '## Unfinished work and damaged lines' (lines 146-162) explains the '*' marker on unfinished tasks, helpers and waits, the INCOMPLETE column, the end_reason and complete:false JSON fields, and 'Skipped lines: N' with skipped_lines in the JSON. The labels match render.go (lines 56-60, 85-140: 'Working time', 'Helper wait', 'Command time', 'Gaps over', 'Tasks', 'Helpers', 'User waits', 'Longest gaps', 'Skipped lines'). Tasks, Helpers, User waits and Longest gaps are also described in the report walkthrough (lines 60-66)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "docs/src/components/Nav.astro:23 adds { label: \"Run statistics\", href: \"/run-stats/\" } inside the 'Resources' children list (lines 13-24). docs/src/pages/debugging.mdx diff lines 21-22 adds 'see [Run statistics](/run-stats/)' to the logging page."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The staged verification reports npm run build pass (17 pages, dist/run-stats/index.html) and astro check with 0 errors and 0 warnings; I did not rerun them because I am read-only. The body of run-stats.mdx uses only the Astro components Hero, Prose, CtaBanner and Button (lines 6-9, 11-14, 16, 195-210), the same pattern as other pages in docs/src/pages (for example index.mdx, install.mdx). The grep for div, section and class= finds nothing in src/pages/*.mdx. Reading run-stats.mdx, I found no em dash character (the arrow in line 206 is a right arrow, not an em dash)."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 3,
+      "state": "accepted"
+    },
+    {
+      "item": "b152f2a6-8bbc-4b92-b981-558c68cb032e",
+      "title": "README lists the stats commands",
+      "checks": [
+        {
+          "at": "2026-10-25T14:49:35Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "b152f2a6-8bbc-4b92-b981-558c68cb032e",
+            "title": "README lists the stats commands",
+            "criteria": [
+              "The README shows `stats list`, `stats run`, `stats compare` and `stats summary` with a one-line description each, and mentions `--dir` and `--format json`."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "README.md:53-60 (the 'Run statistics' block under 'How It Works', in the spektacular code root and in spektacular.diff hunk @@ -50,6 +50,17 @@) shows a bash block with four lines, one per command: `spektacular stats list` (line 56, '# every recorded run, newest first'), `spektacular stats run [--name \u003cspec\u003e]` (line 57, '# where one run's time went: steps, tasks, helpers, waits, gaps'), `spektacular stats compare` (line 58, '# the two latest runs of a kind, side by side'), and `spektacular stats summary --kind implement` (line 59, '# median and 90th percentile per step'). Each has a one-line description. README.md:62 mentions `--dir \u003cpath\u003e` and `--format json`, and the same paragraph also states the json form is available for every form. No em dashes appear in the added lines (lines 53-62)."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    }
+  ]
+}

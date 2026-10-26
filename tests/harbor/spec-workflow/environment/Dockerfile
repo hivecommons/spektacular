@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl jq \
+    ca-certificates curl jq python3 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -LsSf https://astral.sh/uv/0.9.5/install.sh | sh
@@ -13,3 +13,7 @@ COPY spektacular /usr/local/bin/spektacular
 RUN chmod +x /usr/local/bin/spektacular
 
 WORKDIR /app
+
+# The agent's run is recorded at Spektacular's default log level, with no
+# special setting, under .spektacular/logs/, which comes back with the
+# .spektacular artifact.

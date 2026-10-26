@@ -43,7 +43,10 @@ func TestCopilotInstall(t *testing.T) {
 	require.Equal(t, "copilot", a.Name())
 	require.NoError(t, a.Install(root, cfg, io.Discard))
 	first := copilotSnapshot(t, root)
-	require.Len(t, first, 9, "only eight skills and AGENTS.md")
+	require.Len(t, first, 18, "only eight skills, the goal reviewer helper, AGENTS.md and the eight standing-rule guidance files")
+	for _, rel := range standingRuleGuidancePaths {
+		require.Contains(t, first, filepath.FromSlash(rel), "copilot must install guidance file %s", rel)
+	}
 	require.NoError(t, a.Install(root, cfg, io.Discard))
 	require.Equal(t, first, copilotSnapshot(t, root), "install is idempotent")
 	for _, name := range []string{"claude", "bob", "codex"} {

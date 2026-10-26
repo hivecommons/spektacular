@@ -1,0 +1,1465 @@
+{
+  "plan": "000073_log-mode-and-logger-providers",
+  "items": [
+    {
+      "item": "df1bade8-66a7-4bb8-b261-3dda877ae82c",
+      "title": "Trace log package with the file logger",
+      "checks": [
+        {
+          "at": "2026-10-25T11:57:52Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "df1bade8-66a7-4bb8-b261-3dda877ae82c",
+            "title": "Trace log package with the file logger",
+            "criteria": [
+              "A record serialises with the field names in the plan's Data Structures section, omitting the parent span id and the error message when they are empty.",
+              "Trace ids are 32 and span ids 16 lowercase hex characters, never all zeros, and never repeat across many mintings.",
+              "A workflow run's records land in a file named from the run's start time, agent, kind and name; a standalone command's record lands in that UTC day's standalone file.",
+              "Writing appends exactly one line without reading the file's earlier contents, and the log directory contains a `.gitignore` that ignores everything in it.",
+              "Asking for the `file` logger succeeds; asking for any other name fails with an error that names the accepted loggers.",
+              "With an unwritable log directory, writing returns normally, with no panic and nothing printed."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/record.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "service.name"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/ids.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "crypto/rand"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/identifier/taskid.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/logger.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/output"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/file.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/sessionlog/record.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "record.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "dir/.gitignore"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/tracelog/record.go:51-63 defines Record with json tags record, trace_id, span_id, parent_span_id,omitempty, name, kind, start_time, end_time, status, attributes, resource; Status at lines 66-69 has message,omitempty. record_test.go:39-56 (TestRecordJSONShape) pins the exact JSON and asserts parent_span_id and status.message are absent when empty; record_test.go:60-72 checks they appear when set."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "internal/tracelog/ids.go:11-15 NewTraceID uses 16 random bytes and NewSpanID 8 bytes, hex-encoded to 32 and 16 lowercase chars. newID (lines 24-42) retries rand.Read and rejects all-zero output via allZero, and the fallback path also guards against all zeros (lines 38-40). ids_test.go:18-37 mints 10000 of each, checks regex ^[0-9a-f]{32}$ / ^[0-9a-f]{16}$, not all zeros, and no duplicates."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "internal/tracelog/file.go:79-89: runFileName uses the UTC start time formatted as 20060102T150405.000000000Z, plus agent (agentOr, 'unknown' when empty), kind and name, sanitized, for workflow runs (Run.Standalone() is Kind==''); standalone runs go to standalone_\u003cUTC day\u003e.jsonl. record.go:83-84 defines Standalone. file_test.go:39-68 pins these names; file_test.go:125-141 checks two standalone writes land in standalone_20261024.jsonl."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "file.go:56-61 opens with os.O_APPEND|os.O_CREATE|os.O_WRONLY and writes a single JSON line plus '\\n' (lines 50-54); the file is never read. file.go:105-111 ensureGitignore writes gitignoreBody '*\\n' into \u003cdir\u003e/.gitignore when the run file is newly created and no .gitignore exists. file_test.go:73-101 checks earlier bytes are kept and the .gitignore content; file_test.go:103-123 seeds non-JSON content and checks the append leaves it intact."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "logger.go:36-44: New returns the constructor for 'file' (providers map at lines 30-32) and otherwise returns output.NewError('config_invalid', ...) whose NextAction reads 'set log.provider in .spektacular/config.yaml to one of: ' + Providers() joined, which is 'file' (lines 46-54). logger_test.go:12-31 checks 'file' succeeds and 'bogus' returns config_invalid with NextAction containing 'log.provider' and 'file'. Note the accepted-logger list is carried in NextAction, not the Message; the test asserts that field."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "file.go:37-38 Write defers recover() so no panic escapes; a MkdirAll failure returns at lines 44-46 and an OpenFile failure returns at lines 56-58 with no print or error return. The package never calls fmt/log to print. file_test.go:175-194 (TestWriteUnwritableDirectoryIsContained) and 196-214 check NotPanics, empty captured stdout/stderr, and no directory created; both skip when running as root."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "9057f37e-b995-499e-a5dc-867e3b219337",
+      "title": "Run identifier in workflow state",
+      "checks": [
+        {
+          "at": "2026-10-25T12:01:03Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "9057f37e-b995-499e-a5dc-867e3b219337",
+            "title": "Run identifier in workflow state",
+            "criteria": [
+              "A newly started workflow's state carries a run identifier in the same format as a trace id.",
+              "Reloading and advancing an existing workflow keeps its run identifier unchanged.",
+              "An in-progress state written without a run identifier gains one through the helper, and every other field, including keys the current code does not know, is preserved.",
+              "The helper leaves a finished state, a missing state and a state that already has an identifier untouched."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/state.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "state.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/workflow.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/workflow_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow/state_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/workflow/workflow.go:111-113 sets RunID: NewRunID() when New builds fresh state. NewRunID (internal/workflow/state.go, diff hunk @@ -59 +67) returns hex.EncodeToString of 16 crypto/rand bytes, looping until not all zero, so it is 32 lowercase hex and never all zeros. workflow_test.go TestNewMintsRunIDOnFreshState (diff @@ -473) checks the regex ^[0-9a-f]{32}$ on the persisted state."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "loadState (state.go:43-54) unmarshals the whole State including run_id, and New (workflow.go:105-107) reuses the loaded state without regenerating RunID. saveState (state.go:56-69) marshals the same struct, so Next/Goto keep the field. workflow_test.go TestRunIDKeptAcrossReloadAndAdvance (diff @@ -473 hunk, lines 151-164) reloads via New, calls Goto, and asserts the id is unchanged on disk."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "state.go EnsureRunID decodes into map[string]any with UseNumber, sets m[\"run_id\"] only when the state is in progress and lacks an id, and re-marshals the whole map, so unknown keys and large numbers are kept. It writes via a temp file plus rename. state_test.go TestEnsureRunIDBackfillsLegacyStateKeepingEveryField uses a legacy body with no run_id, a future_field key and a 20-digit integer, and asserts every other field is equal after removing run_id. The file is untracked (listed in the .status) but is in the goal's allowed files."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "state.go EnsureRunID returns (\"\", nil) without writing for a missing file (os.IsNotExist branch) and for current_step \"finished\" or \"\" (step check). It returns the existing id without writing when run_id is non-empty. state_test.go covers these: TestEnsureRunIDLeavesOtherStatesUntouched compares the file bytes before and after for the existing-id, finished and empty-step cases, and TestEnsureRunIDMissingStateIsUntouched covers the missing file."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "154f3002-9b09-4cb4-aaec-f204081cee9a",
+      "title": "Log settings replace debug, with migration",
+      "checks": [
+        {
+          "at": "2026-10-25T12:10:36Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "154f3002-9b09-4cb4-aaec-f204081cee9a",
+            "title": "Log settings replace debug, with migration",
+            "criteria": [
+              "A new project's configuration has logging on at the standard level, with the file logger, retention 10 and the `logs` directory, and no `debug` section.",
+              "An unknown logger name, an unknown level or a retention below 1 is refused as a configuration error naming the accepted values and the key to change.",
+              "A relative log directory resolves from the folder holding the configuration file, and an absolute one is used as written.",
+              "Migrating a project with debug turned on gives the verbose level, with debug off or absent the standard level, and in every case the debug setting is gone and other settings are unchanged.",
+              "After `init`, and after `migrate` of an older project, the project's ignore rules include the logs folder exactly once, and a migration preview lists that change.",
+              "Migration never reads, moves or deletes anything in the old debug folder."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config/config.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config/schema.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config/config_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "providers_pin_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/migrate/steps_project.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.level"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "node.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/migrate/registry.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/migrate/engine.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "engine.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/migrate/testdata/current/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/migrate/steps_project_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/debug/x.jsonl"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "registry_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/.spektacular/.gitignore"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/project/init_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/config/config.go:536-541 sets NewDefault().Log to provider file, level standard, retention DefaultLogRetention (10), config.directory logs, and DebugConfig is removed from the Config struct. internal/config/config_test.go (TestLogDefaults_AbsentSectionAndWrittenFile) asserts the written default contains 'log:\\n    provider: file\\n    level: standard\\n    retention: 10\\n    config:\\n        directory: logs' and does not contain 'debug'. ToYAMLFile emits only the Log struct, which has no debug field."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "internal/config/config.go:589-620 LogConfig.Validate refuses an unknown provider (config_invalid, resource log.provider, message lists accepted loggers 'file', next action names the key and the values), an unknown level (lists \"off\", \"standard\", \"verbose\" and the key), and retention below 1 (resource log.retention, next action names the key). Config.Validate calls it at config.go:850. internal/config/config_test.go TestLogValidate_RefusesBadSettings covers these via FromYAMLFile and asserts the exact messages and next actions."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "internal/config/config.go:462-473 LogDir: a relative directory is joined to ProjectConfigDir(projectRoot) (the .spektacular folder holding config.yaml); an absolute one returns filepath.Clean(d). internal/config/config_test.go TestLogDir_ResolvesRelativeToConfigFolder checks the default, a '../var/logs' relative path and an absolute path."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "internal/migrate/steps_project.go:179-215 project4to5: debug.enabled true gives level verbose, anything else gives standard (lines 193-199); the debug key is deleted (lines 205-211). Other keys are untouched because setDefault only adds missing log keys. internal/migrate/steps_project_test.go TestApply_Format4DebugBecomesLogLevel covers debug on, debug off and debug absent, asserts the rewritten file byte-for-byte and that no debug key remains; TestApply_Format4KeepsExistingLogKeys covers existing log keys."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "Init: templates/.spektacular/.gitignore:15-16 adds a comment and 'logs/' once; internal/project/init.go:149-154 writes that template to .spektacular/.gitignore; internal/project/init_test.go TestInit_CreatesGitignore counts 'logs/' lines and requires exactly 1. Migrate: internal/migrate/steps_project.go:213 emits Action{Op:\"ignore\", Path: \u003c.spektacular\u003e/.gitignore, To:\"logs/\"}; internal/migrate/engine.go ensureIgnoreLine appends only when no line equals it. The preview lists it: steps_project_test.go and engine_test.go expect the ignore action in Inspect output, and cmd/migrate_test.go:123 lists the step description. TestApply_Format4IgnoresLogsFolderOnce checks a single line after repeated runs."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "Searching internal/migrate non-test code for debug references finds only settings key reads in steps_project.go:193 and :208 and an Action on the settings file; no file operation targets the debug folder. Ensure-ignore only reads and writes the .gitignore. internal/migrate/steps_project_test.go TestApply_Format4LeavesDebugFolderUntouched seeds .spektacular/debug files and asserts the same entries and bytes after Apply."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "dd495862-2f2e-430b-b8ae-ef5b52cb2078",
+      "title": "Record every command through the configured logger",
+      "checks": [
+        {
+          "at": "2026-10-25T12:30:17Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "dd495862-2f2e-430b-b8ae-ef5b52cb2078",
+            "title": "Record every command through the configured logger",
+            "criteria": [
+              "In a freshly initialised project with no settings changed, any command leaves a record of itself in the project's logs directory.",
+              "A `spec goto` record carries the configured agent (or `unknown` when none is set), the workflow kind and name, the step it ran in and the step it moved to.",
+              "A spec run's start, gotos, resume report and later gotos share one trace id; a `--force` restart gets a new one; two parallel plan lanes each keep their own constant trace id.",
+              "A spec workflow whose state was written by the previous version resumes without error, and every record from then on carries the same trace id.",
+              "Two standalone `knowledge search` commands produce two records with different trace ids in the same day's log.",
+              "At the standard level a record holds the command, timing, exit status and any error message but no response or state; a failed command records an error status, a non-zero exit code and its message.",
+              "At the verbose level a record holds the exact output and the state before and after.",
+              "With logging off nothing is written, and nothing is ever written outside a project. Setting `SPEKTACULAR_SESSION_LOG` to any value changes nothing.",
+              "At the standard and verbose levels, `status` (readable or JSON, with or without a name) adds no record, creates no log file and does not give an older run its identifier, while the next workflow command is still recorded.",
+              "A command marked with the logging-exempt annotation, or one whose parent is marked, is never logged; the annotation's key and value are named constants that another command group can set.",
+              "A custom log directory receives the records and the default one stays empty.",
+              "After `init` in a new git repository, and after `migrate` of an older project, running commands leaves `git status` free of log files.",
+              "Every command's output and exit code are identical with logging off, standard and verbose, including when the logs directory cannot be written. The full test suite passes with logging on, and the `cmd` suite also passes with logging forced off through its test-only flag.",
+              "Files in an old `.spektacular/debug/` folder are byte-identical after `migrate` and further commands."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/gate.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/status.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/sessionlog"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/workflow"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/sessionlog/record.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/sessionlog/record_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/logs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "state.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/testutil"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/sessionlog_lane_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/log_lane_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/main_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/root.go logLevel() returns standard when no config value is set (config.go NewDefault sets Log.Level standard, Provider file, Directory logs). cmd/log_test.go:372-390 (TestLog_FreshInitProjectLogsByDefault) runs init then `spec file list` and asserts one standalone_ record in .spektacular/logs. Caveat: `init` itself is not logged (level is computed before the project config exists), and status is exempt by design (criterion 9); both are explicit in the test and the code comments."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "cmd/root.go buildRecord (attrs AttrAgent with 'unknown' fallback, AttrWorkflowKind/Name, AttrStep, AttrStepTo) and attributeRun. cmd/log_test.go:395-427 (TestLog_GotoRecordCarriesAgentWorkflowAndSteps) asserts agent claude and unknown, kind spec, name 000001_billing, step new, step.to interview."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Run id minted in internal/workflow/workflow.go New() (RunID: NewRunID()) and kept on reload; attributeRun uses owner.RunID as TraceID. cmd/log_test.go:432-482 (TestLog_SpecRunSharesOneTraceID) checks start, gotos, resume refusal and later goto share the run_id, and that --force yields a new run_id and new file while the old file is byte-identical. cmd/log_lane_test.go:123-200 checks alpha and beta lanes each keep a constant distinct trace id and the solo run is separate."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "internal/workflow/state.go EnsureRunID backfills run_id into a legacy in-progress state as a generic JSON map, keeping other fields; runRoot calls it before the command (cmd/root.go ~line 488). cmd/log_test.go:495-522 (TestLog_LegacyStateResumesWithOneTraceID) asserts the backfilled id keeps created_at and every record carries that id."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "With no in-progress state attributeRun returns tracelog.NewTraceID() per command; standalone records go to standalone_\u003cUTC day\u003e.jsonl (internal/tracelog/file.go runFileName). cmd/log_test.go:526 (TestLog_StandaloneCommandsShareTheDayFile) covers two standalone knowledge search commands in the same day file with different trace ids."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "cmd/root.go buildRecord adds response/state attributes only when level is verbose; standard records carry command args, exit code, start/end times and Status{Error, Message} on failure (toErrorResponse(err).Message). cmd/log_test.go:331-367 (TestLog_StandardLevelRecordsSuccessAndRejection) asserts exit code 1, error status with message, and no verbose attributes."
+            },
+            {
+              "criterion": 7,
+              "verdict": "met",
+              "evidence": "cmd/root.go buildRecord sets AttrResponse (buf.String(), teed via io.MultiWriter), AttrStateBefore and AttrStateAfter at verbose. cmd/log_test.go:576 (TestLog_ResponseAndStateOnlyAtVerbose) covers the verbose branch."
+            },
+            {
+              "criterion": 8,
+              "verdict": "met",
+              "evidence": "cmd/root.go logLevel returns off when !inProject or config fails to load; recordCommand uses projectRoot() and returns on error. grep for SPEKTACULAR_SESSION_LOG in non-test code finds nothing (the only mention is a comment in root.go). cmd/log_test.go:217-231 (off writes nothing), 272-308 (both env values change nothing; outside a project nothing written), 312-325 (nothing outside a project even when forced)."
+            },
+            {
+              "criterion": 9,
+              "verdict": "met",
+              "evidence": "cmd/status.go:29-31 sets Annotations{logAnnotation: logExempt} on statusCmd; logExempted is checked in logLevel and before recording, and the before-snapshot/EnsureRunID block only runs when level is not off, so status does not backfill. cmd/log_test.go:655-689 (TestLog_StatusIsNeverLogged, standard and verbose, readable and JSON, with and without name) and 694-717 (TestLog_StatusDoesNotBackfillALegacyRun, state.json byte-identical, next goto recorded under the new id)."
+            },
+            {
+              "criterion": 10,
+              "verdict": "met",
+              "evidence": "cmd/root.go defines const logAnnotation = \"log\" and logExempt = \"exempt\" and logExempted walks c.Parent() for the annotation. cmd/log_test.go:722-744 (TestLogExempted) checks the constants and the parent walk."
+            },
+            {
+              "criterion": 11,
+              "verdict": "met",
+              "evidence": "internal/config/config.go LogDir() resolves log.config.directory (relative to the config folder, or absolute), and cmd/root.go recordCommand writes to cfg.LogDir(root). cmd/log_test.go:766-808 (TestLog_CustomDirectoryReceivesTheRecords) asserts the custom directory receives records and the default one stays empty."
+            },
+            {
+              "criterion": 12,
+              "verdict": "met",
+              "evidence": "templates/.spektacular/.gitignore adds logs/, internal/migrate/steps_project.go project4to5 adds the ignore action, and internal/tracelog/file.go ensureGitignore writes '*' into the logs directory. cmd/log_test.go:809-845 (TestLog_LogsStayOutOfGit) runs init and migrate in git repos and asserts porcelain status has no log entries."
+            },
+            {
+              "criterion": 13,
+              "verdict": "met",
+              "evidence": "cmd/root.go runs record-and-write under defer recover, and internal/tracelog/file.go Write drops every error; output is only teed at verbose and the standard path does not touch the output stream. cmd/log_test.go:953-970 (TestLog_OutputParityAcrossLevels, including an unwritable logs directory). cmd/main_test.go adds the -log-level test flag that sets forcedLogLevel. The lead's verification reports the full suite passing with logging on and the cmd suite passing with -log-level=off."
+            },
+            {
+              "criterion": 14,
+              "verdict": "met",
+              "evidence": "internal/migrate/steps_project.go project4to5 never reads, moves or deletes .spektacular/debug (it only edits config keys and the .gitignore). internal/migrate/steps_project_test.go TestApply_Format4LeavesDebugFolderUntouched and cmd/log_test.go:872 (TestLog_OldDebugFolderIsUntouched) check byte-identity after migrate and further commands."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "d1f4fa2f-933e-4a13-b19d-a2af3f910e2d",
+      "title": "Keep only the most recent runs and days",
+      "checks": [
+        {
+          "at": "2026-10-25T12:33:29Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "d1f4fa2f-933e-4a13-b19d-a2af3f910e2d",
+            "title": "Keep only the most recent runs and days",
+            "criteria": [
+              "With the default retention, after 12 separate workflow runs the logs directory holds the logs of the 10 most recent runs only.",
+              "With retention set to 3, it holds the 3 most recent runs' logs.",
+              "Many standalone commands run on different days in between remove no workflow run's log, and only the configured number of most recent day logs is kept.",
+              "The log being written to is never deleted by its own sweep.",
+              "When an old log cannot be deleted, the command's output and exit code are identical to a run with logging off."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/file.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/sessionlog/record.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/tracelog/file_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/tracelog/file.go:87-115 keeps the newest (retention-1) prior run files plus the new one, deleting the rest. cmd/root.go:246 passes cfg.Log.Retention, and config.DefaultLogRetention (internal/config/config.go:96) is the default, which the migrate goldens show as 10. cmd/log_retention_test.go:56-68 (TestLogRetention_DefaultKeepsTheTenMostRecentRuns) runs 12 real spec runs and asserts the last 10 ids remain. Scope note: cmd/log_retention_test.go is not in the goal's file list, though it holds the command-level tests."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "cmd/log_retention_test.go:71-83 (TestLogRetention_ConfiguredRetentionIsHonoured) sets log.retention: 3, runs 6 workflow runs and asserts exactly the 3 newest ids remain. internal/tracelog/file_test.go:101-131 (TestSweepKeepsTheNewestRuns, retention 3 case) checks the same at unit level."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Run files and day files are grouped separately: file.go:95-107 uses strings.HasPrefix(name, standalonePrefix) == currentDay, so a day write only considers day files. file_test.go:137-161 (TestSweepCountsDaysSeparatelyFromRuns) writes 10 runs then 15 day files and asserts all 10 runs remain and 10 day files remain (standalone_20261006 to standalone_20261015). cmd/log_retention_test.go:87-110 covers 20 standalone commands after real runs with retention 3, asserting every run log survives."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "file.go:101 skips name == currentName, so the file just written is never a deletion candidate; see also the comment at file.go:78-80. file_test.go:163-177 (TestSweepNeverDeletesTheFileItWrote) writes a run that sorts oldest with retention 3 and asserts its file survives with its record."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "file.go:115 ignores the os.Remove error (_ = os.Remove), and the sweep returns silently on other errors. Write also recovers panics (file.go:39). file_test.go:199-222 (TestSweepSkipsALogThatCannotBeDeleted) uses a non-empty directory named like an old log and asserts no printed output, no panic, and the new record written. cmd/log_retention_test.go:115-142 compares stdout and exit code with a logging-off run and checks the undeletable log is left in place."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "2a0cfbab-fa3b-43e3-89cc-15ac23bdca40",
+      "title": "Harbor reader understands span records",
+      "checks": [
+        {
+          "at": "2026-10-25T12:35:43Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "2a0cfbab-fa3b-43e3-89cc-15ac23bdca40",
+            "title": "Harbor reader understands span records",
+            "criteria": [
+              "A new-format record and its old-format equivalent produce identical events.",
+              "A directory mixing both formats is read in full, with lanes and shared events split by file name as before.",
+              "A verbose resume refusal in the new format is still detected as a resume.",
+              "All existing Harbor shared unit tests, including the pinned reference-run values, pass unchanged."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/sessionlog.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_windows.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "standalone_20261024.jsonl"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "tests/harbor/shared/tests/test_sessionlog_windows.py (new section 5, added in the staged diff) defines span_record() as the twin of record() and test_span_record_reads_as_the_same_event_as_its_old_twin writes the same five TWINS lines in both formats and asserts `new_events == old_events` (Event is a dataclass, so field-wise equality). The span shape matches internal/tracelog/record.go Record (record, trace_id, span_id, name, kind, start_time, end_time, status, attributes, resource) and the attribute keys match the Attr* constants there. sessionlog.py span_event() (lines 132-150) maps it onto the same Event fields. Note: the twin test covers the verbose level; the standard-level case is covered separately by test_span_record_at_the_standard_level_has_no_response_or_state."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "test_sessionlog_windows.py test_mixed_directory_reads_both_formats writes an old-format lane file (write_lane, 20261023T100000...Z_claude_plan_\u003cNAME\u003e.jsonl), a new-format lane file for another plan (20261023T110000.000000000Z_claude_plan_\u003cother\u003e.jsonl) and a new-format standalone_20261023.jsonl, then asserts lane keys, per-lane events, step windows, shared events and total event count. sessionlog.py SessionLog.__init__ (lines 336-352) is unchanged and splits by LANE_FILE name as before. The file-name format matches file.go runFileTimestampFormat and standalonePrefix."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "test_sessionlog_windows.py test_verbose_span_resume_refusal_counts_as_a_resume writes a span-format NEW record with exit_code=1, response=RESUME_RESPONSE (contains workflow_in_progress) and status error, then asserts lane.resumes has the 10:30 event, children == 2 and finish is found. sessionlog.py Lane.resumes (line 187-193) filters on is_verb(kind,'new'), not ok and RESUME_REFUSAL in e.response, and span_event carries response from spektacular.response (line 149), so the new format is detected."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The staged diff touches only tests/harbor/shared/sessionlog.py (adds the span branch in read_events and span_event, plus docstring) and tests/harbor/shared/tests/test_sessionlog_windows.py (adds the datetime timedelta import, the sessionlog import of read_events/span_event, and appends section 5 after the existing tests; no existing assertion or fixture is edited). test_reference_runs.py, the tests/harbor/shared/tests/data/ fixtures and test_metrics.py are not in the diff. The old-format branch of read_events is unchanged, and the verification run reports 511 passed for tests/harbor/shared/tests. I did not re-run the suite."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "90909dbf-daa8-4bb5-a55f-571a60355636",
+      "title": "Harbor suites read the new logs at the verbose level",
+      "checks": [
+        {
+          "at": "2026-10-25T12:44:06Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "90909dbf-daa8-4bb5-a55f-571a60355636",
+            "title": "Harbor suites read the new logs at the verbose level",
+            "criteria": [
+              "Every suite that drives Spektacular starts the agent's run with `log.level: verbose` in its project configuration, whether the project is pre-built or the agent runs `init` itself. No image, script or verifier sets `SPEKTACULAR_SESSION_LOG`.",
+              "The pre-built projects' logs directories hold no record of the seed scripts' own commands when the agent starts.",
+              "Every verifier that runs `spektacular` switches the project's logging off before its first call, so none of its calls appear in the session log.",
+              "No verifier, shared tool or `test.sh` reads `.spektacular/debug` any more, apart from the old-format test fixtures and their trimming script.",
+              "The metrics recorder's pinned command line in `test.sh` is unchanged and still finds the session log by default.",
+              "The README's Harbor sections name `.spektacular/logs/` and the seeded verbose level, and the Harbor shared unit tests and suite self-checks pass."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/project/init.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/init.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "environment/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.level"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "environment/seed/seed.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "/app/.spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/loglevel.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_loglevel.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_suite_wiring.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/tests/test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-workflow/tests/test_implement_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/standing-rules/tests/test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/spec-workflow/tests/test_spec_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/trim_reference.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_loglevel.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Pre-built projects: spec-workflow, plan-workflow and repo-workflow Dockerfiles pre-seed `schema: 5` plus `log: level: verbose` (tests/harbor/{spec,plan,repo}-workflow/environment/Dockerfile, the printf RUN lines). implement-workflow COPYs environment/config.yaml, which ends `log:` / `    level: verbose` (that file, lines 24-25). Agent-init suites: epic-workflow, goal-check-workflow, standing-rules and implement-epic-workflow seed.sh run init, set log.level off, then set `set_log_level verbose` as their last step (e.g. goal-check seed.sh:60 and :119, standing-rules seed.sh:43 and :67, epic seed.sh:43 and end, implement-epic seed.sh end). Init keeps the level per the verification run. A grep of tests/harbor (excluding jobs/.build) finds no SPEKTACULAR_SESSION_LOG anywhere, and no Dockerfile sets it."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The pre-built Dockerfiles (spec, plan, repo, implement-workflow) run no spektacular command at build time, only printf/COPY. In the seeds that run spektacular, every call happens after logging is switched off: epic seed.sh calls set_log_level off (line ~43) before its `spec file write` and `status` calls, and verbose only at the end; implement-epic seed.sh is off before `spec file write`/`epic write`/`status` and goes verbose last; goal-check seed.sh:59 init runs first but cmd/root.go:118 calls logLevel with projectConfigExists(), and no .spektacular exists in /app before that init (goal-check Dockerfile only copies app/ and git-inits), so init is not logged; the off switch at line 60 precedes all later calls. standing-rules seed.sh:42 init has the same no-config-yet property, off at line 43 precedes `spec file write` at line 51. The throwaway inits run in /tmp/todo-app, which is removed."
+            },
+            {
+              "criterion": 3,
+              "verdict": "not_met",
+              "evidence": "Verifiers that run spektacular and switch logging off before their first call: epic-workflow test_epic_workflow.py (logging_off() in cli), goal-check test_goal_check.py (cli), implement-epic test_implement_epic_workflow.py (cli), standing-rules test_standing_rules.py (cli_bytes). Not met: plan-workflow tests/harbor/plan-workflow/tests/test_plan_workflow.py:1174-1177 runs `spektacular status \u003cname\u003e --format json` through subprocess.run with no logging-off switch anywhere in that file (grep for logging_off/set_log_level/loglevel finds nothing there). The outcome is nearly harmless because status is never logged (cmd/root.go logExempt), but the criterion as written requires the switch before the first call. spec-workflow, repo-workflow and implement-workflow verifiers run no spektacular call (grep for the CLI invocation pattern found none)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Grep of tests/harbor (excluding jobs, .build, shared/tests/data) for .spektacular/debug, spektacular/debug and \"debug\" paths: the only hits outside the shared/tests fixtures and trim_reference.py are a docstring at tests/harbor/shared/sessionlog.py:16 describing the old format, and a comment at shared/tests/test_sessionlog_windows.py:504. trim_reference.py:185-186 reads debug only as the fallback for old-format trials, which is the allowed trimming script. Verifiers, timeline.py (DEFAULT_DIR = /app/.spektacular/logs, timeline.py:43) and metrics.py (DEBUG_DIR = /app/.spektacular/logs, metrics.py:53) use logs/. All test.sh timeline calls point at .spektacular/logs."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "Every tests/harbor/*/tests/test.sh has the line `python3 /tests/metrics.py || true` (e.g. standing-rules/tests/test.sh:18, epic-workflow/tests/test.sh:18), and the diff does not touch that line. With no --debug-dir, metrics.py uses DEBUG_DIR = Path(\"/app/.spektacular/logs\") (tests/harbor/shared/metrics.py:53), so it finds the session log by default."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "README.md:507-515 describes the Harbor suites: the seeded `log.level: verbose` in .spektacular/config.yaml, and `artifacts/spektacular/logs/` for each run, plus the timeline command on `artifacts/spektacular/logs`. README.md:47 says the artifact's `spektacular/` is the project's .spektacular with logs/, and line 612 gives the metrics command with --debug-dir .../spektacular/logs. The literal string `.spektacular/logs/` does not appear, only the artifact path that mirrors it, so this is a judgement call. The shared unit tests (516 passed) and the suite self-checks (14, 31, 38) pass per the verification summary, which I did not rerun."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T12:47:06Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "90909dbf-daa8-4bb5-a55f-571a60355636",
+            "title": "Harbor suites read the new logs at the verbose level",
+            "criteria": [
+              "Every suite that drives Spektacular starts the agent's run with `log.level: verbose` in its project configuration, whether the project is pre-built or the agent runs `init` itself. No image, script or verifier sets `SPEKTACULAR_SESSION_LOG`.",
+              "The pre-built projects' logs directories hold no record of the seed scripts' own commands when the agent starts.",
+              "Every verifier that runs `spektacular` switches the project's logging off before its first call, so none of its calls appear in the session log.",
+              "No verifier, shared tool or `test.sh` reads `.spektacular/debug` any more, apart from the old-format test fixtures and their trimming script.",
+              "The metrics recorder's pinned command line in `test.sh` is unchanged and still finds the session log by default.",
+              "The README's Harbor sections name `.spektacular/logs/` and the seeded verbose level, and the Harbor shared unit tests and suite self-checks pass."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/project/init.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/init.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "environment/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.level"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "environment/seed/seed.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "/app/.spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/loglevel.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_loglevel.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_suite_wiring.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/tests/test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-workflow/tests/test_implement_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/standing-rules/tests/test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/spec-workflow/tests/test_spec_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/trim_reference.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_loglevel.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Pre-built projects set verbose: tests/harbor/spec-workflow/environment/Dockerfile, plan-workflow/environment/Dockerfile and repo-workflow/environment/Dockerfile each RUN printf 'schema: 5\\nlog:\\n    level: verbose\\n' into /app/.spektacular/config.yaml; implement-workflow/environment/config.yaml adds log: level: verbose and its Dockerfile COPYs it; epic-workflow, implement-epic-workflow, goal-check-workflow and standing-rules seed.sh end with set_log_level verbose. The agent's own init keeps the level (diff comments; the goal's own migration check passed). A grep of tests/harbor (excluding jobs) finds no SPEKTACULAR_SESSION_LOG anywhere, and no ENV line remains in any Dockerfile."
+            },
+            {
+              "criterion": 2,
+              "verdict": "not_met",
+              "evidence": "Two pre-built projects still log a seed command. goal-check-workflow/environment/seed/seed.sh:59 runs `spektacular init \"$AGENT\"` in /app, and set_log_level off only follows at line 60. standing-rules/environment/seed/seed.sh:42 runs `spektacular init {{agent}}` in /app, and set_log_level off only follows at line 43. Until then the config is the default level, which is standard (internal/config/config.go:542 NewDefault sets Level: LogLevelStandard), so the init call is logged into /app/.spektacular/logs/ before logging is switched off. The epic and implement-epic seeds avoid this by running their init in a throwaway /tmp/todo-app that is deleted. The spec, plan and repo images run no seed command. I did not execute the seed to confirm the record is written; this is judged from the code and the default level. Fix: switch logging off before the init, or write the config with level off first."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Every verifier that runs spektacular via subprocess now calls logging_off() or set_log_level(..., \"off\") before its first call: epic-workflow/tests/test_epic_workflow.py (cli() calls logging_off() first, env override removed), implement-epic-workflow/tests/test_implement_epic_workflow.py (cli()), goal-check-workflow/tests/test_goal_check.py (cli()), standing-rules/tests/test_standing_rules.py (cli_bytes()), and plan-workflow/tests/test_plan_workflow.py:1178 (set_log_level before its only spektacular subprocess.run at :1179). implement-workflow, spec-workflow and repo-workflow verifiers contain no subprocess call to spektacular (grep). The environment/app test_cli.py has no spektacular reference."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Grep of tests/harbor for .spektacular/debug and DEBUG paths: the verifiers' DEBUG_DIR now points at .spektacular/logs (epic, implement-epic, goal-check, standing-rules, implement-workflow, plan-workflow, spec via SPEK_DIR/'logs'); timeline.py DEFAULT_DIR=/app/.spektacular/logs; metrics.py DEBUG_DIR=/app/.spektacular/logs; test.sh timeline calls use /app/.spektacular/logs. The only remaining 'debug' hits are trim_reference.py:185-186 (the trimming script, allowed), the old-format tests in shared/tests, and sessionlog.py:15-16, a docstring that describes the old record format. sessionlog.py's reader takes any directory passed in and hard-codes no debug path. Judged as met on that basis."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "tests/harbor/*/tests/test.sh lines still read `python3 /tests/metrics.py || true` with no arguments, and the diff does not touch those lines. metrics.py:53 now sets DEBUG_DIR = Path(\"/app/.spektacular/logs\"), and the --debug-dir default at metrics.py:709 is DEBUG_DIR, so the default run finds the session log."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "README.md:487 names artifacts/spektacular/logs/ (\"logs/ command logs\"). README.md:58-62 states every suite seeds log.level: verbose in .spektacular/config.yaml and that the logs live in .spektacular/logs/, and README.md:67-69 gives the timeline command with .../spektacular/logs. The shared unit tests and self-checks are not re-run here; the supplied verification output reports 516 passed in tests/harbor/shared/tests and the self-checks passing (14, 31, 38), and I did not run them myself."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T12:50:40Z",
+          "round": 1,
+          "attempt": 3,
+          "goal": {
+            "item": "90909dbf-daa8-4bb5-a55f-571a60355636",
+            "title": "Harbor suites read the new logs at the verbose level",
+            "criteria": [
+              "Every suite that drives Spektacular starts the agent's run with `log.level: verbose` in its project configuration, whether the project is pre-built or the agent runs `init` itself. No image, script or verifier sets `SPEKTACULAR_SESSION_LOG`.",
+              "The pre-built projects' logs directories hold no record of the seed scripts' own commands when the agent starts.",
+              "Every verifier that runs `spektacular` switches the project's logging off before its first call, so none of its calls appear in the session log.",
+              "No verifier, shared tool or `test.sh` reads `.spektacular/debug` any more, apart from the old-format test fixtures and their trimming script.",
+              "The metrics recorder's pinned command line in `test.sh` is unchanged and still finds the session log by default.",
+              "The README's Harbor sections name `.spektacular/logs/` and the seeded verbose level, and the Harbor shared unit tests and suite self-checks pass."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/project/init.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/init.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "environment/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "log.level"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "environment/seed/seed.sh"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "/app/.spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/loglevel.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_loglevel.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/timeline.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/metrics.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_suite_wiring.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/tests/test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/tests/test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-workflow/tests/test_implement_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/tests/test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/standing-rules/tests/test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_implement_epic_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_goal_check.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_standing_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/spec-workflow/tests/test_spec_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/test_sessionlog_rules.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".spektacular/config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/shared/tests/trim_reference.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_reference_runs.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "test_loglevel.py"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Pre-built suites write log.level verbose before the agent's run: spec-workflow/environment/Dockerfile:22, repo-workflow/environment/Dockerfile:32, plan-workflow/environment/Dockerfile:24 (printf 'schema: 5\\nlog:\\n    level: verbose\\n' \u003e /app/.spektacular/config.yaml), and implement-workflow/environment/config.yaml:23-24 (log: level: verbose, copied by its Dockerfile). Seeded suites end their seed with set_log_level verbose: epic-workflow/environment/seed/seed.sh (last line), implement-epic-workflow seed.sh (last line), goal-check-workflow seed.sh (last line), standing-rules seed.sh:~66 before git init. Agent init keeps the level: the diff's Dockerfile comments and the verification run (schema 5 config with only log.level, init keeps verbose) support this. grep for SESSION_LOG over tests/harbor (excluding jobs and .build) returns no files, and the Makefile has no SESSION_LOG or log.level line."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The four seeded suites run init or spektacular commands before setting logging off, then check the logs before the final verbose step: epic-workflow seed.sh (set_log_level off right after the cp of the config, line ~43; later spec writes are logged off), goal-check seed.sh:63-64 (init in /app with no prior config is not logged per the CLI rule; set_log_level off follows), implement-epic seed.sh (init in /tmp/todo-app, then set_log_level off before the sed and spec writes), standing-rules seed.sh:45-46 (init then set_log_level off). Each ends with `if compgen -G \"/app/.spektacular/logs/*.jsonl\"` ... exit 1 before set_log_level verbose. The pre-built Dockerfiles (spec, repo, plan, implement) contain no RUN that calls spektacular, only chmod and mkdir/printf, so their logs start empty."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Every verifier that runs spektacular via subprocess switches logging off first: epic-workflow/tests/test_epic_workflow.py:37-57 (logging_off() called from cli() before subprocess.run of [\"spektacular\", ...]); implement-epic-workflow/tests/test_implement_epic_workflow.py:40-59 (same pattern); goal-check-workflow/tests/test_goal_check.py:263-282 (same); standing-rules/tests/test_standing_rules.py:166-186 (cli_bytes calls logging_off first); plan-workflow/tests/test_plan_workflow.py:1178 (set_log_level(SPEK_DIR/'config.yaml','off') directly before the `spektacular status` subprocess call at 1179-1180, which is the only spektacular call in that file). The other subprocess calls in those files are git and python -m todo, not spektacular. The spec, repo and implement verifiers do not import subprocess and run no spektacular."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Grep for debug path use across tests/harbor (excluding jobs and .build) finds no verifier, shared tool or test.sh that reads .spektacular/debug. The verifiers and shared tools use .spektacular/logs: test_epic_workflow.py:193, test_goal_check.py:359, test_implement_epic_workflow.py:488, test_implement_workflow.py:584, test_plan_workflow.py:630, test_spec_workflow.py:1084, test_standing_rules.py:1207, timeline.py:43, metrics.py:729 (DEBUG_DIR = /app/.spektacular/logs). Remaining 'debug' matches are old-format fixtures under shared/tests/data and test_*.py fixtures (test_reference_runs.py, test_sessionlog_rules.py, test_delegation.py, test_epic_children.py), and the trim script trim_reference.py:178-186, which falls back to debug/ only for old trials. The one non-fixture mention is a docstring in shared/sessionlog.py:16 that describes the old format's location; the code has no debug path constant, so this is a description, not a read."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "The pinned command in every tests/harbor/*/tests/test.sh (e.g. standing-rules/tests/test.sh:18, epic-workflow/tests/test.sh:18) is `python3 /tests/metrics.py || true`, unchanged and not in the diff. metrics.py:729 sets DEBUG_DIR = Path(\"/app/.spektacular/logs\"), so the default run finds the session log without flags. The README and metrics.py docstring were updated to logs/ as well."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "README.md diff lines 484-508: the artifact tree names logs/ command logs; the Harbor section says every suite seeds its project with log.level: verbose in .spektacular/config.yaml and that the project's .spektacular/logs/ is collected as artifacts/spektacular/logs/; the timeline command is updated to .../artifacts/spektacular/logs. The shared unit tests and self-checks are reported passing in the verification summary (516 passed in shared/tests; 14, 31, 38 in the three selfcheck files). I did not rerun them, since that would write cache files; the pass result is taken from the verification summary, and the test files were not read for their assertions."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 3,
+      "state": "accepted"
+    },
+    {
+      "item": "6f66ab15-ff74-47ff-bea3-f3d5adbfb1c9",
+      "title": "Documentation site describes logging",
+      "checks": [
+        {
+          "at": "2026-10-25T12:53:53Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "6f66ab15-ff74-47ff-bea3-f3d5adbfb1c9",
+            "title": "Documentation site describes logging",
+            "criteria": [
+              "The debugging page explains the levels and what each records, the logs location and how to change it, retention, switching logging off, and that `status` and the `stats` reports are never logged; it describes no environment variable.",
+              "The configuration reference documents every `log` setting with its default, and no longer documents `debug` anywhere, including the example file and the key list.",
+              "The navigation shows the page as \"Logging and debugging\" at its existing address.",
+              "The site builds and type-checks without errors, and no page body contains layout HTML or em dashes in the new text."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/configuration.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "config.yaml"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                },
+                {
+                  "repo": "docs",
+                  "path": "CHANGELOG.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "src/pages/debugging.mdx covers the levels and what each records (\"What each level records\", lines 41-52: standard, verbose, off); the log location and how to change it (line 21 `.spektacular/logs/`, lines 67-69 `log.config.directory`, relative or absolute); retention (lines 71-78, 10 runs by default or `log.retention`, standalone days counted separately); switching off (line 51-52, `log.level: off`); and that status is never logged (lines 82-85). The stats rule is stated as a rule for reporting commands ('Commands that only report on the project or its logs are never logged either', lines 83-85), and the page names no stats command. The stats command does not exist in the spektacular code root (cmd/root.go:182-184 only mentions it as spec 000075), so the plan's fallback applies. The page describes no environment variable and states there is none (lines 87-88); no SPEKTACULAR_SESSION_LOG text is in src/ outside the 'Upgrading' prose, which does not name it."
+            },
+            {
+              "criterion": 2,
+              "verdict": "not_met",
+              "evidence": "src/pages/configuration.mdx has the log example (lines 44-49), the key list (line 113, `log` replaces `debug`), and a log ConfigKey (lines 206-217) with defaults for level (standard), retention (10) and directory (logs). The log.provider setting has no default documented: the ConfigKey defaultValue at line 206 is 'level: standard, retention: 10, logs' and the bullet at line 210 says only 'the logger; only `file` ships today'. The shipped default is file (internal/config/config.go:540, Provider: ProviderFile). Other sections such as changelog (configuration.mdx:273) state 'file provider' in defaultValue, so log should do the same. No remaining 'debug' key text in configuration.mdx; grep found no 'debug' there. The docs root has no config.yaml file, so nothing in it needed changing."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "src/components/Nav.astro:22 reads `{ label: \"Logging and debugging\", href: \"/debugging/\" }` (diff hunk at Nav.astro line 19-22). The address /debugging/ is unchanged, and the page's title and Hero heading are also 'Logging and debugging' (debugging.mdx:3, :12)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The build and type-check results come from the verification summary (npm run build pass, 16 pages; npx astro check 0 errors, 0 warnings); I did not rerun them. Layout HTML: grep for '\u003cdiv|\u003csection|class=' in src/pages/*.mdx had no matches per the verification list, and debugging.mdx uses only the existing Astro components Hero, Prose, CtaBanner and Button (debugging.mdx:6-9, 11-14, 148-160). Em dashes: I read all of src/pages/debugging.mdx and found none; a grep of configuration.mdx for the em dash character returned no matches. Both checks hold for the new text."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T12:55:12Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "6f66ab15-ff74-47ff-bea3-f3d5adbfb1c9",
+            "title": "Documentation site describes logging",
+            "criteria": [
+              "The debugging page explains the levels and what each records, the logs location and how to change it, retention, switching logging off, and that `status` and the `stats` reports are never logged; it describes no environment variable.",
+              "The configuration reference documents every `log` setting with its default, and no longer documents `debug` anywhere, including the example file and the key list.",
+              "The navigation shows the page as \"Logging and debugging\" at its existing address.",
+              "The site builds and type-checks without errors, and no page body contains layout HTML or em dashes in the new text."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/configuration.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "config.yaml"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                },
+                {
+                  "repo": "docs",
+                  "path": "CHANGELOG.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "not_met",
+              "evidence": "debugging.mdx covers levels (lines 41-52), location and the `log.config.directory` setting (lines 54-69, 27-36), retention (lines 71-78), switching off via `log.level: off` (lines 51-52), and names no environment variable (lines 87-88 say there is none). But the 'never logged' section (lines 80-85) says only that `spektacular status` is never logged and that 'commands that only report on the project or its logs' are never logged. It never names the `stats` reports, which criterion 1 requires. The fix is to name `spektacular stats` in that section. The stats command is not built in the spektacular code root (grep of cmd/ finds `stats` only in a comment at cmd/root.go:184), so the sentence must be forward-looking, but the criterion can still be met by naming it."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "configuration.mdx:44-49 example shows the `log` block (provider, level, retention, config.directory) in place of `debug`; the key list at lines 113-114 names `log` and no `debug`; the ConfigKey at lines 206-217 documents provider (file), level (standard), retention (10) and directory (logs) with the default in the header at line 206. The only remaining 'debug' hit in configuration.mdx is the link text 'Logging and debugging' at line 217, which is the page title, not the key. The description at line 4 also uses `log`. The docs config.yaml the goal lists does not exist in the docs code root (Glob for **/config.yaml found nothing), and the diff does not touch it, so nothing there documents debug."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "docs/src/components/Nav.astro:22 reads `{ label: \"Logging and debugging\", href: \"/debugging/\" }` (diff hunk at line 10 of docs.diff); the href is unchanged. debugging.mdx:3 title and :12 Hero heading also read 'Logging and debugging'."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The build and astro check results are accepted from the verification summary (npm run build passed; astro check 0 errors, 0 warnings); I did not rerun them. Read-only checks: no em dash (U+2014) in src/pages/debugging.mdx (grep returned no matches) or in the added lines of docs.diff (lines 9-10, 14-82, 84-300 reviewed, none contain one). No div, section or class= markup in the new page body (debugging.mdx uses only the existing Hero, Prose and CtaBanner components)."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T12:56:37Z",
+          "round": 1,
+          "attempt": 3,
+          "goal": {
+            "item": "6f66ab15-ff74-47ff-bea3-f3d5adbfb1c9",
+            "title": "Documentation site describes logging",
+            "criteria": [
+              "The debugging page explains the levels and what each records, the logs location and how to change it, retention, switching logging off, and that `status` and the `stats` reports are never logged; it describes no environment variable.",
+              "The configuration reference documents every `log` setting with its default, and no longer documents `debug` anywhere, including the example file and the key list.",
+              "The navigation shows the page as \"Logging and debugging\" at its existing address.",
+              "The site builds and type-checks without errors, and no page body contains layout HTML or em dashes in the new text."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/configuration.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "config.yaml"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                },
+                {
+                  "repo": "docs",
+                  "path": "CHANGELOG.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "docs/src/pages/debugging.mdx covers the levels (lines 41-52: standard, verbose, off, each with what it records), the location (lines 20-21 `.spektacular/logs/`; lines 67-69 `log.config.directory`, relative to .spektacular/ or absolute), retention (lines 71-78: 10 recent runs or log.retention, plus standalone days), switching off (line 51-52 `log.level: off`), and the never-logged rule for `status` and the `stats` reports (lines 80-86). It names no environment variable; lines 88-89 say there is none. Shipped defaults match: internal/config/config.go:93-98 (DefaultLogDir logs, DefaultLogRetention 10), config.go:459-471 (LogDir resolves under .spektacular/), cmd/status.go:33 carries the log:exempt annotation, cmd/root.go:155 and 193-199 skip logExempted commands. Caveat: no stats command or stats annotation exists in this worktree (no cmd/stats*.go; the comment at root.go:183-184 refers to spec 000075 as future work), so the `stats` claim describes behaviour not shipped here. The page text itself meets the criterion."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "docs/src/pages/configuration.mdx:42-47 documents log.provider (file), log.level (standard), log.retention (10) and log.config.directory (logs) in the example YAML; lines 199-216 ConfigKey name=\"log\" with defaultValue and a bullet per setting, each with its default. The debug key is gone: grep for 'debug' across docs/src (excluding debugging.mdx) returns only the link text at configuration.mdx:217 and no debug key. The key list at line 110-113 now reads `log` and still counts seventeen top-level keys, matching the schema. No docs config.yaml file exists in the docs code root (glob for **/config.yaml found nothing), and grep of docs *.yaml found no debug key, so no example file still shows it."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "docs/src/components/Nav.astro:22 now reads `{ label: \"Logging and debugging\", href: \"/debugging/\" }`, and the href is unchanged. debugging.mdx:3 and :12 also use the new title and heading."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The supplied verification shows `npm run build` pass and `npx astro check` with 0 errors and 0 warnings. Not re-run here. No raw layout HTML: the grep for \u003cdiv, \u003csection or class= in debugging.mdx returned no matches, and the configuration.mdx and Nav.astro diff hunks add no HTML. No em dash: grep for the em dash character in debugging.mdx returned no matches, and none appear in the added lines of docs.diff (lines 9-82 of the diff read clean)."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 3,
+      "state": "accepted"
+    },
+    {
+      "item": "6ec1a2f7-0b73-4c90-b1a2-cf897ed8d097",
+      "title": "README and knowledge describe logging",
+      "checks": [
+        {
+          "at": "2026-10-25T12:58:45Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "6ec1a2f7-0b73-4c90-b1a2-cf897ed8d097",
+            "title": "README and knowledge describe logging",
+            "criteria": [
+              "The README's configuration example shows the `log` section with its defaults and a one-line explanation of each key, mentions `debug` nowhere as a current setting, and describes no logging environment variable.",
+              "The Harbor knowledge entries say the session log is collected from `.spektacular/logs/` at the verbose level set in each suite's seeded configuration, and no longer mention `.spektacular/debug/` or `SPEKTACULAR_SESSION_LOG` as current behaviour."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "gotchas/harbor-agent-logs-and-artifacts.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "architecture/testing-architecture.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "CHANGELOG.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "README.md (worktree .spektacular/worktrees/000073_log-mode-and-logger-providers/spektacular/README.md) lines 296-301 show the config.yaml example with a `log:` block: `provider: file` (one-line comment: the logger; only file ships), `level: standard` (off | standard | verbose (full responses and state); status is never logged), `retention: 10` (most recent workflow runs kept, and as many days of standalone commands), and `config: directory: logs` (relative to the folder holding config.yaml). Each key has a defaults value and a one-line explanation. A grep for 'debug' in the README returns only line 491 (\"Bob's own debug log\", the permitted agent-logs line) and line 617 (`--debug-dir`, the permitted metrics.py flag name); the old `debug:` config block is gone from the example (diff hunk at @@ -293,8 +293,12 @@). No SPEKTACULAR_SESSION_LOG or other logging environment variable appears in the README. Line 199 (the .spektacular/ tree) now reads 'agent, command, log, store settings'."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Staged gotchas/harbor-agent-logs-and-artifacts.md lines 32-50: 'Each suite sets `log.level: verbose` in the configuration of the project it seeds', with the spec/plan/repo images pre-seeding a config.yaml and the implement suite's copied config carrying it; the session log is collected from `.spektacular/logs/` (with 'the existing /app/.spektacular artifact carries it out'). `SPEKTACULAR_SESSION_LOG` appears once (line 49-50) only as 'no longer exists'. Staged architecture/testing-architecture.md line 15 states each epic suite sets `log.level: verbose` in the seeded project's configuration, reads `.spektacular/logs/`, and that `SPEKTACULAR_SESSION_LOG` no longer exists (once). Neither staged file contains the path `.spektacular/debug/`. The only remaining 'debug' wording is at testing-architecture.md line 24, 'the old debug records of the checked-in reference runs', which describes legacy reference data rather than current behaviour and does not name the debug path."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    }
+  ]
+}

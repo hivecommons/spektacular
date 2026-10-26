@@ -1,31 +1,24 @@
 {
-  "kind": "plan",
+  "kind": "spec",
   "current_step": "finished",
   "completed_steps": [
     "new",
+    "interview",
     "overview",
-    "discovery",
-    "architecture",
-    "components",
-    "data_structures",
-    "implementation_detail",
-    "dependencies",
-    "testing_approach",
-    "milestones",
-    "tasks",
-    "open_questions",
-    "out_of_scope",
-    "assemble",
+    "requirements",
+    "acceptance_criteria",
+    "constraints",
+    "technical_approach",
+    "success_metrics",
+    "non_goals",
     "verification",
-    "write_plan",
-    "write_context",
-    "write_research",
-    "walkthrough",
+    "split",
     "finished"
   ],
-  "created_at": "2026-10-08T06:28:34.060744274Z",
-  "updated_at": "2026-10-08T07:17:18.613720507Z",
+  "created_at": "2026-10-25T10:18:48.362115459Z",
+  "updated_at": "2026-10-25T10:19:03.523257968Z",
   "data": {
-    "name": "000066_epic-mid-run-revisions"
+    "epic": "000002_workflow-tracing-and-run-stats",
+    "name": "000078_token-use-in-run-stats"
   }
 }

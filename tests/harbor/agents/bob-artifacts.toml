@@ -1,0 +1,8 @@
+
+# Appended to a rendered task's task.toml when it runs Bob (see the Makefile's
+# render targets). Bob writes its own log here, at the debug level the Bob
+# harbor arguments set. Only the log directory, never ~/.bob/settings, which
+# holds the login bob_agent.py uploads.
+[[artifacts]]
+source = "/root/.bob/logs"
+destination = "agent-logs/bob"

@@ -8,10 +8,12 @@ layers of assertions:
      any artefact.
   2. Plan CLI invocation — for every step, the agent invoked the matching
      `plan new` / `plan goto` Bash call during that step's window.
-  3. Skill retrieval and sub-agent spawning — for every (step, skill) pair
-     in EXPECTED_SKILLS_PER_STEP, the agent retrieved that skill during
-     that step's window; for every step in EXPECTED_SPAWN_STEPS, the agent
-     spawned at least one sub-agent during that step's window.
+  3. Skill retrieval — for every (step, skill) pair in
+     EXPECTED_SKILLS_PER_STEP, the agent retrieved that skill during that
+     step's window. Whether discovery started a sub-agent is recorded, not
+     checked: its template only suggests one, and a suggested sub-agent
+     never fails a run. The run's metrics record counts the children each
+     step started.
   4. Artefact content and instruction `next_step` validity — plan.md,
      context.md, research.md exist with substantive on-topic content, and
      every rendered instruction's next_step directive references a valid
@@ -25,8 +27,7 @@ layers of assertions:
      ## Conventions section reflects the seeded convention's distinctive
      token (SEEDED_CONVENTION_TOKEN).
 
-All expectation maps (step order, skills per step, sub-agent spawn steps,
-expected plan sections, and the convention oracles CONVENTIONS_READ_COMMAND /
+All expectation maps (step order, skills per step, expected plan sections, and the convention oracles CONVENTIONS_READ_COMMAND /
 SEEDED_CONVENTION_TOKEN) are hand-maintained in this module — they are the
 independent behavioural oracle. Do NOT derive them from `spektacular plan
 steps`, from the `templates/steps/plan/*.md` files, or from the seeded
@@ -47,13 +48,23 @@ from pathlib import Path
 
 import pytest
 
+from loglevel import set_log_level
+from runlog import RunLog
+
 # ---------------------------------------------------------------------------
 # Paths and constants
 # ---------------------------------------------------------------------------
 
 PROJECT_DIR = Path("/app")
 SPEK_DIR = PROJECT_DIR / ".spektacular"
-TRANSCRIPT = Path("/logs/agent/claude-code.txt")
+LOG_DIR = SPEK_DIR / "logs"
+AGENT_LOG_DIR = Path("/logs/agent")
+TRANSCRIPT = AGENT_LOG_DIR / "claude-code.txt"
+# Agents run through harbor's ACP agent, such as Bob, leave no Claude
+# transcript. Harbor records their run as a trajectory of tool calls and
+# results, and summarises how the session ended.
+ACP_TRAJECTORY = AGENT_LOG_DIR / "trajectory.json"
+ACP_SUMMARY = AGENT_LOG_DIR / "acp-summary.json"
 
 # Hand-maintained canonical step order — the behavioural oracle for
 # state-machine correctness. When a legitimate state-machine change lands
@@ -96,10 +107,6 @@ EXPECTED_SKILLS_PER_STEP = {
         }
     ),
 }
-
-# Hand-maintained set of steps whose templates direct the agent to spawn
-# sub-agents. Independent oracle — update when template language changes.
-EXPECTED_SPAWN_STEPS = frozenset({"discovery"})
 
 MIN_SECTION_LENGTH = 100
 
@@ -315,6 +322,99 @@ def parse_frontmatter(text: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def is_acp_run() -> bool:
+    """True when an ACP agent drove the run instead of Claude Code."""
+    return not TRANSCRIPT.exists() and ACP_SUMMARY.exists()
+
+
+def agent_record() -> Path:
+    """The file this run's tool calls are read from."""
+    return ACP_TRAJECTORY if is_acp_run() else TRANSCRIPT
+
+
+def _acp_summary() -> dict:
+    try:
+        return json.loads(ACP_SUMMARY.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _acp_steps() -> list:
+    try:
+        return json.loads(ACP_TRAJECTORY.read_text()).get("steps") or []
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def _acp_call_type(function_name: str) -> str:
+    """Map an ACP agent's tool to the Claude Code tool it stands for.
+
+    Bob's names: `execute` runs a shell command, `Using skill <name>` loads a
+    skill, `Running subagent: <prompt>` spawns a sub-agent. A tool whose name
+    mentions a question is taken as asking the user. Anything else is "".
+    """
+    if function_name == "execute":
+        return "Bash"
+    if function_name.startswith("Using skill"):
+        return "Skill"
+    if function_name.startswith("Running subagent"):
+        return "Agent"
+    if "question" in function_name.lower():
+        return "AskUserQuestion"
+    return ""
+
+
+ACP_FILE_TOOLS = frozenset({"edit", "write", "write_to_file", "apply_diff", "insert_content"})
+
+
+def _acp_tool_calls() -> list:
+    calls: list = []
+    for step in _acp_steps():
+        for tc in step.get("tool_calls") or []:
+            name = tc.get("function_name", "")
+            kind = _acp_call_type(name)
+            if not kind:
+                continue
+            args = tc.get("arguments") or {}
+            if kind == "Bash":
+                inp = {"command": args.get("command", "")}
+            elif kind == "Skill":
+                inp = {"skill": args.get("skill_name") or name.removeprefix("Using skill").strip()}
+            else:
+                inp = dict(args)
+            calls.append(
+                ToolCall(index=len(calls), type=kind, name=name, input=inp,
+                         tool_use_id=tc.get("tool_call_id", "") or "")
+            )
+    return calls
+
+
+def _acp_file_edits() -> list:
+    edits: list = []
+    for step in _acp_steps():
+        for tc in step.get("tool_calls") or []:
+            if tc.get("function_name") not in ACP_FILE_TOOLS:
+                continue
+            args = tc.get("arguments") or {}
+            edits.append({"name": tc["function_name"], "file_path": args.get("path") or args.get("file_path") or ""})
+    return edits
+
+
+def _acp_tool_results() -> dict:
+    results: dict = {}
+    for step in _acp_steps():
+        for r in (step.get("observation") or {}).get("results") or []:
+            tid = r.get("source_call_id", "")
+            content = r.get("content", "")
+            if isinstance(content, list):
+                content = "".join(
+                    (part.get("text", "") if isinstance(part, dict) else str(part)) for part in content
+                )
+            if tid:
+                results[tid] = str(content)
+    return results
+
+
 def _iter_transcript_objects():
     assert TRANSCRIPT.exists(), f"Agent transcript not found at {TRANSCRIPT}"
     for line in TRANSCRIPT.read_text().splitlines():
@@ -335,6 +435,8 @@ def extract_tool_calls() -> list:
     consumer filters by call.type or by Bash command content, so the
     AskUserQuestion entries only surface in tests that ask for them.
     """
+    if is_acp_run():
+        return _acp_tool_calls()
     calls: list = []
     for obj in _iter_transcript_objects():
         if obj.get("type") != "assistant":
@@ -364,6 +466,8 @@ def extract_builtin_file_edits() -> list:
     the agent must NOT use on the plan documents — `extract_tool_calls` does
     not capture them, so this walks the transcript separately.
     """
+    if is_acp_run():
+        return _acp_file_edits()
     edits: list = []
     for obj in _iter_transcript_objects():
         if obj.get("type") != "assistant":
@@ -380,7 +484,15 @@ def extract_builtin_file_edits() -> list:
 
 
 def extract_tool_results() -> dict:
-    """Return a map of tool_use_id → result text extracted from user turns."""
+    """Return a map of tool_use_id → result text extracted from user turns.
+
+    This reads the agent's own transcript (what the CLI printed back to the
+    agent), never Spektacular's logs: it holds no response or state
+    snapshot recorded by Spektacular, so it needs no verbose log level. Every
+    fact this verifier takes from Spektacular's logs comes through
+    `spektacular stats` (RunLog) and is recorded at the default level."""
+    if is_acp_run():
+        return _acp_tool_results()
     results: dict = {}
     for obj in _iter_transcript_objects():
         if obj.get("type") != "user":
@@ -436,10 +548,9 @@ def find_plan_cli_calls(calls: list) -> list:
             continue
         if _is_plan_new_call(cmd):
             results.append("new")
-        elif _is_plan_goto_call(cmd):
-            m = PLAN_GOTO_STEP_RE.search(cmd)
-            if m:
-                results.append(m.group(1))
+        if _is_plan_goto_call(cmd):
+            # One command can chain several gotos; each enters its step.
+            results.extend(PLAN_GOTO_STEP_RE.findall(cmd))
     return results
 
 
@@ -497,10 +608,6 @@ def _skill_params() -> list:
     )
 
 
-def _spawn_params() -> list:
-    return sorted(EXPECTED_SPAWN_STEPS)
-
-
 def _calls_cache() -> list:
     if "calls" not in _CACHE:
         _CACHE["calls"] = extract_tool_calls()
@@ -525,13 +632,31 @@ def _results_cache() -> dict:
 
 
 def _agent_result_events() -> list:
-    """Return all `result`-type events from the transcript, in order."""
+    """Return all `result`-type events from the transcript, in order.
+
+    An ACP run has no such events; its summary's prompt response stands in
+    as one result, an error when the session ended in an error.
+    """
+    if is_acp_run():
+        summary = _acp_summary()
+        if "prompt_response" in summary:
+            return [{"type": "result", "is_error": False, "result": summary["prompt_response"]}]
+        if "error" in summary:
+            return [{"type": "result", "is_error": True, "result": summary["error"]}]
+        return []
     return [o for o in _iter_transcript_objects() if o.get("type") == "result"]
 
 
 def _agent_auth_failure():
     """Return the first transcript object signalling an Anthropic API
-    authentication failure (HTTP 401), or None if there is none."""
+    authentication failure (HTTP 401), or None if there is none. For an ACP
+    run, the summary's error when the agent required authentication."""
+    if is_acp_run():
+        error = _acp_summary().get("error") or {}
+        message = error.get("message", "") if isinstance(error, dict) else str(error)
+        if "auth" in message.lower():
+            return {"error": message, "api_error_status": None}
+        return None
     for obj in _iter_transcript_objects():
         if obj.get("error") == "authentication_failed":
             return obj
@@ -556,9 +681,9 @@ def _abort_on_failed_agent_run():
     the wrong thing) does NOT trip this, so the full suite still reports every
     such failure.
     """
-    if not TRANSCRIPT.exists():
+    if not agent_record().exists():
         pytest.exit(
-            f"Agent transcript not found at {TRANSCRIPT} — the agent never ran. "
+            f"Agent transcript not found at {agent_record()} — the agent never ran. "
             "Aborting before the misleading downstream cascade.",
             returncode=1,
         )
@@ -599,8 +724,8 @@ class TestAgentExecution:
     """
 
     def test_transcript_exists(self):
-        assert TRANSCRIPT.exists(), (
-            f"Agent transcript not found at {TRANSCRIPT} — the agent never ran."
+        assert agent_record().exists(), (
+            f"Agent transcript not found at {agent_record()} — the agent never ran."
         )
 
     def test_agent_authenticated(self):
@@ -643,8 +768,14 @@ class TestWorkflow:
     """Overall workflow integrity checks."""
 
     def test_project_initialized(self):
-        assert (SPEK_DIR / "config.yaml").exists(), (
+        # The image pre-seeds a config holding only log.level, so init is
+        # proven by the installed skills it records, not by the file alone.
+        cfg = SPEK_DIR / "config.yaml"
+        assert cfg.exists(), (
             "config.yaml missing — `spektacular init` was not run"
+        )
+        assert "skills_version:" in cfg.read_text(), (
+            "config.yaml records no installed skills — `spektacular init` was not run"
         )
 
     def test_state_file_exists(self):
@@ -802,31 +933,6 @@ class TestSkillRetrieval:
         assert retrieved, (
             f"Step '{step}' did not retrieve skill '{skill}' — checked "
             f"{len(window_calls)} tool calls in the step's window"
-        )
-
-
-# ---------------------------------------------------------------------------
-# Template-driven sub-agent spawn tests
-# ---------------------------------------------------------------------------
-
-
-class TestSubAgentSpawning:
-    """Steps whose templates expect sub-agent spawning actually spawn one."""
-
-    @pytest.mark.parametrize("step", _spawn_params())
-    def test_subagent_spawned_in_step(self, step):
-        windows = _windows_cache()
-        calls = _calls_cache()
-        window = windows.get(step)
-        assert window is not None, (
-            f"Step '{step}' was never entered — cannot verify sub-agent spawning"
-        )
-        window_calls = calls[window.start : window.end]
-        spawned = any(c.type in ("Task", "Agent") for c in window_calls)
-        assert spawned, (
-            f"Step '{step}' expected sub-agent spawning but found no "
-            f"Task/Agent tool_use in its window "
-            f"({len(window_calls)} tool calls)"
         )
 
 
@@ -1071,6 +1177,10 @@ class TestPlanTasks:
 
     def test_status_reports_the_plan_tasks(self):
         name = find_plan_name()
+        # Like every verifier that runs spektacular, switch the project's
+        # logging off first, so no call of the verifier's own reaches the
+        # session log the other checks read (status is never logged anyway).
+        set_log_level(SPEK_DIR / "config.yaml", "off")
         result = subprocess.run(
             ["spektacular", "status", name, "--format", "json"],
             cwd=PROJECT_DIR, capture_output=True, text=True,
@@ -1152,14 +1262,16 @@ class TestArtefactStatusLifecycle:
             )
 
     def test_docs_draft_during_walkthrough(self):
-        """Docs read during the walkthrough still carry document_status: draft.
+        """Docs read before sign-off still carry document_status: draft.
 
-        The walkthrough template instructs the agent to read the committed
-        documents back with `plan file read`, so the walkthrough window
-        reliably contains such reads and their results include the
-        frontmatter. Every status observed there must be draft: a final
-        status during the walkthrough would mean the documents were
-        stamped before sign-off, i.e. the gating is broken.
+        The walkthrough reviews the documents the agent has just written,
+        and reads them back with `plan file read` only on a resumed session,
+        so a read is not guaranteed. Every `plan file read` result from the
+        first document write (`write_plan`) to the end of the walkthrough
+        must show draft: a final status there would mean the documents were
+        stamped before sign-off, i.e. the gating is broken. A run that read
+        none back is skipped: the finished step's stamp is covered by the Go
+        tests (TestPlanFinished_ClosesAllThreeSiblings).
         """
         windows = _windows_cache()
         calls = _calls_cache()
@@ -1169,8 +1281,9 @@ class TestArtefactStatusLifecycle:
             "Walkthrough step was never entered — cannot verify the "
             "draft status of the documents under review."
         )
+        first = windows.get("write_plan") or window
         observed = []  # (call index, status value)
-        for c in calls[window.start : window.end]:
+        for c in calls[first.start : window.end]:
             cmd = _bash_command(c)
             if "plan file read" not in cmd:
                 continue
@@ -1178,14 +1291,15 @@ class TestArtefactStatusLifecycle:
                 results.get(c.tool_use_id, "")
             ):
                 observed.append((c.index, status))
-        assert observed, (
-            "No `plan file read` result inside the walkthrough window "
-            "contained a status: frontmatter line — the walkthrough must "
-            "read the committed documents back for review."
-        )
+        if not observed:
+            pytest.skip(
+                "no `plan file read` result between write_plan and the end of "
+                "the walkthrough carried a status: line — the walkthrough used "
+                "the documents already in context"
+            )
         offenders = [o for o in observed if o[1] != STATUS_DRAFT]
         assert not offenders, (
-            "Documents read during the walkthrough already carried a "
+            "Documents read before sign-off already carried a "
             f"non-draft status (call index, status): {offenders} — "
             "the final stamp must wait for walkthrough sign-off."
         )
@@ -1194,6 +1308,29 @@ class TestArtefactStatusLifecycle:
 # ---------------------------------------------------------------------------
 # Instruction next_step validity invariant
 # ---------------------------------------------------------------------------
+
+
+def _step_payload(result_text: str):
+    """The plan step response in a command's output, or None.
+
+    An agent may chain other commands around a `plan goto`, such as a
+    `plan file write` before it or a `head` of the plan files after it, so
+    the output is not always one JSON document. Every top-level JSON object
+    in it is decoded, and the first carrying a "step" or "instruction" is the
+    step response.
+    """
+    decoder = json.JSONDecoder()
+    i = result_text.find("{")
+    while i != -1:
+        try:
+            obj, end = decoder.raw_decode(result_text, i)
+        except json.JSONDecodeError:
+            i = result_text.find("{", i + 1)
+            continue
+        if isinstance(obj, dict) and ("step" in obj or "instruction" in obj):
+            return obj
+        i = result_text.find("{", end)
+    return None
 
 
 class TestInstructionNextStepValidity:
@@ -1220,11 +1357,10 @@ class TestInstructionNextStepValidity:
             result_text = results.get(call.tool_use_id, "")
             if not result_text:
                 continue
-            try:
-                payload = json.loads(result_text)
-            except json.JSONDecodeError:
-                # Not all stdout lines are pure JSON (error paths, wrapped
-                # harness output). Skip.
+            payload = _step_payload(result_text)
+            if payload is None:
+                # Error paths and wrapped harness output carry no step
+                # response. Skip.
                 continue
             instruction = (
                 payload.get("instruction", "") if isinstance(payload, dict) else ""
@@ -1247,48 +1383,19 @@ class TestInstructionNextStepValidity:
         )
 
     def test_walkthrough_rendered_before_finished(self):
-        """The `finished` instruction must only be rendered after a
-        `walkthrough` instruction.
+        """The workflow must enter `walkthrough` before `finished`.
 
-        Transcript-level guard for the mandatory plan-walkthrough review:
-        the ordered sequence of `step` values from successful plan
-        new/goto results must contain "walkthrough", and its first
-        occurrence must precede the first occurrence of "finished". The
-        step names here are hand-maintained oracle values, not derived
-        from the state machine.
+        Guard for the mandatory plan-walkthrough review, judged from what
+        ran: the session log's successful plan new/goto commands and the
+        step each left the workflow at. However the agent wrote a command
+        (piped, chained, in a loop), the CLI logged the call it received.
+        The step names are hand-maintained oracle values, not derived from
+        the state machine.
         """
-        calls = _calls_cache()
-        results = _results_cache()
-        rendered_steps = []
-        for call in calls:
-            if call.type != "Bash":
-                continue
-            cmd = _bash_command(call)
-            if not (_is_plan_new_call(cmd) or _is_plan_goto_call(cmd)):
-                continue
-            result_text = results.get(call.tool_use_id, "")
-            if not result_text:
-                continue
-            try:
-                payload = json.loads(result_text)
-            except json.JSONDecodeError:
-                # Not all stdout lines are pure JSON (error paths, wrapped
-                # harness output). Skip.
-                continue
-            step = payload.get("step") if isinstance(payload, dict) else None
-            if step:
-                rendered_steps.append(step)
-        assert "walkthrough" in rendered_steps, (
-            "No walkthrough instruction was rendered "
-            f"(rendered steps: {rendered_steps})"
-        )
-        assert "finished" in rendered_steps, (
-            "No finished instruction was rendered "
-            f"(rendered steps: {rendered_steps})"
-        )
-        assert rendered_steps.index("walkthrough") < rendered_steps.index(
-            "finished"
-        ), (
-            "The finished instruction was rendered before any walkthrough "
-            f"instruction (rendered steps: {rendered_steps})"
+        entered = RunLog(LOG_DIR).steps_entered("plan")
+        assert entered, f"no plan workflow commands in the Spektacular logs under {LOG_DIR}"
+        assert "walkthrough" in entered, f"The workflow never entered walkthrough (steps entered: {entered})"
+        assert "finished" in entered, f"The workflow never entered finished (steps entered: {entered})"
+        assert entered.index("walkthrough") < entered.index("finished"), (
+            f"The workflow entered finished before walkthrough (steps entered: {entered})"
         )

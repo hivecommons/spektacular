@@ -13,11 +13,15 @@ Report to the user:
 {{#worktrees_kept}}
 - That the spec's worktrees are kept for the next task run, and are merged back once the plan is complete.
 {{/worktrees_kept}}
+{{^orchestrated}}
+
+{{> partials/implement-knowledge-written}}
+{{/orchestrated}}
 
 This is the terminal state of this implement run. Do **not** emit a `goto` command — no further steps exist.
 {{#orchestrated}}
 
-This run is orchestrated, so report to your orchestrator rather than the user: end your run with a final message whose first line is exactly `DONE: {{plan_name}}`, followed by the report above and any durable discovery worth saving to the knowledge base.
+This run is orchestrated, so report to your orchestrator rather than the user: end your run with a final message whose first line is exactly `DONE: {{plan_name}}`, followed by the report above and every knowledge entry you wrote (tier, store, path, why).
 {{/orchestrated}}
 {{/task_run}}
 {{^task_run}}
@@ -51,10 +55,14 @@ This spec was built in its own worktrees, on branch `spek/{{plan_name}}`. Merge 
 
 The merge is all or nothing: every repo the spec touched is merged, or none is. On success, report that the work is merged and the worktrees and branches were removed. If it is refused, report the repos and conflicting paths it names to the user and stop. Never resolve a conflict yourself, and never merge, rebase or switch branches on your own initiative. The worktrees and branches are kept for the user.
 {{/merge_required}}
+{{^orchestrated}}
+
+{{> partials/implement-knowledge-written}}
+{{/orchestrated}}
 
 This is the terminal state of the implement workflow. Do **not** emit a `goto` command — no further steps exist.
 {{#orchestrated}}
 
-This run is orchestrated, so report to your orchestrator rather than the user: end your run with a final message whose first line is exactly `DONE: {{plan_name}}`, followed by the report above and any durable discovery worth saving to the knowledge base.
+This run is orchestrated, so report to your orchestrator rather than the user: end your run with a final message whose first line is exactly `DONE: {{plan_name}}`, followed by the report above and every knowledge entry you wrote (tier, store, path, why).
 {{/orchestrated}}
 {{/task_run}}

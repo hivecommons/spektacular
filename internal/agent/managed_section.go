@@ -39,17 +39,15 @@ func installManagedSection(projectPath string, cfg config.Config, out io.Writer,
 
 // installManagedSectionAt is installManagedSection with an explicit placement.
 func installManagedSectionAt(projectPath string, cfg config.Config, out io.Writer, templatePath, heading, actionNoun string, placement sectionPlacement) error {
-	tmplBytes, err := fs.ReadFile(sourceFS, templatePath)
-	if err != nil {
-		return fmt.Errorf("reading embedded template %s: %w", templatePath, err)
-	}
+	return installManagedSectionWith(projectPath, out, templatePath, heading, actionNoun, placement, map[string]string{"command": cfg.Command})
+}
 
-	rendered, err := mustache.Render(string(tmplBytes), map[string]string{"command": cfg.Command})
+// installManagedSectionWith is installManagedSectionAt rendering the template
+// against data, for a section that needs variables beyond the command.
+func installManagedSectionWith(projectPath string, out io.Writer, templatePath, heading, actionNoun string, placement sectionPlacement, data map[string]string) error {
+	rendered, err := renderTemplate(templatePath, data)
 	if err != nil {
-		return fmt.Errorf("rendering template %s: %w", templatePath, err)
-	}
-	if !strings.HasSuffix(rendered, "\n") {
-		rendered += "\n"
+		return err
 	}
 
 	agentsPath := filepath.Join(projectPath, "AGENTS.md")
@@ -85,6 +83,23 @@ func installManagedSectionAt(projectPath string, cfg config.Config, out io.Write
 
 	body := replaceManagedSection(existing, startIdx, endIdx, rendered)
 	return writeAGENTSAtomic(agentsPath, body, out, "updated "+actionNoun+" in")
+}
+
+// renderTemplate renders the embedded template at templatePath against data,
+// ending it with a newline.
+func renderTemplate(templatePath string, data map[string]string) (string, error) {
+	tmplBytes, err := fs.ReadFile(sourceFS, templatePath)
+	if err != nil {
+		return "", fmt.Errorf("reading embedded template %s: %w", templatePath, err)
+	}
+	rendered, err := mustache.Render(string(tmplBytes), data)
+	if err != nil {
+		return "", fmt.Errorf("rendering template %s: %w", templatePath, err)
+	}
+	if !strings.HasSuffix(rendered, "\n") {
+		rendered += "\n"
+	}
+	return rendered, nil
 }
 
 // locateManagedSection returns the byte range [startIdx, endIdx) covering the

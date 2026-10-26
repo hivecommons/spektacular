@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl jq git \
+    ca-certificates curl jq git python3 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -LsSf https://astral.sh/uv/0.9.5/install.sh | sh
@@ -21,7 +21,9 @@ WORKDIR /app
 # project config and the repo config live under the same .spektacular/
 # directory, which is what happens naturally when a repo is a member of a
 # project that shares its working tree. init preserves an existing
-# config.yaml/repo.yaml, so pre-seeding here is safe.
+# config.yaml/repo.yaml, so pre-seeding here is safe. The config sets no log
+# level, so .spektacular/logs/ records the agent's run at the default level;
+# it comes back with the .spektacular artifact.
 RUN mkdir -p /app/.spektacular/specs /app/.spektacular/plans/20260101000000-jwt-auth
 COPY config.yaml /app/.spektacular/config.yaml
 COPY repo.yaml /app/.spektacular/repo.yaml

@@ -41,6 +41,31 @@ spektacular status [name] --watch         # keep the readable tree on screen, sc
 
 When `plan.strict_spec_changes` is true, `status` reports a plan's `document_status: "stale"` and `current_step: "stale"`, and its spec's state as `stale`, once the linked spek is modified after a final plan; `implement new` and subsequent implement steps refuse that plan until it is replanned and re-approved. With the default non-strict setting, a later spek edit does not invalidate an existing plan. A spek change recorded with `spektacular spec amend` during an implement run does not make the plan stale in either mode; any other edit to the spek's body still does under the strict setting.
 
+**Spans.** Every run's log shows where its time went. Spektacular records each command, each workflow step and, during implement, each plan task as a timed span by itself, with every command nested under its step. Agents mark the helper agents they launch and the questions they ask the user, as the workflow instructions tell them:
+
+```bash
+spektacular trace start <name> --type sub-agent|user-wait|work [--parent <id>]   # prints a span id
+spektacular trace stop <id> [--status ok|error] [--message <text>]
+```
+
+A span nests under the current step unless `--parent` names another open span, and one left open is closed, marked abandoned, when its step ends or its run finishes. With logging off both commands succeed and record nothing. See [Logging and debugging](https://spektacular.dev/debugging/).
+
+**Run statistics.** Ask the logs where a run's time went; the timings need no agent transcript:
+
+```bash
+spektacular stats list                     # every recorded run, newest first
+spektacular stats run [--name <spec>]      # where one run's time went: steps, tasks, helpers, waits, gaps
+spektacular stats compare                  # the two latest runs of a kind, side by side
+spektacular stats summary --kind implement # median and 90th percentile per step
+spektacular stats commands                 # every recorded command, with its step and arguments
+spektacular stats spans                    # helpers and waits, including an epic orchestrator's
+spektacular stats view [--name <spec>]     # the run as a single-file HTML waterfall you can open or share
+```
+
+For runs driven by Claude Code, `stats run`, `compare` and `summary` also show tokens, cost and time per thousand output tokens for each step, task and helper, read from Claude Code's own session files with no extra setup (`--sessions-dir <path>` reads them from another folder). Set prices per million tokens under `stats.prices` in `.spektacular/config.yaml`; none are built in. Other agents show these figures as unknown.
+
+Every form takes the same selection (`--name`, `--kind`, `--agent`, and a repeatable `--run <id or 8+ character prefix>`), prints a readable table by default, and gives the structured report with `--format json`, whose durations are integer milliseconds and whose field names are stable. `--dir <path>` reads a logs directory copied from anywhere, such as a test run's, with no project needed. Reporting never changes a log, and `stats` commands are never logged. The figures are defined on the documentation site's [Run statistics](https://spektacular.dev/run-stats/) page. `stats view` writes a single HTML file that opens in any browser without a server; see the [Run viewer](https://spektacular.dev/run-viewer/) page on the documentation site.
+
 **Epics.** When a piece of work is split into an epic, ask your agent to *plan this epic*, review the plans, then *implement this epic*. Independent specs are worked on in parallel, each spec is built in its own worktree and merged before the specs that depend on it, and repeating either request picks up where it stopped. Naming an epic in `status` adds a `run` view that says, for planning and for implementing, what each spec still needs and what blocks the epic. See [Epics](https://spektacular.dev/epics/).
 
 ### Addressing specs, plans and changelog records
@@ -100,10 +125,37 @@ Speks are plain markdown with a small set of structured sections (overview, requ
 Spek ships with five coding-agent integrations. `spektacular init <agent>` runs the chosen agent's install step, writing its workflow skills (and, where the agent has no skill mechanism, command wrappers) into your project:
 
 - **claude** — installs the workflow skills under `.claude/skills/` and ensures the project's `CLAUDE.md` imports `@AGENTS.md`, so the Spek agent rules take effect.
-- **bob** — installs skills under `.bob/skills/` and command wrappers under `.bob/commands/`.
+- **bob** — installs skills under `.bob/skills/` and command wrappers under `.bob/commands/`. Bob stops every
+  sub-agent after `session.maxTurns` turns (100 by default) and hands back whatever it said last, which cuts
+  epic children off mid-step. `init bob` warns while a limit is set; `spektacular init bob --raise-bob-turn-limit`
+  sets it to `0` (no limit) in `~/.bob/settings/settings.json`. The epic skills resume a cut-off child either way.
 - **codex** — installs skills under `.agents/skills/`.
 - **copilot** — GitHub Copilot CLI; installs the eight workflow skills under `.github/skills/` and the same standing rules in root `AGENTS.md`, with no command wrappers or extra instruction files.
 - **omp** — installs the same six skills under `.omp/skills/`, Markdown wrappers and native input-preserving handlers under `.omp/commands/`, and eight always-applied `spek-*.md` rules under `.omp/rules/`. The rules mirror only Spektacular's sections of root `AGENTS.md`, keeping them visible even when omp selects another instruction file. Other project instructions, rules, skills and settings are left alone.
+
+### Goal reviewer
+
+The implement workflow's `check_goal` step has a separate, read-only reviewer judge each task's
+acceptance criteria before any is ticked. `spektacular init <agent>` installs that reviewer as a
+helper named `spek-goal-reviewer`, in the agent's own sub-agent format, on a cheaper model than the
+agent's default:
+
+| Agent | Helper | Default model | Read-only |
+|---|---|---|---|
+| claude | `.claude/agents/spek-goal-reviewer.md` | `haiku` | `Read`, `Grep`, `Glob` tools only |
+| codex | `.codex/agents/spek-goal-reviewer.toml` | `gpt-6-luna` | by instruction only: Codex has no read-only mode for a helper |
+| copilot | `.github/agents/spek-goal-reviewer.agent.md` | `Claude Haiku 4.5` | `read` and `search` tools only |
+| omp | `.omp/agents/spek-goal-reviewer.md` | `@smol` (your own cheap model role) | `read`, `grep`, `glob` tools only |
+| bob | none | Bob's lighter model | Bob's built-in read-only `explore` helper is the reviewer |
+
+Set `implement.goal_check.models.<agent>` in `.spektacular/config.yaml` to use another model for
+one agent; the others keep their defaults. The model is written into the helper when it is
+installed, so re-run `spektacular init <agent>` after changing it (`migrate` refreshes it on an
+upgrade). Your own agent settings that pin a helper's model still win. Copilot ignores a helper's
+model when the session model is `Auto`, and Copilot in VS Code also loads `.claude/agents/`, so a
+project set up for both may list two copies of the same reviewer; both carry the same brief. An
+agent without the helper falls back to any fresh-context sub-agent given
+`spektacular skill review-task-goal`. Switch the check off with `implement.goal_check.enabled: false`.
 
 ### GitHub Copilot CLI
 
@@ -169,7 +221,7 @@ Running `spektacular init <agent>` creates:
 
 ```
 .spektacular/
-├── config.yaml              # agent, command, debug, store settings, and the repo registry
+├── config.yaml              # agent, command, log, store settings, and the repo registry
 ├── repo.yaml                # the colocated repo's own configuration
 ├── specs/                   # your specification files
 ├── plans/                   # generated plans (plan.md, research.md, context.md)
@@ -233,12 +285,18 @@ Agents (and you) reach knowledge through the `spektacular knowledge` commands ra
 - `knowledge delete` — remove one addressed entry, via `--data '{"tier":"…","name":"…","path":"…"}'`; an address holding nothing succeeds and changes nothing, and a category's own generated description is refused
 - `knowledge list` — list entries across the stores the request covers; takes `--tier` and `--filter`
 - `knowledge sources` — list the configured stores by tier and name, with their locations
+- `knowledge usage` — show each entry's creation date and discovery and retrieval history from the store's usage index; takes `--tier` and `--filter`
+- `knowledge prune` — remove old, unread entries, then check every remaining entry against the project, one instruction per entry answered with `knowledge prune verdict`; `--dry-run` previews without changing anything
 
 Every subcommand accepts `--schema` to print its input/output JSON schema and exit.
 
 ### Capturing knowledge
 
-When research surfaces a durable learning, gotcha, or convention worth keeping, the agent **proposes** the destination — the tier, the store name, and the path — along with the exact content, and waits for your explicit confirmation before writing; it never persists to a knowledge store unprompted. In a Spek-initialised repo, the `spek-knowledge` skill is the entry point for reading, contributing to, and updating the knowledge base in any session, and coding agents route what they would otherwise save to their own per-user memory into the project knowledge base instead, so captured knowledge lands in git and travels with the project.
+When research surfaces a durable learning, gotcha, or convention worth keeping, the agent writes it to the knowledge base itself through the `spek-knowledge` skill and tells you which entry it wrote, where (the tier, the store name, and the path) and why. Nothing waits for your approval: the report is how you see the knowledge base change, and the project's version history is the undo.
+
+Each store keeps a usage index, `.usage-index.json` at its root, recording when every entry was created and each time a search surfaced it (a discovery) or a read returned it (a retrieval), written only by the knowledge commands and read with `knowledge usage`. `spektacular knowledge prune` (preview it with `--dry-run`) removes entries nobody has retrieved within `knowledge.prune.max_age_days` (90 days by default), then has the agent correct or delete the rest where they no longer describe the project, and reports every entry with its verdict and evidence.
+
+In a Spek-initialised repo, the `spek-knowledge` skill is the entry point for reading, contributing to, and updating the knowledge base in any session, and coding agents route what they would otherwise save to their own per-user memory into the project knowledge base instead, so captured knowledge lands in git and travels with the project.
 
 ## Configuration
 
@@ -252,7 +310,7 @@ Configuration is split across two files, and a colocated single-repo project sim
 ### Project configuration (`config.yaml`)
 
 ```yaml
-schema: 3                           # settings format version, written by Spektacular; `migrate` raises it
+schema: 5                           # settings format version, written by Spektacular; `migrate` raises it
 written_by: 0.16.0                  # the Spektacular version that last wrote this file (informational)
 skills_version: 0.16.0              # the Spektacular version that last installed the agent skills
 name: my-project                    # required, slug-safe; namespaces changelog entries
@@ -260,8 +318,12 @@ source: git@example.com:org/my-project.git  # optional; the project's git addres
 command: spektacular
 agent: claude
 auto_commit: "off"                  # off | workflow | full: automatic git commits (local only)
-debug:
-  enabled: false                    # true records every command and response to a session log; SPEKTACULAR_SESSION_LOG=off leaves one call out
+log:
+  provider: file                    # the logger; only file ships
+  level: standard                   # off | standard | verbose (full responses and state); status is never logged
+  retention: 10                     # most recent workflow runs kept, and as many days of standalone commands
+  config:
+    directory: logs                 # relative to the folder holding config.yaml
 spec:
   provider: file
   id_method: timestamp              # timestamp + random suffix; counter is legacy and branch-local
@@ -289,6 +351,8 @@ knowledge:
       provider: file
       config:
         location: ../team-kb        # relative to the folder holding config.yaml, as repos are
+  prune:
+    max_age_days: 90                # optional; days an entry may go unretrieved before prune removes it
 design:
   sources:                          # optional, where the project's design documents live;
     - name: api                     # declared by the project only, never by a repo
@@ -394,7 +458,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 Then run:
 
 ```bash
-harbor run -p tests/harbor/spec-workflow -a claude-code -m claude-sonnet-4-6 -o tests/harbor/jobs
+harbor run -p tests/harbor/spec-workflow -a claude-code -m claude-sonnet-5-5 -o tests/harbor/jobs
 ```
 
 Makefile wrappers run the suites for you, building the binary and wiring up the agent-specific placeholders:
@@ -403,10 +467,41 @@ Makefile wrappers run the suites for you, building the binary and wiring up the 
 make harbor-test-spec            # spec workflow (claude)
 make harbor-test-spec-codex      # spec workflow (codex)
 make harbor-test-plan            # plan workflow (claude)
+make harbor-test-plan-codex      # plan workflow (codex)
+make harbor-test-plan-bob        # plan workflow (IBM Bob)
 make harbor-test-implement       # implement workflow (claude)
 make harbor-test-repo            # guided repo add, answering each question (claude)
 make harbor-test-repo-delegated  # guided repo add, handing the whole set over (claude)
+make harbor-test-epic            # plan a whole epic through background sub-agents (claude)
+make harbor-test-epic-codex      # the same, with codex
+make harbor-test-epic-bob        # the same, with IBM Bob
+make harbor-test-implement-epic             # implement a planned four-spec epic, two specs in parallel (claude)
+make harbor-test-implement-epic-codex       # the same, with codex
+make harbor-test-implement-epic-bob         # the same, with Bob at its default turn limit
+make harbor-test-implement-epic-bob-unlimited  # the same, with Bob's turn limit removed
+make harbor-test-standing-rules            # standing rules in AGENTS.md, in a project initialised before the session (claude)
+make harbor-test-standing-rules-codex      # the same, with codex
+make harbor-test-standing-rules-bob        # the same, with IBM Bob
+make harbor-test-background-child          # probe: does headless Claude Code keep a background child past ten minutes?
 ```
+
+`harbor-test-background-child` is a probe, not a workflow suite. Headless Claude Code starts one
+background child that runs for fifteen minutes and ends its turn, and the verifier prints
+`PROBE OUTCOME: <ending> after <seconds> s; notice-woken turn: <bool>` without asserting which way
+it went. Its recorded run (2026-10-24, Claude Code 2.1.310: the child was stopped about ten minutes
+after the main agent ended its turn) is checked in under
+`tests/harbor/shared/tests/data/probe-background-child/`, and the epic skills' headless guidance
+follows it. Re-run it when Claude Code changes, and update that guidance if the outcome does.
+
+Bob has no Harbor agent of its own. `harbor-test-epic-bob` runs it through
+`tests/harbor/agents/bob_agent.py`, which extends Harbor's generic ACP agent: it installs Bob from
+IBM's published tarball and launches `bob acp` as described in `tests/harbor/agents/bob.json`. The plan suite's verifier reads Bob's run from the trajectory Harbor
+records for an ACP agent, since Bob leaves no Claude transcript.
+Like the Claude targets, it signs in with the login already on your machine, uploading your Bob
+Shell login into the container before Bob starts, so run `bob` and sign in once first. Set
+`BOBSHELL_API_KEY` to use an API key instead. If the container's Bob refreshes the session, you may
+need to sign in to Bob again locally. Bob runs without `-m`, because its ACP server cannot choose a
+model.
 
 #### Test results
 
@@ -416,10 +511,15 @@ Results are written to `tests/harbor/jobs/` (gitignored). Each run produces:
 tests/harbor/jobs/<timestamp>/
 ├── result.json                    # Overall pass/fail and metrics
 └── spec-workflow__<id>/
-    ├── agent/                     # Agent output log
+    ├── agent/                     # Agent output log and native session transcripts
+    ├── artifacts/
+    │   ├── spektacular/           # The project's .spektacular, with logs/ (Spektacular's run logs)
+    │   └── agent-logs/bob/        # Bob's own debug log, on Bob runs only
     ├── verifier/
     │   ├── test-stdout.txt        # pytest output
-    │   └── reward.txt             # 1 = pass, 0 = fail
+    │   ├── junit.xml              # pytest results, one testcase per check
+    │   ├── reward.txt             # 1 = pass, 0 = fail
+    │   └── metrics.json           # the run's metrics record (see Run metrics below)
     └── trial.log                  # Full trial log
 ```
 
@@ -430,6 +530,127 @@ tests/harbor/jobs/<timestamp>/
 | `tests/harbor/spec-workflow` | Full spec creation workflow, end to end |
 | `tests/harbor/plan-workflow` | Full plan generation workflow, end to end |
 | `tests/harbor/repo-workflow` | Guided repo add, checked against the agent's own transcript |
+| `tests/harbor/epic-workflow` | Plans a seeded three-spec epic with `spek-plan-epic`, checked against CLI state and Spektacular's logs, so the same verifier serves every agent |
+| `tests/harbor/implement-epic-workflow` | Implements a seeded, planned four-spec epic with `spek-implement-epic`: storage and format in parallel, commands after both are merged, export after commands. Checked against CLI state, git, the finished app's behaviour and Spektacular's logs |
+
+Every suite records the agent's run at Spektacular's default log level, with no special setting
+(the pre-built projects' seed scripts run with logging off and switch it back to the default as
+their last step, and the verifiers switch logging off before their own calls). The project's
+`.spektacular/logs/`, collected as each run's `artifacts/spektacular/logs/`, holds one file per
+workflow run and one per day for commands outside any run, whichever agent ran, apart from
+`status`, which is never logged. Harbor reads these logs only through `spektacular stats` (`list`,
+`run`, `commands` and `spans`), never by parsing them, so running `spektacular stats run --dir
+<trial>/artifacts/spektacular/logs` on a collected trial shows the same step timings as its
+metrics record. Reading them locally needs a `spektacular` that has `stats` on `PATH`, or one named
+by `SPEKTACULAR_BIN`.
+
+The epic suites print a timeline from those logs at the top of their results: when each spec's
+child started and finished, its slowest step, and the hand-off gaps. The orchestrator starts a
+`sub-agent` span when it launches a child and stops it when it handles the child's hand-back, so
+*spawned after* runs from that span's start to the child's first command and *picked up after*
+from the child's last command to the span's end (or, for a span never stopped, to the
+orchestrator's next recorded command or span); *merged after* runs to the orchestrator's
+`epic merge`. Because `status` is never logged, these gaps are not comparable with timelines from
+before. The timeline also lists every child that had to be resumed and the step it stopped at,
+and, on Bob runs, how often Bob ended a task at its turn limit. Run it on a collected job with
+`python3 tests/harbor/shared/timeline.py <job>/<trial>/artifacts/spektacular/logs [<job>/<trial>/artifacts/agent-logs/bob]`.
+
+#### Run metrics
+
+Every suite's verifier leaves `verifier/metrics.json` beside `reward.txt`, in the same shape for
+every agent and suite. `tests/harbor/shared/metrics.py` writes it after the reward is written, and
+the verifier ignores how it exits, so recording metrics never changes a run's pass or fail. The
+record's identity comes from a `build.json` that each `make harbor-test-*` target writes into the
+suite it renders, beside the recorder and the shared helpers it copies there. A suite run straight
+from its source directory, without its make target, has no recorder in its tests and leaves no
+record.
+
+A value a run's logs do not supply is `null`, and its field is listed under `unknown` with the
+reason. It is never written as zero.
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | The record's shape, currently `3`. Version 3 takes every step, helper, wait and gap from Spektacular's logs, in place of version 2's transcript-based step output, child placement and idle time; the report still reads version-1 and version-2 records |
+| `run` | `suite`, `scenario`, `agent`, `model`, `spektacular_version` (`git describe`), `commit`, and `dirty` (the tree had uncommitted changes when the suite was built) |
+| `result` | `reward` as written to `reward.txt`. `checks` holds `passed`, `total` and `score` (passed over total, skipped tests excluded). `groups` gives the same per group, under its `name`: the test class, or the test module for suites written as plain functions |
+| `totals` | From the agent's log: `wall_time_s`, `model_time_s` (time spent in model calls, summed across sub-agents, so it can exceed the wall time), `turns`, `cost_usd`, `input_tokens` (uncached), `output_tokens`, `cache_read_tokens` and `cache_write_tokens`. From Spektacular's logs: `trace_calls` and `trace_calls_per_task` (the run's `spektacular trace` calls, and their average per plan task), and, summed over every workflow run, `user_wait_s` (time waiting on the user), `helper_wait_s` (time a helper agent was running), `gap_s` and `gaps` (the time in, and the number of, stretches with no recorded event longer than `gap_threshold_s`, 300 by default) |
+| `steps` | One entry in `workflows` per workflow run in Spektacular's logs, in start order: its `run_id`, `kind`, `name`, `status`, `wall_s`, `user_wait_s`, `helper_wait_s`, `gap_s` and `gaps`, and in `steps` each step it entered, in order of first entry, with its `step` name, `started_at`, `entries`, `duration_s` (over every entry), its split into `working_s`, `helper_wait_s` and `user_wait_s` (which add up to its duration), `commands`, `helpers` (how many helper agents were started in it) and `incomplete` (entries that did not finish). `workflows` is `null` when the logs are missing or hold no workflow run |
+| `subagents` | From Spektacular's logs: `started`, `completed`, `failed`, `unfinished` (not stopped, or cut off), `durations_s` for each helper that finished, and `helpers`, every `sub-agent` span: `span_id`, `parent`, `name`, `spec`, `kind`, `step`, `task_id`, `outside_run` (an epic orchestrator's helper, started outside any run, whose `spec` is the lane of the child launched under it and whose `step` is `null`), `started_at`, `ended_at`, `duration_s`, `end_reason`, `status` and `complete`. From the agent's log: `briefs`, every child agent the run started, nested ones included, with its `id` (its launching call), `parent`, `kind`, `description`, `models`, `prompt` (the full context it was given) and `prompt_chars` |
+| `unknown` | One `{field, reason}` per measure the record could not fill |
+
+Everything but tokens, models, cost and briefs comes from the logs Spektacular keeps under
+`.spektacular/logs/`, recorded at the default log level, which reach the trial's artifacts with
+the project's `.spektacular`. The recorder reads them only through `spektacular stats` (`list`,
+`run`, `commands` and `spans`), never by parsing them, so every step, helper and wait figure means
+the same for every agent, and `spektacular stats run --dir <trial>/artifacts/spektacular/logs` on a
+collected trial gives the same numbers. A step's figures add up over every entry into it, and a
+resumed child's hand-off is not inside any step. When the logs are missing, or `stats` cannot read
+them, every log-sourced field is `null` and listed under `unknown` with the reason, and none is
+filled in from the agent's transcript.
+
+Claude's totals come from the `result` summary at the end of its transcript, with tokens summed over
+every model it used. When background sub-agents split a Claude run into several summaries, turns are
+summed, cost, tokens and model time come from the last summary, and wall time is the span from the
+transcript's first message to its last. The other agents report less, but only in the transcript's
+fields: steps, helpers and waits are the same for every agent.
+
+| Agent | Unknown in its record |
+|---|---|
+| Bob | Tokens, cost, model time and model. Each brief carries only its `kind`, `description` and `prompt` (and so `prompt_chars`); its `models` are unknown. Its wall time comes from Bob's own shell logs |
+| Codex | `briefs` (`null`: Codex's log shows no helpers), model time and cache writes. Cost too, unless Harbor can price the model |
+| Oracle (no agent) | Every agent total, the model and `briefs`. Wall time comes from Spektacular's logs |
+
+#### Comparing runs
+
+`tests/harbor/shared/report.py` reads the records collected under `tests/harbor/jobs/`, and groups
+runs by suite and scenario, so, for example, repo-workflow's one-at-a-time and delegated runs are
+kept apart. It opens
+only each trial's `verifier/metrics.json` and `result.json`, never the agent's own files, so it runs
+as your normal user even though Claude runs leave root-owned files under `agent/`. Trials without a
+record, such as runs from before the recorder, are skipped. `make harbor-report` runs it, passing
+`ARGS` through:
+
+```bash
+make harbor-report                                     # one row per run, grouped by suite
+make harbor-report ARGS='tests/harbor/jobs/fix2-*'     # only some jobs (directories or globs)
+make harbor-report ARGS='--run plan-workflow-claude__<id>'    # one run's step split, by a trial name from the table
+make harbor-report ARGS='--run epic-workflow-claude__<id> --prompts'   # ... and every helper's brief
+make harbor-report ARGS='--compare plan-workflow-claude__<a> plan-workflow-claude__<b>'   # two trials side by side
+make harbor-report ARGS="--baseline 'tests/harbor/jobs/before-*' --candidate 'tests/harbor/jobs/after-*'"
+```
+
+The table shows each run's agent and model, wall time, user wait and gap time in minutes, turns,
+output and cache-read tokens, cost, check score and pass or fail, and marks a run whose gaps take
+more than a quarter of its wall time `◀ gaps` (the threshold is `GAP_SHARE` at the top of
+`report.py`). `--run` takes a trial directory, a trial name, or a prefix that names one trial. For
+each workflow run it lists every step with its entries, duration and share of the run, and its
+split into working, helper-wait and user-wait time, with the helpers it started; then the run's
+totals (wall, user wait, helper wait and gaps over the threshold), the helper counts, a table of
+the helpers (name, spec, step, seconds and how it ended), and every unknown measure with its
+reason. A step taking more than a third of the run's wall time is marked `◀ dominant`. Add
+`--prompts` to `--run` to print each helper's brief after it; without `--run` it is a usage error.
+
+`--compare A B` takes two trial directories or names and prints, for each workflow (matched by
+kind and name, else in order within a kind, since a suite's generated spec names differ from
+trial to trial), every step's duration, working, helper-wait and user-wait time and helpers for A
+and B with B's difference from A, then the totals (wall, user wait, helper wait, gaps, cost and
+tokens) the same way. A step only one trial entered shows `-` on the other side, never 0. A
+version-1 or version-2 record holds none of the split, so those figures print `unknown`.
+
+`--baseline` and `--candidate` each take job directories or globs: the runs before a change and the
+runs after it. For each suite (and scenario) present in both, it prints the median of wall time,
+user wait, helper wait, gap time, turns, output tokens, total tokens, cost and check score in each
+set, and the change. A median is
+taken over the runs whose value is known. A measure is marked
+`◀ regression` when the candidate's median is at least twice the baseline's, or when the check
+score falls by 0.1 or more. A measure no run in a set knows prints `unknown` there and is never
+flagged.
+Suites present in only one set are listed as unmatched. The thresholds are constants at the top of
+`report.py`.
+
+The recorder can also be run by hand on a collected trial, for example to re-record it:
+`python3 tests/harbor/shared/metrics.py --agent-dir <trial>/agent --log-dir <trial>/artifacts/spektacular/logs --bob-logs <trial>/artifacts/agent-logs/bob --junit <trial>/verifier/junit.xml --reward <trial>/verifier/reward.txt --build-info <build.json> --out <file>`.
+Reading `agent/` there needs the same permissions as the files Harbor left in it.
 
 The repo-workflow suite is the one whose assertions are about the conversation rather than the
 files: that only the repo itself is asked for cold, that every later question carries a proposed
@@ -440,6 +661,22 @@ pytest with no container and proves each rule fails on a transcript that breaks 
 
 ```bash
 python3 -m pytest tests/harbor/repo-workflow/tests/test_verifier_selfcheck.py
+```
+
+The shared helpers have self-checks of their own, also without a container: the run log reader
+(over canned `stats` answers, which include the Go golden files, so a renamed field breaks them
+too), the delegation rules, the recorder (including every way an input can be missing or broken),
+the timeline, the report, the wiring of the recorder into every suite, and a check that the shared
+scripts stay within 3,000 lines. An integration test builds a throwaway `spektacular` from the
+working tree and runs the reader, the recorder and the timeline over fixture logs; it needs Go,
+and skips without it. Some run on real runs: trimmed copies of
+collected trials, checked in under `tests/harbor/shared/tests/data/`, with every message's text
+blanked to the same length. `python3 tests/harbor/shared/tests/trim_reference.py <trial dir> <name>`
+adds one, and writes nothing if trimming would change a value the recorder computes. They live in
+`tests/harbor/shared/tests/`, which the make targets never copy into an image:
+
+```bash
+uvx --with pytest pytest --import-mode=importlib tests/harbor/shared/tests
 ```
 
 ## Building from Source

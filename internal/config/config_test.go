@@ -26,7 +26,7 @@ func TestNewDefault_HasExpectedDefaults(t *testing.T) {
 	cfg := NewDefault()
 
 	require.Equal(t, "spektacular", cfg.Command)
-	require.False(t, cfg.Debug.Enabled)
+	require.Equal(t, LogConfig{Provider: "file", Level: "standard", Retention: 10, Config: FileLogConfig{Directory: "logs"}}, cfg.Log)
 	require.Equal(t, "timestamp", cfg.Spec.IDMethod)
 	require.Equal(t, SpecTriggerThresholdModerate, cfg.SpecTriggerThreshold)
 	require.Equal(t, AutoCommitOff, cfg.AutoCommit)
@@ -224,6 +224,83 @@ repos:
 	require.True(t, cfg.Implement.Worktrees)
 }
 
+// Prune age criteria 1 and 4: a current-schema project that never mentions
+// knowledge.prune loads without error or migration and reports the default
+// age of 90 days.
+func TestFromYAMLFile_AbsentKnowledgePruneAgeLoadsAsNinety(t *testing.T) {
+	yaml := `name: testproj
+repos:
+  - name: testproj
+    location: ..`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, 0, cfg.Knowledge.Prune.MaxAgeDays)
+	require.Equal(t, 90, cfg.Knowledge.PruneMaxAgeDays())
+	require.Equal(t, 90, NewDefault().Knowledge.PruneMaxAgeDays())
+}
+
+// Prune age criterion 2: a configured age is read, and survives being saved
+// and loaded again, leaving the settings format version where it was. An
+// unset age is not written at all.
+func TestToYAMLFile_KnowledgePruneAgeRoundTrips(t *testing.T) {
+	yaml := `name: testproj
+repos:
+  - name: testproj
+    location: ..
+knowledge:
+  prune:
+    max_age_days: 30`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, 30, cfg.Knowledge.PruneMaxAgeDays())
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "prune:\n        max_age_days: 30\n")
+	require.Contains(t, string(raw), "schema: 5\n")
+
+	loaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, 30, loaded.Knowledge.PruneMaxAgeDays())
+
+	fresh := NewDefault()
+	fresh.Name = "testproj"
+	fresh.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	require.NoError(t, fresh.ToYAMLFile(path))
+	raw, err = os.ReadFile(path)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "prune:", "an unset age is not written")
+}
+
+// Prune age criterion 3: a negative age is refused with config_invalid,
+// naming the key and how to fix it.
+func TestFromYAMLFile_NegativeKnowledgePruneAgeIsRefused(t *testing.T) {
+	yaml := `name: testproj
+repos:
+  - name: testproj
+    location: ..
+knowledge:
+  prune:
+    max_age_days: -1`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	_, err := FromYAMLFile(path)
+	var er *output.ErrorResponse
+	require.ErrorAs(t, err, &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.Equal(t, "knowledge.prune.max_age_days must be a positive number of days, got -1", er.Message)
+	require.Equal(t, "knowledge.prune.max_age_days", er.Resource)
+	require.Equal(t, "set knowledge.prune.max_age_days in .spektacular/config.yaml to a positive number of days (or remove the key to use 90)", er.NextAction)
+}
+
 // Implement-in-worktrees criteria 2 and 3: turning worktrees off is written
 // to the settings file as the literal `worktrees: false` under `implement:`
 // and read back as false, and doing so leaves the settings format version
@@ -240,18 +317,19 @@ func TestToYAMLFile_ImplementWorktreesFalseRoundTrips(t *testing.T) {
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Contains(t, string(raw), "implement:\n    worktrees: false\n")
-	require.Contains(t, string(raw), "schema: 4\n")
+	require.Contains(t, string(raw), "schema: 5\n")
 
 	loaded, err := FromYAMLFile(path)
 	require.NoError(t, err)
 	require.False(t, loaded.Implement.Worktrees)
-	require.Equal(t, 4, loaded.Schema)
+	require.Equal(t, 5, loaded.Schema)
 }
 
 // Implement-in-worktrees criterion 3: adding the implement section did not
-// bump the project settings format version.
+// bump the project settings format version. Format 5, which replaced debug
+// with the log section, is the current one.
 func TestCurrentProjectSchema_UnchangedByImplementSection(t *testing.T) {
-	require.Equal(t, 4, CurrentProjectSchema)
+	require.Equal(t, 5, CurrentProjectSchema)
 }
 
 func TestFromYAMLFile_MissingFile_ReturnsError(t *testing.T) {
@@ -274,7 +352,7 @@ func TestToYAMLFile_RoundTrip(t *testing.T) {
 	loaded, err := FromYAMLFile(path)
 	require.NoError(t, err)
 	require.Equal(t, cfg.Command, loaded.Command)
-	require.Equal(t, cfg.Debug.Enabled, loaded.Debug.Enabled)
+	require.Equal(t, cfg.Log, loaded.Log)
 	require.Equal(t, cfg.Spec.IDMethod, loaded.Spec.IDMethod)
 }
 
@@ -969,12 +1047,12 @@ func TestToYAMLFile_ProjectDesignSourcesRoundTrip(t *testing.T) {
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Contains(t, string(raw), "design:\n")
-	require.Contains(t, string(raw), "schema: 4\n", "a design block does not bump the settings format version")
+	require.Contains(t, string(raw), "schema: 5\n", "a design block does not bump the settings format version")
 
 	loaded, err := FromYAMLFile(path)
 	require.NoError(t, err)
 	require.Equal(t, cfg.Design, loaded.Design)
-	require.Equal(t, 4, loaded.Schema)
+	require.Equal(t, 5, loaded.Schema)
 }
 
 // Phase 1.1 criterion 2: a project that declares no design sources loads as
@@ -1238,12 +1316,12 @@ func TestToYAMLFile_StampsSchemaAndWriter(t *testing.T) {
 
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
-	require.Contains(t, string(raw), "schema: 4\n")
+	require.Contains(t, string(raw), "schema: 5\n")
 	require.Contains(t, string(raw), "written_by: test-x\n")
 
 	loaded, err := FromYAMLFile(path)
 	require.NoError(t, err)
-	require.Equal(t, 4, loaded.Schema)
+	require.Equal(t, 5, loaded.Schema)
 	require.Equal(t, "test-x", loaded.WrittenBy)
 }
 
@@ -1253,7 +1331,7 @@ func TestToYAMLFile_StampsSchemaAndWriter(t *testing.T) {
 func TestToYAMLFile_PreservesSkillsVersion(t *testing.T) {
 	pinWriterVersion(t, "test-x")
 
-	body := "schema: 4\n" +
+	body := "schema: 5\n" +
 		"written_by: 0.9.0\n" +
 		"skills_version: 0.9.0\n" +
 		"name: testproj\n" +
@@ -1306,4 +1384,355 @@ func TestPeekSchema(t *testing.T) {
 
 	_, err = PeekSchema(filepath.Join(dir, "missing.yaml"))
 	require.Error(t, err)
+}
+
+// Goal-check criterion 1: a new project's configuration has the goal check
+// switched on, and so does one written before implement.goal_check existed.
+func TestNewDefault_GoalCheckIsOn(t *testing.T) {
+	cfg := NewDefault()
+	require.True(t, cfg.Implement.GoalCheck.Enabled)
+	require.Empty(t, cfg.Implement.GoalCheck.Models)
+}
+
+func TestFromYAMLFile_AbsentGoalCheckLoadsAsOn(t *testing.T) {
+	for name, yaml := range map[string]string{
+		"no implement section":         "name: testproj\nrepos:\n  - name: testproj\n    location: ..",
+		"implement without goal_check": "name: testproj\nimplement:\n    worktrees: false\nrepos:\n  - name: testproj\n    location: ..",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, path := projectConfigPath(t)
+			require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+			cfg, err := FromYAMLFile(path)
+			require.NoError(t, err)
+			require.True(t, cfg.Implement.GoalCheck.Enabled)
+		})
+	}
+}
+
+// Goal-check criterion 2: switching the check off is written as the literal
+// `enabled: false` under `goal_check:` and read back as off, with no
+// settings-format bump.
+func TestToYAMLFile_GoalCheckDisabledRoundTrips(t *testing.T) {
+	cfg := NewDefault()
+	cfg.Name = "testproj"
+	cfg.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	cfg.Implement.GoalCheck.Enabled = false
+	_, path := projectConfigPath(t)
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "implement:\n    worktrees: true\n    goal_check:\n        enabled: false\n")
+	require.NotContains(t, string(raw), "models:", "an empty models map is not written")
+	require.Contains(t, string(raw), "schema: 5\n")
+
+	loaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.False(t, loaded.Implement.GoalCheck.Enabled)
+}
+
+// Goal-check criterion 3: a reviewer model set for one agent round-trips and
+// leaves every other agent without an override.
+func TestToYAMLFile_GoalCheckModelsRoundTrip(t *testing.T) {
+	cfg := NewDefault()
+	cfg.Name = "testproj"
+	cfg.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	cfg.Implement.GoalCheck.Models = map[string]string{"claude": "sonnet"}
+	_, path := projectConfigPath(t)
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "goal_check:\n        enabled: true\n        models:\n            claude: sonnet\n")
+
+	loaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{"claude": "sonnet"}, loaded.Implement.GoalCheck.Models)
+	_, ok := loaded.Implement.GoalCheck.Models["codex"]
+	require.False(t, ok, "other agents keep their defaults")
+}
+
+// Goal-check criterion 3: naming an unknown agent, or giving an agent no
+// model, is refused with a message naming the valid agents and a fix.
+func TestFromYAMLFile_GoalCheckModelsRefusesUnknownAgentOrEmptyModel(t *testing.T) {
+	cases := map[string]struct {
+		models  string
+		message string
+		fix     string
+	}{
+		"unknown agent": {
+			models:  "            cursor: fast",
+			message: `implement.goal_check.models names "cursor", which is not a supported agent; valid agents are bob, claude, codex, copilot, omp`,
+			fix:     "rename implement.goal_check.models.cursor in .spektacular/config.yaml to one of bob, claude, codex, copilot, omp, or remove it",
+		},
+		"empty model": {
+			models:  `            codex: ""`,
+			message: "implement.goal_check.models.codex has no model",
+			fix:     "remove it to use codex's default reviewer model",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			yaml := "name: testproj\nimplement:\n    goal_check:\n        models:\n" + tc.models + "\nrepos:\n  - name: testproj\n    location: .."
+			_, path := projectConfigPath(t)
+			require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+			_, err := FromYAMLFile(path)
+			require.Error(t, err)
+			var oe *output.ErrorResponse
+			require.ErrorAs(t, err, &oe)
+			require.Equal(t, "config_invalid", oe.Code)
+			require.Contains(t, oe.Message, tc.message)
+			require.Contains(t, oe.NextAction, tc.fix)
+		})
+	}
+}
+
+// A config file with no log section takes every log default, and the
+// written default config carries a log section and no debug section.
+func TestLogDefaults_AbsentSectionAndWrittenFile(t *testing.T) {
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema("name: testproj\nrepos:\n  - name: testproj\n    location: ..\n")), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, LogConfig{Provider: "file", Level: "standard", Retention: 10, Config: FileLogConfig{Directory: "logs"}}, cfg.Log)
+
+	out := filepath.Join(t.TempDir(), "config.yaml")
+	def := NewDefault()
+	def.Name = "testproj"
+	require.NoError(t, def.ToYAMLFile(out))
+	raw, err := os.ReadFile(out)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "log:\n    provider: file\n    level: standard\n    retention: 10\n    config:\n        directory: logs\n")
+	require.NotContains(t, string(raw), "debug")
+}
+
+// Each bad log setting is refused as config_invalid naming the key and the
+// accepted values.
+func TestLogValidate_RefusesBadSettings(t *testing.T) {
+	cases := []struct {
+		name         string
+		log          string
+		wantResource string
+		wantMessage  string
+		wantNext     string
+	}{
+		{
+			name:         "unknown provider",
+			log:          "log:\n  provider: syslog\n",
+			wantResource: "log.provider",
+			wantMessage:  `log.provider "syslog" is not a known logger; accepted loggers are file`,
+			wantNext:     "set log.provider in .spektacular/config.yaml to one of: file",
+		},
+		{
+			name:         "unknown level",
+			log:          "log:\n  level: loud\n",
+			wantResource: "log.level",
+			wantMessage:  `log.level must be one of "off", "standard" or "verbose", not "loud"`,
+			wantNext:     "set log.level in .spektacular/config.yaml to off, standard or verbose (or remove the key to use standard)",
+		},
+		{
+			name:         "retention zero",
+			log:          "log:\n  retention: 0\n",
+			wantResource: "log.retention",
+			wantMessage:  "log.retention must be at least 1, not 0",
+			wantNext:     "set log.retention in .spektacular/config.yaml to a whole number of runs to keep, 1 or more (or remove the key to keep 10)",
+		},
+		{
+			name:         "retention negative",
+			log:          "log:\n  retention: -2\n",
+			wantResource: "log.retention",
+			wantMessage:  "log.retention must be at least 1, not -2",
+			wantNext:     "set log.retention in .spektacular/config.yaml to a whole number of runs to keep, 1 or more (or remove the key to keep 10)",
+		},
+		{
+			name:         "empty directory",
+			log:          "log:\n  config:\n    directory: \"\"\n",
+			wantResource: "log.config.directory",
+			wantMessage:  "log.config.directory is empty",
+			wantNext:     "set log.config.directory in .spektacular/config.yaml to a folder for logs (or remove the key to use logs)",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, path := projectConfigPath(t)
+			body := "name: testproj\nrepos:\n  - name: testproj\n    location: ..\n" + tc.log
+			require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(body)), 0644))
+
+			_, err := FromYAMLFile(path)
+			var er *output.ErrorResponse
+			require.ErrorAs(t, err, &er)
+			require.Equal(t, "config_invalid", er.Code)
+			require.Equal(t, tc.wantResource, er.Resource)
+			require.Equal(t, tc.wantMessage, er.Message)
+			require.Equal(t, tc.wantNext, er.NextAction)
+		})
+	}
+}
+
+// Every accepted level validates, and an empty level means standard.
+func TestLogValidate_AcceptsEveryLevel(t *testing.T) {
+	for _, level := range []string{"", "off", "standard", "verbose"} {
+		l := NewDefault().Log
+		l.Level = level
+		require.NoError(t, l.Validate(), "level %q", level)
+	}
+	require.Equal(t, LogLevelStandard, LogConfig{}.EffectiveLevel())
+	require.Equal(t, LogLevelOff, LogConfig{Level: "off"}.EffectiveLevel())
+}
+
+// A relative log directory resolves from the folder holding config.yaml; an
+// absolute one is used as written.
+func TestLogDir_ResolvesRelativeToConfigFolder(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "work", "proj")
+	cfg := NewDefault()
+	require.Equal(t, filepath.Join(root, ".spektacular", "logs"), cfg.LogDir(root))
+
+	cfg.Log.Config.Directory = "../var/logs"
+	require.Equal(t, filepath.Join(root, "var", "logs"), cfg.LogDir(root))
+
+	abs := filepath.Join(string(filepath.Separator), "tmp", "spek-logs")
+	cfg.Log.Config.Directory = abs + string(filepath.Separator) + "."
+	require.Equal(t, abs, cfg.LogDir(root))
+}
+
+const statsBase = `name: testproj
+repos:
+  - name: testproj
+    location: ..
+`
+
+func price(v float64) *float64 { return &v }
+
+// Price table criterion 1: prices for two models load exactly as written,
+// and survive being saved and loaded again.
+func TestFromYAMLFile_StatsPricesLoadAsWritten(t *testing.T) {
+	yaml := statsBase + `stats:
+  prices:
+    claude-opus-5-5:
+      input: 5.00
+      output: 25.00
+      cache_read: 0.50
+      cache_write: 6.25
+    claude-haiku-5-5:
+      input: 1
+      output: 5
+      cache_read: 0.1
+      cache_write: 0
+`
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	want := map[string]ModelPrice{
+		"claude-opus-5-5":  {Input: price(5), Output: price(25), CacheRead: price(0.5), CacheWrite: price(6.25)},
+		"claude-haiku-5-5": {Input: price(1), Output: price(5), CacheRead: price(0.1), CacheWrite: price(0)},
+	}
+	require.Equal(t, want, cfg.Stats.Prices)
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+	loaded, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Equal(t, want, loaded.Stats.Prices)
+}
+
+// Price table criterion 2: a config without a price table loads as before,
+// and saving it does not add a stats key.
+func TestFromYAMLFile_AbsentStatsLoadsEmptyAndIsNotWritten(t *testing.T) {
+	_, path := projectConfigPath(t)
+	require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(statsBase)), 0644))
+
+	cfg, err := FromYAMLFile(path)
+	require.NoError(t, err)
+	require.Empty(t, cfg.Stats.Prices)
+	require.True(t, cfg.Stats.IsZero())
+
+	require.NoError(t, cfg.ToYAMLFile(path))
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "stats:")
+
+	fresh := NewDefault()
+	fresh.Name = "testproj"
+	fresh.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	require.Empty(t, fresh.Stats.Prices, "no prices are built in")
+	require.NoError(t, fresh.ToYAMLFile(path))
+	raw, err = os.ReadFile(path)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "stats:", "a new project's config has no price table")
+}
+
+// Price table criterion 3: a missing or negative price is refused with
+// config_invalid, naming the model and the key to set.
+func TestFromYAMLFile_IncompleteOrNegativePriceIsRefused(t *testing.T) {
+	cases := []struct {
+		name, table, message, next string
+	}{
+		{
+			name: "missing cache_write",
+			table: `    claude-opus-5-5:
+      input: 5
+      output: 25
+      cache_read: 0.5
+`,
+			message: "stats.prices.claude-opus-5-5 has no cache_write price",
+			next:    "set stats.prices.claude-opus-5-5.cache_write in .spektacular/config.yaml to its price per million tokens, or remove the model to report its cost as unknown",
+		},
+		{
+			name: "negative output",
+			table: `    claude-opus-5-5:
+      input: 5
+      output: -25
+      cache_read: 0.5
+      cache_write: 6.25
+`,
+			message: "stats.prices.claude-opus-5-5.output is -25, and a price must not be negative",
+			next:    "set stats.prices.claude-opus-5-5.output in .spektacular/config.yaml to its price per million tokens, 0 or more",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, path := projectConfigPath(t)
+			yaml := statsBase + "stats:\n  prices:\n" + tc.table
+			require.NoError(t, os.WriteFile(path, []byte(withProjectSchema(yaml)), 0644))
+
+			_, err := FromYAMLFile(path)
+			var er *output.ErrorResponse
+			require.ErrorAs(t, err, &er)
+			require.Equal(t, "config_invalid", er.Code)
+			require.Equal(t, tc.message, er.Message)
+			require.Equal(t, "stats.prices", er.Resource)
+			require.Equal(t, tc.next, er.NextAction)
+		})
+	}
+}
+
+// An entry with an empty model name is refused the same way.
+func TestStatsConfigValidate_RefusesAnUnnamedModel(t *testing.T) {
+	s := StatsConfig{Prices: map[string]ModelPrice{"": {Input: price(1), Output: price(1), CacheRead: price(1), CacheWrite: price(1)}}}
+	var er *output.ErrorResponse
+	require.ErrorAs(t, s.Validate(), &er)
+	require.Equal(t, "config_invalid", er.Code)
+	require.NotEmpty(t, er.NextAction)
+}
+
+// Price table criterion 4: the optional table leaves the settings format
+// version unchanged, and a saved table is stamped with that version.
+func TestStatsPrices_LeaveTheSettingsFormatUnchanged(t *testing.T) {
+	require.Equal(t, 5, CurrentProjectSchema)
+
+	cfg := NewDefault()
+	cfg.Name = "testproj"
+	cfg.Repos = []RepoEntry{{Name: "testproj", Location: ".."}}
+	cfg.Stats.Prices = map[string]ModelPrice{"m": {Input: price(1), Output: price(2), CacheRead: price(3), CacheWrite: price(4)}}
+	_, path := projectConfigPath(t)
+	require.NoError(t, cfg.ToYAMLFile(path))
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "schema: 5\n")
+	require.Contains(t, string(raw), "stats:\n    prices:\n        m:\n            input: 1\n")
 }

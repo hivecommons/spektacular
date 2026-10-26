@@ -1,0 +1,981 @@
+{
+  "gap_threshold_ms": 300000,
+  "runs": [
+    {
+      "run_id": "aaaa0000000000000000000000000001",
+      "kind": "spec",
+      "name": "000001_demo",
+      "agent": "claude",
+      "log_file": "",
+      "started_at": "2026-10-25T09:00:00Z",
+      "ended_at": "2026-10-25T09:17:01Z",
+      "wall_ms": 1021000,
+      "status": "finished"
+    },
+    {
+      "run_id": "bbbb0000000000000000000000000002",
+      "kind": "spec",
+      "name": "000001_demo",
+      "agent": "claude",
+      "log_file": "",
+      "started_at": "2026-10-25T10:00:00Z",
+      "ended_at": "2026-10-25T10:14:01Z",
+      "wall_ms": 841000,
+      "status": "finished"
+    }
+  ],
+  "totals": [
+    {
+      "figure": "wall_ms",
+      "values": [
+        1021000,
+        841000
+      ],
+      "delta": [
+        0,
+        -180000
+      ],
+      "delta_pct": [
+        0,
+        -17.6
+      ]
+    },
+    {
+      "figure": "working_ms",
+      "values": [
+        1021000,
+        781000
+      ],
+      "delta": [
+        0,
+        -240000
+      ],
+      "delta_pct": [
+        0,
+        -23.5
+      ]
+    },
+    {
+      "figure": "user_wait_ms",
+      "values": [
+        0,
+        60000
+      ],
+      "delta": [
+        0,
+        60000
+      ],
+      "delta_pct": [
+        null,
+        null
+      ]
+    },
+    {
+      "figure": "helper_wait_ms",
+      "values": [
+        0,
+        0
+      ],
+      "delta": [
+        0,
+        0
+      ],
+      "delta_pct": [
+        null,
+        null
+      ]
+    },
+    {
+      "figure": "command_ms",
+      "values": [
+        4000,
+        3000
+      ],
+      "delta": [
+        0,
+        -1000
+      ],
+      "delta_pct": [
+        0,
+        -25
+      ]
+    },
+    {
+      "figure": "commands",
+      "values": [
+        4,
+        3
+      ],
+      "delta": [
+        0,
+        -1
+      ],
+      "delta_pct": [
+        0,
+        -25
+      ]
+    },
+    {
+      "figure": "helpers",
+      "values": [
+        0,
+        0
+      ],
+      "delta": [
+        0,
+        0
+      ],
+      "delta_pct": [
+        null,
+        null
+      ]
+    },
+    {
+      "figure": "gap_ms",
+      "values": [
+        599000,
+        659000
+      ],
+      "delta": [
+        0,
+        60000
+      ],
+      "delta_pct": [
+        0,
+        10
+      ]
+    },
+    {
+      "figure": "input_tokens",
+      "values": [
+        0,
+        0
+      ],
+      "delta": [
+        0,
+        0
+      ],
+      "delta_pct": [
+        null,
+        null
+      ]
+    },
+    {
+      "figure": "output_tokens",
+      "values": [
+        6000,
+        6000
+      ],
+      "delta": [
+        0,
+        0
+      ],
+      "delta_pct": [
+        0,
+        0
+      ]
+    },
+    {
+      "figure": "cache_read_tokens",
+      "values": [
+        0,
+        0
+      ],
+      "delta": [
+        0,
+        0
+      ],
+      "delta_pct": [
+        null,
+        null
+      ]
+    },
+    {
+      "figure": "cache_write_tokens",
+      "values": [
+        0,
+        0
+      ],
+      "delta": [
+        0,
+        0
+      ],
+      "delta_pct": [
+        null,
+        null
+      ]
+    },
+    {
+      "figure": "cost",
+      "values": [
+        0.06,
+        0.06
+      ],
+      "delta": [
+        0,
+        0
+      ],
+      "delta_pct": [
+        0,
+        0
+      ]
+    },
+    {
+      "figure": "working_ms_per_1k_output",
+      "values": [
+        170167,
+        130167
+      ],
+      "delta": [
+        0,
+        -40000
+      ],
+      "delta_pct": [
+        0,
+        -23.5
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "step": "overview",
+      "figures": [
+        {
+          "figure": "duration_ms",
+          "values": [
+            120000,
+            120000
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            0,
+            0
+          ]
+        },
+        {
+          "figure": "entries",
+          "values": [
+            1,
+            1
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            0,
+            0
+          ]
+        },
+        {
+          "figure": "commands",
+          "values": [
+            1,
+            1
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            0,
+            0
+          ]
+        },
+        {
+          "figure": "command_ms",
+          "values": [
+            1000,
+            1000
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            0,
+            0
+          ]
+        },
+        {
+          "figure": "helper_wait_ms",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "user_wait_ms",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "input_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "output_tokens",
+          "values": [
+            1000,
+            2000
+          ],
+          "delta": [
+            0,
+            1000
+          ],
+          "delta_pct": [
+            0,
+            100
+          ]
+        },
+        {
+          "figure": "cache_read_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cache_write_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cost",
+          "values": [
+            0.01,
+            0.02
+          ],
+          "delta": [
+            0,
+            0.01
+          ],
+          "delta_pct": [
+            0,
+            100
+          ]
+        },
+        {
+          "figure": "working_ms_per_1k_output",
+          "values": [
+            120000,
+            60000
+          ],
+          "delta": [
+            0,
+            -60000
+          ],
+          "delta_pct": [
+            0,
+            -50
+          ]
+        }
+      ]
+    },
+    {
+      "step": "interview",
+      "figures": [
+        {
+          "figure": "duration_ms",
+          "values": [
+            600000,
+            720000
+          ],
+          "delta": [
+            0,
+            120000
+          ],
+          "delta_pct": [
+            0,
+            20
+          ]
+        },
+        {
+          "figure": "entries",
+          "values": [
+            1,
+            1
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            0,
+            0
+          ]
+        },
+        {
+          "figure": "commands",
+          "values": [
+            1,
+            1
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            0,
+            0
+          ]
+        },
+        {
+          "figure": "command_ms",
+          "values": [
+            1000,
+            1000
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            0,
+            0
+          ]
+        },
+        {
+          "figure": "helper_wait_ms",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "user_wait_ms",
+          "values": [
+            0,
+            60000
+          ],
+          "delta": [
+            0,
+            60000
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "input_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "output_tokens",
+          "values": [
+            5000,
+            4000
+          ],
+          "delta": [
+            0,
+            -1000
+          ],
+          "delta_pct": [
+            0,
+            -20
+          ]
+        },
+        {
+          "figure": "cache_read_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cache_write_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cost",
+          "values": [
+            0.05,
+            0.04
+          ],
+          "delta": [
+            0,
+            -0.01
+          ],
+          "delta_pct": [
+            0,
+            -20
+          ]
+        },
+        {
+          "figure": "working_ms_per_1k_output",
+          "values": [
+            120000,
+            165000
+          ],
+          "delta": [
+            0,
+            45000
+          ],
+          "delta_pct": [
+            0,
+            37.5
+          ]
+        }
+      ]
+    },
+    {
+      "step": "split",
+      "figures": [
+        {
+          "figure": "duration_ms",
+          "values": [
+            300000,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            0,
+            null
+          ]
+        },
+        {
+          "figure": "entries",
+          "values": [
+            1,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            0,
+            null
+          ]
+        },
+        {
+          "figure": "commands",
+          "values": [
+            1,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            0,
+            null
+          ]
+        },
+        {
+          "figure": "command_ms",
+          "values": [
+            1000,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            0,
+            null
+          ]
+        },
+        {
+          "figure": "helper_wait_ms",
+          "values": [
+            0,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "user_wait_ms",
+          "values": [
+            0,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "input_tokens",
+          "values": [
+            0,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "output_tokens",
+          "values": [
+            0,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cache_read_tokens",
+          "values": [
+            0,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cache_write_tokens",
+          "values": [
+            0,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cost",
+          "values": [
+            0,
+            null
+          ],
+          "delta": [
+            0,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "working_ms_per_1k_output",
+          "values": [
+            null,
+            null
+          ],
+          "delta": [
+            null,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        }
+      ]
+    },
+    {
+      "step": "finished",
+      "figures": [
+        {
+          "figure": "duration_ms",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "entries",
+          "values": [
+            1,
+            1
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            0,
+            0
+          ]
+        },
+        {
+          "figure": "commands",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "command_ms",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "helper_wait_ms",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "user_wait_ms",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "input_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "output_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cache_read_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cache_write_tokens",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "cost",
+          "values": [
+            0,
+            0
+          ],
+          "delta": [
+            0,
+            0
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        },
+        {
+          "figure": "working_ms_per_1k_output",
+          "values": [
+            null,
+            null
+          ],
+          "delta": [
+            null,
+            null
+          ],
+          "delta_pct": [
+            null,
+            null
+          ]
+        }
+      ]
+    }
+  ]
+}

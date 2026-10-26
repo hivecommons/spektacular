@@ -1,0 +1,5 @@
+{
+  "suite": "plan-workflow",
+  "agent": "claude",
+  "model": "claude-sonnet-5-5"
+}

@@ -1,0 +1,47 @@
+Runs: 5
+  00010000  implement 000001_demo  agent claude  finished  wall 1m11s
+  00020000  implement 000001_demo  agent claude  finished  wall 1m21s
+  00030000  implement 000001_demo  agent claude  finished  wall 1m31s
+  00040000  implement 000001_demo  agent claude  finished  wall 41.0s
+  00050000  implement 000001_demo  agent claude  finished  wall 51.0s
+
+Steps (duration)
+STEP      RUNS  MEDIAN  P90
+analyze   5     30.0s   50.0s
+verify    3     1m00s   1m00s
+finished  5     0.0s    0.0s
+
+Steps (output tokens)
+STEP      RUNS  MEDIAN  P90
+analyze   5     30,000  50,000
+verify    3     0       0
+finished  5     0       0
+
+Steps (cost)
+STEP      RUNS  MEDIAN  P90
+analyze   5     0.30    0.50
+verify    3     0.00    0.00
+finished  5     0.00    0.00
+
+Steps (time per 1k output tokens)
+STEP      RUNS  MEDIAN  P90
+analyze   5     1.0s    1.0s
+verify    0     -       -
+finished  0     -       -
+
+Totals
+FIGURE                    RUNS  MEDIAN  P90
+wall_ms                   5     1m11s   1m31s
+working_ms                5     1m11s   1m31s
+user_wait_ms              5     0.0s    0.0s
+helper_wait_ms            5     0.0s    0.0s
+command_ms                5     3.0s    3.0s
+commands                  5     3       3
+helpers                   5     0       0
+gap_ms                    5     0.0s    0.0s
+input_tokens              5     0       0
+output_tokens             5     30,000  50,000
+cache_read_tokens         5     0       0
+cache_write_tokens        5     0       0
+cost                      5     0.30    0.50
+working_ms_per_1k_output  5     3.0s    7.1s

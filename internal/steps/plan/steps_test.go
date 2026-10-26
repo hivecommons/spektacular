@@ -189,9 +189,18 @@ func TestDiscoveryStepUsesKnowledgeCommands(t *testing.T) {
 	require.Contains(t, out, "knowledge read", "discovery step must instruct the agent to use `knowledge read`")
 	require.NotContains(t, out, ".spektacular/knowledge/", "discovery step must not hardcode the knowledge directory path")
 
-	// Criterion 2: knowledge writes require explicit user confirmation.
+	// Criterion 2: a durable learning is written through the spek-knowledge
+	// skill without asking, then reported to the user.
 	require.Contains(t, out, "knowledge write", "discovery step must reference `knowledge write` for capturing learnings")
-	require.Contains(t, strings.ToLower(out), "confirm", "discovery step must require explicit user confirmation before a knowledge write")
+	require.Contains(t, out, "write it yourself through the `spek-knowledge` skill")
+	require.Contains(t, out, "Do not stop to ask first.")
+	require.Contains(t, out, "which entry you wrote, its tier, store and path, and why it is worth keeping")
+	require.NotContains(t, out, "wait for explicit confirmation")
+
+	// The knowledge reads name the plan's spec, so parallel lanes are
+	// attributed to the right workflow.
+	require.Contains(t, out, "knowledge always-applied --tier repo --filter <name> --spec test")
+	require.Contains(t, out, `"path":"<path>","spec":"test"}'`)
 }
 
 func TestImplementationDetailStepIsHighLevelOnly(t *testing.T) {
@@ -473,22 +482,28 @@ func TestPlanFinished_SkipsClose_WhenPlanIncomplete(t *testing.T) {
 }
 
 // TestWalkthroughStepIsMandatoryGuidedReview asserts the walkthrough step
-// (Phase 1.1, acceptance criterion 2): it drives a section-by-section review of
-// the committed documents, applies requested changes immediately via the
-// existing `plan file write` command, and concludes only on an explicit
-// affirmative answer to a direct closing question — never framed as an
-// optional offer.
+// (Phase 1.1, acceptance criterion 2): it presents the committed documents in
+// one compact message, applies requested changes immediately via the existing
+// `plan file write` command, and concludes only on an explicit affirmative
+// answer to a single closing question — never framed as an optional offer.
 func TestWalkthroughStepIsMandatoryGuidedReview(t *testing.T) {
 	out := renderStep(t, walkthrough())
 	lower := strings.ToLower(out)
 
-	// Guided review of the committed documents, read back through the CLI.
+	// Guided review of the committed documents, read back through the CLI
+	// only when they are not already in context.
 	require.Contains(t, out, "plan file read", "walkthrough must read the committed documents via `plan file read`")
+	require.Contains(t, out, "Read them back through the CLI only on a resumed session or after a context compaction")
 	require.Contains(t, lower, "walk the user through", "walkthrough must direct a guided review of the plan")
+
+	// One message and one closing question, not paced beats.
+	require.Contains(t, out, "Present the plan in **one message**")
+	require.Contains(t, out, "End that message with a single closing question")
+	require.Contains(t, out, "Do not split the walkthrough into several turns")
 
 	// Change requests apply immediately through the document write command.
 	require.Contains(t, out, "plan file write", "walkthrough must apply change requests via `plan file write`")
-	require.Contains(t, lower, "apply it immediately", "walkthrough must apply change requests immediately, not defer them")
+	require.Contains(t, lower, "apply a change request immediately", "walkthrough must apply change requests immediately, not defer them")
 
 	// Sign-off gate: explicit affirmative to a direct closing question only.
 	require.Contains(t, lower, "explicit affirmative", "walkthrough must gate completion on an explicit affirmative answer")
@@ -520,53 +535,42 @@ func TestVerificationStepRequiresDraftingAssumptions(t *testing.T) {
 }
 
 // TestWalkthroughStepWalksDraftingAssumptions asserts the walkthrough step's
-// drafting-assumptions beat (Phase 2.2): it reads the `## Drafting assumptions`
-// section of research.md back through the CLI, walks the entries, and invites
-// the user to challenge each — a challenged assumption becoming a change
+// drafting-assumptions point (Phase 2.2): it lists every entry of the
+// `## Drafting assumptions` section of research.md, one line each, and invites
+// the user to challenge any — a challenged assumption becoming a change
 // request.
 func TestWalkthroughStepWalksDraftingAssumptions(t *testing.T) {
 	out := renderStep(t, walkthrough())
-	require.Contains(t, out, "Read the `## Drafting assumptions` section",
-		"walkthrough must read the Drafting assumptions section of research.md")
+	require.Contains(t, out, "from the `## Drafting assumptions` section of the plan's `research` document. List every entry, one line each",
+		"walkthrough must list every entry of the Drafting assumptions section of research.md")
 	require.Contains(t, strings.ToLower(out), "challenge",
 		"walkthrough must invite the user to challenge each assumption")
 	require.Contains(t, out, "challenged assumption is a change request",
 		"walkthrough must route a challenged assumption through the change-request path")
 }
 
-// TestWalkthroughStepOffersKnowledgeCaptureForRevealingCorrections asserts the
-// walkthrough step's correction-assessment-and-offer beat (Phase 2.1): after a
-// correction is applied and confirmed, the step directs assessing what the
-// correction reveals and — only for durable, generalizable lessons — offering
-// to capture the general lesson, gated on explicit acceptance and handed to
-// the `spek-knowledge` skill, with a decline being final.
-func TestWalkthroughStepOffersKnowledgeCaptureForRevealingCorrections(t *testing.T) {
+// TestWalkthroughStepWritesKnowledgeForRevealingCorrections asserts the
+// walkthrough step's correction-assessment beat: after a correction is applied
+// and confirmed, the step directs assessing what the correction reveals and,
+// only for durable, generalizable lessons, writing the general lesson through
+// the `spek-knowledge` skill without asking, then telling the user in the same
+// review message which entry was written, where and why.
+func TestWalkthroughStepWritesKnowledgeForRevealingCorrections(t *testing.T) {
 	out := renderStep(t, walkthrough())
 	lower := strings.ToLower(out)
 
-	// Assess what an applied correction reveals before resuming.
 	require.Contains(t, lower, "what the correction reveals",
 		"walkthrough must direct assessing what an applied correction reveals")
-
-	// The offer is phrased as the general lesson, not the specific edit.
 	require.Contains(t, lower, "general lesson",
-		"walkthrough must phrase the offer as the general lesson rather than the specific edit")
-
-	// Selectivity bar: most corrections reveal nothing durable and produce no offer.
-	require.Contains(t, lower, "produce no offer",
-		"walkthrough must state that corrections revealing nothing durable produce no offer")
-
-	// Capture is gated on the user's explicit acceptance.
-	require.Contains(t, lower, "explicit acceptance",
-		"walkthrough must gate knowledge capture on the user's explicit acceptance")
-
-	// A decline is final for that lesson within the conversation.
-	require.Contains(t, lower, "not offered again",
-		"walkthrough must state a declined lesson is not offered again")
-
-	// Accepted items are handed to the spek-knowledge skill.
-	require.Contains(t, out, "spek-knowledge",
-		"walkthrough must hand accepted items to the `spek-knowledge` skill")
+		"walkthrough must phrase the entry as the general lesson rather than the specific edit")
+	require.Contains(t, lower, "reveal nothing durable",
+		"walkthrough must state that most corrections reveal nothing durable")
+	require.Contains(t, out, "write it to the project knowledge base yourself through the `spek-knowledge` skill")
+	require.Contains(t, out, "Do not ask first.")
+	require.Contains(t, out, "tell the user which entry you wrote, its tier, store and path, and why it is worth keeping")
+	for _, banned := range []string{"explicit acceptance", "not offered again", "produce no offer", "propose-then-confirm"} {
+		require.NotContains(t, lower, banned)
+	}
 	require.NotContains(t, out, "skill spek-knowledge",
 		"walkthrough must not direct the unreachable CLI invocation `spektacular skill spek-knowledge`")
 }
@@ -832,8 +836,8 @@ func TestReviewsGoToTheTestPlanNotHumanTasks(t *testing.T) {
 // task and its reason before sign-off.
 func TestWalkthroughNamesHumanTasks(t *testing.T) {
 	out := renderStep(t, walkthrough())
-	require.Contains(t, out, "name every task whose `**Execution:**` is `human`, with its reason")
-	require.Contains(t, out, "Before asking for sign-off")
+	require.Contains(t, out, "Name every task whose `**Execution:**` is `human`, with its reason")
+	require.Contains(t, out, "End that message with a single closing question")
 	require.Contains(t, out, "If there are none, say so")
 }
 

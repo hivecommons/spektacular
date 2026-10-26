@@ -1,0 +1,749 @@
+{
+  "plan": "000078_token-use-in-run-stats",
+  "items": [
+    {
+      "item": "b7d6cb42-9b9d-4ffb-8941-1c93a17c2558",
+      "title": "Read Claude Code sessions",
+      "checks": [
+        {
+          "at": "2026-10-25T18:34:51Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "b7d6cb42-9b9d-4ffb-8941-1c93a17c2558",
+            "title": "Read Claude Code sessions",
+            "criteria": [
+              "A response written over several records counts once, with its tokens, its model and the time of its first record.",
+              "Each shell command the agent ran is read with its command text, the time it was issued and the time its result came back.",
+              "Each helper agent's transcript is linked to the launch that started it, and a helper started by another helper is linked to that helper.",
+              "Claude Code's own per-model totals for a session are read when present, and reported as absent otherwise.",
+              "Only sessions with activity at or after the given time are read, including a session whose only recent activity is in its helpers' files.",
+              "A missing sessions folder, an unreadable file and a file with no recognisable records each give their own reason, and damaged lines are skipped and counted.",
+              "Every session file is byte-identical before and after reading."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agentusage/doc.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agentusage/types.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agentusage/claude.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "message.usage"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agentusage/transcript.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "message.id"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agentusage/meta.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agentusage/session.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".jsonl"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "agent-a1.jsonl"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "agent-a1.meta.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agentusage/claude_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "transcript_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agentusage/bench_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/agentusage/transcript.go:171-197 (assistant) keys responses by message id; the first record sets at and model, and each token type keeps the max across records. Records are emitted once per id (transcript.go:152-158). Test TestReadTranscriptCountsAResponseOnceWithItsLargestUsageAndFirstTime (transcript_test.go:21-34) checks msg_1 counted once with output 40 and time 10:00:01."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "transcript.go:200-214 records each Bash tool_use with Command, Start=record timestamp; user() at transcript.go:220-234 sets End from the matching tool_result timestamp. types.go:52-58 documents ShellCall. TestReadTranscriptPairsShellCallsWithTheirResults (transcript_test.go:36-46) checks command text, start and end times against s1.jsonl."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "session.go:35-46 reads each helper; claude/meta.go:18-28 sets LaunchID from toolUseId and ParentID from parentAgentId in agent-\u003cid\u003e.meta.json. Fixture s1/subagents/agent-a1.meta.json links to toolu_t1 in s1.jsonl:9. agent-a2 meta (depth 2) has parentAgentId a1 with toolUseId toolu_t2 from a1's Agent call (agent-a1.jsonl:2). TestReadSessionLinksHelpersToTheirLaunchAndParent (transcript_test.go:89-118) asserts both links."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "transcript.go:135-140 builds p.totals only from a cost-state record's modelUsage; without one p.totals stays nil. session.go:32 copies it to Session.Totals, and types.go:86-94 documents nil as absent. TestReadTranscriptReadsClaudeCodesOwnTotals (transcript_test.go:60-72) checks the totals from s1.jsonl:14 and that a helper with no totals is nil, not zero."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "claude.go:73 keeps a session when since is zero or latestChange(path, fi) \u003e= since, and session.go:53-61 takes the max mtime across the main file and every helper under \u003csession\u003e/subagents. TestSessionsReadsOnlySessionsActiveSinceTheGivenTime (claude_test.go:99-114) covers the main-file case; TestSessionsCountsActivityInHelperFilesOnly (claude_test.go:116-130) covers a session whose only recent write is in agent-a2.jsonl, and expects all 3 transcripts."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "Three distinct codes in types.go:7-14. Missing directory gives ProblemDirMissing (claude.go:44-46, also the empty-Dir case at claude.go:40-42). Unreadable file gives ProblemUnreadable (claude.go:68-71, 84-86; session.go:37-39). A session with no recognised record gives ProblemUnrecognised (claude.go:88-91). Damaged lines are counted in transcript.go:121-123 and carried to Session.Skipped (session.go:32, 44). Tests: claude_test.go:132-176 cover all three codes and the skipped count (s1 has one damaged line, s1.jsonl:13)."
+            },
+            {
+              "criterion": 7,
+              "verdict": "met",
+              "evidence": "Non-test code opens files only with os.Open (transcript.go:92), reads them with os.ReadFile (meta.go:19) and os.Stat or ReadDir, and never writes, renames or removes. A grep for write, create, remove, rename, chmod, chtimes and O_WRONLY in internal/agentusage finds such calls only in test files, and those act on temp copies (claude_test.go:18-44, 158-159, 53, 111, 124; bench_test.go:26). TestSessionsLeavesEveryFileByteIdentical (claude_test.go:178-187) hashes content, mode and mtime before and after. Note: the test-only writes are on copies, which is consistent with the scope rule."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "a1cd3849-cb71-4659-bf32-9286976b50c7",
+      "title": "Price table in the project configuration",
+      "checks": [
+        {
+          "at": "2026-10-25T18:38:17Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "a1cd3849-cb71-4659-bf32-9286976b50c7",
+            "title": "Price table in the project configuration",
+            "criteria": [
+              "A configuration with prices for two models loads with every price as written.",
+              "A configuration without a price table loads as before, and saving it does not add one.",
+              "A model missing one of its four prices, or with a negative price, is refused with a message naming the model and the key to set.",
+              "The settings format version is unchanged."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config/config.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config/schema.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config/config_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "config.go:294-308 defines StatsConfig.Prices as map[string]ModelPrice with four *float64 fields (input, output, cache_read, cache_write), and config.go:569 adds the stats key to Config. config_test.go (added hunk at 1601+) TestFromYAMLFile_StatsPricesLoadAsWritten loads a file with two models, asserts cfg.Stats.Prices equals the exact values written, then saves and reloads and asserts the same. Verification 'go test ./internal/config' passed."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "config.go:294-299 marks Stats omitempty and StatsConfig.IsZero (config.go:312) reports true when no prices are set. NewDefault (config.go:591-637) sets no Stats value, so nothing is built in. config_test.go TestFromYAMLFile_AbsentStatsLoadsEmptyAndIsNotWritten loads a config with no stats section, asserts it loads empty, saves it, and asserts the file contains no 'stats:'. It also checks a fresh NewDefault project saves without a stats key. Verification passed."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "config.go:316-346 StatsConfig.Validate returns config_invalid errors for a missing price: 'stats.prices.\u003cmodel\u003e has no \u003ckey\u003e price' with next action 'set stats.prices.\u003cmodel\u003e.\u003ckey\u003e in .spektacular/config.yaml ...', and for a negative price: 'stats.prices.\u003cmodel\u003e.\u003ckey\u003e is \u003cv\u003e, and a price must not be negative' with a next action naming the same key. Validate is called from Config.Validate at config.go:911, so FromYAMLFile refuses it. config_test.go TestFromYAMLFile_IncompleteOrNegativePriceIsRefused covers a missing cache_write and a negative output and asserts the message, resource and next action text naming the model and key. Verification passed."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "schema.go:20 keeps CurrentProjectSchema = 5, and schema.go is not in the staged diff (spektacular.diff contains only config.go and config_test.go hunks). config_test.go TestStatsPrices_LeaveTheSettingsFormatUnchanged asserts CurrentProjectSchema == 5 and that a saved file is stamped 'schema: 5'."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "f0791ec4-1820-4ab8-a498-3d7725b5da27",
+      "title": "Place tokens on steps, tasks and helpers",
+      "checks": [
+        {
+          "at": "2026-10-25T18:54:07Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "f0791ec4-1820-4ab8-a498-3d7725b5da27",
+            "title": "Place tokens on steps, tasks and helpers",
+            "criteria": [
+              "For a run driven by one session, every token is placed exactly once, and the step figures plus the tokens outside any step equal the run total for each token type.",
+              "A helper launched in one step that finishes after the next step began has all its tokens on its launch and in the launching step, not the next.",
+              "Each task of a two-task implement run has its own tokens and cost.",
+              "Helpers are matched to the helper launches the run recorded, by the id in their brief, or in launch order when the brief has none. A helper that matches no recorded launch is still counted, and listed as unmatched.",
+              "A run resumed in a second session counts both sessions' requests, and a session that drove two runs splits its requests between them.",
+              "With prices for both models, cost equals each type's tokens times its price, summed. With one of two models unpriced, cost covers the priced model only, is marked incomplete and names the other.",
+              "Working time per thousand output tokens is given for the run, each step, each task and each helper. A helper's figure uses only its own time and tokens, and a part with no output tokens shows not applicable.",
+              "When the session drove only this run and holds Claude Code's own totals, the run total equals those totals. Otherwise the overhead is unknown with a reason.",
+              "A run driven by another agent, or with no matching session, gives unknown token figures with the reason."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agentusage"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/prices.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/tokens_match.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/tokens_place.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/tokens_helpers.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/tokens_overhead.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/tokens.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/tokens_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tokens_match_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tokens_place_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tokens_helpers_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tokens_overhead_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "prices_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/runstats/tokens_place.go:35-48 (put) adds each request to p.all once and to exactly one of p.steps[step] or p.outside, with tasks and helpers as views only. tokens.go:120-121 and 137-138 build total and outside, and TestTokensOneSession, TestTokensRequestsAfterTheLastStepAreOutside and TestTokensTwoTasks in tokens_place_test.go assert steps plus outside equal the total for each type. Caveat: buildTokens is not called from BuildReport (grep finds no caller outside tests), so the figures are not reachable from report output yet."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "tokens_helpers.go:161-171 places a matched helper's usage on loc.step(row.Step), and Span.Step is set from the span's start attribute (assemble.go:222), so the launching step is used. tokens_helpers_test.go:11-24 TestTokensLateHelper: helper launched in discovery ends in architecture; discovery gets 301, architecture gets 2, the helper row gets 300."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "tokens.go:103-107 builds a figure per task key from p.tasks, fed by taskAt for main requests (tokens_place.go:134) and by row.TaskID for helpers (tokens_helpers.go:163-170). tokens_place_test.go:60-77 TestTokensTwoTasks asserts separate tokens and costs for tasks '1' (250/35/1000/0, cost 0.007875) and '2' (300/40, cost 0.0075)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "tokens_helpers.go:90-148 matchHelpers pairs first by a span id in the brief matching run.ID (spanRef, lines 105-106), then by launch order over unused spans (lines 114-146). Unmatched launches are placed in their launch-time step and task and listed in sec.UnmatchedHelpers (tokens.go:139-150, tokens_helpers.go:176-183). tokens_helpers_test.go:28-116 covers brief match, launch order, a brief naming another run, and fewer spans than launches."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "tokens_match.go:91-105 drivers() collects driver transcripts across all sessions, so a resumed run has a driver in each session. tokens_match.go:110-168 runsDrivenBy and ownerAt split a transcript's requests by run time window. tokens_match_test.go:94-171 covers TestTokensResumed and TestTokensTwoRuns."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "prices.go:19-28 price() computes sum(tokens*price)/1e6 per model. tokens.go:158-180 figure() sums the priced models only, records UnpricedModels and sets CostComplete=false when any model is unpriced. Cost is null only when there are tokens and none are priced. tokens_test.go:317 TestTokensModelsAndCost covers the priced and unpriced cases."
+            },
+            {
+              "criterion": 7,
+              "verdict": "met",
+              "evidence": "tokens.go:98-107 gives steps and tasks workingMS = DurationMS minus UserWaitMS, and tokens.go:116 gives helpers their own span DurationMS only. tokens.go:120 gives the run rep.Totals.WorkingMS. tokens.go:182-184 gives nil when output is 0 (not applicable). tokens_test.go:342-380 TestTokensPace covers these."
+            },
+            {
+              "criterion": 8,
+              "verdict": "met",
+              "evidence": "tokens_overhead.go:11-62 computes overhead as each session's Totals minus its transcript requests, per model, and returns a reason (several_runs, no_totals, totals_below_transcript) otherwise. tokens.go:88-96 adds it to p.all and p.outside, so the total equals the Claude Code totals when known. tokens_overhead_test.go:10-122 covers the known, unknown and several-runs cases."
+            },
+            {
+              "criterion": 9,
+              "verdict": "met",
+              "evidence": "tokens.go:44-46 gives agent_unsupported for any agent other than claude or unknown, and tokens.go:51-60 gives session_not_found with a reason when no session drove the run. unknown() at tokens.go:36-39 nulls the figures. tokens_test.go:225-309 TestTokensUnknown and TestTokensUnknownAgentIsRead cover these."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "e5b929cc-c2e0-434c-8518-ac874da67f3e",
+      "title": "Report and print token figures",
+      "checks": [
+        {
+          "at": "2026-10-25T19:00:46Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "e5b929cc-c2e0-434c-8518-ac874da67f3e",
+            "title": "Report and print token figures",
+            "criteria": [
+              "The structured report gives input, output, cache-read and cache-write tokens, cost and time per thousand output tokens for the run, each step, each task and each helper, with the field names in the plan's Data Structures section.",
+              "The report names every model used with the tokens each used.",
+              "With the new token fields removed, the structured report is identical to the report before this change.",
+              "The table form shows output tokens, cost and time per thousand output tokens beside each step's, task's and helper's timings, plus a token breakdown, the models and any unmatched helpers.",
+              "When token use is unknown, both forms say so with the reason, and every timing is unchanged."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "report.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "compare.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "summary.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "commands.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spans.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/report.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/tokens_types.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/render.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "n/a"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/testdata/report.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "report.golden.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/contract_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/render_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "report.go:72-78 documents tokens on steps, tasks and helpers, plus a top-level tokens section. tokens_types.go:47-64 defines TokenFigure with input, output, cache_read, cache_write, cost and working_ms_per_1k_output. Report.Tokens (report.go Report struct) carries Total and OutsideSteps. report.golden.json shows the run total (tokens.total, line ~879) and per-step, per-task and per-helper figures. contract_test.go:238-241 and report_test.go TestReportJSONFieldNamesAndUnits check these key sets."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "tokens_types.go:73-82 ModelTokens (model, input, output, cache_read, cache_write, cost). tokens.go:124-137 builds sec.Models from p.all for every model placed in the run, sorted. report.golden.json shows claude-haiku-5-5 and claude-opus-5-5 with their tokens. contract_test.go:238-241 asserts the models list."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "contract_test.go:137-151 TestTokenFieldsAreAdditive strips the tokens key, the new figures in compare/summary, and the token keys on steps, tasks and helpers, then requires canonical equality of report, compare, summary, commands and spans golden files against testdata/pre-tokens/*.golden.json (those pre-tokens files exist as untracked files). contract_test.go:157-182 TestReportWithoutTokenInput checks the same for a built report. The verification run passed the suite. I could not re-run the tests (read-only), so this rests on the test passing and the test's logic as read."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "render.go:271-278 adds OUT TOKENS, COST and TIME/1K OUT columns to the Steps table beside DURATION etc. render.go:293 adds the same to Tasks, and render.go:308-311 to Helpers. render.go:282 calls renderTokens (render.go:418-475), which prints a Tokens block with INPUT/OUTPUT/CACHE READ/CACHE WRITE/COST per step, outside steps, session overhead and TOTAL. It also prints a Models section (render.go:452-463) and an Unmatched helpers section (render.go:465-474). render_test.go and contract_test.go:244-303 check these."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "Table form: render.go:418-431 prints 'unknown (\u003ccode\u003e): \u003creason\u003e' and returns, and the step, task and helper cells print '?' via tokenCells (render.go:358-363). Structured form: report.go Report.Tokens status unknown with reason_code and reason set (tokens.go:36-42, TokenSection in tokens_types.go:97-115). Timings are unchanged: contract_test.go:157-182 requires identical StepEntries, UserWaits, Gaps and Totals with and without token input, and render_test/contract_test.go:276-287 TestRenderReportUnknownTokens checks the analyze timing is unchanged."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "bc066b45-20f2-41ed-897c-798fb1a645f8",
+      "title": "Token figures from the command line",
+      "checks": [
+        {
+          "at": "2026-10-25T19:06:24Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "bc066b45-20f2-41ed-897c-798fb1a645f8",
+            "title": "Token figures from the command line",
+            "criteria": [
+              "For a run driven by Claude Code with no change to how the agent works, `stats run` gives token, cost and time-per-token figures in both table and JSON form.",
+              "Costs use the prices in the project's configuration. Outside a project, or with no price table, every cost is unknown with the reason.",
+              "A run driven by another agent shows unknown token figures with the reason.",
+              "With the agent's session removed, token figures are unknown with a reason, and the timings match the report without token data.",
+              "Every log file and agent session file is byte-identical before and after `stats run`.",
+              "The existing `stats` tests still pass, without reading any real Claude Code sessions."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/main_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "config.yaml"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "stats.prices"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:265 sets opts.Tokens for `stats run` in both table and JSON paths; cmd/stats_test.go:365-415 (TestStatsRunGivesTokenUseForAClaudeRun) checks the JSON tokens block (status known, total, per-step tokens with working_ms_per_1k_output) and the pretty output (internal/runstats/render.go renderTokens, lines 922-979, and the per-step cells in tokenCells). No agent-side change is involved: the diff only adds reads of Claude Code's session files via internal/agentusage/claude.go."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Prices are read only from the project config: cmd/stats.go:116-119 calls statsPrices(cfg.Stats) only when projectConfigExists(); outside a project Prices stays nil so every model is unpriced. internal/config/config.go:532-584 defines StatsConfig/ModelPrice and validates them, with no built-in prices (config.go Stats field at line 566). With no table, the cost is null with cost_complete false and unpriced_models listed; the pretty output adds the reason line 'incomplete, no price for \u003cmodel\u003e (prices per million tokens go under stats.prices in .spektacular/config.yaml)' (render.go:841-844). Tests: cmd/stats_test.go:419-440 covers no-table and outside-project cases (cost nil, cost_complete false). Scope note: the price parsing lives in internal/config and internal/runstats, which the goal's file list does not name; this is a scope concern, not a failure of this criterion."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "cmd/stats.go:103-111 marks claude/unknown runs for session lookup; other agents get reason agent_unsupported (internal/runstats/tokens_types.go:17, tokens_test.go:291). The pretty output prints 'unknown (agent_unsupported): token use is read only for Claude Code sessions; this run's agent is codex' (asserted at cmd/stats_test.go:1126-1133, TestStatsRunOtherAgentIsUnknown, which also checks the JSON reason_code and that tokens are null)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "cmd/stats_test.go:461-473 (TestStatsRunWithTheSessionRemovedIsUnknownWithTheSameTimings) deletes the session file, then asserts tokens.status unknown with reason_code session_not_found and a reason naming the sessions directory, and that withoutTokens(known) equals withoutTokens(gone), so every timing matches the report without token data. Reason text is built in internal/agentusage and runstats (session_not_found, tokens_types.go:19)."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "No write call exists in non-test code under internal/agentusage or internal/runstats (grep for os.Create/WriteFile/OpenFile/Remove/Rename/Chtimes/Mkdir/Chmod and O_WRONLY/O_RDWR/O_APPEND returned matches only in *_test.go files). cmd/stats_test.go:476-489 (TestStatsRunLeavesTheLogsAndSessionsByteIdentical) snapshots every log file and every session file byte-for-byte before and after three stats run invocations (table, JSON, and no --run) and requires equality."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "cmd/main_test.go:29-45 sets CLAUDE_CONFIG_DIR to an empty os.MkdirTemp directory for the whole cmd package before m.Run(), so default session lookups read nothing real; cmd/stats_test.go:493-511 (TestStatsRunNeverReadsTheDevelopersSessions) asserts this. The changes to existing stats tests (cmd/stats_test.go:156-161) only extend the expected regexes with the new ? token columns, and the verification summary reports the full go test suite and TestStats count=3 passing. Scope note: edits also touch internal/runstats and internal/config test files, which the goal's file list does not name."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "9a1effc0-c05f-43f4-903f-c801e4887ef2",
+      "title": "Comparisons and summaries carry tokens",
+      "checks": [
+        {
+          "at": "2026-10-25T19:11:54Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "9a1effc0-c05f-43f4-903f-c801e4887ef2",
+            "title": "Comparisons and summaries carry tokens",
+            "criteria": [
+              "Comparing two runs shows each step's tokens, cost and time per thousand output tokens for both runs, with the second run's difference in amount and percentage, and the same for the totals.",
+              "Summarising five runs gives the median and 90th percentile of tokens, cost and time per thousand output tokens, for each step and the totals, beside the timings.",
+              "A run with unknown token use shows as absent for the new figures, and the timings are unaffected.",
+              "With the new figures removed, comparison and summary output is identical to before this change.",
+              "Every log file and agent session file is byte-identical before and after `stats compare` and `stats summary`."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/compare.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/summary.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/render.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/testdata/compare.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "summary.golden.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "compare.golden.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "summary.golden.txt"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runstats/compare_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "summary_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "spektacular.diff, internal/runstats/compare.go tokenValues and totalValues/stepRowValues append six token figures to both totalFigures and stepFigures; render.go RenderComparison (diff hunk at @@ -231) adds per-step tables for output tokens, cost and time per 1k output tokens, and the totals table gains the token rows. compare.golden.txt lines 12-40 show step values for both runs with deltas and delta_pct, e.g. 'overview 1,000 2,000 (+1,000, +100.0%)'. TestCompareCarriesTokens in compare_test.go checks the per-step and total figures and deltas."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "summary.go newStat is shared, so each token figure gets median and p90 (nearest rank). render.go RenderSummary adds 'Steps (output tokens)', 'Steps (cost)' and 'Steps (time per 1k output tokens)' tables after the existing step timings table and before Totals, and the totals table lists the token rows. summary.golden.txt lines 14-35 show analyze 30,000/50,000 and 0.30/0.50. TestSummariseCarriesTokens covers five runs with median and p90 for steps and totals."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "compare.go tokenValues returns all-nil values when the run's TokenFigure is nil, and the cost and pace are nil when their inputs are nil. compare.golden.json shows null values for the unknown run's token figures, with the timings unchanged. summary.golden.json shows count 4 for output_tokens when one run is unknown (the summary test expects count 4 and median 25000). TestCompareUnknownTokensAreAbsent and TestSummariseUnknownTokensAreLeftOut assert the absence, and that the first eight totals and six step figures equal the no-token output."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "contract_test.go TestTokenFieldsAreAdditive compares compare.golden.json and summary.golden.json (with token keys stripped by canonical()) against testdata/pre-tokens copies, and requires equality. Integer figures still encode as whole numbers because num() now yields float64 with the same values, and delta_pct uses the same rounding for integers. Caveats: the text goldens' totals table is re-padded for the longer 'working_ms_per_1k_output' label, which reverts when those rows are removed; the cmd schema for values changed from integer to number and its description text changed (cmd/stats.go hunk at @@ -363), which is documentation output rather than comparison or summary output. Judged met on the reading that the comparison and summary output is the report itself."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "cmd/stats.go statsTokenInput (diff hunks @@ -378 and @@ -405) only reads: it calls agentusage.Claude{Dir}.Sessions and statsPrices and writes nothing. The only write calls in the touched packages are in test files. cmd/stats_test.go TestStatsCompareAndSummaryLeaveTheLogsAndSessionsByteIdentical snapshots the logs (rawLogSnapshot) and session tree (treeSnapshot) before and after compare and summary, in text and JSON, and requires equality. I did not run that test; the verification summary reports the full suite passing."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "a1a9901f-b9c4-468a-9cea-0a5ba5d50a6e",
+      "title": "Documentation site describes token figures",
+      "checks": [
+        {
+          "at": "2026-10-25T19:13:54Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "a1a9901f-b9c4-468a-9cea-0a5ba5d50a6e",
+            "title": "Documentation site describes token figures",
+            "criteria": [
+              "The Run statistics page describes the token, cost and time-per-token figures, how a run is matched to its session, the price table, the supported agents and the unknown reasons.",
+              "The configuration reference describes `stats.prices` with an example, and the top-level key list includes `stats`.",
+              "The site builds and type-checks without errors, and the page bodies have no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-stats.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/configuration.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "config.yaml"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "docs/src/pages/run-stats.mdx lines 191-293 cover the token and cost figures (the Tokens and cost section, lines 191-208, adds the token columns and TIME/1K OUT), how a run finds its session (\"How a run finds its session\", lines 210-226, covering ~/.claude/projects, the new/goto matching, resumed and orchestrated runs and --sessions-dir), the price table (\"Setting prices\", lines 254-275, with a yaml example), the supported agents (lines 284-285: only Claude Code sessions are read today, so Bob, Codex and other agents show unknown) and the unknown reasons (\"When tokens are unknown\", lines 277-293, listing agent_unsupported, sessions_dir_missing, session_not_found, session_unreadable and format_unrecognised). Also the TIME/1K OUT definition is at lines 248-252 and the token meanings at lines 228-246."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "docs/src/pages/configuration.mdx lines 51-57 give a stats.prices example in the complete config.yaml block (claude-opus-5-5 with input, output, cache_read and cache_write). The stats ConfigKey at lines 229-241 describes the four required per-million prices and links to run-stats. The top-level key list at lines 119-123 reads \"Eighteen top-level keys\" and includes `stats`, and the list does contain 18 keys (schema through repos)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "The verification summary reports npm run build pass (18 pages) and npx astro check with 0 errors and 0 warnings. I did not rerun these, since I am read-only, so this rests on that reported result. Searching run-stats.mdx and configuration.mdx for the em dash character and for \u003cdiv, \u003csection or class= returned no matches (my own grep, plus the reported grep). The docs.diff hunks added in both files contain no em dash and no layout HTML. config.yaml in the docs root is untouched by the diff, which is consistent with the scope."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "67c0ae0d-c369-439c-937d-6e4373ceaa03",
+      "title": "README notes token figures",
+      "checks": [
+        {
+          "at": "2026-10-25T19:15:10Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "67c0ae0d-c369-439c-937d-6e4373ceaa03",
+            "title": "README notes token figures",
+            "criteria": [
+              "The README says that reports include tokens, cost and time per thousand output tokens for Claude Code runs, that prices come from `stats.prices`, and that other agents show unknown."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "README.md:65 in the worktree at /home/nicj/code/github.com/hivecommons/spektacular/.spektacular/worktrees/000078_token-use-in-run-stats/spektacular/README.md, inside the 'Run statistics' block (line 53 heading). It states that for Claude Code runs `stats run`, `compare` and `summary` show tokens, cost and time per thousand output tokens for each step, task and helper. It says prices are set per million tokens under `stats.prices` in `.spektacular/config.yaml`, and that other agents show these figures as unknown. The staged diff (goal-check/spektacular.diff) lists README.md as changed."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    }
+  ]
+}

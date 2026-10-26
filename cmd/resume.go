@@ -212,8 +212,10 @@ func probeResume(statePath, command, expectedKind string, force bool) (handled b
 // clearState removes a state file that probeResume found nothing to resume
 // in — a finished workflow's leftovers, or any state at all under --force.
 // It is the first thing a `new` run writes, so every check that must see the
-// project untouched has to run before it.
+// project untouched has to run before it. A run still in progress there is
+// being restarted, so its open spans are first closed, marked abandoned.
 func clearState(statePath string) {
+	workflow.AbandonRun(statePath, activeSpans)
 	_ = os.Remove(statePath)
 }
 

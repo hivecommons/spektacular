@@ -107,8 +107,10 @@ func TestMigrate_FormatBehindAndSkillsStaleReachesMatch(t *testing.T) {
 	require.Equal(t, "9.9.9", rep.Skills.Installed)
 
 	require.FileExists(t, filepath.Join(dir, ".claude", "skills", "spek-new", "SKILL.md"))
+	require.FileExists(t, filepath.Join(dir, ".claude", "agents", "spek-goal-reviewer.md"),
+		"migrate's reinstall refreshes the goal reviewer helper")
 	cfg := readSettingsMap(t, cfgPath)
-	require.Equal(t, 4, cfg["schema"])
+	require.Equal(t, 5, cfg["schema"])
 	require.Equal(t, "0.20.0", cfg["skills_version"])
 	require.Equal(t, 2, readSettingsMap(t, filepath.Join(dir, ".spektacular", "repo.yaml"))["schema"])
 	require.NoFileExists(t, filepath.Join(dir, ".spektacular", "version"))
@@ -144,11 +146,12 @@ func TestMigrate_DryRunReportsEverythingAndChangesNothing(t *testing.T) {
 		require.Equal(t, cfgPath, f.Path)
 		require.Equal(t, migrate.Kind("project"), f.Kind)
 		require.Equal(t, 1, f.From)
-		require.Equal(t, 4, f.To)
+		require.Equal(t, 5, f.To)
 		require.Equal(t, []string{
 			"split legacy single-file settings and record installed skills version",
 			"resolve spec, plan and changelog folders from the settings file",
 			"add the epic store and epic_split_threshold",
+			"replace debug with the log section and ignore the logs folder",
 		}, f.Steps)
 		for key, to := range map[string]string{
 			"spec.config.directory":      "specs",
@@ -232,15 +235,19 @@ func TestMigrate_ReportsByteIdenticalBackup(t *testing.T) {
 func TestMigrate_StaleSkillsOnCurrentProjectOnlyTouchesSkillsVersion(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	cfgPath := writeSettingsFile(t, dir, "config.yaml", `schema: 4
+	cfgPath := writeSettingsFile(t, dir, "config.yaml", `schema: 5
 written_by: 9.9.9
 skills_version: 9.9.9
 name: proj
 command: spektacular
 agent: claude
 spec_trigger_threshold: strict
-debug:
-    enabled: false
+log:
+    provider: file
+    level: standard
+    retention: 10
+    config:
+        directory: logs
 spec:
     provider: file
     id_method: timestamp
@@ -359,7 +366,7 @@ func TestMigrate_NoProject(t *testing.T) {
 func TestMigrate_NoAgentWithStaleSkillsFails(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSettingsFile(t, dir, "config.yaml", "schema: 4\nskills_version: 9.9.9\nname: proj\ncommand: spektacular\n")
+	writeSettingsFile(t, dir, "config.yaml", "schema: 5\nskills_version: 9.9.9\nname: proj\ncommand: spektacular\n")
 
 	er := runMigrateError(t)
 	require.Equal(t, "migrate_failed", er.Code)
@@ -373,7 +380,7 @@ func TestMigrate_NoAgentWithStaleSkillsFails(t *testing.T) {
 func TestMigrate_DifferentWrittenByIsUpToDate(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeSettingsFile(t, dir, "config.yaml", `schema: 4
+	writeSettingsFile(t, dir, "config.yaml", `schema: 5
 written_by: 7.7.7
 skills_version: 0.20.0
 name: proj
@@ -473,11 +480,12 @@ func TestMigrate_LegacyStoreFoldersKeepEveryArtifact(t *testing.T) {
 	require.Equal(t, "upgraded", rep.Status)
 	require.Equal(t, cfgPath, rep.Files[0].Path)
 	require.Equal(t, 1, rep.Files[0].From)
-	require.Equal(t, 4, rep.Files[0].To)
+	require.Equal(t, 5, rep.Files[0].To)
 	require.Equal(t, []string{
 		"split legacy single-file settings and record installed skills version",
 		"resolve spec, plan and changelog folders from the settings file",
 		"add the epic store and epic_split_threshold",
+		"replace debug with the log section and ignore the logs folder",
 	}, rep.Files[0].Steps)
 	for key, to := range map[string]string{
 		"spec.config.directory":      "specs",
@@ -556,4 +564,76 @@ repos:
 	require.NoDirExists(t, filepath.Join(dir, ".spektacular", "docs"))
 	resetRootCmd(t)
 	require.Equal(t, []string{"a"}, fileNames(runListJSON(t, "spec").Files))
+}
+
+// Log mode: `migrate` of a format-4 project turns debug on into the verbose
+// log level, removes debug, ignores the logs folder exactly once in the
+// project's .gitignore (which the project's older init installed without
+// it), and leaves the old debug folder byte-identical.
+func TestMigrate_Format4DebugOnBecomesVerboseLogging(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	cfgPath := writeSettingsFile(t, dir, "config.yaml", `schema: 4
+written_by: 9.9.9
+skills_version: 9.9.9
+name: proj
+command: spektacular
+agent: claude
+debug:
+    enabled: true
+repos:
+    - name: proj
+      location: .
+`)
+	writeSettingsFile(t, dir, "repo.yaml", "schema: 2\nwritten_by: 9.9.9\n")
+	writeSettingsFile(t, dir, ".gitignore", "*.tmp\n*.log\nrepos/\n")
+	writeProjectFile(t, dir, ".spektacular/debug/20261001T000000.000000000Z_claude_spec_x.jsonl", "{\"seq\":0}\n")
+
+	rep := runMigrateReport(t)
+	require.Equal(t, "upgraded", rep.Status)
+
+	cfg := readSettingsMap(t, cfgPath)
+	require.Equal(t, 5, cfg["schema"])
+	require.NotContains(t, cfg, "debug")
+	require.Equal(t, map[string]any{
+		"provider":  "file",
+		"level":     "verbose",
+		"retention": 10,
+		"config":    map[string]any{"directory": "logs"},
+	}, cfg["log"])
+
+	gi, err := os.ReadFile(filepath.Join(dir, ".spektacular", ".gitignore"))
+	require.NoError(t, err)
+	require.Equal(t, "*.tmp\n*.log\nrepos/\nlogs/\n", string(gi))
+
+	debugFile, err := os.ReadFile(filepath.Join(dir, ".spektacular", "debug", "20261001T000000.000000000Z_claude_spec_x.jsonl"))
+	require.NoError(t, err)
+	require.Equal(t, "{\"seq\":0}\n", string(debugFile))
+
+	again := runMigrateReport(t)
+	require.Empty(t, again.Files, "a migrated project has no settings file behind")
+	gi, err = os.ReadFile(filepath.Join(dir, ".spektacular", ".gitignore"))
+	require.NoError(t, err)
+	require.Equal(t, "*.tmp\n*.log\nrepos/\nlogs/\n", string(gi))
+}
+
+// Log mode: `migrate --dry-run` of a format-4 project lists the ignore
+// action and changes nothing.
+func TestMigrate_Format4DryRunListsIgnoreAction(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	cfgPath := writeSettingsFile(t, dir, "config.yaml", "schema: 4\nwritten_by: 9.9.9\nskills_version: 9.9.9\nname: proj\ncommand: spektacular\nagent: claude\nrepos:\n    - name: proj\n      location: .\n")
+	writeSettingsFile(t, dir, "repo.yaml", "schema: 2\nwritten_by: 9.9.9\n")
+	before, err := os.ReadFile(cfgPath)
+	require.NoError(t, err)
+
+	rep := runMigrateReport(t, "--dry-run")
+	require.True(t, rep.DryRun)
+	require.Len(t, rep.Files, 1)
+	require.Contains(t, rep.Files[0].Actions, migrate.Action{Op: "ignore", Path: filepath.Join(dir, ".spektacular", ".gitignore"), To: "logs/"})
+
+	after, err := os.ReadFile(cfgPath)
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+	require.NoFileExists(t, filepath.Join(dir, ".spektacular", ".gitignore"))
 }

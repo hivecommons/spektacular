@@ -43,6 +43,8 @@ CONFIG_FILE = SPEK_DIR / "config.yaml"
 # spec/plan/implement workflows share, so an add can run alongside a spec
 # already in progress. It is repo-state.json, not state.json.
 STATE_FILE = SPEK_DIR / "repo-state.json"
+# The scenario the Makefile bakes into the build, beside this file.
+SCENARIO_FILE = Path(__file__).resolve().parent / "scenario"
 
 AGENT_LOG_DIR = Path("/logs/agent")
 
@@ -295,6 +297,23 @@ def assistant_texts(objs) -> list[str]:
     return [e["text"] for e in transcript_events(objs) if e["kind"] == "text"]
 
 
+def conversation_texts(objs) -> list[str]:
+    """The prose the agent addressed to the user, up to the instruction's
+    "After completion" step.
+
+    Once the agent copies `.spektacular` to /logs/artifacts the conversation
+    with the user is over, and what follows is its report to this harness,
+    which echoes the task's own success criteria (`repo add` among them).
+    """
+    texts = []
+    for e in transcript_events(objs):
+        if e["kind"] == "bash" and "/logs/artifacts" in e["command"]:
+            break
+        if e["kind"] == "text":
+            texts.append(e["text"])
+    return texts
+
+
 def is_question(text: str) -> bool:
     """A turn counts as asking the user something if it contains a question
     mark. Crude, but it is what a reader of the transcript would use, and the
@@ -409,6 +428,24 @@ def questions_before_first_goto(objs) -> list[str]:
         for e in events[:limit]
         if e["kind"] == "text" and is_question(e["text"])
     ]
+
+
+def location_given_to_new(objs) -> bool:
+    """Whether a `repo new` before the first `repo goto` carried the location.
+
+    The skill passes a location the user already named straight to `repo
+    new`, and the flow then has nothing left to ask empty-handed.
+    """
+    events = transcript_events(objs)
+    calls = goto_calls(objs)
+    limit = calls[0]["index"] if calls else len(events)
+    for event in events[:limit]:
+        if event["kind"] != "bash" or not re.search(r"\brepo\s+new\b", event["command"]):
+            continue
+        payload = _first_json_object(event["command"]) or {}
+        if payload.get("location"):
+            return True
+    return False
 
 
 def _last_question_before(events, index):
@@ -607,10 +644,11 @@ def banned_terms_in_assistant_text(objs) -> list[tuple[str, str]]:
     Only assistant prose is scanned — see the boundary note above. The agent
     runs `repo goto --data …` on every successful run, and the step
     instructions it reads back are full of "footprint" and "provider"; both
-    are working detail, and neither is a leak.
+    are working detail, and neither is a leak. The agent's closing report to
+    this harness is not scanned either: see conversation_texts.
     """
     found = []
-    for text in assistant_texts(objs):
+    for text in conversation_texts(objs):
         for label, pattern in BANNED_VOCABULARY:
             if pattern.search(text):
                 found.append((label, text))
@@ -759,15 +797,19 @@ def load_state() -> dict:
 def scenario() -> str:
     """Which scenario this run is: "one-at-a-time" or "delegated".
 
-    SPEK_SCENARIO is exported into the harbor run by the Makefile and is the
-    authority. If it did not survive into the verifier container, the
-    scenario is inferred from whether the delegated path's skipped steps were
-    walked — a fallback for test *selection* only; the step-order oracle
-    itself stays hand-written either way.
+    SPEK_SCENARIO, when it reaches the verifier, is the authority; otherwise
+    the `scenario` file the Makefile writes beside this verifier is. Harbor
+    does not pass the host's environment into the verifier container, so the
+    file is what a real run reads. Only when neither exists is the scenario
+    inferred from whether the delegated path's skipped steps were walked, and
+    that inference would grade an agent that delegated when told not to as
+    the delegated scenario, so a run never relies on it.
     """
     from_env = os.environ.get("SPEK_SCENARIO", "").strip()
     if from_env:
         return from_env
+    if SCENARIO_FILE.exists():
+        return SCENARIO_FILE.read_text().strip()
     try:
         completed = load_state().get("completed_steps", [])
     except (AssertionError, OSError, json.JSONDecodeError):
@@ -791,6 +833,9 @@ def registered_repo() -> dict:
     """
     assert CONFIG_FILE.exists(), f"config.yaml missing at {CONFIG_FILE} — init not run"
     text = CONFIG_FILE.read_text()
+    # The image pre-seeds a config holding only log.level; init records the
+    # installed skills.
+    assert "skills_version:" in text, f"config.yaml at {CONFIG_FILE} records no installed skills — init not run"
     project_name = yaml_top_level(text).get("name", "")
     entries = config_repo_entries(text)
     added = [
@@ -968,14 +1013,22 @@ class TestOnlyRepositoryAskedCold:
 
     The locate step is the one question the agent cannot answer for itself.
     Everything after it must arrive with a proposal, which means exactly one
-    question may precede the first `repo goto` call. The turns are correlated
-    against the tool calls in transcript order, so "before the first goto"
-    means what it says.
+    question may precede the first `repo goto` call, or none when the user
+    already named the repo and `repo new` was given its location. The turns
+    are correlated against the tool calls in transcript order, so "before the
+    first goto" means what it says.
     """
 
     def test_exactly_one_question_before_first_goto(self):
         objs = transcript_objects()
         questions = questions_before_first_goto(objs)
+        if location_given_to_new(objs):
+            assert questions == [], (
+                f"`repo new` was given the location, so nothing is left to ask "
+                f"before the first `repo goto`, but found {len(questions)}: "
+                f"{questions!r}"
+            )
+            return
         assert len(questions) == 1, (
             f"Expected exactly one question before the first `repo goto` — "
             f"the one asking which repo to add — but found {len(questions)}: "

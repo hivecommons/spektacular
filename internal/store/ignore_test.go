@@ -359,3 +359,22 @@ func TestIgnoreStore_SearchForwardsTagNarrowingToTheWrappedStore(t *testing.T) {
 	require.Equal(t, []string{"kept-tagged.md"}, narrowedPaths,
 		"the wrapper must forward Tags to the wrapped store and still apply its own exclusions")
 }
+
+// Update delegates through the wrapper untouched, like Write: an excluded path
+// named directly is still updated, and the wrapped store sees the bytes.
+func TestIgnoreStore_UpdateDelegatesToWrappedStore(t *testing.T) {
+	st := ignoredFixture(t)
+
+	var saw []byte
+	err := st.Update("noise/secret.md", func(current []byte, exists bool) ([]byte, error) {
+		require.True(t, exists)
+		saw = current
+		return []byte("updated through the wrapper\n"), nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, "zebra hides in the noise\n", string(saw))
+
+	data, err := os.ReadFile(filepath.Join(st.Root(), "noise", "secret.md"))
+	require.NoError(t, err)
+	require.Equal(t, "updated through the wrapper\n", string(data))
+}

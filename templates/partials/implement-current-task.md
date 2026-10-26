@@ -6,4 +6,8 @@ This run implements **only task `{{task.title}}`** (id `{{task.id}}`). That task
 
 - In a plan whose work is written as tasks (a `## Milestones & Tasks` section), it is the first unchecked `#### - [ ] Task: <title>` heading. Its technical detail is the `### Task: <title>` section of the plan's `context.md` that its `*Technical detail:*` link points to.
 - In a plan written before tasks (a `## Milestones & Phases` section), it is the first unchecked `#### - [ ] Phase N.M:` heading. Its technical detail is the matching `### Phase N.M:` section of the plan's `context.md`.
+{{#goal_check}}
+
+Pass over any task or phase that the goal check skipped: `{{config.command}} implement goal show {{plan_name}}` reports it as `skipped`.
+{{/goal_check}}
 {{/task}}

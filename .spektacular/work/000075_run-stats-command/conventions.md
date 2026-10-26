@@ -1,0 +1,9 @@
+- **Error messages must describe the problem and suggest remediation**: every `stats` refusal is an `output.NewError(...).WithNextAction(...)` with a runnable fix. These cover an unsupported format, no project and no `--dir`, a missing directory, no matching runs, an unknown or ambiguous run id, a bad kind, fewer than two runs to compare, and a bad gap count or threshold.
+- **Tests must not depend on order**: the new `cmd` tests go through `runRootCmd`/`resetRootCmd` (the repeatable `--run` flag is a slice flag that the reset already handles). They use fixture logs with fixed timestamps in their own temp directories, never the wall clock.
+- **Passing tests are required before calling work done**: the logging exemption touches `runRoot`, which every `cmd` test drives. The full shuffled Go suite must pass.
+- **A plan never changes the active skills and configuration**: the feature adds a command and touches no template, skill, managed section or settings format. No task installs the binary or touches this repo's `.spektacular/`. Manual checks run the built binary against copied or throwaway logs.
+- **Store files are written through the CLI**: the logs directory is not a store, so the report reads it directly (read-only). No task writes a store file by hand.
+- **Plans must sketch content structure, not just summarize it (docs repo)**: the new Run statistics page carries a content outline with the verified command names, flags and field names.
+- **No em dashes (docs repo)**: all new docs, README and changelog prose avoids em dashes.
+- **MDX authoring conventions (docs repo)**: the new page is built from `Hero`, `Prose` and `CtaBanner`, with fenced code blocks and no layout HTML in its body.
+- **Site layout conventions (docs repo)**: the page composes existing section components and adds no new frame, width or heading size.

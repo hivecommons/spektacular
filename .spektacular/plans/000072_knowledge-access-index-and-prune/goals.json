@@ -1,0 +1,1065 @@
+{
+  "plan": "000072_knowledge-access-index-and-prune",
+  "items": [
+    {
+      "item": "6a171f75-0217-4ee5-864e-228ba48424b0",
+      "title": "Add a shared file lock and an atomic store update",
+      "checks": [
+        {
+          "at": "2026-10-25T11:08:07Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "6a171f75-0217-4ee5-864e-228ba48424b0",
+            "title": "Add a shared file lock and an atomic store update",
+            "criteria": [
+              "Many concurrent updaters, each with its own store instance, incrementing one value end with exactly the expected total.",
+              "An update whose callback fails leaves the file exactly as it was.",
+              "The commit lock behaves as before, with its existing tests unchanged and passing.",
+              "Every store implementation, including the ignore-filtering wrapper and the test doubles, supports the new operation."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/filelock/filelock.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/autocommit/lock.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/filelock/filelock_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/autocommit/lock_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/store/store.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "f.abs"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/store/ignore.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/design/design_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/set_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/store/store_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/store/ignore_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/store/store_test.go (TestUpdate_ConcurrentIncrementsFromSeparateInstancesAreAllKept, added in the diff): 16 goroutines, each with its own NewFileStore over the same root, each doing 25 Update increments on counter.json, asserting the final N is exactly 400 and that only counter.json remains. FileStore.Update (internal/store/store.go, diff hunk at +210) serialises through filelock.Acquire on abs+\".lock\" and writes via temp file and rename. The test is the only evidence; I did not run it."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "internal/store/store_test.go (TestUpdate_FailingCallbackLeavesTheFileUnchanged): the callback returns ([]byte(\"half-made\"), boom); the test asserts ErrorIs boom, the file still reads \"original\\n\", and requireOnlyFiles shows no temp or lock file. In store.go Update, fn's error returns before CreateTemp, so nothing is written. The test is the only evidence; I did not run it."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "internal/autocommit/lock_test.go is not in the diff, so its four tests are unchanged. internal/autocommit/lock.go AcquireLock now delegates to filelock.AcquireWithBackoff(path, LockTimeout, LockStale, lockBackoff) and maps *filelock.LockError to the autocommit *LockError with the same Path and Holder. LockError.Error() is untouched (context lines in the diff hunk at line 37), so the \"timed out waiting for the commit lock\" message is preserved. filelock.go uses the same stale comparison (\u003e stale) and the same backoff doubling capped at 1s as the removed code."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Every type with a Write/Delete pair in the code root now has Update: FileStore (store.go:239), ignoreStore (ignore.go:89, delegates to s.inner.Update), design_test.go recordingWriter (line 650), set_test.go tagBlindStore (line 2058) and deleteRecordingStore (line 2338). A grep for `) Write(path string, content []byte)` found one more type, metadata/close_test.go fakeStore, but it implements only the metadata.StoreReadWriter surface (Read/Write), not store.Writer, so it needs no Update. store_test.go lines 200-208 also assert the interface conformance for FileStore and ignoreStore."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "8343b890-245d-4391-99eb-fea26576a100",
+      "title": "Keep a usage index in each knowledge store",
+      "checks": [
+        {
+          "at": "2026-10-25T11:15:18Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "8343b890-245d-4391-99eb-fea26576a100",
+            "title": "Keep a usage index in each knowledge store",
+            "criteria": [
+              "Recording a discovery or a retrieval adds exactly one to that entry's count, with the time given, and a retrieval keeps the workflow and spec it was given.",
+              "An entry written and then rewritten keeps its first creation date and its counts.",
+              "An entry that predates the index gains a record with a creation date (from version history when available) and a tracking start of now.",
+              "Records for removed entries disappear, and the index never appears as an entry in list, search, tags or the always-applied rules.",
+              "Concurrent searches and reads of one entry from several independent instances are all counted, none lost."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/usage.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/set.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/usage_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/set_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "usage.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "set.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/knowledge/usage.go:134-198: RecordDiscoveries and RecordRetrievals call recordEach, which increments l.Count by exactly one per path, sets Last to the given time (at.UTC()), appends an event with that time, and, for retrievals, copies wf.Kind and wf.Spec into the event (lines 166-187). internal/knowledge/usage_test.go:48-88 asserts count 1 after one discovery, the given timestamp in Last and Recent, a retrieval recorded with Workflow 'implement' and the spec, and a retrieval with nil workflow carrying neither."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "usage.go:204-227: EnsureRecord leaves an existing record untouched (the only change is to Created, and only when reconcile just met the path with no history date, line 220-224, which is the first-write case). usage_test.go:113-141 writes, records a retrieval and two discoveries, rewrites, calls EnsureRecord again, and asserts Created and TrackedSince remain t1 and counts remain 1 retrieval and 2 discoveries."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "usage.go:312-335 reconcile adds a record for every listed file with no record; usage.go:349-361 datedRecord sets Created from the CreatedDater (version history) when it returns a date, else from store Stat ModTime, and sets TrackedSince to the write time 'at'. usage_test.go:147-190 checks the historic entry dated from history (committed), the handmade entry dated from its mtime (modified), and TrackedSince equal to now for both, plus a trigger entry with the mtime date."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Dropping removed entries: usage.go:329-333 in reconcile deletes any record whose path no longer exists; ForgetRecords (usage.go:233-243) deletes named paths. usage_test.go:194-237 covers both. Reserved exclusion: listFiles in set.go:680-705 skips IsReservedPath paths, so List, Tags and AlwaysAppliedEntries (via readCategories) never see the index, lock or temp files; Search skips them explicitly at set.go:231-237; usage.go:101-109 defines the reserved set. usage_test.go:245-315 asserts the index, lock and temp file are absent from List, Search, Tags, AlwaysAppliedEntries and Usage (Usage excludes them via listFiles), and are refused as entry addresses. Note the index file is not returned by Usage either, since it uses listFiles."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "Every index change goes through Set.update (usage.go:291-304), which calls src.store.Update. internal/store/store.go:239-247 FileStore.Update takes filelock.Acquire on the index path plus LockSuffix and then does a read-modify-write through a temp file, so the read-modify-write is atomic across processes. usage_test.go:389-432 starts 8 independent Set instances over one directory, each recording one discovery and one retrieval concurrently, and asserts both counts equal 8 and that no lock or temp file remains. The race test on internal/knowledge also passes per the verification summary."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "381790da-cb87-4cbf-b720-35b146519d5a",
+      "title": "Record usage from the knowledge commands",
+      "checks": [
+        {
+          "at": "2026-10-25T11:20:26Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "381790da-cb87-4cbf-b720-35b146519d5a",
+            "title": "Record usage from the knowledge commands",
+            "criteria": [
+              "After a search returning an entry, `knowledge usage` shows one more discovery for it at the search's time.",
+              "After an entry is read, or loaded as an always-applied rule, it shows one more retrieval. A read that names its spec is attributed to that spec's running workflow even when other workflows run in parallel, and an unnamed read during a single running workflow names that workflow.",
+              "The delete command's existence check, the tags and list commands, and other internal reads change no count.",
+              "Writing to the index's location through `knowledge write` is refused with a remediation, and the index is not listed or returned as an entry.",
+              "A search or read still returns its result, with a warning, when usage cannot be recorded.",
+              "Existing entries written before the change can still be searched and read, and gain a creation date with no manual edit."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/knowledge.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/knowledge_usage.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/spec.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "data.name"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/knowledge_usage_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/knowledge_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "state.json"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": ".usage-index.json.lock"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/testutil/gittest/gittest.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/instruction_surface_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/knowledge.go runKnowledgeSearch (diff hunk ~L435-446) calls recordUsage(result, set.RecordDiscoveries(hits, knowledgeNow())) after the search, one discovery per hit. internal/knowledge/usage.go RecordDiscoveries/recordEach (L134-196) increments Discoveries.Count and sets Last to the given time. cmd/knowledge_usage_test.go TestKnowledgeSearch_RecordsADiscoveryPerHit (L89-112) checks the count and time for returned entries and that a non-returned entry gains nothing."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Retrieval recording: cmd/knowledge.go runKnowledgeRead (diff ~L460-476) calls RecordRetrievals with activeWorkflow(input.Spec); always-applied and conventions do the same (~L187, L214). Named-spec attribution: cmd/knowledge_usage.go activeWorkflow (L129-181) returns the single candidate whose Spec equals the named spec, including lane workflows; test TestKnowledgeRead_NamedSpecPicksItsWorkflowAmongParallelRuns (knowledge_usage_test.go L159-185) covers two parallel lanes. Unnamed single-workflow attribution: L177-178, tested by TestKnowledgeRead_NamesTheSingleRunningWorkflow (L143-154). Note: when a named spec has no running workflow, the code falls through to the single-candidate branch and attributes the read to some other running workflow (L159-180, no test); the criterion does not state that case, so it is noted rather than failed."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "list and tags use set.List/set.Tags (cmd/knowledge.go L486, L505), which call listFiles and never call the update/Record path (internal/knowledge/set.go L417-470). The delete existence check at cmd/knowledge.go L594-598 uses set.Read, which is untracked (usage is recorded only in the cmd layer). Delete drops the record via ForgetRecords (L162). TestKnowledgeInternalReadsRecordNothing (knowledge_usage_test.go L189-221) asserts zero counts after list, tags, sources, usage and delete."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "internal/knowledge/usage.go IsReservedPath (L101-109) covers .usage-index.json, its .lock and .tmp- files. Set.Write, Set.Delete and Set.Read refuse reserved paths (internal/knowledge/set.go L359, L384, L404) via refuseReserved (usage.go L113-121), which gives ErrCodeIndexReserved and a NextAction pointing at 'knowledge usage'. listFiles skips reserved paths (set.go L699-700) and Set.Search drops them (set.go L231), so list, tags, search and conventions never return them. TestKnowledgeIndexPathIsRefusedAndHidden (knowledge_usage_test.go L226-258) covers write, read and delete."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "cmd/knowledge_usage.go recordUsage (L94-99) sets result[\"usage_warning\"] on failure and never returns an error. It wraps the search record (knowledge.go ~L440), the read record (~L470) and the write, delete, conventions and always-applied records. Schemas carry usage_warning (knowledge.go diff L9, L19). TestKnowledge_RecordingFailureStillReturnsTheResult (knowledge_usage_test.go L339-360) corrupts the index and checks that read and search still return content or hits plus the warning."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "Pre-existing entries are reconciled on the first index write: internal/knowledge/usage.go reconcile (L312-335) adds a record for every listed file, dated from the git history via gitCreatedDater (cmd/knowledge_usage.go L105-120, injected by newKnowledgeSet in cmd/knowledge.go diff ~L93) or else from the file's mtime (datedRecord L349-361). Search and read do not depend on the index. TestKnowledge_PreExistingEntryCarriesOver (knowledge_usage_test.go L286-307) and TestKnowledge_PreExistingEntryIsDatedFromGitHistory (L311-335) cover this. I did not run the tests; the verdict rests on reading the code and test bodies, and the reported verification passes."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "9cba7df7-f7b8-4472-82a1-5647512eb0bd",
+      "title": "Add the prune age setting",
+      "checks": [
+        {
+          "at": "2026-10-25T11:22:38Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "9cba7df7-f7b8-4472-82a1-5647512eb0bd",
+            "title": "Add the prune age setting",
+            "criteria": [
+              "A configuration without the key reports an age of 90 days.",
+              "A configured age is read and survives being saved and reloaded.",
+              "A negative age is refused with a message naming the key and the fix.",
+              "Configurations written before the change load without error and without a migration."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config/config.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config/config_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/config/schema.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/migrate"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/config/config.go: const DefaultKnowledgePruneMaxAgeDays = 90 and KnowledgeConfig.PruneMaxAgeDays() returns it when Prune.MaxAgeDays is 0 (diff hunk @@ -241). config_test.go TestFromYAMLFile_AbsentKnowledgePruneAgeLoadsAsNinety asserts PruneMaxAgeDays() == 90 for a file without the key and for NewDefault()."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "config.go: KnowledgeConfig gains Prune KnowledgePruneConfig `yaml:\"prune,omitempty\"` with MaxAgeDays `yaml:\"max_age_days,omitempty\"`; Config.Knowledge is KnowledgeConfig (config.go:427), and ToYAMLFile (config.go:976) marshals the whole Config. config_test.go TestToYAMLFile_KnowledgePruneAgeRoundTrips loads max_age_days: 30, asserts it is written as 'prune:\\n        max_age_days: 30', reloads it and reads 30 back. The schema version stays 4 (asserted in the test)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "config.go KnowledgeConfig.Validate (diff @@ -872): when Prune.MaxAgeDays \u003c 0 it returns output.NewError(\"config_invalid\", \"knowledge.prune.max_age_days must be a positive number of days, got -1\") with Resource 'knowledge.prune.max_age_days' and NextAction 'set knowledge.prune.max_age_days in .spektacular/config.yaml to a positive number of days (or remove the key to use 90)'. Reached via FromYAMLFile -\u003e Config.Validate -\u003e c.Knowledge.Validate (config.go:495, 764). config_test.go TestFromYAMLFile_NegativeKnowledgePruneAgeIsRefused asserts code, message, resource and next action."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The diff touches only internal/config/config.go and config_test.go. schema.go and internal/migrate are unchanged, so CurrentProjectSchema is still 4 and no migration step was added. The new field is optional with omitempty, so an existing file parses with it absent (config.go:515-537 loader unchanged apart from the new field). config_test.go TestFromYAMLFile_AbsentKnowledgePruneAgeLoadsAsNinety loads a current-schema file without the key with NoError. I did not run the tests myself; the reported go test pass is consistent with these tests, and the test code and the code paths I read support the verdicts."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "2e76ead4-71c7-4af7-a8d1-1815e29189ff",
+      "title": "Add the knowledge prune command",
+      "checks": [
+        {
+          "at": "2026-10-25T11:35:00Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "2e76ead4-71c7-4af7-a8d1-1815e29189ff",
+            "title": "Add the knowledge prune command",
+            "criteria": [
+              "With a 30-day age, an entry created 40 days ago and never retrieved is removed, while one retrieved once in that window and one created 10 days ago are kept.",
+              "An old entry that searches surfaced but nobody read is removed, and an entry tracked for less than the age is never removed for non-use.",
+              "A corrected entry keeps its usage counts, and a removed or deleted entry leaves no record in the index.",
+              "A verdict that the store contradicts, a verdict for the wrong entry, or a change without evidence is refused with a remediation.",
+              "The instruction for each entry tells the agent to keep an entry stating an unmet standard as current, and to delete only an entry whose subject no longer exists.",
+              "A dry run reports the same removals a real run would make and a verdict for every entry, and afterwards every entry and the index are byte-for-byte unchanged.",
+              "Prune's own reads, in a real run or a dry run, change no retrieval count."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/usage.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/usage_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/knowledge_prune.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/knowledge.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/knowledge/prune-entry.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/workflows/spek-knowledge/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/knowledge_prune_template_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/knowledge_prune_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/knowledge/usage.go PruneCandidates (diff lines 172-195) removes an entry only when now-Created \u003e maxAge, now-TrackedSince \u003e= maxAge and the last retrieval is nil or older than maxAge; a retrieval 5 days ago keeps the entry and a 10-day-old entry fails the Created test. internal/knowledge/usage_test.go:212-240 (TestPruneCandidates_AgeRule) asserts exactly never-read.md (40d) removed, read-once.md (retrieved 5d ago) and young.md (10d) kept. cmd/knowledge_prune_test.go:259-298 checks the same through the command against the on-disk fixture."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "usage.go PruneCandidates ignores Discoveries, so surfaced.md (3 discoveries, never read, 40d) is removed (usage_test.go:227, expected at line 237). The TrackedSince check at usage.go:178 (now.Sub(eu.TrackedSince) \u003c maxAge continues) keeps backfilled.md (created 400d ago, tracked 10d) per usage_test.go:228 and cmd/knowledge_prune_test.go:73. cmd/knowledge_prune_test.go:255-298 asserts the removed set and that the surfaced entry's file and index record are gone."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Corrected: cmd/knowledge.go:532-538 runs set.Write then set.EnsureRecord, and internal/knowledge/usage.go EnsureRecord (about line 204) leaves an existing record untouched, so counts survive. Deleted and removed: cmd/knowledge.go:603-610 calls ForgetRecords after delete, and cmd/knowledge_prune.go applyPruneRemovals (lines 440-457) calls ForgetRecords for each removal; usage.go:233-243 deletes the record. cmd/knowledge_prune_test.go:406-427 asserts backfilled.md keeps 2 discoveries and 1 retrieval after correction, and that removed/deleted paths have no index record."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "cmd/knowledge_prune.go: wrong entry refused with knowledge_prune_wrong_entry and a NextAction naming the head verdict command (lines 326-332); change without evidence refused with knowledge_prune_evidence_required (lines 340-346); claims the store contradicts refused with knowledge_prune_claim_mismatch for deleted-but-present, corrected-but-absent, corrected-unchanged and current-but-changed (checkPruneClaim, lines 378-436). Each carries WithNextAction. cmd/knowledge_prune_test.go:308-359 exercises every refusal and requirePruneRefusal asserts a non-empty NextAction."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "templates/knowledge/prune-entry.md:23 says an entry stating a standard the code has not yet met is **current**, not stale, and that a gap is work to do; line 24 says only an entry whose subject no longer exists is **deleted**. templates/knowledge_prune_template_test.go:41-63 asserts these phrases render in both real and dry-run instructions."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "Dry run uses the same PruneCandidates and the same queue as a real run (cmd/knowledge_prune.go:241-247, applyPruneRemovals only when !pruneDryRun). The run file lives in dataDir under .spektacular (line 46, 554-560), outside any store. Usage, List and Read are read-only (internal/knowledge/usage.go:245-284 says Usage writes nothing; set.go:358-377 Read has no recording; set.go:417 List does not call update). checkPruneClaim refuses any change in dry run (cmd/knowledge_prune.go:391-400). cmd/knowledge_prune_test.go:480-547 hashes both stores, including index files, before and after a dry run and asserts the dry-run would_remove set equals a real run's removals. Not verified by running tests; verification summary reports pass."
+            },
+            {
+              "criterion": 7,
+              "verdict": "met",
+              "evidence": "Prune reads use set.Read, which never records usage (internal/knowledge/set.go:358-377); cmd/knowledge_prune.go:263, 379 and 465 call set.Read directly, and the template forbids the agent from running knowledge read or search (templates/knowledge/prune-entry.md:19). Only RecordRetrievals and EnsureRecord record usage, and prune calls neither on its reads. cmd/knowledge_prune_test.go:551-575 compares retrieval and discovery counts before and after dry and real runs and asserts unchanged values."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "3f3644b0-86f5-424d-98e0-285470de7180",
+      "title": "Rewrite the installed instructions to write knowledge, then report it",
+      "checks": [
+        {
+          "at": "2026-10-25T11:39:45Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "3f3644b0-86f5-424d-98e0-285470de7180",
+            "title": "Rewrite the installed instructions to write knowledge, then report it",
+            "criteria": [
+              "The guidance a fresh `init` installs tells agents to write durable knowledge themselves and report it, and no longer tells them to offer it and wait for a decision.",
+              "No plan, implement or epic instruction asks the user whether to save knowledge, in standalone or orchestrated runs.",
+              "Each instruction tells the agent to name the entry it wrote, its store and path, and why it was worth keeping.",
+              "The AGENTS.md knowledge section keeps its heading and stays within the compact-section limits.",
+              "The plan discovery step's knowledge reads name the plan's spec."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "AGENTS.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/agents/knowledge-trigger.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/standing_rules_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/agents/short/knowledge-trigger.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "standing_rules_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/agents/memory-context.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/plan/02-discovery.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/steps/plan/steps_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/plan/18-walkthrough.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/implement/07-update_changelog.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/implement-knowledge-candidates.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/implement-knowledge-written.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/implement/12-finished.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/plan/19-finished.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/orchestrated-stop.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/workflows/spek-plan-epic/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/workflows/spek-implement-epic/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/plan_epic_skill_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/implement_epic_skill_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/steps/implement/steps_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/testdata/agents-md-legacy.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/testdata/agents-md-legacy.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "templates/agents/knowledge-trigger.md:16-21 now says 'write the entry yourself — do not offer it and do not wait for a decision', and lines 23-28 say to tell the user which entry, where and why. templates/agents/short/knowledge-trigger.md:4-6 reads 'write it via `spek-knowledge` yourself, then tell the user which entry, where and why. Do not ask first.' memory-context.md:12 now says 'reporting what it wrote'. The old offer-and-wait wording is gone from these sources. Note: untracked templates/knowledge_capture_wording_test.go is not in the item's file scope."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Grep of templates/steps/plan, templates/steps/implement, templates/partials and both epic SKILL.md files for 'offer to save', 'save it only if the user accepts', 'explicit acceptance', 'not offered again', 'knowledge candidates' and 'propose-then-confirm' finds nothing. Rewritten sources: steps/plan/02-discovery.md:76-78, steps/plan/18-walkthrough.md:435, steps/implement/07-update_changelog.md:350-356 (both branches), partials/orchestrated-stop.md:299-300, skills/workflows/spek-plan-epic/SKILL.md:328,337, skills/workflows/spek-implement-epic/SKILL.md:309,318. Remaining 'offer'/'wait' wording in templates/steps/spec/05-technical_approach.md is in the spec workflow, outside plan, implement and epic."
+            },
+            {
+              "criterion": 3,
+              "verdict": "not_met",
+              "evidence": "Most instructions name the entry, store/tier, path and why: knowledge-trigger.md:23-25, plan/02-discovery.md:422, plan/18-walkthrough.md:435, implement/07-update_changelog.md:351 and 356, partials/implement-knowledge-written.md:4, implement/12-finished.md:376 and 392, plan/19-finished.md:448, both epic SKILL.md files. The exception is templates/agents/memory-context.md:10-13, which tells the agent to route writes through spek-knowledge and only says 'reporting what it wrote'. It does not name the entry, store, path or reason. The short section (templates/agents/short/knowledge-trigger.md:6) says 'which entry, where and why', which is thin but acceptable."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "The short section heading '## Knowledge-Worthy Discovery Recognition' is kept (templates/agents/short/knowledge-trigger.md:1, and standing_rules_test.go:614 expects its compact phrases). The new short text is 4 lines (the test's line limit and the 5120-byte budget are at standing_rules_test.go:813-822), and it contains the needles 'write it via `spek-knowledge` yourself', 'tell the user which entry, where' and 'Do not ask first.' The installed repo-root AGENTS.md still has the old offer wording, but it is regenerated by init/migrate and is not part of the template source this criterion covers."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "templates/steps/plan/02-discovery.md:404 sets '--spec {{plan_name}}' on the always-applied read. Line 413 sets '\"spec\":\"{{plan_name}}\"' on the knowledge read. The knowledge search commands do not name the spec because the CLI takes --spec only on always-applied, conventions and read (cmd/knowledge_usage.go:62-68, cmd/knowledge.go:779), so search cannot carry it."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T11:41:31Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "3f3644b0-86f5-424d-98e0-285470de7180",
+            "title": "Rewrite the installed instructions to write knowledge, then report it",
+            "criteria": [
+              "The guidance a fresh `init` installs tells agents to write durable knowledge themselves and report it, and no longer tells them to offer it and wait for a decision.",
+              "No plan, implement or epic instruction asks the user whether to save knowledge, in standalone or orchestrated runs.",
+              "Each instruction tells the agent to name the entry it wrote, its store and path, and why it was worth keeping.",
+              "The AGENTS.md knowledge section keeps its heading and stays within the compact-section limits.",
+              "The plan discovery step's knowledge reads name the plan's spec."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "AGENTS.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/agents/knowledge-trigger.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/standing_rules_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/agents/short/knowledge-trigger.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "standing_rules_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/agents/memory-context.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/plan/02-discovery.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/plan-workflow/tests/test_plan_workflow.py"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/steps/plan/steps_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/plan/18-walkthrough.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/implement/07-update_changelog.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/implement-knowledge-candidates.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/implement-knowledge-written.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/implement/12-finished.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/steps/plan/19-finished.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/partials/orchestrated-stop.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/workflows/spek-plan-epic/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/workflows/spek-implement-epic/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/plan_epic_skill_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/implement_epic_skill_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/steps/implement/steps_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/testdata/agents-md-legacy.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/testdata/agents-md-legacy.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "templates/agents/knowledge-trigger.md:16-20 now reads 'write the entry yourself — do not offer it and do not wait for a decision', invoking the spek-knowledge skill and writing through `{{command}} knowledge write`. The old Accept/Defer/Decline outcomes are removed (diff hunk at lines 190-220). templates/agents/short/knowledge-trigger.md:4-6 (the AGENTS.md compact form) says 'write it via spek-knowledge yourself, then tell the user ... Do not ask first.' templates/agents/memory-context.md:12-14 also writes then reports. Caveat: the spek-knowledge skill it hands off to (templates/skills/workflows/spek-knowledge/SKILL.md:92-93, 115, 167) still requires explicit user confirmation before any `knowledge write`. That skill is outside this item's scope, so the instruction text is met, but the guidance may stall in practice."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "Grep of templates/steps/plan, templates/steps/implement, templates/partials and the two spek-*-epic SKILL.md files finds no remaining knowledge offer or ask. Plan: steps/plan/02-discovery.md:423 'Do not stop to ask first'; steps/plan/18-walkthrough.md:436 'Do not ask first'; steps/plan/19-finished.md:449 reports entries. Implement: steps/implement/07-update_changelog.md:351-357 writes via spek-knowledge without asking in both standalone and orchestrated branches; partials/implement-knowledge-written.md:4 is a report, not a question; steps/implement/12-finished.md:18,60 use the written partial. Epic: skills/workflows/spek-plan-epic/SKILL.md:108 and spek-implement-epic/SKILL.md:320 report entries instead of offering. partials/orchestrated-stop.md:301 says never ask. Remaining 'offer' hits are spec-workflow or repo/design items, not knowledge in plan, implement or epic. The same caveat as criterion 1 applies to the spek-knowledge skill's own confirmation step."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Each instruction names entry, store/tier and path, and why: knowledge-trigger.md:215-217 ('which entry (its path), where it lives (its tier and store), and why it is worth keeping'); short/knowledge-trigger.md:6-7 ('which entry, where (tier, store, path) and why'); memory-context.md:12-14; steps/plan/02-discovery.md:423 ('which entry you wrote, its tier, store and path, and why'); steps/plan/18-walkthrough.md:436; steps/plan/19-finished.md:449; steps/implement/07-update_changelog.md:352 and 357 (tier, store, path and why); partials/implement-knowledge-written.md:4; steps/implement/12-finished.md:377,392; partials/orchestrated-stop.md:301; both epic SKILL.md files (spek-plan-epic:330,108; spek-implement-epic:311,320)."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Root AGENTS.md:50 keeps the heading '## Knowledge-Worthy Discovery Recognition'. The compact template templates/agents/short/knowledge-trigger.md is 3 lines, and internal/agent/standing_rules_test.go:614 sets its compact needles to match it, with the line budget enforced at standing_rules_test.go:822-898. Note: the installed root AGENTS.md:53 still holds the old 'offer to save ... never write unprompted' text because it has not been regenerated by init. That is not a criterion failure, since this criterion covers only heading and limits, and the template is updated."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "templates/steps/plan/02-discovery.md:405 runs `knowledge always-applied --tier repo --filter \u003cname\u003e --spec {{plan_name}}`, and line 414 reads `knowledge read --data '{...,\"spec\":\"{{plan_name}}\"}'`. internal/steps/plan/steps_test.go:121-122 asserts both forms with spec test."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 2,
+      "state": "accepted"
+    },
+    {
+      "item": "7e7bd29f-237e-44f2-9ba5-b6b97cb6ef43",
+      "title": "Make the knowledge skill write directly and drive prune",
+      "checks": [
+        {
+          "at": "2026-10-25T11:44:19Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "7e7bd29f-237e-44f2-9ba5-b6b97cb6ef43",
+            "title": "Make the knowledge skill write directly and drive prune",
+            "criteria": [
+              "The installed skill writes a new or revised entry without asking and then tells the user the tier, store, path, tags and reason.",
+              "Asking whether the knowledge base is still accurate leads the agent to the prune command, with the dry run offered as a preview.",
+              "The tag audit still proposes and confirms one entry at a time, exactly as before.",
+              "Every command the skill tells the agent to run is a real knowledge subcommand."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "templates/skills/workflows/spek-knowledge/SKILL.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/agent/instruction_surface_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "templates/skills/workflows/spek-knowledge/SKILL.md, contribute step 6 (line 77) reads 'Write it straight away; do not ask the user first', and step 7 (line 82) tells the user the tier, store name, path, tags and why. Update step 4 (line 92) and step 5 (line 97) follow the same pattern. The diff confirms the 'Write it straight away' contribute line is new (goal-check/spektacular.diff, hunk near line 822)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "SKILL.md line 22 lists 'Is the knowledge base still accurate?' and 'Prune the knowledge base.' as triggers under '# When to invoke'. The prune intent, step 1 (line 128), says to run 'knowledge prune --dry-run' as the preview when the user asks what prune would do or seems unsure, and otherwise to run 'knowledge prune'. Step 2 (line 129) describes the first pass. Prune is driven through the command loop in steps 3 and 4 (lines 130-135)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "The tag audit section (SKILL.md lines 100-122) still has step 4 'Propose per entry, and confirm per entry' (line 115) and step 5 'Only after explicit confirmation for that entry' (line 116). The diff does not touch these lines: the only removed 'Propose per entry' line (diff near line 875) belongs to the old maintenance review, which the diff replaces with prune. '# Decline handling' (lines 139-147) keeps the per-entry rule."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "Every 'spektacular knowledge \u003cverb\u003e' the skill names is registered. cmd/knowledge.go:784 registers search, read, list, write, delete, sources, conventions, categories, always-applied, tags and usage. cmd/knowledge_prune.go:632 registers prune, and :631 registers its verdict subcommand. The --dry-run flag is defined at cmd/knowledge_prune.go:626. The 'init \u003cagent\u003e' reference is a top-level command, not a knowledge subcommand. internal/agent/instruction_surface_test.go:TestRenderedSpekKnowledgeEveryInvocationIsARealSubcommand enforces this against the rendered skill, and its hand-kept knowledgeSubcommands map (lines 542-555) matches the registrations."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "f9150144-92e1-4ac8-8908-c38ba4132052",
+      "title": "Drop the obsolete knowledge-offer line from the end-to-end suites",
+      "checks": [
+        {
+          "at": "2026-10-25T11:45:41Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "f9150144-92e1-4ac8-8908-c38ba4132052",
+            "title": "Drop the obsolete knowledge-offer line from the end-to-end suites",
+            "criteria": [
+              "No end-to-end suite instruction mentions declining an offer to save knowledge.",
+              "The suites' instructions still tell the headless agent not to wait for a person."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "architecture/testing-architecture.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/epic-workflow/instruction.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/implement-epic-workflow/instruction.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "tests/harbor/goal-check-workflow/instruction.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "The staged diff removes the knowledge-offer line from all three in-scope suites: tests/harbor/epic-workflow/instruction.md:52 (`- If you are offered to save something to the knowledge base, decline.`), tests/harbor/goal-check-workflow/instruction.md:64 and tests/harbor/implement-epic-workflow/instruction.md:76 (diff hunks at .spektacular/tmp/000072_knowledge-access-index-and-prune/goal-check/spektacular.diff lines 1044-1077). Current files under /home/nicj/code/github.com/hivecommons/spektacular/.spektacular/worktrees/000072_knowledge-access-index-and-prune/spektacular/tests/harbor/ have no match for 'knowledge', 'offer' or 'decline' in those three files. Across the whole spektacular worktree, 'offered to save' appears only in .spektacular/plans/000072_knowledge-access-index-and-prune/context.md:179, a plan note outside the suites. The architecture doc (.spektacular/knowledge/architecture/testing-architecture.md, the file the scope's architecture/testing-architecture.md resolves to) has no match for 'offered to save', 'decline', 'offer', or 'knowledge'."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "The 'Never end your turn waiting for a reply' rule is still present in the three in-scope suites: epic-workflow/instruction.md:58, implement-epic-workflow/instruction.md:58 and goal-check-workflow/instruction.md:43. Each also keeps 'This session is headless: no one replies between your turns' or 'nothing will answer', and the diff hunks only delete the single offer line, leaving the surrounding lines unchanged."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "ccc22bb9-b485-4b1d-be15-06a360ae8440",
+      "title": "Update the README and the maintainer knowledge-base doc",
+      "checks": [
+        {
+          "at": "2026-10-25T11:47:32Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "ccc22bb9-b485-4b1d-be15-06a360ae8440",
+            "title": "Update the README and the maintainer knowledge-base doc",
+            "criteria": [
+              "Neither document says the agent waits for confirmation before writing knowledge.",
+              "Both list `knowledge usage` and `knowledge prune` with what they do, and the knowledge-base doc explains the two prune passes, the dry run and the age setting.",
+              "The existing documentation pin tests still pass."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/docs_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "docs/knowledge-base.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/ranking_docs_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "not_met",
+              "evidence": "README.md is clean: its capture paragraph (README.md:270 in the working tree) says 'Nothing waits for your approval', and the only other README hits for approv/confirm (line 42, plan strict-spec staleness; line 335, repo add confirmation) are unrelated to knowledge. docs/knowledge-base.md still says the agent waits for confirmation before writing knowledge: line 245 ('The spek-knowledge skill proposes tags when it captures an entry ... and shows them alongside the destination for confirmation before anything is written'), line 361 ('The flow is read-only until you approve something') and line 371 ('Changes are proposed and confirmed one entry at a time') in the tag-audit section. The staged diff rewrote the contribution paragraph at knowledge-base.md ~343-352 but did not touch these three passages. Line 245 directly states the confirmation gate before writing, so the doc still says it. Fix: reword line 245 to match the no-wait write behaviour, and reword the audit section at 361 and 371 so the audit's writes are not described as waiting for approval (or confirm that audit edits are intentionally gated, in which case the criterion's wording still forbids the claim for knowledge writing)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "README.md diff hunk @@ -260 adds bullets 'knowledge usage' (line 9 of diff, what it shows, --tier/--filter) and 'knowledge prune' (line 10, two-step removal, verdict command, --dry-run); docs/knowledge-base.md diff hunk @@ -378 adds '### Pruning the knowledge base' covering pass one (unused entries, max_age_days 90 default from .spektacular/config.yaml, tracking clock), pass two (current/corrected/deleted verdicts), and '--dry-run is the preview ... changes nothing'; the command reference table in that doc also lists knowledge usage and knowledge prune. The age setting is also documented in the README config example (knowledge.prune.max_age_days: 90)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Verification summary reports go test -shuffle=on ./... passing, including cmd/docs_test.go and internal/knowledge/ranking_docs_test.go, and go vet passing. Neither pin test file is in the staged diff (spektacular.status lists only README.md and docs/knowledge-base.md). A grep of cmd/docs_test.go and internal/knowledge/ranking_docs_test.go for confirm/wait/approv/knowledge usage/prune returned no matches, so the pins do not depend on the rewritten sentences. I could not re-run the tests myself; this verdict rests on the reported pass result."
+            }
+          ],
+          "decision": "retry",
+          "tree_unchanged": true
+        },
+        {
+          "at": "2026-10-25T11:48:41Z",
+          "round": 1,
+          "attempt": 2,
+          "goal": {
+            "item": "ccc22bb9-b485-4b1d-be15-06a360ae8440",
+            "title": "Update the README and the maintainer knowledge-base doc",
+            "criteria": [
+              "Neither document says the agent waits for confirmation before writing knowledge.",
+              "Both list `knowledge usage` and `knowledge prune` with what they do, and the knowledge-base doc explains the two prune passes, the dry run and the age setting.",
+              "The existing documentation pin tests still pass."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/docs_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "docs/knowledge-base.md"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/knowledge/ranking_docs_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "README.md:270 now says the agent writes knowledge itself and that 'Nothing waits for your approval'. docs/knowledge-base.md capture text (lines 45-47 and 343-351 of the diff) was changed to 'writes the entry without asking'. A grep of both files for confirm/waits for/approv/propos/before writing finds no capture-time confirmation gate. The only remaining confirmation language is in the tag-audit section (knowledge-base.md ~lines 358-375, 'Changes are proposed and confirmed one entry at a time'), which is the audit flow the spec lists as an unchanged Non-Goal, so it is out of scope for this criterion."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "README.md diff lines 9-10 list `knowledge usage` (creation date, discovery and retrieval history, --tier/--filter) and `knowledge prune` (removes old unread entries, then checks each entry; --dry-run previews). The command table in docs/knowledge-base.md (diff ~line 206-207) also lists both. docs/knowledge-base.md '### Pruning the knowledge base' section (diff lines 110-161) explains Pass one (unused entries, created more than knowledge.prune.max_age_days ago, default 90, tracked by the usage index for that long, not retrieved), Pass two (per-entry current/corrected/deleted verdicts), the --dry-run preview (line 115-117), and the max_age_days setting (README.md config example diff lines 29-30 and the doc at line 120-121)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "The verification summary reports `go test -shuffle=on ./cmd ./internal/knowledge` passing, which includes cmd/docs_test.go and internal/knowledge/ranking_docs_test.go. I could not re-run tests (read-only). Reading the pins: cmd/docs_test.go checks README strings (repo.yaml, repos:, Breaking change, Knowledge lives in one of two tiers, --tier, --filter, auto_commit, recorded-amendment exemption) and knowledge.sources/superseded-shape rules, none of which the diff removes or rewrites. ranking_docs_test.go requires `tagWeight = …`, `minPrefixLen = …` etc. in docs/knowledge-base.md and the knowledge-search-ranking doc; the diff touches no such backtick statements. No test references the removed headings ('Reviewing whether entries are still true') or the removed maintenance-review wording (grep of *_test.go). docs.diff (the docs repo) is empty, so no changes there."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 2,
+      "state": "accepted"
+    },
+    {
+      "item": "7cf807cc-1f23-45ee-9d2d-b400af7cb0df",
+      "title": "Document self-written knowledge, the usage index and prune on the website",
+      "checks": [
+        {
+          "at": "2026-10-25T11:50:26Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "7cf807cc-1f23-45ee-9d2d-b400af7cb0df",
+            "title": "Document self-written knowledge, the usage index and prune on the website",
+            "criteria": [
+              "The knowledge-base page describes writing without asking, the usage index, the prune command, its preview mode and its age setting.",
+              "The configuration page documents `knowledge.prune.max_age_days` with its default of 90.",
+              "The site builds and type-checks without errors, and the new prose contains no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/knowledge-base.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/configuration.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "knowledge-trigger.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Staged docs diff src/pages/knowledge-base.mdx: 'How usage is recorded' section (hunk @@ -176,6 +179,99 @@) documents the usage index .usage-index.json and knowledge usage; the writing-without-asking prose at hunk @@ -113,9 +113,10 @@ says 'Nothing waits for your approval'; the 'Pruning the knowledge base' section documents the prune command, '--dry-run' as the preview mode (lines ~165-171 of the diff), and knowledge.prune.max_age_days (90 by default) in pass one and in the final 'How long unused knowledge is kept' block (hunk @@ -478,6 +574,18 @@)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "src/pages/configuration.mdx in the docs worktree: line 86-87 adds 'prune: max_age_days: 90' to the example config; line 344 sets the knowledge ConfigKey defaultValue to 'none; \u003ccode\u003eprune.max_age_days: 90\u003c/code\u003e'; lines 357-359 describe the key, that it defaults to 90 when absent and must be positive."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Verification summary reports npm run build pass (16 pages, 'Complete!') and npx astro check with 0 errors and 0 warnings (2 hints). I did not re-run them (read-only). Grep for the em dash character over docs.diff returned 0 matches, so the added prose contains no em dashes. Note: the goal lists knowledge-trigger.md as a changeable file, but it is absent from docs.diff and no criterion requires a change to it."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    }
+  ]
+}

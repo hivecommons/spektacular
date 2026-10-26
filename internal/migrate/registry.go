@@ -45,12 +45,12 @@ type StepContext struct {
 // Action is a side effect of a step, reported in previews and performed by
 // Apply.
 type Action struct {
-	Op      string `json:"op"`            // "set" | "create" | "remove"
-	Path    string `json:"path"`          // the file created/removed, or the settings file for "set"
+	Op      string `json:"op"`            // "set" | "create" | "remove" | "ignore"
+	Path    string `json:"path"`          // the file created/removed, the settings file for "set", or the .gitignore for "ignore"
 	Key     string `json:"key,omitempty"` // dotted key for "set"
 	From    string `json:"from,omitempty"`
-	To      string `json:"to,omitempty"`
-	Content []byte `json:"-"` // payload for "create"
+	To      string `json:"to,omitempty"` // the new value for "set" (empty: the key is removed), the line for "ignore"
+	Content []byte `json:"-"`            // payload for "create"
 }
 
 // registry holds the ordered steps for each kind, and current the format
@@ -58,7 +58,7 @@ type Action struct {
 // synthetic step.
 var (
 	registry = map[Kind][]Step{
-		KindProject: {project1to2, project2to3, project3to4},
+		KindProject: {project1to2, project2to3, project3to4, project4to5},
 		KindRepo:    {repo1to2},
 	}
 	current = map[Kind]int{

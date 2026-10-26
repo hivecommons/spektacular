@@ -1,6 +1,6 @@
 # Follow Test Patterns
 
-Guide for writing tests that match the project's existing conventions. Use this skill when the implement workflow reaches its `test` step and needs to delegate test authoring to a sub-agent.
+Guide for writing tests that match the project's existing conventions. Use this skill when the implement workflow reaches its `test` step: a sub-agent follows it for a High-complexity task, and the agent driving the workflow follows it itself otherwise.
 
 ## Instructions
 

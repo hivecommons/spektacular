@@ -27,6 +27,14 @@ func snapshotDir(t *testing.T, root string) map[string]string {
 		if err != nil {
 			return err
 		}
+		if isProjectLogPath(path) {
+			// The command log is an expected side effect of every logged
+			// command, not a change the command made.
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if d.IsDir() {
 			return nil
 		}
@@ -147,7 +155,7 @@ knowledge:
 	require.NoError(t, rootCmd.Execute())
 
 	cfg := readSettingsMap(t, cfgPath)
-	require.Equal(t, 4, cfg["schema"])
+	require.Equal(t, 5, cfg["schema"])
 	require.Equal(t, "0.20.0", cfg["skills_version"])
 	require.Equal(t, "proj", cfg["name"])
 	require.Equal(t, 2, readSettingsMap(t, repoPath)["schema"])
@@ -640,7 +648,7 @@ func TestInit_FreshProjectWritesSettingsRelativeStoreDirectories(t *testing.T) {
 		require.Contains(t, string(raw), want)
 	}
 	require.NotContains(t, string(raw), ".spektacular/")
-	require.Equal(t, 4, readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["schema"])
+	require.Equal(t, 5, readSettingsMap(t, filepath.Join(dir, ".spektacular", "config.yaml"))["schema"])
 	require.DirExists(t, filepath.Join(dir, ".spektacular", "specs"))
 	require.DirExists(t, filepath.Join(dir, ".spektacular", "plans"))
 	require.NoDirExists(t, filepath.Join(dir, ".spektacular", ".spektacular"))
@@ -668,4 +676,60 @@ func TestInit_FreshProjectWritesEpicSettingsWithoutEpicsFolder(t *testing.T) {
 	require.Equal(t, "epics", epicConfig["directory"])
 
 	require.NoDirExists(t, filepath.Join(dir, ".spektacular", "epics"))
+}
+
+// init bob warns while Bob's per-task turn limit is in force, since it cuts
+// off epic sub-agents, and changes the user's Bob settings only with
+// --raise-bob-turn-limit.
+func TestInit_BobTurnLimit(t *testing.T) {
+	initBob := func(t *testing.T, home string, args ...string) (string, error) {
+		t.Helper()
+		resetRootCmd(t)
+		t.Chdir(t.TempDir())
+		t.Setenv("HOME", home)
+		var out strings.Builder
+		rootCmd.SetOut(&out)
+		rootCmd.SetArgs(append([]string{"init", "bob"}, args...))
+		err := rootCmd.Execute()
+		return out.String(), err
+	}
+
+	t.Run("warns with Bob's default limit", func(t *testing.T) {
+		out, err := initBob(t, t.TempDir())
+		require.NoError(t, err)
+		require.Contains(t, out, "Bob stops every sub-agent after 100 turns")
+		require.Contains(t, out, "--raise-bob-turn-limit")
+	})
+
+	t.Run("says nothing when there is no limit", func(t *testing.T) {
+		home := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Dir(agent.BobSettingsPath(home)), 0o700))
+		require.NoError(t, os.WriteFile(agent.BobSettingsPath(home), []byte(`{"session":{"maxTurns":0}}`), 0o600))
+		out, err := initBob(t, home)
+		require.NoError(t, err)
+		require.NotContains(t, out, "sub-agent")
+	})
+
+	t.Run("the flag removes the limit", func(t *testing.T) {
+		home := t.TempDir()
+		out, err := initBob(t, home, "--raise-bob-turn-limit")
+		require.NoError(t, err)
+		require.Contains(t, out, "session.maxTurns set to 0 (no limit)")
+		n, err := agent.BobMaxTurns(home)
+		require.NoError(t, err)
+		require.Zero(t, n)
+	})
+
+	t.Run("the flag is refused for another agent before anything is written", func(t *testing.T) {
+		resetRootCmd(t)
+		dir := t.TempDir()
+		t.Chdir(dir)
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		rootCmd.SetArgs([]string{"init", "claude", "--raise-bob-turn-limit"})
+		err := rootCmd.Execute()
+		require.Error(t, err)
+		require.NoDirExists(t, filepath.Join(dir, ".spektacular"))
+		require.NoFileExists(t, agent.BobSettingsPath(home))
+	})
 }

@@ -40,8 +40,9 @@ vendor/
 *~
 .DS_Store
 
-# Spektacular debug output
+# Spektacular debug output and command logs
 .spektacular/debug/
+.spektacular/logs/
 
 # Temporary files
 *.tmp
@@ -51,9 +52,11 @@ vendor/
 tests/harbor/jobs/
 tests/harbor/*/environment/spektacular
 tests/harbor/.build/
+tests/harbor/shared/__pycache__
 jobs/
 
 __pycache__
 
 all_archive
 .bob/notes
+

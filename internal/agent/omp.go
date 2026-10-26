@@ -21,21 +21,18 @@ func (ompAgent) Install(projectPath string, cfg config.Config, out io.Writer) er
 	if err := installWorkflowSkills(projectPath, ".omp/skills", cfg, out); err != nil {
 		return err
 	}
+	if err := installGoalReviewer(projectPath, "omp", cfg, out); err != nil {
+		return err
+	}
 	if err := installCommandWrappers(projectPath, ".omp/commands", bobCommandFilename, cfg, out); err != nil {
 		return err
 	}
 	if err := installOMPCommandHandlers(projectPath, out); err != nil {
 		return err
 	}
-	// Use the same section installers as Bob, without installing Bob's files.
-	for _, install := range []func(string, config.Config, io.Writer) error{
-		installRepoSourcesSection, installStoreAccessSection, installMemoryContextSection,
-		installKnowledgeTriggerSection, installSpecTriggerSection, installDesignTriggerSection,
-		installDraftPresentationSection, installHistoricalArtifactsSection,
-	} {
-		if err := install(projectPath, cfg, out); err != nil {
-			return err
-		}
+	// The same standing rules as every other agent, without Bob's files.
+	if err := installStandingRules(projectPath, cfg, out); err != nil {
+		return err
 	}
 	return installOMPRules(projectPath, out)
 }
@@ -54,22 +51,13 @@ func installOMPRules(projectPath string, out io.Writer) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("creating omp rules directory: %w", err)
 	}
-	for _, section := range []struct{ name, heading string }{
-		{"repo-sources", repoSourcesHeading},
-		{"store-access", storeAccessHeading},
-		{"memory-context", memoryContextHeading},
-		{"knowledge-trigger", knowledgeTriggerHeading},
-		{"spec-trigger", specTriggerHeading},
-		{"design-trigger", designTriggerHeading},
-		{"draft-presentation", draftPresentationHeading},
-		{"historical-artifacts", historicalArtifactsHeading},
-	} {
-		start, end, found := locateManagedSection(body, section.heading)
+	for _, rule := range standingRules {
+		start, end, found := locateManagedSection(body, rule.heading)
 		if !found {
-			return fmt.Errorf("missing omp standing-rule section %q", section.heading)
+			return fmt.Errorf("missing omp standing-rule section %q", rule.heading)
 		}
 		content := "---\nalwaysApply: true\n---\n\n" + strings.TrimSpace(string(body[start:end])) + "\n"
-		path := filepath.Join(dir, "spek-"+section.name+".md")
+		path := filepath.Join(dir, "spek-"+rule.slug+".md")
 		if err := writeFileAtomic(path, []byte(content)); err != nil {
 			return err
 		}

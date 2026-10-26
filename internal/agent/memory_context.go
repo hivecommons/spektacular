@@ -16,5 +16,5 @@ const (
 // embedded template against cfg.Command. Idempotent: re-running for the
 // same projectPath leaves a single section and does not duplicate.
 func installMemoryContextSection(projectPath string, cfg config.Config, out io.Writer) error {
-	return installManagedSection(projectPath, cfg, out, memoryContextTemplatePath, memoryContextHeading, "Memory & Context section")
+	return installStandingRule(projectPath, cfg, out, "memory-context")
 }

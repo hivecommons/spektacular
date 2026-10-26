@@ -1,0 +1,499 @@
+{
+  "gap_threshold_ms": 300000,
+  "run": {
+    "run_id": "9a1b2c3d000000000000000000000075",
+    "kind": "implement",
+    "name": "000075_run-stats-command",
+    "agent": "claude",
+    "log_file": "",
+    "started_at": "2026-10-25T09:00:00Z",
+    "ended_at": "2026-10-25T09:30:00Z",
+    "wall_ms": 1800000,
+    "status": "finished"
+  },
+  "totals": {
+    "wall_ms": 1800000,
+    "working_ms": 1680000,
+    "user_wait_ms": 120000,
+    "helper_wait_ms": 180000,
+    "command_ms": 180000,
+    "commands": 6,
+    "helpers": 2,
+    "user_waits": 1,
+    "gap_ms": 900000,
+    "gaps_over_threshold": 2
+  },
+  "steps": [
+    {
+      "step": "setup",
+      "entries": 1,
+      "duration_ms": 60000,
+      "commands": 1,
+      "command_ms": 30000,
+      "helper_wait_ms": 0,
+      "user_wait_ms": 0,
+      "incomplete": 0,
+      "tokens": {
+        "input": 5,
+        "output": 200,
+        "cache_read": 2000,
+        "cache_write": 50,
+        "cost": 0.006338,
+        "cost_complete": true,
+        "unpriced_models": [],
+        "working_ms_per_1k_output": 300000
+      }
+    },
+    {
+      "step": "analyze",
+      "entries": 2,
+      "duration_ms": 960000,
+      "commands": 2,
+      "command_ms": 60000,
+      "helper_wait_ms": 180000,
+      "user_wait_ms": 0,
+      "incomplete": 1,
+      "tokens": {
+        "input": 13,
+        "output": 2400,
+        "cache_read": 15000,
+        "cache_write": 150,
+        "cost": 0.068503,
+        "cost_complete": true,
+        "unpriced_models": [],
+        "working_ms_per_1k_output": 400000
+      }
+    },
+    {
+      "step": "verify",
+      "entries": 1,
+      "duration_ms": 720000,
+      "commands": 2,
+      "command_ms": 60000,
+      "helper_wait_ms": 0,
+      "user_wait_ms": 120000,
+      "incomplete": 0,
+      "tokens": {
+        "input": 4,
+        "output": 450,
+        "cache_read": 4000,
+        "cache_write": 10,
+        "cost": 0.012078,
+        "cost_complete": false,
+        "unpriced_models": [
+          "claude-haiku-5-5"
+        ],
+        "working_ms_per_1k_output": 1333333
+      }
+    },
+    {
+      "step": "finished",
+      "entries": 1,
+      "duration_ms": 0,
+      "commands": 0,
+      "command_ms": 0,
+      "helper_wait_ms": 0,
+      "user_wait_ms": 0,
+      "incomplete": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "cache_read": 0,
+        "cache_write": 0,
+        "cost": 0,
+        "cost_complete": true,
+        "unpriced_models": [],
+        "working_ms_per_1k_output": null
+      }
+    }
+  ],
+  "step_entries": [
+    {
+      "step": "setup",
+      "span_id": "p0",
+      "task_id": null,
+      "started_at": "2026-10-25T09:01:00Z",
+      "ended_at": "2026-10-25T09:02:00Z",
+      "duration_ms": 60000,
+      "end_reason": "moved",
+      "complete": true
+    },
+    {
+      "step": "analyze",
+      "span_id": "a1",
+      "task_id": "df1bade8-0000-4000-8000-000000000001",
+      "started_at": "2026-10-25T09:02:00Z",
+      "ended_at": "2026-10-25T09:08:00Z",
+      "duration_ms": 360000,
+      "end_reason": "moved",
+      "complete": true
+    },
+    {
+      "step": "verify",
+      "span_id": "b1",
+      "task_id": "df1bade8-0000-4000-8000-000000000001",
+      "started_at": "2026-10-25T09:08:00Z",
+      "ended_at": "2026-10-25T09:20:00Z",
+      "duration_ms": 720000,
+      "end_reason": "moved",
+      "complete": true
+    },
+    {
+      "step": "analyze",
+      "span_id": "a2",
+      "task_id": "df1bade8-0000-4000-8000-000000000002",
+      "started_at": "2026-10-25T09:20:00Z",
+      "ended_at": "2026-10-25T09:30:00Z",
+      "duration_ms": 600000,
+      "end_reason": "interrupted",
+      "complete": false
+    },
+    {
+      "step": "finished",
+      "span_id": "f",
+      "task_id": null,
+      "started_at": "2026-10-25T09:30:00Z",
+      "ended_at": "2026-10-25T09:30:00Z",
+      "duration_ms": 0,
+      "end_reason": "finished",
+      "complete": true
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "df1bade8-0000-4000-8000-000000000001",
+      "name": "Trace log package",
+      "span_id": "t1",
+      "started_at": "2026-10-25T09:02:00Z",
+      "ended_at": "2026-10-25T09:20:00Z",
+      "duration_ms": 1080000,
+      "helper_wait_ms": 180000,
+      "user_wait_ms": 120000,
+      "end_reason": "moved",
+      "complete": true,
+      "tokens": {
+        "input": 13,
+        "output": 2250,
+        "cache_read": 13000,
+        "cache_write": 140,
+        "cost": 0.062435,
+        "cost_complete": false,
+        "unpriced_models": [
+          "claude-haiku-5-5"
+        ],
+        "working_ms_per_1k_output": 426667
+      }
+    },
+    {
+      "task_id": "df1bade8-0000-4000-8000-000000000002",
+      "name": "Report builder",
+      "span_id": "t2",
+      "started_at": "2026-10-25T09:20:00Z",
+      "ended_at": "2026-10-25T09:30:00Z",
+      "duration_ms": 600000,
+      "helper_wait_ms": 0,
+      "user_wait_ms": 0,
+      "end_reason": "moved",
+      "complete": true,
+      "tokens": {
+        "input": 4,
+        "output": 600,
+        "cache_read": 6000,
+        "cache_write": 20,
+        "cost": 0.018145,
+        "cost_complete": true,
+        "unpriced_models": [],
+        "working_ms_per_1k_output": 1000000
+      }
+    }
+  ],
+  "helpers": [
+    {
+      "span_id": "h1",
+      "parent_span_id": "a1",
+      "name": "research",
+      "step": "analyze",
+      "task_id": "df1bade8-0000-4000-8000-000000000001",
+      "started_at": "2026-10-25T09:03:00Z",
+      "ended_at": "2026-10-25T09:06:00Z",
+      "duration_ms": 180000,
+      "end_reason": "stopped",
+      "status": "ok",
+      "message": null,
+      "complete": true,
+      "tokens": {
+        "input": 2,
+        "output": 500,
+        "cache_read": 1000,
+        "cache_write": 30,
+        "cost": 0.013198,
+        "cost_complete": true,
+        "unpriced_models": [],
+        "working_ms_per_1k_output": 360000
+      }
+    },
+    {
+      "span_id": "h2",
+      "parent_span_id": "a2",
+      "name": "review",
+      "step": "analyze",
+      "task_id": "df1bade8-0000-4000-8000-000000000002",
+      "started_at": "2026-10-25T09:22:00Z",
+      "ended_at": "2026-10-25T09:30:00Z",
+      "duration_ms": 480000,
+      "end_reason": "open",
+      "status": null,
+      "message": null,
+      "complete": false,
+      "tokens": null
+    }
+  ],
+  "user_waits": [
+    {
+      "span_id": "u1",
+      "parent_span_id": null,
+      "name": "approval",
+      "step": "verify",
+      "task_id": "df1bade8-0000-4000-8000-000000000001",
+      "started_at": "2026-10-25T09:10:00Z",
+      "ended_at": "2026-10-25T09:12:00Z",
+      "duration_ms": 120000,
+      "end_reason": "stopped",
+      "status": "ok",
+      "message": null,
+      "complete": true
+    }
+  ],
+  "gaps": [
+    {
+      "started_at": "2026-10-25T09:12:00Z",
+      "ended_at": "2026-10-25T09:19:30Z",
+      "duration_ms": 450000,
+      "step": "verify",
+      "after": {
+        "event": "end",
+        "type": "user-wait",
+        "name": "approval"
+      },
+      "before": {
+        "event": "start",
+        "type": "command",
+        "name": "implement goto"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:22:00Z",
+      "ended_at": "2026-10-25T09:29:30Z",
+      "duration_ms": 450000,
+      "step": "analyze",
+      "after": {
+        "event": "start",
+        "type": "sub-agent",
+        "name": "review"
+      },
+      "before": {
+        "event": "start",
+        "type": "command",
+        "name": "implement status"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:03:00Z",
+      "ended_at": "2026-10-25T09:06:00Z",
+      "duration_ms": 180000,
+      "step": "analyze",
+      "after": {
+        "event": "start",
+        "type": "sub-agent",
+        "name": "research"
+      },
+      "before": {
+        "event": "end",
+        "type": "sub-agent",
+        "name": "research"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:10:00Z",
+      "ended_at": "2026-10-25T09:12:00Z",
+      "duration_ms": 120000,
+      "step": "verify",
+      "after": {
+        "event": "start",
+        "type": "user-wait",
+        "name": "approval"
+      },
+      "before": {
+        "event": "end",
+        "type": "user-wait",
+        "name": "approval"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:20:00Z",
+      "ended_at": "2026-10-25T09:22:00Z",
+      "duration_ms": 120000,
+      "step": "analyze",
+      "after": {
+        "event": "end",
+        "type": "command",
+        "name": "implement goto"
+      },
+      "before": {
+        "event": "start",
+        "type": "sub-agent",
+        "name": "review"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:06:00Z",
+      "ended_at": "2026-10-25T09:07:30Z",
+      "duration_ms": 90000,
+      "step": "analyze",
+      "after": {
+        "event": "end",
+        "type": "sub-agent",
+        "name": "research"
+      },
+      "before": {
+        "event": "start",
+        "type": "command",
+        "name": "implement goto"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:02:00Z",
+      "ended_at": "2026-10-25T09:03:00Z",
+      "duration_ms": 60000,
+      "step": "analyze",
+      "after": {
+        "event": "end",
+        "type": "command",
+        "name": "implement goto"
+      },
+      "before": {
+        "event": "start",
+        "type": "sub-agent",
+        "name": "research"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:08:00Z",
+      "ended_at": "2026-10-25T09:09:00Z",
+      "duration_ms": 60000,
+      "step": "verify",
+      "after": {
+        "event": "end",
+        "type": "command",
+        "name": "implement goto"
+      },
+      "before": {
+        "event": "start",
+        "type": "command",
+        "name": "implement status"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:00:30Z",
+      "ended_at": "2026-10-25T09:01:00Z",
+      "duration_ms": 30000,
+      "step": null,
+      "after": {
+        "event": "end",
+        "type": "command",
+        "name": "implement new"
+      },
+      "before": {
+        "event": "start",
+        "type": "step",
+        "name": "setup"
+      }
+    },
+    {
+      "started_at": "2026-10-25T09:01:00Z",
+      "ended_at": "2026-10-25T09:01:30Z",
+      "duration_ms": 30000,
+      "step": "setup",
+      "after": {
+        "event": "start",
+        "type": "step",
+        "name": "setup"
+      },
+      "before": {
+        "event": "start",
+        "type": "command",
+        "name": "implement goto"
+      }
+    }
+  ],
+  "tokens": {
+    "status": "known",
+    "reason_code": null,
+    "reason": null,
+    "agent": "claude",
+    "sessions": [
+      {
+        "session_id": "bc997d3b-1caa-4579-9318-a6795dd8b757",
+        "transcript": "main",
+        "file": "/home/u/.claude/projects/-home-u-proj/bc997d3b-1caa-4579-9318-a6795dd8b757.jsonl"
+      }
+    ],
+    "skipped_lines": 0,
+    "total": {
+      "input": 153,
+      "output": 3215,
+      "cache_read": 22100,
+      "cache_write": 310,
+      "cost": 0.092648,
+      "cost_complete": false,
+      "unpriced_models": [
+        "claude-haiku-5-5"
+      ],
+      "working_ms_per_1k_output": 522551
+    },
+    "outside_steps": {
+      "input": 131,
+      "output": 165,
+      "cache_read": 1100,
+      "cache_write": 100,
+      "cost": 0.00573,
+      "cost_complete": false,
+      "unpriced_models": [
+        "claude-haiku-5-5"
+      ],
+      "working_ms_per_1k_output": null
+    },
+    "session_overhead": {
+      "input": 120,
+      "output": 55,
+      "cache_read": 0,
+      "cache_write": 0,
+      "cost": 0.00175,
+      "cost_complete": false,
+      "unpriced_models": [
+        "claude-haiku-5-5"
+      ],
+      "working_ms_per_1k_output": null
+    },
+    "session_overhead_reason": null,
+    "models": [
+      {
+        "model": "claude-haiku-5-5",
+        "input": 21,
+        "output": 55,
+        "cache_read": 0,
+        "cache_write": 0,
+        "cost": null
+      },
+      {
+        "model": "claude-opus-5-5",
+        "input": 132,
+        "output": 3160,
+        "cache_read": 22100,
+        "cache_write": 310,
+        "cost": 0.092648
+      }
+    ],
+    "unmatched_helpers": []
+  }
+}

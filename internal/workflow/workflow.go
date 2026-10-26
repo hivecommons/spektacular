@@ -38,6 +38,23 @@ type Config struct {
 	// on every invocation. Empty otherwise. Like the rest of this config it
 	// is never persisted.
 	CodeRoots []CodeRoot
+	// GoalCheck says whether the implement workflow's goal check runs, read
+	// from implement.goal_check.enabled on every invocation. Like the rest of
+	// this config it is never persisted.
+	GoalCheck bool
+	// Repos are the registered repo names, in registry order, which the goal
+	// check attributes a task's files to. Never persisted.
+	Repos []string
+	// Spans receives the workflow's step and task span events. Nil reports
+	// nothing: span ids are still kept in state. Runtime only, never
+	// persisted.
+	Spans SpanSink
+	// StepSpan is the id, "<run id>-<span id>", of the span of the step
+	// being rendered, so its instruction can name it as the parent of the
+	// spans an agent starts. The workflow sets it before each step callback
+	// runs; it is "" on the terminal step and in a run with no run id.
+	// Runtime only, never persisted.
+	StepSpan string
 }
 
 // CodeRoot is one repo's code root inside a spec's worktrees.
@@ -66,6 +83,10 @@ type StepConfig struct {
 	Src      []string
 	Dst      string
 	Callback StepCallback
+	// Task is the step's part in the work on one plan task, which decides
+	// the task span its step span nests under. The default, TaskNone, is a
+	// step outside any task.
+	Task TaskRole
 }
 
 // Workflow is a linear state machine with persistence.
@@ -79,6 +100,9 @@ type Workflow struct {
 	store       store.Store
 	out         ResultWriter
 	pendingGoto string
+	// nextSpan is the span id minted for the step about to be entered or
+	// re-rendered, before its callback runs.
+	nextSpan string
 }
 
 // New builds a workflow FSM from step configs.
@@ -103,6 +127,7 @@ func New(steps []StepConfig, statePath string, cfg Config, st store.Store, out R
 		now := time.Now().UTC()
 		state = &State{
 			Kind:           cfg.Kind,
+			RunID:          NewRunID(),
 			CurrentStep:    initialState,
 			CompletedSteps: []string{},
 			CreatedAt:      now,
@@ -167,7 +192,9 @@ func New(steps []StepConfig, statePath string, cfg Config, st store.Store, out R
 			w.state.markCompleted(e.Src)
 		}
 		w.state.CurrentStep = e.Dst
-		w.state.UpdatedAt = time.Now().UTC()
+		now := time.Now().UTC()
+		w.moveSpans(e.Dst, now)
+		w.state.UpdatedAt = now
 		if !cfg.DryRun {
 			_ = saveState(w.statePath, w.state)
 		}
@@ -186,6 +213,7 @@ func (w *Workflow) Next() error {
 		return fmt.Errorf("workflow is already complete")
 	}
 	w.pendingGoto = ""
+	w.prepareSpan(transitions[0])
 	if err := w.FSM.Event(context.Background(), transitions[0]); err != nil {
 		return w.translateTransitionError(transitions[0], err)
 	}
@@ -205,6 +233,7 @@ func (w *Workflow) Goto(name string) error {
 	}
 
 	w.pendingGoto = ""
+	w.prepareSpan(name)
 	if err := w.FSM.Event(context.Background(), name); err != nil {
 		return w.translateTransitionError(name, err)
 	}
@@ -288,25 +317,222 @@ func (w *Workflow) gotoData(step string) string {
 // after_<name> callback invocation shape. If the callback returns a next step
 // (defensive — a resting current step is normally a render-only step), it is
 // followed via Goto, matching Next/Goto.
+//
+// A re-render is how a stopped session resumes, so the step's open span is
+// closed as interrupted and a fresh span opens for the same step (see
+// resumeSpans): the progress is untouched, but state's step_span changes and
+// is saved.
 func (w *Workflow) renderStep(name string) error {
 	for _, step := range w.steps {
 		if step.Name != name {
 			continue
 		}
-		if step.Callback == nil {
-			return nil
-		}
 		w.pendingGoto = ""
-		nextStep, err := step.Callback(w.data, w.out, w.store, w.cfg)
-		if err != nil {
-			return err
+		w.prepareSpan(name)
+		var nextStep string
+		if step.Callback != nil {
+			var err error
+			if nextStep, err = step.Callback(w.data, w.out, w.store, w.cfg); err != nil {
+				return err
+			}
 		}
+		w.resumeSpans(name)
 		if nextStep != "" {
 			return w.Goto(nextStep)
 		}
 		return nil
 	}
 	return nil
+}
+
+// terminalStep is the workflow's last step.
+func (w *Workflow) terminalStep() string {
+	if len(w.steps) == 0 {
+		return ""
+	}
+	return w.steps[len(w.steps)-1].Dst
+}
+
+// stepDst is the step event fires into, or "" for an unknown event or the
+// implicit "done".
+func (w *Workflow) stepDst(event string) string {
+	for _, s := range w.steps {
+		if s.Name == event {
+			return s.Dst
+		}
+	}
+	return ""
+}
+
+// prepareSpan mints the span id of the step event leads into, before the
+// step's callback runs, and puts its composite id on the config the callback
+// receives. The terminal step's span is instant, so its instruction names
+// none.
+func (w *Workflow) prepareSpan(event string) {
+	w.nextSpan = NewSpanID()
+	w.cfg.StepSpan = ""
+	dst := w.stepDst(event)
+	if dst != "" && dst != w.terminalStep() && w.state.RunID != "" {
+		w.cfg.StepSpan = w.state.RunID + "-" + w.nextSpan
+	}
+}
+
+// reporting reports whether span events go to a sink: one is set, and this
+// is not a dry run.
+func (w *Workflow) reporting() bool {
+	return w.cfg.Spans != nil && !w.cfg.DryRun
+}
+
+// moveSpans closes the open step span and opens dst's, as the workflow
+// enters dst at now, and keeps the task span in step with dst's task role:
+// the step span ends first, then the task span ends or starts, then the new
+// step span starts, nested under the task span inside a task. Entering the
+// terminal step records it as an instant span and ends the run, so no span
+// is left open. An event into no step (the implicit "done") changes nothing.
+func (w *Workflow) moveSpans(dst string, now time.Time) {
+	if !w.validStep(dst) {
+		return
+	}
+	ref := w.state.RunRef()
+	if prev := w.state.StepSpan; prev != nil {
+		if w.reporting() {
+			w.cfg.Spans.Ended(ref, stepInfo(prev), now, EndMoved)
+		}
+		w.state.StepSpan = nil
+	}
+	role := w.taskRole(dst)
+	w.moveTask(ref, dst, role, now)
+
+	id := w.nextSpan
+	if id == "" {
+		id = NewSpanID()
+	}
+	w.nextSpan = ""
+	open := &OpenSpan{ID: id, Name: dst, Start: now}
+	if role != TaskNone && w.state.TaskSpan != nil {
+		open.Parent = w.state.TaskSpan.ID
+	}
+	if w.reporting() {
+		w.cfg.Spans.Started(ref, stepInfo(open))
+	}
+	if dst == w.terminalStep() {
+		if w.reporting() {
+			w.cfg.Spans.Ended(ref, stepInfo(open), now, EndFinished)
+			w.cfg.Spans.RunEnded(ref, now, EndFinished)
+		}
+		return
+	}
+	w.state.StepSpan = open
+}
+
+// taskRole is the task role of the step named step.
+func (w *Workflow) taskRole(step string) TaskRole {
+	for _, s := range w.steps {
+		if s.Name == step {
+			return s.Task
+		}
+	}
+	return TaskNone
+}
+
+// moveTask keeps the task span in step with the step being entered: a step
+// that starts a task ends the open task span and opens one for the task its
+// callback named; a step within a task keeps it (opening one if a run
+// started before spans existed has none); a step outside any task ends it,
+// as finished when dst is the terminal step.
+func (w *Workflow) moveTask(ref RunRef, dst string, role TaskRole, now time.Time) {
+	switch role {
+	case TaskStart:
+		w.endTask(ref, now, EndMoved)
+		w.openTask(ref, dst, now)
+	case TaskWithin:
+		if w.state.TaskSpan == nil {
+			if _, ok := w.taskFromData(); ok {
+				w.openTask(ref, dst, now)
+			}
+		}
+	default:
+		reason := EndMoved
+		if dst == w.terminalStep() {
+			reason = EndFinished
+		}
+		w.endTask(ref, now, reason)
+	}
+}
+
+// endTask ends the open task span, if any.
+func (w *Workflow) endTask(ref RunRef, now time.Time, reason EndReason) {
+	if t := w.state.TaskSpan; t != nil {
+		if w.reporting() {
+			w.cfg.Spans.Ended(ref, taskInfo(t), now, reason)
+		}
+		w.state.TaskSpan = nil
+	}
+}
+
+// openTask opens a task span for the task named in the workflow data under
+// TaskDataKey, as step enters it. A task the data does not name is called
+// "task".
+func (w *Workflow) openTask(ref RunRef, step string, now time.Time) {
+	t, ok := w.taskFromData()
+	if !ok || t.title == "" {
+		t.title = "task"
+	}
+	w.state.TaskSpan = &OpenSpan{ID: NewSpanID(), Name: t.title, Task: t.id, Step: step, Start: now}
+	if w.reporting() {
+		w.cfg.Spans.Started(ref, taskInfo(w.state.TaskSpan))
+	}
+}
+
+type dataTask struct{ id, title string }
+
+// taskFromData reads the task a TaskStart step's callback handed over.
+func (w *Workflow) taskFromData() (dataTask, bool) {
+	v, ok := w.data.Get(TaskDataKey)
+	if !ok {
+		return dataTask{}, false
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return dataTask{}, false
+	}
+	id, _ := m["id"].(string)
+	title, _ := m["title"].(string)
+	if id == "" && title == "" {
+		return dataTask{}, false
+	}
+	return dataTask{id: id, title: title}, true
+}
+
+// resumeSpans is the span half of re-rendering step: the open step span,
+// left by a session that stopped, is reported interrupted, and a fresh span
+// opens for the same step and is saved. The terminal step has no open span
+// and opens none.
+func (w *Workflow) resumeSpans(step string) {
+	id := w.nextSpan
+	w.nextSpan = ""
+	if step == w.terminalStep() {
+		return
+	}
+	if id == "" {
+		id = NewSpanID()
+	}
+	ref := w.state.RunRef()
+	parent := ""
+	if prev := w.state.StepSpan; prev != nil {
+		parent = prev.Parent
+		if w.reporting() {
+			w.cfg.Spans.Interrupted(ref, stepInfo(prev))
+		}
+	}
+	open := &OpenSpan{ID: id, Name: step, Parent: parent, Start: time.Now().UTC()}
+	w.state.StepSpan = open
+	if w.reporting() {
+		w.cfg.Spans.Started(ref, stepInfo(open))
+	}
+	if !w.cfg.DryRun {
+		_ = saveState(w.statePath, w.state)
+	}
 }
 
 // commitTerminal marks the terminal step as completed and persists state

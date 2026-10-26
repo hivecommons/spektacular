@@ -1,0 +1,26 @@
+version = "1.0"
+
+[metadata]
+author_name = "Jumppad Labs"
+author_email = "team@jumppad.dev"
+difficulty_explanation = "Resumes an implement run at check_goal, after verification passed, and has a separate, read-only reviewer judge the task's acceptance criteria from the files before any is ticked; in the unmet scenario a required README line is missing while every test passes and the agent is told the work is complete"
+category = "agent-workflow"
+tags = ["spektacular", "implement-workflow", "goal-check", "sub-agents", "multi-step", "cli"]
+
+[agent]
+# One task, checked once (met) or twice (unmet, with one retry). The implement
+# suite gives a whole run 1200s; 1500s leaves room for the reviewer launches.
+timeout_sec = 1500.0
+
+[verifier]
+timeout_sec = 180.0
+
+[environment]
+build_timeout_sec = 600.0
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240
+
+[[artifacts]]
+source = "/app/.spektacular"
+destination = "spektacular"

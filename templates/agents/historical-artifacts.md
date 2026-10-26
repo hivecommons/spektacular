@@ -1,8 +1,9 @@
-## Historical Artifacts: Specs and Plans as Archaeology
+# Historical Artifacts: Specs and Plans as Archaeology
 
-> Managed by `{{command}} init` — edit `templates/agents/historical-artifacts.md`
-> in the Spektacular source, not this section in place. Hand edits will not
-> survive the next init.
+> Managed by `{{command}} init` and refreshed by `{{command}} migrate` — edit
+> `templates/agents/historical-artifacts.md` in the Spektacular source, not this file in
+> place. Hand edits will not survive the next init. Agents read this file
+> when its rule's short section in `AGENTS.md` sends them here, and never edit it.
 
 In this repository, treat every file under `.spektacular/specs/` and
 `.spektacular/plans/` as a historical, archaeological record. Each one

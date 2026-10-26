@@ -15,7 +15,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/config"
 	"github.com/hivecommons/spektacular/internal/migrate"
 	"github.com/hivecommons/spektacular/internal/output"
-	"github.com/hivecommons/spektacular/internal/sessionlog"
+	"github.com/hivecommons/spektacular/internal/tracelog"
 	"github.com/hivecommons/spektacular/internal/workflow"
 	"github.com/spf13/cobra"
 )
@@ -88,44 +88,66 @@ func Execute() {
 // Execute so tests can exercise the full wrapping behavior without an
 // os.Exit call.
 //
-// When the project's debug.enabled config option is on, runRoot also
-// records the command issued and the exact response returned to a local
-// session log, for reconstructing a session after the fact. This is
-// strictly additive: with the option off (the default), runRoot's behavior
-// is byte-for-byte identical to what it is without any of this.
+// It is also the single place every command is logged. Each command run in
+// a project leaves one OpenTelemetry-model span record in the project's log
+// (internal/tracelog), through the logger log.provider names, at the level
+// log.level sets:
 //
-// SPEKTACULAR_SESSION_LOG=off leaves one command out of the session log,
-// for a caller that polls, such as an editor or agent-host mod refreshing
-// status every few seconds, whose calls would otherwise bury the session.
-// sessionLogEnv names the variable that, set to "off", keeps a command out
-// of the debug session log.
-const sessionLogEnv = "SPEKTACULAR_SESSION_LOG"
-
+//   - standard (the default) records the command, its run, agent, workflow
+//     and step, timing, exit status and any error message;
+//   - verbose also records the full response and the workflow state before
+//     and after the command;
+//   - off records nothing.
+//
+// The level comes from the project's configuration alone. Nothing is
+// recorded where no project config exists, so a command run anywhere else,
+// such as in a repo's code checkout, never leaves a log behind. A command
+// carrying the logging-exempt annotation, on itself or a parent (see
+// logExempted), is never logged at all: `status` carries it, so a caller
+// that polls status never adds to or trims the log.
+//
+// Logging never changes a command's output or exit code: at the standard
+// level nothing touches the output stream, and the whole record-and-write
+// block runs under a recover, with every failure inside the logger dropped.
 func runRoot() int {
-	// The debug probe must tolerate running outside a project — the gate
+	// The log probe must tolerate running outside a project — the gate
 	// belongs to the command handlers, not here.
 	cfg, cfgErr := loadConfigLenient()
-	debugEnabled := cfgErr == nil && cfg.Debug.Enabled && os.Getenv(sessionLogEnv) != "off"
+	argv := os.Args[1:]
+	target, _, findErr := rootCmd.Find(argv)
+	level := logLevel(cfg.Log.Level, cfgErr == nil, projectConfigExists(), findErr == nil && logExempted(target))
 
-	var argv []string
 	var start time.Time
+	var snapshotPath string
+	var before *stateSnapshot
 	var orig io.Writer
 	var buf *bytes.Buffer
-	var stateBefore *sessionlog.StateSnapshot
-	var snapshotPath string
-
-	if debugEnabled {
-		argv = os.Args[1:]
+	var logger tracelog.Logger
+	if level != config.LogLevelOff {
 		start = time.Now()
+		// The command's workflows report their step and task spans through
+		// the same logger its own record goes to.
+		if l, ok := newCommandLogger(cfg); ok {
+			logger = l
+			activeSpans = newSpanRecorder(logger, cfg.Agent)
+		}
 		snapshotPath = snapshotStatePath(argv)
-		stateBefore = readStateSnapshot(snapshotPath)
-		orig = rootCmd.OutOrStdout()
-		buf = &bytes.Buffer{}
-		rootCmd.SetOut(io.MultiWriter(orig, buf))
-		terminalOut = orig
+		// A run already in progress before the upgrade has no run id: give
+		// it one now, so this command and every later one share it.
+		if snapshotPath != "" {
+			_, _ = workflow.EnsureRunID(snapshotPath)
+		}
+		before = readStateSnapshot(snapshotPath)
+		if level == config.LogLevelVerbose {
+			orig = rootCmd.OutOrStdout()
+			buf = &bytes.Buffer{}
+			rootCmd.SetOut(io.MultiWriter(orig, buf))
+			terminalOut = orig
+		}
 	}
 
 	executedCmd, err := rootCmd.ExecuteC()
+	activeSpans = nil
 
 	exitCode := 0
 	if err != nil {
@@ -133,86 +155,274 @@ func runRoot() int {
 		exitCode = 1
 	}
 
-	if debugEnabled {
-		stateAfter := readStateSnapshot(snapshotPath)
-		advanced := stateAdvanced(stateBefore, stateAfter)
-		if dir, pathErr := sessionLogDir(); pathErr == nil {
-			sessionID := sessionlog.SessionID(stateAfter)
-			// A lane's files are removed when it finishes, so its last
-			// command is filed under the lane it drove, not under no
-			// workflow at all.
-			if stateAfter == nil && stateBefore != nil {
-				sessionID = sessionlog.SessionID(stateBefore)
-			}
-			isStart := isWorkflowStart(executedCmd, exitCode)
-			logPath := sessionlog.LogFilePath(dir, cfg.Agent, sessionID, isStart, start)
-			sessionlog.Record(logPath, sessionlog.Event{
-				Timestamp:   start,
-				SessionID:   sessionID,
-				Command:     argv,
-				DurationMS:  time.Since(start).Milliseconds(),
-				ExitCode:    exitCode,
-				Response:    buf.String(),
-				StateBefore: stateBefore,
-				StateAfter:  stateAfter,
-				Advanced:    advanced,
-			})
-		}
+	if buf != nil {
 		rootCmd.SetOut(orig)
 		terminalOut = nil
+	}
+
+	if level != config.LogLevelOff && !logExempted(executedCmd) {
+		func() {
+			defer func() { _ = recover() }()
+			var response string
+			if buf != nil {
+				response = buf.String()
+			}
+			recordCommand(logger, cfg, level, commandOutcome{
+				cmd:      executedCmd,
+				argv:     argv,
+				start:    start,
+				end:      time.Now(),
+				exitCode: exitCode,
+				err:      err,
+				response: response,
+				before:   before,
+				after:    readStateSnapshot(snapshotPath),
+			})
+		}()
 	}
 
 	return exitCode
 }
 
-// isWorkflowStart reports whether this invocation is the command that just
-// began a brand-new workflow session — a `<kind> new` call (kind ∈
-// spec/plan/implement) that actually succeeded in creating fresh state,
-// rather than bouncing off an in-progress workflow (a workflow_in_progress
-// error, which returns a non-nil error and so exitCode != 0) or running as
-// --dry-run (which never touches the real state.json). It deliberately does
-// not compare state before/after: a `--force` restart of the same named
-// workflow produces a fresh state shaped identically to the state it
-// replaced (same kind, name, and first current_step), so that comparison
-// can't tell a real restart apart from a true no-op — the command's own
-// identity and its --dry-run flag are the only reliable signal. It reads
-// the actually-executed leaf command (from ExecuteC, not raw argv) so it
-// stays correct regardless of where global flags land in the invocation.
-// This is the one moment sessionlog.LogFilePath mints a new, timestamped
-// log file instead of continuing to append to the current session's
-// existing one.
-func isWorkflowStart(executedCmd *cobra.Command, exitCode int) bool {
-	if executedCmd == nil || exitCode != 0 {
-		return false
+// Commands that are never logged carry this cobra annotation, on themselves
+// or on a command above them: Annotations[logAnnotation] == logExempt. A
+// command group marks itself once and every subcommand inherits it through
+// logExempted's parent walk. The key and value are the contract other
+// command groups use: `status` sets it here, and the run statistics group
+// (spec 000075, `stats`) sets the same map.
+const (
+	logAnnotation = "log"
+	logExempt     = "exempt"
+)
+
+// logExempted reports whether c, or any command above it, carries the
+// logging-exempt annotation. Unlike the upgrade gate's walk it has no
+// implicit exemptions: help, completion and the root itself are logged.
+func logExempted(c *cobra.Command) bool {
+	for ; c != nil; c = c.Parent() {
+		if c.Annotations[logAnnotation] == logExempt {
+			return true
+		}
 	}
-	if executedCmd.Name() != "new" || executedCmd.Parent() == nil {
-		return false
-	}
-	switch executedCmd.Parent().Name() {
-	case "spec", "plan", "implement":
-	default:
-		return false
-	}
-	dryRun, _ := executedCmd.Flags().GetBool("dry-run")
-	return !dryRun
+	return false
 }
 
-// stateSnapshotFile is the subset of internal/workflow's State shape needed
-// to build a sessionlog.StateSnapshot, read directly rather than importing
-// internal/workflow — cmd already owns the path-construction logic for
-// state.json and this keeps sessionlog a pure leaf package.
+// forcedLogLevel, when set, replaces the configured log level inside a
+// project. Only cmd's TestMain sets it, from the test binary's -log-level
+// flag, so the whole suite can run with logging forced off; the shipped
+// binary never sets it and no environment variable reaches it.
+var forcedLogLevel string
+
+// logLevel is the effective log level of one command: off outside a
+// project, when the config cannot be loaded, or for a logging-exempt
+// command; otherwise the forced test level when set, else the configured
+// one (empty meaning standard).
+func logLevel(configured string, configOK, inProject, exempt bool) string {
+	if !configOK || !inProject || exempt {
+		return config.LogLevelOff
+	}
+	if forcedLogLevel != "" {
+		return forcedLogLevel
+	}
+	if configured == "" {
+		return config.LogLevelStandard
+	}
+	return configured
+}
+
+// commandOutcome is everything a command's record is built from.
+type commandOutcome struct {
+	cmd           *cobra.Command
+	argv          []string
+	start, end    time.Time
+	exitCode      int
+	err           error
+	response      string
+	before, after *stateSnapshot
+}
+
+// recordCommand builds the command's record and hands it to logger, the
+// configured logger. A logger that could not be built (an unknown provider,
+// which config validation already refuses) records nothing.
+func recordCommand(logger tracelog.Logger, cfg config.Config, level string, o commandOutcome) {
+	if logger == nil {
+		return
+	}
+	run, rec := buildRecord(cfg.Agent, level, o)
+	logger.Write(run, rec)
+}
+
+// buildRecord turns a command's outcome into the run it belongs to and its
+// span record.
+func buildRecord(agent, level string, o commandOutcome) (tracelog.Run, tracelog.Record) {
+	if agent == "" {
+		agent = "unknown"
+	}
+	run, step, stepTo := attributeRun(o.before, o.after, o.start, agent)
+
+	attrs := map[string]any{
+		tracelog.AttrSpanType:    tracelog.TypeCommand,
+		tracelog.AttrAgent:       agent,
+		tracelog.AttrCommandArgs: o.argv,
+		tracelog.AttrExitCode:    o.exitCode,
+	}
+	if !run.Standalone() {
+		attrs[tracelog.AttrWorkflowKind] = run.Kind
+		attrs[tracelog.AttrWorkflowName] = run.Name
+		if step != "" {
+			attrs[tracelog.AttrStep] = step
+		}
+		if stepTo != "" {
+			attrs[tracelog.AttrStepTo] = stepTo
+		}
+	}
+	if level == config.LogLevelVerbose {
+		attrs[tracelog.AttrResponse] = o.response
+		attrs[tracelog.AttrStateBefore] = o.before
+		attrs[tracelog.AttrStateAfter] = o.after
+	}
+
+	status := tracelog.Status{Code: tracelog.StatusOK}
+	if o.err != nil {
+		status = tracelog.Status{Code: tracelog.StatusError, Message: toErrorResponse(o.err).Message}
+	}
+
+	return run, tracelog.Record{
+		Record:       tracelog.RecordSpan,
+		TraceID:      run.TraceID,
+		SpanID:       tracelog.NewSpanID(),
+		ParentSpanID: parentSpan(o.before, o.after, run),
+		Name:         commandName(o.cmd),
+		Kind:         tracelog.KindInternal,
+		StartTime:    o.start.UTC(),
+		EndTime:      o.end.UTC(),
+		Status:       status,
+		Attributes:   attrs,
+		Resource:     tracelog.Resource(version),
+	}
+}
+
+// attributeRun decides which run a command belongs to, from the state
+// snapshots taken before and after it: the run in progress afterwards (a
+// `new`, a `--force` restart, or any command inside a run); otherwise the
+// run in progress before (the command that finished it, or removed its
+// lane); otherwise none, and the command is standalone with a trace of its
+// own. step is the step the command ran in, when the before-state belongs to
+// the same run; stepTo is the step it moved the run to, when that differs.
+func attributeRun(before, after *stateSnapshot, start time.Time, agent string) (run tracelog.Run, step, stepTo string) {
+	var owner *stateSnapshot
+	switch {
+	case after.inProgress():
+		owner = after
+	case before.inProgress():
+		owner = before
+	default:
+		return tracelog.Run{TraceID: tracelog.NewTraceID(), StartedAt: start, Agent: agent}, "", ""
+	}
+
+	run = tracelog.Run{TraceID: owner.RunID, Kind: owner.Kind, Name: owner.Name, StartedAt: owner.CreatedAt, Agent: agent}
+	if run.TraceID == "" {
+		run.TraceID = tracelog.NewTraceID()
+	}
+	if run.StartedAt.IsZero() {
+		run.StartedAt = start
+	}
+	if before.sameRun(owner) {
+		step = before.CurrentStep
+	}
+	if after.sameRun(owner) && after.CurrentStep != step {
+		stepTo = after.CurrentStep
+	}
+	return run, step, stepTo
+}
+
+// parentSpan is the step span a command ran in, the parent of its record:
+// the step span of the state before the command when that state is in
+// progress and belongs to the record's run; otherwise the step span of the
+// state after it, when that belongs to the run (a `new` starting the run);
+// otherwise none.
+func parentSpan(before, after *stateSnapshot, run tracelog.Run) string {
+	if run.Standalone() {
+		return ""
+	}
+	if before.inProgress() && before.RunID == run.TraceID && before.StepSpan != "" {
+		return before.StepSpan
+	}
+	if after != nil && after.RunID == run.TraceID {
+		return after.StepSpan
+	}
+	return ""
+}
+
+// commandName is the command's path without the binary name, such as
+// "spec goto", or "spektacular" for the root command itself.
+func commandName(c *cobra.Command) string {
+	if c == nil || c == rootCmd {
+		return rootCmd.Name()
+	}
+	return strings.TrimPrefix(c.CommandPath(), rootCmd.Name()+" ")
+}
+
+// stateSnapshotFile is the subset of internal/workflow's State shape a
+// command's record needs, read directly from the state file the command
+// acts on (see snapshotStatePath).
 type stateSnapshotFile struct {
 	Kind           string         `json:"kind"`
+	RunID          string         `json:"run_id"`
 	CurrentStep    string         `json:"current_step"`
 	CompletedSteps []string       `json:"completed_steps"`
+	CreatedAt      time.Time      `json:"created_at"`
 	Data           map[string]any `json:"data"`
+	StepSpan       *struct {
+		ID string `json:"id"`
+	} `json:"step_span"`
+}
+
+// stateSnapshot is the small view of a workflow's persisted state taken
+// immediately before and after a command runs. Its JSON form is what a
+// verbose record carries as the state before and after; a nil snapshot means
+// no workflow state existed at that point.
+type stateSnapshot struct {
+	Kind           string   `json:"kind"`
+	Name           string   `json:"name"`
+	RunID          string   `json:"run_id"`
+	CurrentStep    string   `json:"current_step"`
+	CompletedSteps []string `json:"completed_steps"`
+	// StepSpan is the id of the open step span, "" when there is none.
+	StepSpan  string    `json:"step_span,omitempty"`
+	CreatedAt time.Time `json:"-"`
+}
+
+// inProgress reports whether the snapshot is of a run that has started and
+// not finished; a nil snapshot is not.
+func (s *stateSnapshot) inProgress() bool {
+	return s != nil && s.CurrentStep != "" && s.CurrentStep != "finished"
+}
+
+// sameRun reports whether s is a snapshot of the same run as other.
+func (s *stateSnapshot) sameRun(other *stateSnapshot) bool {
+	if s == nil || other == nil {
+		return false
+	}
+	if s.RunID != "" || other.RunID != "" {
+		return s.RunID == other.RunID
+	}
+	return s.Kind == other.Kind && s.Name == other.Name && s.CreatedAt.Equal(other.CreatedAt)
 }
 
 // snapshotStatePath is the state file a command's session record follows:
 // the lane of an orchestrated plan or implement workflow the command names —
-// an orchestrated `new`, or a `goto` naming a spec that has a lane — and
-// .spektacular/state.json otherwise. It is decided once, before the command
-// runs, so both snapshots read the same file. "" means none can be found.
+// an orchestrated `new`, a `goto` naming a spec that has a lane, or any other
+// command whose arguments name a spec with a running lane, such as a child's
+// `plan file write <spec> plan` — and .spektacular/state.json otherwise. It is
+// decided once, before the command runs, so both snapshots read the same
+// file. "" means none can be found.
+//
+// Filing by argument keeps a child's work in its own lane, so the shared log
+// holds the orchestrator's commands and the few a child runs without naming
+// its spec. An orchestrator command naming a spec whose lane is still running
+// is filed under that lane too; once the lane finishes and its files are
+// removed, commands naming the spec go to the shared log again.
 func snapshotStatePath(argv []string) string {
 	dir, err := dataDir()
 	if err != nil {
@@ -220,7 +430,8 @@ func snapshotStatePath(argv []string) string {
 	}
 	shared := stateFilePath(dir)
 
-	var kind, verb, data string
+	var kind, verb, data, parent string
+	var args []string
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
 		switch {
@@ -231,24 +442,37 @@ func snapshotStatePath(argv []string) string {
 			}
 		case strings.HasPrefix(a, "--data="):
 			data = strings.TrimPrefix(a, "--data=")
-		case a == "--fields" || a == "--stdin" || a == "--file":
+		case a == "--parent":
+			if i+1 < len(argv) {
+				parent = argv[i+1]
+				i++
+			}
+		case strings.HasPrefix(a, "--parent="):
+			parent = strings.TrimPrefix(a, "--parent=")
+		case a == "--fields" || a == "--stdin" || a == "--file" ||
+			a == "--type" || a == "--status" || a == "--message":
 			i++ // these take a value, which is not a subcommand
 		case strings.HasPrefix(a, "-"):
 		case kind == "":
 			kind = a
 		case verb == "":
 			verb = a
+		default:
+			args = append(args, a)
 		}
 	}
+	if kind == "trace" {
+		return traceSnapshotPath(dir, verb, args, parent, shared)
+	}
 	if kind != "plan" && kind != "implement" {
-		return shared
+		return laneNamedByArgs(dir, kind, append([]string{verb}, args...), shared)
 	}
 	var input struct {
 		Name         string `json:"name"`
 		Orchestrated bool   `json:"orchestrated"`
 	}
 	if json.Unmarshal([]byte(data), &input) != nil || input.Name == "" || !nameRegexp.MatchString(input.Name) {
-		return shared
+		return laneNamedByArgs(dir, kind, args, shared)
 	}
 	lane := workflow.LaneStatePath(dir, kind, input.Name)
 	switch verb {
@@ -266,8 +490,57 @@ func snapshotStatePath(argv []string) string {
 		if _, err := os.Stat(lane); err == nil {
 			return lane
 		}
+	case "goal":
+		// `implement goal record|decide|show` name their spec in --data like
+		// a goto, and belong to the same lane, so a verifier finds each
+		// recorded goal check in the lane it gates.
+		if _, err := os.Stat(lane); err == nil && kind == "implement" {
+			return lane
+		}
 	}
-	return shared
+	return laneNamedByArgs(dir, kind, args, shared)
+}
+
+// traceSnapshotPath is the state file a trace command's record follows: the
+// in-progress run its span id names (the positional id of a stop, the
+// --parent of a start), so the command's record lands in the same run file
+// as the span it writes; otherwise fallback.
+func traceSnapshotPath(dir, verb string, args []string, parent, fallback string) string {
+	id := parent
+	if verb == "stop" && len(args) > 0 {
+		id = args[0]
+	}
+	ref, err := tracelog.ParseSpanRef(id)
+	if err != nil {
+		return fallback
+	}
+	if path, _ := resolveTraceRun(dir, &ref); path != "" {
+		return path
+	}
+	return fallback
+}
+
+// laneNamedByArgs is the state file of a running lane whose spec one of args
+// names, preferring the lane of the command's own kind, or fallback when none
+// does. An argument that is not a spec name never matches, since only a
+// running orchestrated workflow has a lane file.
+func laneNamedByArgs(dir, kind string, args []string, fallback string) string {
+	kinds := []string{"plan", "implement"}
+	if kind == "implement" {
+		kinds = []string{"implement", "plan"}
+	}
+	for _, k := range kinds {
+		for _, a := range args {
+			if !nameRegexp.MatchString(a) {
+				continue
+			}
+			lane := workflow.LaneStatePath(dir, k, a)
+			if _, err := os.Stat(lane); err == nil {
+				return lane
+			}
+		}
+	}
+	return fallback
 }
 
 // dryRunArg reports whether argv asks for a dry run.
@@ -281,10 +554,11 @@ func dryRunArg(argv []string) bool {
 }
 
 // readStateSnapshot reads the workflow state file at path and returns the
-// small view of it a session record needs, or nil if no workflow has run yet
-// (no state file exists) or it can't be read/parsed — never an error, since a
-// snapshot read can never be allowed to affect the command's own outcome.
-func readStateSnapshot(path string) *sessionlog.StateSnapshot {
+// small view of it a command's record needs, or nil if no workflow has run
+// yet (no state file exists) or it can't be read/parsed — never an error,
+// since a snapshot read can never be allowed to affect the command's own
+// outcome.
+func readStateSnapshot(path string) *stateSnapshot {
 	if path == "" {
 		return nil
 	}
@@ -299,41 +573,19 @@ func readStateSnapshot(path string) *sessionlog.StateSnapshot {
 	}
 
 	name, _ := sf.Data["name"].(string)
-	return &sessionlog.StateSnapshot{
+	stepSpan := ""
+	if sf.StepSpan != nil {
+		stepSpan = sf.StepSpan.ID
+	}
+	return &stateSnapshot{
+		StepSpan:       stepSpan,
 		Kind:           sf.Kind,
 		Name:           name,
+		RunID:          sf.RunID,
 		CurrentStep:    sf.CurrentStep,
 		CompletedSteps: sf.CompletedSteps,
+		CreatedAt:      sf.CreatedAt,
 	}
-}
-
-// stateAdvanced reports whether after meaningfully differs from before —
-// the signal that a command actually moved a piece of work forward, as
-// opposed to a rejected or silently no-op command (e.g. Goto to the
-// already-current step) that returns no error but changes nothing. This is
-// deliberately independent of whatever error rootCmd.Execute() returned.
-func stateAdvanced(before, after *sessionlog.StateSnapshot) bool {
-	if (before == nil) != (after == nil) {
-		return true
-	}
-	if before == nil {
-		return false
-	}
-	return before.Kind != after.Kind ||
-		before.Name != after.Name ||
-		before.CurrentStep != after.CurrentStep ||
-		len(before.CompletedSteps) != len(after.CompletedSteps)
-}
-
-// sessionLogDir returns the project's already-gitignored debug directory,
-// which holds one session log file per workflow session (see
-// sessionlog.LogFilePath) plus any ad hoc commands run outside one.
-func sessionLogDir() (string, error) {
-	dir, err := dataDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "debug"), nil
 }
 
 // toErrorResponse converts any error returned by a command into the shared
@@ -358,6 +610,17 @@ func configFilePath() (string, error) {
 		return "", fmt.Errorf("getting working directory: %w", err)
 	}
 	return filepath.Join(cwd, ".spektacular", "config.yaml"), nil
+}
+
+// projectConfigExists reports whether the current working directory holds
+// a project config.
+func projectConfigExists() bool {
+	cfgPath, err := configFilePath()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(cfgPath)
+	return err == nil
 }
 
 // loadConfig loads the project config from the current working directory.
@@ -445,6 +708,7 @@ func init() {
 	rootCmd.AddCommand(changelogCmd)
 	rootCmd.AddCommand(implementCmd)
 	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(statsCmd)
 	rootCmd.AddCommand(knowledgeCmd)
 	rootCmd.AddCommand(designCmd)
 	rootCmd.AddCommand(epicCmd)

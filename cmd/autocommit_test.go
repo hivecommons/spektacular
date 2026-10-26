@@ -200,6 +200,9 @@ func walkSteps(t *testing.T, kind string, steps ...string) {
 	for _, step := range steps {
 		_, _, code := runRootCmd(t, kind, "goto", "--data", `{"step":"`+step+`"}`)
 		require.Equalf(t, 0, code, "%s goto %s", kind, step)
+		if kind == "implement" && step == "check_goal" {
+			passGoalCheck(t, sharedImplementPlan(t))
+		}
 	}
 }
 
@@ -316,7 +319,7 @@ func TestAutoCommit_ImplementCompletionCommitsEachChangedRepoOnce(t *testing.T) 
 	_, _, code := runRootCmd(t, "implement", "new", "--data", `{"name":"billing"}`)
 	require.Equal(t, 0, code)
 	walkSteps(t, "implement",
-		"analyze", "implement", "test", "verify", "update_plan", "update_changelog",
+		"analyze", "implement", "test", "verify", "check_goal", "update_plan", "update_changelog",
 		"test_plan", "update_feature_changelog", "reconcile_spec")
 
 	dirtyOtherRepo(t, fx)
@@ -506,7 +509,7 @@ func startImplementLaneConfigured(t *testing.T, docsChanged bool, extraConfig st
 	_, _, code := runRootCmd(t, "implement", "new", "--data", `{"name":"alpha"}`)
 	require.Equal(t, 0, code)
 	walkSteps(t, "implement",
-		"analyze", "implement", "test", "verify", "update_plan", "update_changelog",
+		"analyze", "implement", "test", "verify", "check_goal", "update_plan", "update_changelog",
 		"test_plan", "update_feature_changelog")
 	reconcileOut, _, code := runRootCmd(t, "implement", "goto", "--data", `{"step":"reconcile_spec"}`)
 	require.Equalf(t, 0, code, "implement goto reconcile_spec failed: %s", reconcileOut)
@@ -583,6 +586,7 @@ func requireImplementLaneCommitted(t *testing.T, fx implementLaneFixture) {
 	require.Equal(t,
 		".spektacular/changelog/alpha.md\n"+
 			".spektacular/changelog/testproj/alpha.md\n"+
+			".spektacular/plans/alpha/goals.json\n"+
 			".spektacular/plans/alpha/plan.md\n"+
 			".spektacular/state.json",
 		changedIn(t, f.proj, fx.heads[f.proj]))
@@ -706,6 +710,7 @@ func TestAutoCommit_ImplementInWorktreesSkipsARepoWithNoRecord(t *testing.T) {
 	require.Equal(t,
 		".spektacular/changelog/alpha.md\n"+
 			".spektacular/changelog/testproj/alpha.md\n"+
+			".spektacular/plans/alpha/goals.json\n"+
 			".spektacular/plans/alpha/plan.md\n"+
 			".spektacular/state.json",
 		changedIn(t, f.proj, fx.heads[f.proj]))
@@ -797,7 +802,7 @@ func TestAutoCommit_OffModeImplementWithoutWorktreesCommitsNothing(t *testing.T)
 	_, _, code := runRootCmd(t, "implement", "new", "--data", `{"name":"billing"}`)
 	require.Equal(t, 0, code)
 	walkSteps(t, "implement",
-		"analyze", "implement", "test", "verify", "update_plan", "update_changelog",
+		"analyze", "implement", "test", "verify", "check_goal", "update_plan", "update_changelog",
 		"test_plan", "update_feature_changelog")
 	stdout, _, code := runRootCmd(t, "implement", "goto", "--data", `{"step":"reconcile_spec"}`)
 	require.Equal(t, 0, code)

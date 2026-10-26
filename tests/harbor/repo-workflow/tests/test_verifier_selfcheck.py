@@ -194,6 +194,28 @@ def test_cold_question_rule_fails_on_a_second_cold_question():
 def test_cold_question_rule_fails_when_nothing_was_asked():
     broken = replace(good_one_at_a_time(), text(Q_LOCATE), None)
     assert rw.questions_before_first_goto(broken) == []
+    assert not rw.location_given_to_new(broken)
+
+
+def known_location() -> list[dict]:
+    """The good transcript with the location the user already named passed to
+    `repo new`, so the locate question and its answer are gone."""
+    objs = replace(good_one_at_a_time(), text(Q_LOCATE),
+                   bash("""spektacular repo new --data '{"location":"/srv/harbour"}'"""))
+    return replace(objs, text("The repo is at /srv/harbour."), None)
+
+
+def test_cold_question_rule_accepts_no_question_for_a_known_location():
+    objs = known_location()
+    assert rw.location_given_to_new(objs)
+    assert rw.questions_before_first_goto(objs) == []
+
+
+def test_cold_question_rule_fails_on_a_question_after_a_known_location():
+    broken = replace(known_location(), bash("spektacular init claude"),
+                     [bash("spektacular init claude"), text("And what would you like to call it?")])
+    assert rw.location_given_to_new(broken)
+    assert len(rw.questions_before_first_goto(broken)) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +373,22 @@ def test_vocabulary_rule_ignores_commands_the_agent_runs():
     assert "--data" in commands and "repo goto" in commands
     assert any(o.get("type") == "user" for o in objs), "fixture has no tool results"
     assert rw.banned_terms_in_assistant_text(objs) == []
+
+
+def test_vocabulary_rule_ignores_the_report_after_the_artifacts_copy():
+    objs = good_one_at_a_time() + [
+        bash("cp -r /app/.spektacular /logs/artifacts/spektacular"),
+        text("The repo was registered through the guided flow, not via `spektacular repo add`."),
+    ]
+    assert rw.banned_terms_in_assistant_text(objs) == []
+
+
+def test_vocabulary_rule_still_scans_the_conversation_before_the_copy():
+    objs = good_one_at_a_time() + [
+        text("I could have used repo add instead."),
+        bash("cp -r /app/.spektacular /logs/artifacts/spektacular"),
+    ]
+    assert any(t == "repo add" for t, _ in rw.banned_terms_in_assistant_text(objs))
 
 
 # ---------------------------------------------------------------------------

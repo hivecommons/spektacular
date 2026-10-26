@@ -97,6 +97,7 @@ func TestStepsOrderMatchesExpected(t *testing.T) {
 		"implement",
 		"test",
 		"verify",
+		"check_goal",
 		"update_plan",
 		"update_changelog",
 		"test_plan",
@@ -156,10 +157,10 @@ func TestFSMWalkFromNewToFinished(t *testing.T) {
 	require.Equal(t, "start", wf.Current())
 
 	// new auto-advances to read_plan, so the first Next lands on read_plan.
-	// Walk forward with Next() up through update_changelog. Then use explicit
-	// Goto() to disambiguate the multi-source exit (update_changelog has two
-	// legal successors — analyze via the loop, and test_plan — so Next()
-	// cannot pick one deterministically).
+	// Walk forward with explicit Goto() up through update_changelog: verify
+	// has two legal successors (check_goal, and update_plan when the goal
+	// check is off) and update_changelog two more (analyze via the loop, and
+	// test_plan), so Next() cannot pick one deterministically.
 	linear := []string{
 		"read_plan",
 		"analyze",
@@ -170,7 +171,7 @@ func TestFSMWalkFromNewToFinished(t *testing.T) {
 		"update_changelog",
 	}
 	for _, want := range linear {
-		require.NoError(t, wf.Next(), "transition to %s failed", want)
+		require.NoError(t, advance(wf, want), "transition to %s failed", want)
 		require.Equal(t, want, wf.Current(), "expected state %s after transition", want)
 	}
 
@@ -197,8 +198,8 @@ func TestFSMHasNoUpdateRepoChangelogStep(t *testing.T) {
 	tmp := t.TempDir()
 	wf := workflow.New(Steps(), filepath.Join(tmp, "state.json"), workflow.Config{Command: "spektacular", DryRun: true}, store.NewFileStore(tmp, "project"), &captureWriter{})
 	wf.SetData("name", "test")
-	for range []string{"read_plan", "analyze", "implement", "test", "verify", "update_plan", "update_changelog"} {
-		require.NoError(t, wf.Next())
+	for _, step := range []string{"read_plan", "analyze", "implement", "test", "verify", "update_plan", "update_changelog"} {
+		require.NoError(t, advance(wf, step))
 	}
 	require.Error(t, wf.Goto("update_repo_changelog"))
 	require.NoError(t, wf.Goto("test_plan"))
@@ -216,7 +217,7 @@ func TestFSMLoopFromUpdateChangelogBackToAnalyze(t *testing.T) {
 
 	// Walk through to update_changelog the first time.
 	for _, want := range []string{"read_plan", "analyze", "implement", "test", "verify", "update_plan", "update_changelog"} {
-		require.NoError(t, wf.Next())
+		require.NoError(t, advance(wf, want))
 		require.Equal(t, want, wf.Current())
 	}
 
@@ -226,7 +227,7 @@ func TestFSMLoopFromUpdateChangelogBackToAnalyze(t *testing.T) {
 
 	// Walk forward again to update_changelog.
 	for _, want := range []string{"implement", "test", "verify", "update_plan", "update_changelog"} {
-		require.NoError(t, wf.Next())
+		require.NoError(t, advance(wf, want))
 		require.Equal(t, want, wf.Current())
 	}
 
@@ -339,6 +340,36 @@ func TestVerifyStepReferencesVerifyImplementation(t *testing.T) {
 	require.Contains(t, strings.ToLower(out), "pass/fail")
 }
 
+// The test step delegates to a sub-agent only for a High-complexity task;
+// Low and Medium tasks are tested inline, which saves a child launch per task.
+func TestTestStepDelegatesOnlyHighComplexity(t *testing.T) {
+	out := renderStep(t, testStep())
+	require.Contains(t, out, "- **High**: the tests are written by a **sub-agent**")
+	require.Contains(t, out, "a High-complexity task's tests are never written in your own context.")
+	require.Contains(t, out, "- **Low or Medium**, or no complexity recorded: write the tests yourself, in this context. Do not launch a sub-agent for them.")
+	require.Contains(t, out, "For a High-complexity task, pass the current task's acceptance criteria and its section of the plan's `context.md` to the sub-agent.")
+	require.Contains(t, out, "skill follow-test-patterns")
+	require.Contains(t, out, "Do not sleep, poll its output or schedule a wake-up")
+}
+
+// The verify step runs its commands inline with trimmed output, never in a
+// sub-agent.
+func TestVerifyStepRunsInline(t *testing.T) {
+	out := renderStep(t, verify())
+	require.Contains(t, out, "Run the verification commands for the current task yourself, in this context")
+	require.Contains(t, out, "Do not launch a sub-agent for them")
+	require.Contains(t, out, "`tail -n 20`")
+	require.NotContains(t, out, "the verification commands run in one")
+	require.Contains(t, out, "skill verify-implementation")
+	require.Contains(t, out, "pass/fail")
+}
+
+// The goal check waits for its reviewer rather than polling for it.
+func TestCheckGoalStepWaitsForTheReviewerWithoutPolling(t *testing.T) {
+	out := renderStep(t, checkGoalOn())
+	require.Contains(t, out, "Then wait for the reviewer to return. Do not sleep, poll its output or schedule a wake-up while it runs")
+}
+
 // The implement, test and verify steps each load the current phase from the
 // plan store themselves rather than trusting an earlier step's output to
 // still be in the agent's context (it may have been compacted or resumed).
@@ -394,44 +425,67 @@ func TestUpdateChangelogStepBranchesOnUncheckedPhases(t *testing.T) {
 	require.Contains(t, out, `"step":"analyze"`)
 	require.Contains(t, out, `"step":"test_plan"`)
 	require.NotContains(t, out, "update_repo_changelog")
-	require.Contains(t, strings.ToLower(out), "ask the user")
+	// A standalone run loops on without asking, and pauses only on request.
+	require.Contains(t, out, "By default, do not ask whether to continue: loop on to the next task automatically.")
+	require.Contains(t, out, "Pause here only if the user asked you to")
+	require.NotContains(t, out, "Continue, or stop here for review?")
 }
 
-// TestUpdateChangelogStepOffersKnowledgeCaptureForDurableDiscoveries asserts
-// the update_changelog step directs the agent to assess the phase's
-// Discoveries entry for durable knowledge and offer capture via the
-// spek-knowledge skill, gated on explicit acceptance with decline being final
-// (Phase 1.1 assessment-and-offer beat).
-func TestUpdateChangelogStepOffersKnowledgeCaptureForDurableDiscoveries(t *testing.T) {
+// TestUpdateChangelogStepWritesDurableKnowledge asserts the update_changelog
+// step weighs the task's Discoveries entry for durable knowledge and, rather
+// than offering it, writes each qualifying item through the spek-knowledge
+// skill and lists it for the finished step to report once.
+func TestUpdateChangelogStepWritesDurableKnowledge(t *testing.T) {
 	out := renderStep(t, updateChangelog())
 	lower := strings.ToLower(out)
 
-	// Durability assessment: each discovery is weighed for value beyond the
-	// current change.
 	require.Contains(t, lower, "durable", "update_changelog must direct a durability assessment of discoveries")
 	require.Contains(t, lower, "beyond this one change", "update_changelog must frame durability as holding beyond the current change")
-
-	// The offer: name what would be captured and why it is worth keeping.
-	require.Contains(t, lower, "offer", "update_changelog must direct offering knowledge capture, never writing unprompted")
-	require.Contains(t, lower, "name what you would capture and why it is worth keeping", "update_changelog must require the offer to name what and why")
-
-	// Selectivity bar: change-local discoveries produce no offer.
 	require.Contains(t, lower, "most tasks produce none", "update_changelog must state that most tasks produce no qualifying discovery")
 
-	// Confirm gate: capture only on explicit acceptance.
-	require.Contains(t, lower, "explicit acceptance", "update_changelog must gate capture on the user's explicit acceptance")
-
-	// Decline finality: a declined item is not offered again.
-	require.Contains(t, lower, "not offered again", "update_changelog must make a decline final for that discovery")
-
-	// The hand-off goes to the spek-knowledge skill.
-	require.Contains(t, out, "spek-knowledge", "update_changelog must hand accepted items to the spek-knowledge skill")
-
-	// Negative guard: there is no `skill spek-knowledge` CLI subcommand — the
-	// template must not direct the unreachable invocation
-	// `spektacular skill spek-knowledge` (the legitimate
-	// `skill update-changelog` reference must not trip this).
+	require.Contains(t, out, "write it to the knowledge base now through the `spek-knowledge` skill")
+	require.Contains(t, out, "do not ask first, and do not stop the run for it")
+	require.Contains(t, out, "`## Knowledge written` list in `.spektacular/working-context.md`, naming the entry's tier, store, path and why it is worth keeping")
+	require.Contains(t, out, "The run's `finished` step reports every entry on that list to the user at once.")
+	require.NotContains(t, out, "Knowledge candidates")
 	require.NotContains(t, out, "skill spek-knowledge", "update_changelog must not direct the nonexistent `skill spek-knowledge` CLI invocation")
+}
+
+// TestUpdateChangelogStepOrchestratedWritesAndLists asserts an orchestrated
+// child writes durable knowledge itself and lists what it wrote in its
+// closing summary, instead of leaving discoveries for the orchestrator to
+// offer.
+func TestUpdateChangelogStepOrchestratedWritesAndLists(t *testing.T) {
+	out := renderStepWithData(t, updateChangelog(), map[string]any{"name": "test", "orchestrated": true})
+
+	require.Contains(t, out, "write it to the knowledge base now through the `spek-knowledge` skill")
+	require.Contains(t, out, "List each entry you wrote (tier, store, path, why) in your closing summary")
+	require.NotContains(t, out, "do not offer to save anything yourself")
+	require.NotContains(t, out, "Never offer to save knowledge")
+	require.Contains(t, out, "Write durable knowledge yourself through the `spek-knowledge` skill, and list each entry you wrote (tier, store, path, why) in your closing summary.")
+}
+
+// TestFinishedStepReportsKnowledgeWritten asserts the finished step reports
+// the knowledge entries the run wrote, once, as a report rather than a
+// question, for both a whole-plan run and a single-task run.
+func TestFinishedStepReportsKnowledgeWritten(t *testing.T) {
+	for name, out := range map[string]string{
+		"whole plan":  renderFinishedStep(t),
+		"single task": renderTaskStep(t, finished()),
+	} {
+		t.Run(name, func(t *testing.T) {
+			lower := strings.ToLower(out)
+			require.Contains(t, out, "### Report the knowledge written")
+			require.Contains(t, out, "If this run collected a `## Knowledge written` list in `.spektacular/working-context.md`, tell the user about every entry on it now, all in one message")
+			require.Contains(t, lower, "which entry was written (its path), where it lives (its tier and store), and why it is worth keeping")
+			require.Contains(t, out, "this is a report, not a question")
+			require.Contains(t, out, "use the list as you last wrote it")
+			require.Contains(t, out, "If there is no such list, say nothing about knowledge capture.")
+			for _, banned := range []string{"explicit acceptance", "not offered again", "Knowledge candidates", "offer its items"} {
+				require.NotContains(t, out, banned)
+			}
+		})
+	}
 }
 
 func TestStopOnMismatchDirectivePresentInEveryNonTerminalTemplate(t *testing.T) {
@@ -441,6 +495,7 @@ func TestStopOnMismatchDirectivePresentInEveryNonTerminalTemplate(t *testing.T) 
 		"implement":                implementStep(),
 		"test":                     testStep(),
 		"verify":                   verify(),
+		"check_goal":               checkGoalOn(),
 		"update_plan":              updatePlan(),
 		"update_changelog":         updateChangelog(),
 		"test_plan":                testPlan(),
@@ -594,6 +649,7 @@ func TestNoImplementTemplateMentionsRootChangelogFile(t *testing.T) {
 		"implement":                implementStep(),
 		"test":                     testStep(),
 		"verify":                   verify(),
+		"check_goal":               checkGoalOn(),
 		"update_plan":              updatePlan(),
 		"update_changelog":         updateChangelog(),
 		"test_plan":                testPlan(),
@@ -747,10 +803,31 @@ func repoListSteps() map[string]workflow.StepCallback {
 // each carry their own "Where the code lives" section.
 func subAgentCodeSteps() map[string]workflow.StepCallback {
 	return map[string]workflow.StepCallback{
-		"analyze":   analyze(),
-		"implement": implementStep(),
-		"test":      testStep(),
-		"verify":    verify(),
+		"analyze":    analyze(),
+		"implement":  implementStep(),
+		"test":       testStep(),
+		"verify":     verify(),
+		"check_goal": checkGoalOn(),
+	}
+}
+
+// advance moves wf to step: through new's auto-advance from the start, and by
+// an explicit Goto everywhere else, since several steps have more than one
+// legal successor.
+func advance(wf *workflow.Workflow, step string) error {
+	if wf.Current() == "start" {
+		return wf.Next()
+	}
+	return wf.Goto(step)
+}
+
+// checkGoalOn is the check_goal callback run with the goal check switched
+// on, as every render of it is: with the check off the step refuses.
+func checkGoalOn() workflow.StepCallback {
+	cb := checkGoal()
+	return func(data workflow.Data, out workflow.ResultWriter, st store.Store, cfg workflow.Config) (string, error) {
+		cfg.GoalCheck = true
+		return cb(data, out, st, cfg)
 	}
 }
 
@@ -1107,10 +1184,11 @@ const specConflictHeading = "### If the spec or a design is wrong"
 // stop, keyed by step name.
 func specConflictSteps() map[string]workflow.StepCallback {
 	return map[string]workflow.StepCallback{
-		"analyze":   analyze(),
-		"implement": implementStep(),
-		"test":      testStep(),
-		"verify":    verify(),
+		"analyze":    analyze(),
+		"implement":  implementStep(),
+		"test":       testStep(),
+		"verify":     verify(),
+		"check_goal": checkGoalOn(),
 	}
 }
 

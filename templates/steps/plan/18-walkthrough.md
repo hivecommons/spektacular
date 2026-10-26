@@ -3,7 +3,7 @@
 {{^orchestrated}}
 All three plan documents are committed to the plan store. Before the workflow can finish, walk the user through the plan and get their explicit sign-off. This review is mandatory — do not offer it as a choice, and do not skip it because the user seems satisfied.
 
-Begin by reading all three committed documents back through the CLI — ground the review in the committed state, not your memory of drafting it (on a resumed session, this is the only reliable source):
+Ground the review in the committed documents. You wrote them in the last three steps, so when their content is in your context, use it as it is. Read them back through the CLI only on a resumed session or after a context compaction:
 
 ```
 {{config.command}} plan file read {{plan_name}} plan
@@ -11,18 +11,20 @@ Begin by reading all three committed documents back through the CLI — ground t
 {{config.command}} plan file read {{plan_name}} research
 ```
 
-Present the plan as a colleague would explain it aloud, not as a recitation of the plan's section text. Pace it as a small number of natural beats with a brief pause between each, rather than one uninterrupted monologue or a rigid sign-off gate after every point:
+Present the plan in **one message**, as a colleague would explain it aloud, not as a recitation of the plan's section text. Keep it compact, a few lines per point:
 
 1. The chosen approach and why it was picked over the alternatives.
-2. How the work breaks into tasks under its milestones. Before asking for sign-off, name every task whose `**Execution:**` is `human`, with its reason, so the user knows which work needs a person. If there are none, say so.
+2. How the work breaks into tasks under its milestones. Name every task whose `**Execution:**` is `human`, with its reason, so the user knows which work needs a person. If there are none, say so.
 3. What was deliberately left out of scope, and why.
-4. The drafting assumptions — the judgement calls made while drafting. Read the `## Drafting assumptions` section of the plan's `research` document (via `{{config.command}} plan file read {{plan_name}} research`) and walk its entries one by one — decision, rationale, rejected alternatives — inviting the user to challenge each. This beat is first-class: raise the assumptions explicitly rather than leaving them as a section the user could read. A challenged assumption is a change request — handle it through the apply-immediately path below.
+4. The drafting assumptions: the judgement calls made while drafting, from the `## Drafting assumptions` section of the plan's `research` document. List every entry, one line each with the decision and its rationale, and invite the user to challenge any of them. A challenged assumption is a change request, handled through the apply-immediately path below.
 
-At any point during the walkthrough, the user may interrupt with a question or a request to change something. Respond to it directly in your next message before returning to the beat you were on. If the interruption is a change request, apply it immediately rather than deferring it: edit the affected section, stage the updated document under `.spektacular/tmp/`, commit it with `{{config.command}} plan file write {{plan_name}} plan --from <scratch>` (or the same command against the plan's `context.md`/`research.md` for changes landing there), confirm the update to the user, remove the scratch file, then resume the walkthrough, re-summarizing anything the change affected. Never write or edit the plan documents with the `Write` or `Edit` tools — `{{config.command}} plan file write` is the only supported way to write them.
+End that message with a single closing question, such as "Approve the plan, or tell me what to change?". Do not split the walkthrough into several turns, and do not pause for an answer between points.
 
-After a correction is applied and confirmed — including one that came from a challenged drafting assumption — and before resuming the walkthrough, consider what the correction reveals: a wrong default chosen while drafting, a constraint or convention the user knew that the codebase does not record, a term that was misunderstood. Most corrections are change-local edits and produce no offer — when nothing durable is revealed, resume the walkthrough without mentioning knowledge capture. When a correction does reveal a durable, generalizable lesson, offer in this same review conversation to save it to the project knowledge base, phrased as the general lesson rather than the specific edit, naming what you would capture and why it is worth keeping. Capture happens only on the user's explicit acceptance: hand an accepted item to the `spek-knowledge` skill, whose own propose-then-confirm flow owns tier and store selection, category routing, and the write. Never invoke `{{config.command}} knowledge write` without that explicit acceptance. If the user declines, the item is not offered again for the remainder of the conversation — a decline is final for that lesson; a deferral ("not now", "later") may be raised again later.
+When the user asks a question or requests a change, answer it directly in your next message. Apply a change request immediately rather than deferring it: edit the affected section, stage the updated document under `.spektacular/tmp/`, commit it with `{{config.command}} plan file write {{plan_name}} plan --from <scratch>` (or the same command against the plan's `context.md`/`research.md` for changes landing there), confirm the update to the user, and remove the scratch file. Then re-summarize only what the change affected and ask the closing question again. Never write or edit the plan documents with the `Write` or `Edit` tools — `{{config.command}} plan file write` is the only supported way to write them.
 
-Only conclude the walkthrough once the user gives an explicit affirmative answer to a direct closing question (e.g. "does this look right, ready to proceed?"). Silence, a topic change, or an ambiguous reply is not agreement — keep the walkthrough open until they explicitly confirm. If the session is interrupted mid-review, the workflow stays on this step and a later session resumes the walkthrough here.
+After a correction is applied and confirmed — including one that came from a challenged drafting assumption — consider what the correction reveals: a wrong default chosen while drafting, a constraint or convention the user knew that the codebase does not record, a term that was misunderstood. Most corrections are change-local edits and reveal nothing durable — when nothing durable is revealed, carry on without mentioning knowledge capture. When a correction does reveal a durable, generalizable lesson, write it to the project knowledge base yourself through the `spek-knowledge` skill, phrased as the general lesson rather than the specific edit; the skill owns tier and store selection, category routing, and the write. Do not ask first. In this same review message, tell the user which entry you wrote, its tier, store and path, and why it is worth keeping.
+
+Only conclude the walkthrough once the user gives an explicit affirmative answer to the closing question. Silence, a topic change, or an ambiguous reply is not agreement — keep the walkthrough open until they explicitly confirm. If the session is interrupted mid-review, the workflow stays on this step and a later session resumes the walkthrough here.
 
 Once the user has explicitly signed off, advance to the finished step:
 
@@ -33,7 +35,7 @@ Once the user has explicitly signed off, advance to the finished step:
 {{#orchestrated}}
 All three plan documents are committed to the plan store. This run is orchestrated: the user reviews every plan of the epic together once planning ends, so there is **no sign-off here**. Do not ask the user to review this plan, and do not wait for an answer.
 
-Read all three committed documents back through the CLI, so your summary reflects the committed state rather than your memory of drafting it:
+Base your summary on the committed documents. You wrote them in the last three steps, so when their content is in your context, use it as it is. Read them back through the CLI only on a resumed session or after a context compaction:
 
 ```
 {{config.command}} plan file read {{plan_name}} plan

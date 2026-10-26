@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl jq git \
+    ca-certificates curl jq git python3 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -LsSf https://astral.sh/uv/0.9.5/install.sh | sh
@@ -15,6 +15,10 @@ RUN chmod +x /usr/local/bin/spektacular
 WORKDIR /app
 
 RUN mkdir -p /app/.spektacular/specs
+
+# The agent's run is recorded at Spektacular's default log level, with no
+# special setting, under .spektacular/logs/, which comes back with the
+# .spektacular artifact.
 COPY 20260101000000-user-auth.md /app/.spektacular/specs/20260101000000-user-auth.md
 
 # Seed a distinctive always-apply convention relevant to the JWT auth spec so

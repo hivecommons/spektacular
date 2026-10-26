@@ -1,0 +1,493 @@
+{
+  "plan": "000077_html-log-viewer",
+  "items": [
+    {
+      "item": "9d0f8c1e-ed99-4f76-9d06-ca3b849a600c",
+      "title": "Build the page data from a run",
+      "checks": [
+        {
+          "at": "2026-10-25T17:56:48Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "9d0f8c1e-ed99-4f76-9d06-ca3b849a600c",
+            "title": "Build the page data from a run",
+            "criteria": [
+              "A run gives exactly one row per recorded span and command. Each row starts and ends at the span's recorded times, with unfinished spans ending where they were cut off, and sits under its parent: tasks at the top, steps under their task, commands and helpers under their step.",
+              "Each span type gets its own type. A helper stopped with an error and a command that failed are marked failed. Interrupted, abandoned and never-closed spans are each marked as such, and finished work is unmarked.",
+              "A helper's row carries its name, type, start, duration, status, end reason and step, and the run carries its agent and workflow. Full command output and state snapshots are never included.",
+              "The wall, working, user-wait and helper-wait times equal the run statistics report's figures for the same run.",
+              "A run with a 20-minute and a 2-minute pause carries both gaps, each with its step. By the report's rule one is over the default 5-minute threshold, and both are over a 1-minute one.",
+              "The data's field names and shape match the plan's Data Structures section, and a fixture run's data is pinned so a change to it is noticed."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/doc.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/model.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/build.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spektacular.step"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/build_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/testdata/model.golden.json"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/runview/build.go:110-135 (collect) makes one node per r.Spans entry and one per r.Commands entry, so every span and command is a row. build.go:145-200 (tree) orders roots then children by start, rank and id, so parents precede children. Rows take StartMS from n.start and DurationMS from n.end (build.go:89-90). Open and abandoned spans get their effective end from runstats/assemble.go:313-328 (capUnfinished). TestBuildOneRowPerSpanInTreeOrder and TestBuildUnfinishedSpansEndWhereTheyWereCutOff in build_test.go:170-261 pin this."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "model.go:23-26 fixes Types to command, step, task, sub-agent, user-wait, work, which is the full tracelog set (tracelog/record.go:28-37). model.go:30 fixes Problems to none, failed, interrupted, abandoned, open. build.go:232-252 (problemIndex) gives interrupted, abandoned and open from the end reason, failed for a span with StatusError or a command with a non-zero exit, and none otherwise. Finished, moved and stopped spans with OK status fall through to none. TestBuildProblemFlags (build_test.go:263-297) covers each case."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "model.go:73-84 (RunInfo) carries agent, kind and name, and model.go:94-111 (Rows) carries name, type, start_ms, duration_ms, status, end_reason and step. build.go:89-101 fills these from the span. Full output and snapshots are excluded: collect copies only the name, status, message, step, task id, span id, command line (capped at 2000 bytes, build.go:362-385) and exit code. TestBuildLeavesOutVerboseAttributes (build_test.go:343-360) checks that response and state attributes are absent from the JSON. Caveat: a row's step is the span's own step attribute (build.go:97, from assemble.go:222). The report instead falls back to the enclosing step for a helper with no step attribute (report.go:349-351), so a helper recorded without a step shows no step on the page. The criterion is met for helpers that record a step."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "build.go:61 calls runstats.BuildReport on the same run, and build.go:69-72 copies WallMS, WorkingMS, UserWaitMS and HelperWaitMS from rep.Totals. Those totals do not depend on the gap options, so the page matches the report. build_test.go:362-371 (TestBuildTotalsAreTheReports) compares them with runstats.DefaultOptions. The golden file's totals (testdata/model.golden.json:13-18) match the report's arithmetic for that fixture."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "build.go:104 and build.go:280-304 (buildGaps) keep every report gap of at least the floor (1 s by default, from GapFloor at build.go:42-44), in time order, with its step (build.go:296-298). build_test.go:373-422 (TestBuildGaps) builds the 20-minute and 2-minute pauses, asserts starts 1,000 ms and 1,202,000 ms, durations 1,200,000 ms and 120,000 ms, and step \"discovery\" for both. It also checks that over() counts 1 at the 5-minute threshold and 2 at 1 minute, and that this agrees with rep.Totals.GapsOverThreshold. runstats/report.go:315 uses the same strict \u003e rule."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "The field names and nesting in model.go:44-52 (doc comment) match the struct tags at model.go:59-121 (for example run_id, wall_ms, start_ms, duration_ms, span_id, exit_code, after, before, longest_steps). I could not read the plan's Data Structures section because the store is off-limits to me, so I judged against the doc comment that the pointers name as the contract. TestModelJSONFieldNames (build_test.go:463-486) pins the key sets. TestModelGolden (build_test.go:496-508) compares a fixture run (treeRecords plus cmd3) with testdata/model.golden.json, and I checked several golden values by hand (gap start, duration and edge labels; row parents; longest_steps [5,1,8]). They are consistent with the builder."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "4b33b999-493b-46d6-b081-f758f3907ce1",
+      "title": "Write the run as a self-contained page",
+      "checks": [
+        {
+          "at": "2026-10-25T18:07:36Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "4b33b999-493b-46d6-b081-f758f3907ce1",
+            "title": "Write the run as a self-contained page",
+            "criteria": [
+              "The page is one file with no reference to anything outside it, and the run data inside it reads back exactly as built.",
+              "A span whose name contains HTML or a closing script tag appears only as text and cannot change the page.",
+              "Writing the same run twice gives identical files, with no generation time and no file paths in them.",
+              "The page for a generated run of about 2,000 spans is under 1 MB.",
+              "In a browser with networking off, the page shows the totals and a bar for every span, each type looks different, user waits stand out across the timeline, each problem is marked, gaps over the threshold are marked, and selecting a bar shows its details.",
+              "Sample pages for the manual checks (every span type with each problem, a 20-minute and a 2-minute pause, and runs of 2,000 and 5,000 spans) can be generated on request from the test suite."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/assets/page.html"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "document.title"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/assets/viewer.css"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/assets/viewer.js"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "12.3s"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/assets.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "templates/templates.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/write.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/write_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "every-type.html"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "gaps.html"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spans-2000.html"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spans-5000.html"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "internal/runview/assets/page.html has no src/href/link/iframe; viewer.css has no url() or @import; viewer.js never fetches or opens sockets. write.go:27-67 splices css and js into the shell in one strings.Replacer pass. write_test.go:31-43 asserts Decode(page) equals the built Model."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "write.go:60 uses json.Marshal, which escapes \u003c, \u003e, \u0026 and U+2028/2029, so a closing script tag in a name cannot end the data element. viewer.js writes strings only via textContent (lines 118, 126, 129, 132, 141, 219) or fillText (lines 154, 420, 426); no innerHTML. write_test.go:55-85 checks hostile names stay text."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "write.go:27-67 takes only the Model; model.go has no generation time or path field, and no time.Now, Getwd or Abs use in non-test runview code. write_test.go:87-128 writes twice, compares bytes, checks no temp or working dir appears, and checks every timestamp is the run's own."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "write_test.go:148-154 (TestWritePageOf2000SpansIsUnder1MB) asserts a 2,000-row generated run is under 1,000,000 bytes; the goal's verification reports spans-2000.html at 210,700 B."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "Totals: viewer.js:122-146. Every row drawn as a bar in the scrolled window: drawBar at viewer.js:363-411. Types differ by colour (viewer.css:12-17), hatch for user-wait (viewer.js:374-379), thin command bars (viewer.js:372). User waits shaded across the timeline: drawBands viewer.js:301-315. Problems: borders and dashes (viewer.js:392-403), glyphs (viewer.js:413-427). Gaps over threshold hatched and labelled: viewer.js:317-361. Selection and details: viewer.js:177-221, 519-568. Judged from code; the screenshots named in the goal were not inspected."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "write_test.go:21 defines -sample-dir; write_test.go:241-265 (TestSamplePages) writes every-type.html, gaps.html, spans-2000.html and spans-5000.html, and skips unless the flag is set."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "d3b05758-9f66-45e6-a5b8-591be850bed5",
+      "title": "Render a run from the command line",
+      "checks": [
+        {
+          "at": "2026-10-25T18:11:00Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "d3b05758-9f66-45e6-a5b8-591be850bed5",
+            "title": "Render a run from the command line",
+            "criteria": [
+              "With no selection, a page for the most recent run is written to a default file name in the current directory. Selecting by workflow name, run id, kind or agent renders the run `stats run` reports for the same selection.",
+              "`--out` writes to the named file, or uses the default file name inside a named directory.",
+              "The result names the file, the run, the number of bars and the file size, as a readable line or in the standard JSON envelope, honouring `--fields`.",
+              "The page's totals equal `stats run`'s for the same run, and `--gap-threshold` sets the page's default threshold.",
+              "A page rendered from a copy of the logs directory, from outside any project, is identical to the page rendered in the project.",
+              "Every log file is byte-identical before and after `stats view` in a project with logging on.",
+              "An output path inside the logs directory, or one that cannot be written, is refused with a message naming the fix, and nothing is written."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/spec.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats_view.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/stats_view_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "cmd/root_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "cmd/stats_view.go:62-66 selects the run with statsSelect and runstats.ForReport, the same path stats run uses, and viewTarget (line 116) defaults to runview.DefaultFileName in the current directory. cmd/stats_view_test.go:21-30 checks the no-selection default file and latest run; lines 32-58 check that by name, run id, prefix, kind, agent and multiple --run render the run stats run reports."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "cmd/stats_view.go:118-125 resolves --out to an absolute path and, when it is an existing directory, joins the default file name into it. cmd/stats_view_test.go:60-79 covers a named file, a directory getting the default name, and replacing an existing page."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "The JSON envelope in cmd/stats_view.go:37-44 and 87-90 carries file, rows, bytes and run, written through output.New(...,globalFields).WriteResult, so --fields applies. cmd/stats_view_test.go:81-107 checks these keys and that --fields [\"file\"] narrows the output. The text line at stats_view.go:97 names the file, run and bar count but not the size; the criterion accepts the JSON form, so it is met."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "cmd/stats_view.go:76 passes opts.GapThreshold into runview.Build, and cmd/stats_view.go:49 documents --gap-threshold in the schema. cmd/stats_view_test.go:109-122 compares wall_ms, working_ms, user_wait_ms and helper_wait_ms from stats run with the decoded page totals for four runs. Lines 124-128 check that --gap-threshold 1m sets the page's GapThresholdMS to 60000. The totals check depends on the decoded model; I did not read internal/runview/build.go to confirm the page's embedded default."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "cmd/stats_view_test.go:131-143 renders in the project, copies the logs, chdirs to a temp dir outside any project, renders from the copy with --dir, and requires byte-identical pages. internal/runview/model.go:74 notes that the page does not depend on where the logs were read, and a grep of model.go found no path, dir or cwd fields."
+            },
+            {
+              "criterion": 6,
+              "verdict": "met",
+              "evidence": "cmd/stats_view_test.go:145-156 snapshots the raw log files in a verbose project, runs view, view --format json and view with filters, and requires the snapshot unchanged. stats_view.go:108-134 refuses any target inside the logs directory before anything is written, so the command has no path that writes into the logs."
+            },
+            {
+              "criterion": 7,
+              "verdict": "met",
+              "evidence": "cmd/stats_view.go:127-132 refuses a target inside the logs directory with stats_view_out_in_logs and a next action naming --out. cmd/stats_view.go:157-186 names the directory to fix on write failure and removes the temp file on error. cmd/stats_view_test.go:158-202 checks both refusals, the NextAction text, and that nothing is written or created in the logs or the missing directory."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "4940ba43-261c-47ea-b214-ba19f8235260",
+      "title": "Zoom, collapse and summarise on the page",
+      "checks": [
+        {
+          "at": "2026-10-25T18:16:10Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "4940ba43-261c-47ea-b214-ba19f8235260",
+            "title": "Zoom, collapse and summarise on the page",
+            "criteria": [
+              "Zooming into one step shows only that period across the full width of the timeline, and reset returns to the whole run.",
+              "Collapsing a step hides its children until it is expanded again. A collapsed row shows any problem among its hidden children. The page opens collapsed to steps, and one action expands every row.",
+              "With the page's threshold set to 1 minute, a 2-minute pause is marked as well as a 20-minute one, and the gap count and total change to match.",
+              "The side summary lists the longest steps and the longest gaps, and choosing one zooms to it.",
+              "Building and writing a generated 5,000-span page is measured by a benchmark in the Go suite, and that page opens and responds to zooming and selection without noticeable delay in a current browser."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/assets/viewer.js"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/assets/page.html"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "viewer.css"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/write_test.go"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "spans-5000.html"
+                },
+                {
+                  "repo": "spektacular",
+                  "path": "internal/runview/build_test.go"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "Diff viewer.js hunk at @@ -541 adds zoomTo/resetZoom (lines ~279-292) and a dblclick handler (~338-346) that calls zoomTo(R.start_ms[row], R.start_ms[row]+duration) and select(row). Reset zoom is wired to resetZoom via the #reset-zoom button and Escape (~362-364, ~440). The screenshot g-t1.png shows the axis labelled from 0 to about +20m for the whole run, and the headless run reported drag and Ctrl+wheel zoom working. The full-width mapping comes from the existing draw code, which the diff does not change."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "viewer.js (diff ~lines 152-180) builds end[] and collapsed[] state, and computeVisible() skips the rows under a collapsed row. toggle() and the triangle hit-test (~353) collapse and expand a row. collapseToSteps() (~176-179) sets every non-task row collapsed on load, so the page opens collapsed to steps. The Expand all button (~441-445) zeroes state.collapsed. A collapsed row draws its problem glyph from worst[row] (indexTree ~135-151; drawLabel ~212-235). The screenshot g-t1.png shows the collapsed 'discovery (4)' row with its triangle."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "thresholdInput (page.html diff line 14, viewer.js ~368-438) sets state.threshold through setThreshold(), which calls fillGaps() and schedule(). fillGaps() recounts gaps with duration \u003e threshold and updates #gap-summary. The screenshot g-t1.png, with the threshold input at 1 min, reads 'Gaps over threshold: 2, total 22m00s' and lists both the 20m00s and 2m00s gaps under Longest gaps, with a 'gap 2m00s' label on the canvas. The headless run reported the same text, and the 2-minute pause is marked on the canvas."
+            },
+            {
+              "criterion": 4,
+              "verdict": "met",
+              "evidence": "page.html diff adds the #longest-steps and #longest-gaps lists inside the aside (lines 25-30). viewer.js fillLongestSteps() (~390-401) fills them from data.longest_steps and, on click, calls reveal(row), zoomAround(...), select(row) and scrollToRow. fillGaps() (~403-419) lists the top five gaps over threshold and, on click, calls zoomAround(G.start_ms[g], G.duration_ms[g]). The screenshot g-t1.png shows populated Longest steps and Longest gaps lists."
+            },
+            {
+              "criterion": 5,
+              "verdict": "met",
+              "evidence": "write_test.go diff adds BenchmarkBuildAndWrite5000 (line ~539), which calls benchBuildAndWrite(b, 5000) (lines 541-557) to build and Write a genRun(5000,1) page. It reports page-bytes. The verification summary shows this benchmark ran (20.1 ms/op, 499,142 bytes). The headless Chrome timings in the verification summary show first paint at about 311 ms and every zoom and selection input at 33-66 ms on spans-5000.html with no console errors. I did not reproduce the browser run; that evidence is taken from the verification summary."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "139a70b2-621d-4bc9-872d-f40a2e22dc21",
+      "title": "Documentation site describes the run viewer",
+      "checks": [
+        {
+          "at": "2026-10-25T18:23:25Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "139a70b2-621d-4bc9-872d-f40a2e22dc21",
+            "title": "Documentation site describes the run viewer",
+            "criteria": [
+              "The Run viewer page explains rendering a run, choosing it, rendering collected logs, and reading every part of the page: types, problems, gaps and the threshold, zoom, collapse, details, totals and the summary.",
+              "The Resources menu links to the page after Run statistics, and the Run statistics page points to it.",
+              "The site builds and type-checks without errors, and the page body has no layout HTML and no em dashes."
+            ],
+            "scope": {
+              "repo": "docs",
+              "files": [
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-viewer.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/debugging.mdx"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/components/Nav.astro"
+                },
+                {
+                  "repo": "docs",
+                  "path": "src/pages/run-stats.mdx"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "run-viewer.mdx covers rendering (lines 18-34: `stats view` writing the HTML file), choosing the run (36-46: --name, --kind, --agent, --run), collected logs (48-57: --dir), and every part of the page: the waterfall, types table and legend (59-76), problems (78-90), gaps with threshold and gap-threshold box (92-99), zoom (101-106), collapse (108-111), details (115-117), header totals (119-121) and the side summary (123-125)."
+            },
+            {
+              "criterion": 2,
+              "verdict": "met",
+              "evidence": "src/components/Nav.astro:23-24 lists \"Run statistics\" followed by \"Run viewer\" with href \"/run-viewer/\" under the Resources children. src/pages/run-stats.mdx:68 links to the page: \"To see the same run as a picture, render it with [the run viewer](/run-viewer/).\" (diff hunk confirms the addition)."
+            },
+            {
+              "criterion": 3,
+              "verdict": "met",
+              "evidence": "Build and astro check results are reported as passing (0 errors) and were not re-run, as I am read-only. Grep over src/pages/run-viewer.mdx for em dashes, div, section and class= returned no matches. The body uses only the same MDX component tags (Hero, Prose, CtaBanner, Button) as the existing run-stats.mdx, with no raw layout HTML. The symbols in the problems list (✕, ‖, ∅, …) are not em dashes."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    },
+    {
+      "item": "586b4c2b-2f35-41c6-b311-d6d25285fc47",
+      "title": "README lists stats view",
+      "checks": [
+        {
+          "at": "2026-10-25T18:24:22Z",
+          "round": 1,
+          "attempt": 1,
+          "goal": {
+            "item": "586b4c2b-2f35-41c6-b311-d6d25285fc47",
+            "title": "README lists stats view",
+            "criteria": [
+              "The README shows `stats view` beside the other `stats` commands, with a one-line description and a pointer to the Run viewer documentation."
+            ],
+            "scope": {
+              "repo": "spektacular",
+              "files": [
+                {
+                  "repo": "spektacular",
+                  "path": "README.md"
+                }
+              ],
+              "rule": "Change only the files that belong to this item; change nothing that belongs to another task."
+            }
+          },
+          "verdicts": [
+            {
+              "criterion": 1,
+              "verdict": "met",
+              "evidence": "README.md:62 lists `spektacular stats view [--name \u003cspec\u003e]     # the run as a single-file HTML waterfall you can open or share` inside the same code block as the other stats commands (stats list, run, compare, summary, commands, spans at lines 56-61), with the aligned one-line description. README.md:65 adds the pointer: `stats view` writes a single HTML file that opens in any browser without a server; see the [Run viewer](https://spektacular.dev/run-viewer/) page on the documentation site. The staged diff at spektacular.diff touches only README.md (hunk @@ -59,9 +59,10 @@), which matches the file the goal allows."
+            }
+          ],
+          "decision": "accept",
+          "tree_unchanged": true
+        }
+      ],
+      "decisions": [],
+      "attempts": 1,
+      "state": "accepted"
+    }
+  ]
+}

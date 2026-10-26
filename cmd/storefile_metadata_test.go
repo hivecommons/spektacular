@@ -128,6 +128,49 @@ func TestStoreFileWrite_FreshWriteStampsMetadata(t *testing.T) {
 	}
 }
 
+// TestStoreFileWrite_RefusesEmptyBody covers a write whose source has no
+// content, or only a frontmatter block: it is refused and the stored document
+// is left as it was, for every per-kind write command.
+func TestStoreFileWrite_RefusesEmptyBody(t *testing.T) {
+	for _, fx := range kindFixtures() {
+		for name, src := range map[string]string{
+			"empty file":       "",
+			"whitespace only":  "  \n\t\n",
+			"frontmatter only": "---\ncreated_date: \"2026-01-01\"\ndocument_status: draft\n---\n",
+		} {
+			t.Run(fx.kind+"/"+name, func(t *testing.T) {
+				dir := t.TempDir()
+				t.Chdir(dir)
+				writeSpecCommandConfig(t, dir, fx.configYAML)
+
+				good := filepath.Join(t.TempDir(), "good.md")
+				require.NoError(t, os.WriteFile(good, []byte("kept body"), 0o644))
+				setupImplementCmd(t)
+				rootCmd.SetArgs(fx.cmd("write", "--from", good))
+				require.NoError(t, rootCmd.Execute())
+				before, err := os.ReadFile(filepath.Join(dir, fx.storeRelPath))
+				require.NoError(t, err)
+
+				empty := filepath.Join(t.TempDir(), "empty.md")
+				require.NoError(t, os.WriteFile(empty, []byte(src), 0o644))
+				setupImplementCmd(t)
+				rootCmd.SetArgs(fx.cmd("write", "--from", empty))
+				err = rootCmd.Execute()
+
+				var er *output.ErrorResponse
+				require.ErrorAs(t, err, &er)
+				require.Equal(t, "empty_document", er.Code)
+				require.Equal(t, fx.address(), er.Resource)
+				require.Contains(t, er.NextAction, fx.kind+" file delete")
+
+				after, err := os.ReadFile(filepath.Join(dir, fx.storeRelPath))
+				require.NoError(t, err)
+				require.Equal(t, string(before), string(after), "a refused write must leave the stored document untouched")
+			})
+		}
+	}
+}
+
 // TestStoreFileWrite_ExistingArtifactPreservesCreatedDate asserts criterion
 // 2: writing an existing artifact preserves the created_date it already had.
 // The test primes the store with an artifact carrying an older created_date,

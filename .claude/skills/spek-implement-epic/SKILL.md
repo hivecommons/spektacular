@@ -9,6 +9,10 @@ description: Implement every planned spec of an epic in one request, running the
 > - On `"unsupported_format"`, relay the `action` message: the project was written by a newer Spektacular, which the user must install before continuing.
 > - Never run `migrate` or `init`, and never modify installed files yourself. Upgrading is always an explicit, user-initiated action.
 
+**Mark spans.** Before you launch a helper agent, run `spektacular trace start <helper> --type sub-agent` and put the id it prints in the helper's brief: "Your parent span is `<id>`: start any span of your own with `--parent <id>`." When the helper returns, run `spektacular trace stop <id>` (add `--status error` if it failed), chained with your next command.
+
+Before you ask the user a question, run `spektacular trace start <question> --type user-wait`, and once they answer run `spektacular trace stop <id>`, chained with your next command.
+
 > **STOP. Read this before running any command below.**
 > Implementing an epic is a loop over many specs, and every spec is its own multi-step implement workflow. Starting the first child agent, or seeing the first spec finish, is **NOT** completion. Keep driving the loop below until `spektacular status <epic> --format json` reports no spec left to implement, or the run has stopped, and only then give the final report.
 
@@ -53,23 +57,30 @@ Repeat until nothing is left to start or merge and no child is running:
    spektacular epic worktree --data '{"spec":"<spec>"}'
    ```
 
-   Then start a child to **start** it.
+   Then start a child to **start** it. Its prompt names each worktree path the command reported (Step 4).
 5. Specs that are `done` are skipped; specs that are `blocked` wait for the specs in their `waiting_on`, which must be implemented **and merged** first.
 6. Report progress (Step 7), then wait for a child to hand back and handle it (Step 6). Then go round again.
 
 Use your agent's own way of running sub-agents in the background, so independent specs are implemented in overlapping time. Start every ready spec; there is no limit on how many run at once.
 
-A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not.
+**In a headless session, keep every child inside your turn.** A session is headless when no one replies between your turns: you were started non-interactively, or your prompt says so. Being told that no one will answer is not on its own a reason to hold children in your turn; the reason is what a headless session does to a background child once your turn ends. Headless Claude Code stopped one about ten minutes after the main agent ended its turn, and its completion notice never woke the session (recorded on 2026-10-24 with Claude Code 2.1.310 by the background-child harbor probe). So instead of starting children in the background, start the ready specs as foreground sub-agents in a single message, so they still run in overlapping time, and handle every hand-back (Step 6) before you end the turn.
+
+**Never set a timed wake-up while children run.** Do not use a scheduled wake-up, a timer, a recurring job or a command that sleeps to check on your children: each child's hand-back, or its completion notice, is what wakes you. A wake-up still pending once the work is done keeps the session running with nothing left to do.
+
+A child that handed back a `QUESTION:` and is waiting for its answer still counts as running. Never start a second child for a spec that already has one, waiting or not. A child that ended without a hand-back is no longer running (Step 6).
 
 # Step 4: The child prompt
 
 Give each child exactly what it needs, because it inherits nothing from you:
 
 - the spec name, and the project root to run every `spektacular` command from. The implement workflow's own instructions name where each repo's code lives in the spec's worktrees; it never runs `spektacular` from inside a worktree and never touches a worktree's `.spektacular` directory;
+- the spec's code locations: the worktree path of every repo that `spektacular epic worktree --data '{"spec":"<spec>"}'` reports for the spec, and that the child works on code only there. Running it again for a spec whose worktrees already exist reports the same paths, so a resumed child is given them too;
 - to **start** or **resume**: run `spektacular implement new --data '{"name":"<spec>","orchestrated":true}'`. If it returns a resume report for the spec's lane, read back what the report names (the plan documents and the lane's notes), then run the `goto` it gives, which carries `\"name\":\"<spec>\"`;
 - "Follow the `spek-implement` skill. This run is orchestrated: tasks run one after another without asking between them, every `goto` carries `\"name\":\"<spec>\"`, and you never ask the user anything yourself.";
 - "Never resolve a merge or git conflict yourself, and never merge, rebase or switch branches: your worktree's branch is merged by the orchestrator.";
 - "You never write the spec's text or a design document. If the spec or a design it references is wrong, propose the amendment in a `QUESTION:` hand-back, naming the document, the section, the conflict and the change you propose.";
+- "If the goal check stops your task, because its attempts ran out or it judged a criterion impossible, hand it back as a `QUESTION:` with the criteria not met or impossible and the reviewer's evidence, and the options the step offers.";
+- its parent span: the id `spektacular trace start` printed when you marked this child's launch, given as "Your parent span is `<id>`: start any span of your own with `--parent <id>`.";
 - the store-access rule above, word for word;
 - the hand-back contract and the definition of a genuine open question, below.
 
@@ -77,17 +88,17 @@ Give each child exactly what it needs, because it inherits nothing from you:
 
 A child ends every turn that stops its work with a final message whose **first line** is exactly one of:
 
-- `DONE: <spec>`, followed by the completion summary the implement workflow's finished step reports, and any durable discovery worth saving to the knowledge base.
+- `DONE: <spec>`, followed by the completion summary the implement workflow's finished step reports, and every knowledge entry it wrote (tier, store, path, why): a child writes durable knowledge itself through the `spek-knowledge` skill.
 - `QUESTION: <spec>`, followed by the question, the options, and the default it recommends. It then waits for your answer and carries on from the same step.
 - `FAILED: <spec>`, followed by the step it reached and the reason it cannot go on.
 
 ## What counts as a genuine open question
 
-Only a stop the implement workflow itself defines earns a question: the plan no longer matching the code, the spec or a design it references being wrong, a task outgrowing its scope, or a verification failure the child cannot fix within the task. Everything else the child decides itself and records in the plan's changelog. A child never asks whether to continue to its next task.
+Only a stop the implement workflow itself defines earns a question: the plan no longer matching the code, the spec or a design it references being wrong, a task outgrowing its scope, a verification failure the child cannot fix within the task, or the goal check running out of attempts or judging a criterion impossible. Everything else the child decides itself and records in the plan's changelog. A child never asks whether to continue to its next task.
 
 # Step 5: Merging a finished spec
 
-Merge a spec as soon as its child hands back `DONE:`, and whenever `status` reports it `awaiting_merge`:
+Merge a spec as soon as its child hands back `DONE:`, and whenever `status` reports it `awaiting_merge`. Never merge a spec while its goal-check question is open: `epic merge` refuses it (`goal_check_open`) until the question is answered and its run goes on.
 
 ```
 spektacular epic merge --data '{"spec":"<spec>"}'
@@ -95,15 +106,16 @@ spektacular epic merge --data '{"spec":"<spec>"}'
 
 The merge is all or nothing across the spec's repos. On success the spec's worktrees and branches are removed and its changes are in every repo's main line, so specs that depend on it can start. On `epic_merge_conflict`, nothing was merged in any repo: show the user the conflicting paths for each repo, leave the worktrees in place, and enter stopping mode. Never resolve a conflict yourself.
 
-Any other refusal from `epic worktree` or `epic merge` is handled the same way: relay its `message` and `next_action` to the user, leave the worktrees as they are, and enter stopping mode.
+On `merge_lock_timeout`, another merge or commit in the project was still running and nothing was merged: run the same merge again. Any other refusal from `epic worktree` or `epic merge` is handled the same way as a conflict: relay its `message` and `next_action` to the user, leave the worktrees as they are, and enter stopping mode.
 
 # Step 6: Handling a hand-back
 
 - **`DONE:`** — merge the spec (Step 5), keep its summary for the final report, then re-read `status` and start the specs that have just become ready.
-- **`QUESTION:`** — put the question to the user. Present it as ordinary text first, naming the spec, the options and the recommended default, then ask. While the user considers it, the other children keep going. Send the user's answer back to the same child, so it continues where it stopped. If your agent cannot continue a stopped child, start a fresh child on the same spec with the answer included in its prompt; it resumes from its lane.
+- **`QUESTION:`** — put the question to the user. Present it as ordinary text first, naming the spec, the options and the recommended default, then ask. While the user considers it, the other children keep going. Send the user's answer back to the same child, so it continues where it stopped. If your agent cannot continue a stopped child, start a fresh child on the same spec with the answer included in its prompt; it resumes from its lane. In a headless session, always start the fresh child, in the foreground: a stopped child that is continued may carry on in the background, where it can be stopped. Do one or the other, never both: if you start a fresh child, the stopped one must not also be continued, because only one child may work on a spec at a time.
 - **An amendment the user approves** — when a `QUESTION:` proposes amending the spec or a design, apply it yourself only after the user's explicit approval, from the project root and never in a worktree. For the spec, read it with `spektacular spec file read <spec>`, change only the sections the user approved, stage the full result under `.spektacular/tmp/<spec>/`, and run `spektacular spec amend --data '{"name":"<spec>","reason":"<why>","run":"epic <epic> implement run, task <task>"}' --from <staged file>`. For a design, revise it with `spektacular design author`, or store the new version the user supplies with `spektacular design write` for a design they wrote, then record it with `spektacular spec amend` and a `"design":{"source":"<name>","path":"<path>"}` field. Note the amendment in `.spektacular/working-context.md`, then answer the child naming what changed, so it re-reads the amended text and re-verifies its task. If the user rejects the amendment, answer the child with their decision.
 - **The user declines to answer now** — enter stopping mode.
 - **`FAILED:`** — enter stopping mode.
+- **No hand-back at all** — a child whose final message does not open with `DONE:`, `QUESTION:` or `FAILED:` (typically a sentence announcing its next action, such as "Now run the next goto") did not stop: it was cut off by the agent's own limit on how long one sub-agent may run. Nothing is lost, since its code stays in its worktrees and its progress in its lane. Start a fresh child on the same spec straight away, on your own and without waiting for the user, with the **resume** prompt; it carries on from the step its lane records. Name the resume in your next progress line. If a spec is cut off twice in a row at the same step in `status`, treat it as `FAILED:`.
 
 **Stopping mode:** start no new child, let the children already running finish (and merge each one that finishes cleanly, since specs depending on it may already be waiting), then go to the final report. A child waiting on a question the user declined to answer is not resumed: its work stays in progress in its worktree, and repeating the request picks it up. Name the spec that stopped the run and why.
 
@@ -118,6 +130,7 @@ End every run, finished or stopped, with:
 - **Completed in this run:** each spec implemented and merged now, with its summary.
 - **Skipped:** each spec that was already implemented.
 - **Still outstanding:** each spec not implemented, and why: blocked on which specs, stopped by which failure or conflict, or waiting on a question the user chose not to answer.
+- **Resumed after being cut off:** each spec whose child had to be restarted because it ended without a hand-back, and how many times. When there are any, say that the agent limits how long one sub-agent may run, and that raising that limit avoids the restarts (for Bob, `session.maxTurns` in `~/.bob/settings/settings.json`; `0` means no limit).
 - **Worktrees left behind:** each spec whose worktrees remain unmerged, with their paths, so the user can inspect or finish them.
 
-Offer to save any durable discovery the children reported with the `spek-knowledge` skill, and save it only if the user accepts.
+Report every knowledge entry the children wrote (tier, store, path, why), so the user sees how the knowledge base changed.
