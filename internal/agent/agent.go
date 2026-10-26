@@ -1,6 +1,6 @@
 // Package agent defines the Agent interface and per-agent registry used by
 // `spektacular init` to install workflow artefacts for a chosen AI coding
-// agent (Claude, Bob, Codex, …).
+// agent (Claude, Bob, Codex, oh-my-pi, Cursor, …).
 package agent
 
 import (
