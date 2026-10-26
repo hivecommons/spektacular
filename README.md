@@ -93,7 +93,7 @@ Spek is a single self-contained Go binary.
 # Homebrew
 brew install hivecommons/homebrew-repo/spektacular
 
-# Go 1.21+
+# Go 1.25+
 go install github.com/hivecommons/spektacular@latest
 ```
 
@@ -118,7 +118,7 @@ spektacular implement new --data '{"name":"<spec-name>"}'
 
 Spek names are normalised and prefixed by the CLI, so use the returned `spec_name` and `spec_path` for follow-up commands rather than the name you passed.
 
-Speks are plain markdown with a small set of structured sections (overview, requirements, constraints, acceptance criteria, and so on), and `spec new` scaffolds the template for you. For the full walkthrough and spek format, see the [getting-started tutorial](https://spektacular.dev/tutorials/getting-started) and the [how-it-works documentation](https://spektacular.dev/how-it-works/).
+Speks are plain markdown with a small set of structured sections (overview, requirements, constraints, acceptance criteria, and so on), and `spec new` scaffolds the template for you. For the full walkthrough and spek format, see the [getting-started tutorial](https://spektacular.dev/tutorials/getting-started/) and the [how-it-works documentation](https://spektacular.dev/how-it-works/).
 
 ## Supported agents
 
@@ -131,7 +131,7 @@ Spek ships with five coding-agent integrations. `spektacular init <agent>` runs 
   sets it to `0` (no limit) in `~/.bob/settings/settings.json`. The epic skills resume a cut-off child either way.
 - **codex** — installs skills under `.agents/skills/`.
 - **copilot** — GitHub Copilot CLI; installs the eight workflow skills under `.github/skills/` and the same standing rules in root `AGENTS.md`, with no command wrappers or extra instruction files.
-- **omp** — installs the same six skills under `.omp/skills/`, Markdown wrappers and native input-preserving handlers under `.omp/commands/`, and eight always-applied `spek-*.md` rules under `.omp/rules/`. The rules mirror only Spektacular's sections of root `AGENTS.md`, keeping them visible even when omp selects another instruction file. Other project instructions, rules, skills and settings are left alone.
+- **omp** — installs the same eight skills under `.omp/skills/`, Markdown wrappers and native input-preserving handlers under `.omp/commands/`, and eight always-applied `spek-*.md` rules under `.omp/rules/`. The rules mirror only Spektacular's sections of root `AGENTS.md`, keeping them visible even when omp selects another instruction file. Other project instructions, rules, skills and settings are left alone.
 
 ### Goal reviewer
 
@@ -159,7 +159,7 @@ agent without the helper falls back to any fresh-context sub-agent given
 
 ### GitHub Copilot CLI
 
-Install [Copilot CLI](https://docs.github.com/copilot/how-tos/copilot-cli), then run:
+Install [Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli), then run:
 
 ```bash
 cd my-project
@@ -410,7 +410,7 @@ For the full reference (every key, the id-method semantics, name-normalisation r
 
 ## Testing
 
-Spektacular has two layers of tests: a fast Go unit suite, and an end-to-end [Harbor](https://harborframework.com/) harness that runs the workflows against real AI coding agents inside sandboxed Docker containers.
+Spektacular has two layers of tests: a fast Go unit suite, and an end-to-end [Harbor](https://www.harborframework.com/) harness that runs the workflows against real AI coding agents inside sandboxed Docker containers.
 
 ### Unit tests
 
