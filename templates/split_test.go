@@ -88,6 +88,7 @@ func TestSplitCheckCarriesGateSignalsAndRules(t *testing.T) {
 			"**Counter-signals.**",
 			"suppress the offer even when signals have fired, at every sensitivity",
 			"tightly coupled",
+			"parts of one designed process, workflow, or capability",
 		)
 	})
 

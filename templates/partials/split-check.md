@@ -9,9 +9,9 @@ The check asks one question about a complete spec: **is this more than one indep
 **Strong signals.** Any one is enough, provided the gate passes:
 
 - the source the spec was started from lists child items (sub-issues, a task list);
-- the requirements fall into groups that could each ship and be useful alone;
+- the requirements fall into groups that could each ship and be useful alone (delivering user-visible value on its own, not just being technically deployable or tested alone);
 - the acceptance criteria cannot all be verified by one change;
-- the user's own wording phases the work ("phase 1", "first … then later", "v1 is just …").
+- the user's own wording phases the work ("phase 1", "first … then later", "v1 is just …"). If the user described and agreed the work as one unphased flow or change, weigh that against a split.
 
 **Weak signals.** At least two together are needed:
 
@@ -33,6 +33,7 @@ The gate applies at every level.
 **Counter-signals.** These suppress the offer even when signals have fired, at every sensitivity:
 
 - the requirements are tightly coupled, so neither part is useful or testable alone;
+- the requirements describe parts of one designed process, workflow, or capability, agreed as one end-to-end flow; being able to test or deploy a part alone does not count as independent usefulness;
 - several surfaces or repos serve one capability, or one atomic change.
 
 **Offer, never act.** When the check passes, offer — never split on your own:
