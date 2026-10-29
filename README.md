@@ -9,6 +9,8 @@ Agent-agnostic CLI tool for spec-driven development, providing skills and integr
 ## What is Spektacular (Spek)?
 
 Spek is a self-contained Go binary that brings spec-driven development to AI coding agents. You write a markdown spek; Spek turns it into a reviewed implementation plan and then drives a coding agent to implement it — keeping your intent reviewable at every stage.
+It still needs a separately installed and authenticated coding agent. Storage
+is designed to be pluggable; only the file-store provider ships today.
 
 Its core competencies:
 
@@ -25,6 +27,67 @@ Spek follows a three-stage workflow — **spec → plan → implement** — each
 1. **Spec.** You write a markdown spek (requirements, constraints, acceptance criteria); `spec new` scaffolds one from a template.
 2. **Plan.** `plan new` explores your codebase, asks clarifying questions, and writes a detailed implementation plan — `plan.md`, `research.md`, and `context.md`.
 3. **Implement.** `implement new` drives the coding agent through each phase of the plan and validates the result against your acceptance criteria.
+
+## Install & getting started
+
+You need a terminal, a project checkout you may edit, and a supported coding
+agent installed and signed in. Git is useful for reviewing and recovering
+changes. Go is needed only for the Go installation route or building Spek,
+not for using a downloaded binary. Contributor test tools are not product prerequisites.
+
+Choose **one** installation route:
+
+```bash
+# Homebrew
+brew install hivecommons/homebrew-repo/spektacular
+
+# Or Go 1.21+
+go install github.com/hivecommons/spektacular@latest
+```
+
+Or download a pre-built binary from the [releases page](https://github.com/hivecommons/spektacular/releases).
+See the [install docs](https://spektacular.dev/install/) for apt and other methods.
+
+### First run with a coding agent
+
+For beginners, let the installed agent skills guide the workflow rather than
+manually advancing CLI steps. In your project's top-level folder, run these
+**terminal commands** (Claude example; choose your installed agent):
+
+```bash
+spektacular --version
+spektacular init claude
+claude
+```
+
+Initialization installs the agent's workflow skills and creates `.spektacular/`
+configuration. Inside the **agent**, not your shell, type:
+
+```text
+/spek-new add a small feature
+```
+
+Answer the requirements questions and review the resulting spek. Then use
+`/spek-plan` in the agent, select that spek, and review the plan before
+`/spek-implement`. Other agents' skill invocation details are in
+[Supported agents](#supported-agents).
+
+With the default file store, expect a spek in the configured specs directory,
+then `plan.md`, `research.md`, and `context.md` in its plan directory. Use the
+names returned by Spek and its file commands to inspect these artifacts
+(the documents a workflow produces); do not guess their filenames.
+Confirm the implemented behavior against the acceptance criteria and inspect
+the test results, not just the agent's completion message.
+
+Follow the [getting-started tutorial](https://spektacular.dev/tutorials/getting-started)
+for a complete feature. `spektacular status` shows work in progress.
+The [status and workflow reference below](#workflow-status-and-artifact-reference)
+keeps the detailed schemas, watch controls, tracing, and addressing rules.
+
+## Workflow status and artifact reference
+
+<details>
+<summary>Advanced: status fields, watch controls, spans, statistics, and shell-driven workflows</summary>
 
 Where a piece of work stands can be inspected without reading Spek's state files directly. One command reports everything, from the epic down to each task:
 
@@ -85,21 +148,12 @@ A name with an extension, or a plan written as one path (`<name>/plan.md`), is r
 
 For the full pipeline, see the [how-it-works documentation](https://spektacular.dev/how-it-works/).
 
-## Install & getting started
+### Shell-driven workflow commands
 
-Spek is a single self-contained Go binary.
-
-```bash
-# Homebrew
-brew install hivecommons/homebrew-repo/spektacular
-
-# Go 1.21+
-go install github.com/hivecommons/spektacular@latest
-```
-
-Or download a pre-built binary from the [releases page](https://github.com/hivecommons/spektacular/releases). See the [install docs](https://spektacular.dev/install/) for apt and other methods. You also need a supported coding agent CLI (claude, bob, codex, copilot, omp, or cursor) installed and configured.
-
-Once installed, the minimal path is initialise → spec → plan → implement:
+The commands below are the lower-level interface used by skills. They return
+step instructions for an agent to follow; issuing four shell commands alone
+does not replace the interviews, review, and step progression. Use the
+[agent-guided first run](#first-run-with-a-coding-agent) unless building an integration.
 
 ```bash
 # 1. Initialise your project for a coding agent (claude, bob, codex, copilot, omp, or cursor)
@@ -120,7 +174,12 @@ Spek names are normalised and prefixed by the CLI, so use the returned `spec_nam
 
 Speks are plain markdown with a small set of structured sections (overview, requirements, constraints, acceptance criteria, and so on), and `spec new` scaffolds the template for you. For the full walkthrough and spek format, see the [getting-started tutorial](https://spektacular.dev/tutorials/getting-started) and the [how-it-works documentation](https://spektacular.dev/how-it-works/).
 
+</details>
+
 ## Supported agents
+
+<details>
+<summary>Integration reference: installed files, reviewers, and agent-specific behavior</summary>
 
 Spek ships with six coding-agent integrations. `spektacular init <agent>` runs the chosen agent's install step, writing its workflow skills (and, where the agent has no skill mechanism, command wrappers) into your project:
 
@@ -228,6 +287,8 @@ Each integration is deliberately small: an agent implements a narrow `Agent` int
 
 Both the coding agent and the storage layer are pluggable behind defined Go interfaces — the `Agent` interface in `internal/agent` and the `Store` interface in `internal/store` (the read/write/search surface backing the spek, plan, and knowledge stores). Only the `file` store ships today. For the full interface signatures and how to add your own backend or agent, see the [extending documentation](https://spektacular.dev/extending/) and the [plugins overview](https://spektacular.dev/plugins/).
 
+</details>
+
 ## Project Structure
 
 Running `spektacular init <agent>` creates:
@@ -312,6 +373,9 @@ Each store keeps a usage index, `.usage-index.json` at its root, recording when 
 In a Spek-initialised repo, the `spek-knowledge` skill is the entry point for reading, contributing to, and updating the knowledge base in any session, and coding agents route what they would otherwise save to their own per-user memory into the project knowledge base instead, so captured knowledge lands in git and travels with the project.
 
 ## Configuration
+
+<details>
+<summary>Maintainer reference: project/repository settings, migration, and exclusions</summary>
 
 Configuration is split across two files, and a colocated single-repo project simply holds both in the same `.spektacular/` directory. A repo's Spek files can also live apart from its code, in a folder that points at the code (see [Repo configuration](#repo-configuration-repoyaml) below).
 
@@ -421,7 +485,15 @@ Any source root (a repo, or the project's own storage locations) may carry a `.s
 
 For the full reference (every key, the id-method semantics, name-normalisation rules, and `${VAR}` expansion) see the [configuration documentation](https://spektacular.dev/configuration/). For the concept of multi-repo projects, why the configuration is split this way, and how work is attributed across repos, see [Multi-Repo Projects](https://spektacular.dev/projects/).
 
+</details>
+
 ## Testing
+
+**For contributors, not first-time users.** Harbor runs isolated test tasks
+against agents; its infrastructure and measurements are not needed to use Spek.
+
+<details>
+<summary>Contributor reference: unit tests, Harbor setup, tasks, results, and metrics</summary>
 
 Spektacular has two layers of tests: a fast Go unit suite, and an end-to-end [Harbor](https://harborframework.com/) harness that runs the workflows against real AI coding agents inside sandboxed Docker containers.
 
@@ -691,6 +763,8 @@ adds one, and writes nothing if trimming would change a value the recorder compu
 ```bash
 uvx --with pytest pytest --import-mode=importlib tests/harbor/shared/tests
 ```
+
+</details>
 
 ## Building from Source
 
