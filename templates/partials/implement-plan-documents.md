@@ -4,4 +4,6 @@ An implementation works from three documents in the plan store. Together they ar
 - **The plan's `context.md`**: the per-task technical detail. It holds one `### Task: <title>` section per task (`### Phase N.M:` per phase in an older plan) with the files to change, complexity and agent strategy. Read it with `{{command}} plan file read <plan_name> context`.
 - **`research.md`**: the decision log. It holds rejected alternatives, supporting evidence, files examined and open assumptions. Read it with `{{command}} plan file read <plan_name> research`.
 
+`plan.md` and the plan's `context.md` may link images, as `![…](images/<name>.svg)`: a design mock-up of a visual change, or a flow chart of a complex flow. They are part of the approved plan. When the current task builds what one shows, read it with `{{command}} plan image read <plan_name> <name>`; `{{command}} plan image list <plan_name>` names them all.
+
 None of these is the working context, `{{#working_context_path}}{{working_context_path}}{{/working_context_path}}{{^working_context_path}}.spektacular/working-context.md{{/working_context_path}}`, which holds only a session's notes and never replaces the plan.

@@ -83,6 +83,16 @@ Every `name` a list prints is accepted unchanged by read, write, delete and set-
 
 A name with an extension, or a plan written as one path (`<name>/plan.md`), is refused with `unexpected_extension`; `plan file read <name>` with no document is refused with `document_required`. Both refusals' `next_action` shows the correct command, and a missing document's `not_found` points at the matching list command.
 
+A plan can also hold images: an SVG design mock-up of a visual change, or an SVG flow chart of a complex flow, which the plan workflow draws when a line of text cannot explain what the plan describes. Each is addressed by the feature's name and an image name, stored byte for byte beside the plan's documents, and linked from them by the relative `link` a write reports:
+
+```bash
+spektacular plan image write 000059_normalise-artifact-addressing login-flow --from login-flow.svg   # prints "link": "images/login-flow.svg"
+spektacular plan image list 000059_normalise-artifact-addressing
+spektacular plan image read 000059_normalise-artifact-addressing login-flow
+```
+
+Only SVG is accepted: a source that is not a well-formed SVG document is refused with `image_not_svg`.
+
 For the full pipeline, see the [how-it-works documentation](https://spektacular.dev/how-it-works/).
 
 ## Install & getting started

@@ -49,6 +49,8 @@ Draft 2-4 short paragraphs describing:
 
 Keep this section self-contained. Do NOT write `see context.md for …` (pointing at the plan's `context.md`) — plan.md must stand on its own for readers outside the Milestones & Tasks block.
 
+{{> partials/plan-visuals}}
+
 Before advancing, save this section to its working file. Using your own `Write` tool, write the drafted **Architecture & Design Decisions** content (body only — no `## ` heading line) to `.spektacular/work/{{plan_name}}/architecture.md`. This working file is git-tracked and is read back on resume and when the plan documents are assembled, so it must hold the final content. It is **not** a plan store document — write it directly with your file tools and do **not** route it through `{{config.command}} plan file write` (that command is only for the final plan documents).
 
 ### Step 4: Select the conventions that apply

@@ -26,6 +26,8 @@ If you find yourself writing "in file X at line Y", stop and move that content t
 
 A draft Implementation Detail section ready to drop into plan.md at verification time.
 
+{{> partials/plan-visuals}}
+
 Before advancing, save this section to its working file. Using your own `Write` tool, write the drafted **Implementation Detail** content (body only — no `## ` heading line) to `.spektacular/work/{{plan_name}}/implementation_detail.md`. This working file is git-tracked and is read back on resume and when the plan documents are assembled, so it must hold the final content. It is **not** a plan store document — write it directly with your file tools and do **not** route it through `{{config.command}} plan file write` (that command is only for the final plan documents).
 
 **Record your judgement calls.** If drafting this section required a judgement call — a decision made on a reasonable default instead of asking the user — append one entry per call to `.spektacular/work/{{plan_name}}/assumptions.md` using your own `Write` tool (create the file on first use):
