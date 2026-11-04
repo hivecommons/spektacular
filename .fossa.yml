@@ -1,0 +1,31 @@
+# FOSSA CLI configuration for hivecommons/spektacular.
+# Reference: https://github.com/fossas/fossa-cli/blob/master/docs/references/files/fossa-yml.md
+version: 3
+
+project:
+  # Stable project name in the CNCF FOSSA org (the action's `project:` input
+  # mirrors this so UI and CI agree).
+  name: hivecommons/spektacular
+  # Team NAME in the CNCF FOSSA org (team id 207492). Only applied when the
+  # project is first created; later changes must be made in the FOSSA UI.
+  team: Hive Commons
+  url: https://github.com/hivecommons/spektacular
+
+# The shipped artifact is the Go module at the repo root
+# (github.com/hivecommons/spektacular). FOSSA auto-discovers every manifest;
+# pin the shipped module explicitly so a future re-layout does not silently
+# drop it. Deliberately out of scope as repo tooling, not shipped code: the
+# dagger/ CI module and the placeholder pyproject.toml/uv.lock (pytest only).
+targets:
+  only:
+    - type: gomod
+      path: .
+
+paths:
+  exclude:
+    - tests
+    - docs
+    - dagger
+    - knowledge
+    - templates
+    - images
