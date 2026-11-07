@@ -155,6 +155,9 @@ func Merge(existing []byte, newBody []byte, opts UpdateOptions) ([]byte, error) 
 		if opts.Amendments != nil {
 			result.Amendments = *opts.Amendments
 		}
+		// Only publish writes the published list, and it writes the whole
+		// frontmatter itself, so every ordinary write carries it forward.
+		result.Published = current.Published
 		if opts.Project != "" {
 			result.Project = opts.Project
 		}

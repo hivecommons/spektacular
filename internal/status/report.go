@@ -68,6 +68,9 @@ type EpicStatus struct {
 	Done           bool                 `json:"done"`
 	Progress       EpicProgress         `json:"progress"`
 	Sources        []metadata.SourceRef `json:"sources"`
+	// Published is where the epic was published as an RFC, one entry per
+	// target; empty until publish has run.
+	Published []metadata.Publication `json:"published"`
 	// Run is where the epic stands for planning and implementing; present
 	// when the run view was asked for.
 	Run *EpicRun `json:"run,omitempty"`
@@ -98,6 +101,9 @@ type SpecStatus struct {
 	// Sources are effective: the spec's own, then its epic's. The spec's
 	// stored record holds only its own.
 	Sources []metadata.SourceRef `json:"sources"`
+	// Published is where the spec was published as an RFC, one entry per
+	// target; empty until publish has run.
+	Published []metadata.Publication `json:"published"`
 	// Plan is null when the spec has no plan.
 	Plan *PlanStatus `json:"plan"`
 	// Run is what the spec still needs; present when the run view was asked
@@ -447,6 +453,7 @@ func epicStatus(name string, e epic.Epic) *EpicStatus {
 		DocumentStatus: string(e.DocumentStatus),
 		CreatedAt:      dateAsRFC3339(e.CreatedDate),
 		Sources:        sources,
+		Published:      append([]metadata.Publication{}, e.Published...),
 	}
 }
 
@@ -454,7 +461,7 @@ func epicStatus(name string, e epic.Epic) *EpicStatus {
 // missing rather than failing, so one broken link never hides the rest of an
 // epic.
 func buildSpec(opts Options, name string, dependsOn []string, epicSources []metadata.SourceRef) SpecStatus {
-	s := SpecStatus{Name: name, DependsOn: dependsOn, Sources: []metadata.SourceRef{}}
+	s := SpecStatus{Name: name, DependsOn: dependsOn, Sources: []metadata.SourceRef{}, Published: []metadata.Publication{}}
 
 	readable := false
 	if raw, err := opts.Store.Read(specPath(opts.Config, name)); err == nil {
@@ -463,6 +470,7 @@ func buildSpec(opts Options, name string, dependsOn []string, epicSources []meta
 			if fm != nil {
 				s.DocumentStatus = string(fm.DocumentStatus)
 				s.Sources = append(s.Sources, fm.Sources...)
+				s.Published = append(s.Published, fm.Published...)
 			}
 			s.CurrentStep = currentStep(opts, "spec", name, metadata.DocumentStatus(s.DocumentStatus), fm != nil)
 		}

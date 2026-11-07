@@ -63,6 +63,14 @@ var statusSourcesSchema = &schemaProp{Type: "array", Items: &schemaProp{Type: "o
 	"retrieved_date": {Type: "string"},
 }}}
 
+var statusPublishedSchema = &schemaProp{Type: "array", Description: "where publish filed the artifact as an RFC with children, one entry per target", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
+	"target":  {Type: "string"},
+	"rfc_url": {Type: "string"},
+	"children": {Type: "array", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
+		"id": {Type: "string"}, "url": {Type: "string"},
+	}}},
+}}}
+
 var statusTaskSchema = &schemaProp{Type: "object", Properties: map[string]*schemaProp{
 	"id":         {Type: "string"},
 	"title":      {Type: "string"},
@@ -129,8 +137,9 @@ var statusOutputSchema = &schemaObj{
 				"tasks_completed":   {Type: "integer"},
 				"tasks_total":       {Type: "integer"},
 			}},
-			"sources": statusSourcesSchema,
-			"run":     statusEpicRunSchema,
+			"sources":   statusSourcesSchema,
+			"published": statusPublishedSchema,
+			"run":       statusEpicRunSchema,
 		}},
 		"specs": {Type: "array", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
 			"name":            {Type: "string"},
@@ -141,6 +150,7 @@ var statusOutputSchema = &schemaObj{
 			"ready":           {Type: "boolean"},
 			"blocked_by":      {Type: "array", Items: &schemaProp{Type: "string"}},
 			"sources":         statusSourcesSchema,
+			"published":       statusPublishedSchema,
 			"plan": {Type: "object", Properties: map[string]*schemaProp{
 				"name":            {Type: "string"},
 				"document_status": {Type: "string"},

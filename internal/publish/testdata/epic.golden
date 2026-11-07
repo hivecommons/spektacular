@@ -1,0 +1,86 @@
+# RFC: Operator notifications
+
+## Overview
+
+Operators hear about the hive's work through the channels they already read:
+email first, then chat.
+
+## Children
+
+- [ ] `nightly-digest` — Nightly digest email
+- [ ] `chat-alerts` — Chat alerts
+
+---
+
+Published by Spek · Spek epic `operator-notifications` · artifact_id `demo/epic/operator-notifications` · project `demo`
+
+<!-- spek:publish name=operator-notifications artifact_id=demo/epic/operator-notifications target=github -->
+
+---
+
+# [nightly-digest] Nightly digest email
+
+## What to build
+
+Operators want one email per day summarising what the hive filed, merged and
+parked, so they can skim the night's work without opening the dashboard.
+
+Spec `nightly-digest` of epic `operator-notifications`.
+
+## Requirements
+
+- [ ] **Digest schedule**: send one digest per day at the configured hour,
+  in the operator's time zone.
+- [ ] **Digest content**: list filed, merged and parked items with links.
+- [ ] **Opt-out**: an operator can turn the digest off from the settings page.
+
+## Acceptance criteria
+
+- [ ] Digest schedule: a digest arrives within five minutes of the hour.
+- [ ] Digest content: every item of the last 24 hours appears once.
+- [ ] Opt-out: no digest arrives after the operator opts out.
+
+## Where
+
+- Repo: `demo`
+
+## Links
+
+- Part of RFC: `RFC: Operator notifications`
+- Spek epic: `operator-notifications` (artifact_id `demo/epic/operator-notifications`)
+
+<!-- spek:publish name=operator-notifications artifact_id=demo/epic/operator-notifications target=github task=nightly-digest -->
+
+---
+
+# [chat-alerts] Chat alerts
+
+## What to build
+
+Post a message to the configured chat channel when an item is parked, so an
+operator can unpark it before the next digest.
+
+Spec `chat-alerts` of epic `operator-notifications`.
+
+## Requirements
+
+- [ ] **Park alert**: post within a minute of an item being parked.
+
+## Acceptance criteria
+
+- [ ] Park alert: the message names the item and why it was parked.
+
+## Where
+
+- Repo: `demo`
+
+## Depends on
+
+- Blocked by `nightly-digest` — Nightly digest email
+
+## Links
+
+- Part of RFC: `RFC: Operator notifications`
+- Spek epic: `operator-notifications` (artifact_id `demo/epic/operator-notifications`)
+
+<!-- spek:publish name=operator-notifications artifact_id=demo/epic/operator-notifications target=github task=chat-alerts -->

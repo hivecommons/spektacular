@@ -324,7 +324,7 @@ func runEpicWrite(cmd *cobra.Command, args []string) error {
 
 	next := epic.Epic{Specs: []epic.EpicSpec{}, Body: stripLeadingFrontmatterBlocks(content)}
 	if existing != nil {
-		next.Spec, next.Specs, next.Sources = existing.Spec, existing.Specs, existing.Sources
+		next.Spec, next.Specs, next.Sources, next.Published = existing.Spec, existing.Specs, existing.Sources, existing.Published
 	}
 	if input.Specs != nil {
 		next.Specs = *input.Specs

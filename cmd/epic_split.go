@@ -312,6 +312,7 @@ func runEpicSplit(cmd *cobra.Command, _ []string) error {
 	overview := in.Overview
 	if existing != nil {
 		next.Spec = existing.Spec
+		next.Published = existing.Published
 		next.Sources = mergeSources(existing.Sources, epicSources)
 		if strings.TrimSpace(overview) == "" {
 			overview = epicOverview(existing.Body)
