@@ -260,7 +260,7 @@ type GoalCheckConfig struct {
 // valid keys of implement.goal_check.models. It mirrors agent.Supported(),
 // which this package cannot import; a test in internal/agent pins the two
 // equal.
-var SupportedAgentNames = []string{"bob", "claude", "codex", "copilot", "omp"}
+var SupportedAgentNames = []string{"bob", "claude", "codex", "copilot", "cursor", "omp"}
 
 // Validate checks the goal-check models map names only supported agents and
 // gives each a model.

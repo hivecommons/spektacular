@@ -19,16 +19,7 @@ func (cursorAgent) Install(projectPath string, cfg config.Config, out io.Writer)
 	if err := installWorkflowSkills(projectPath, ".cursor/skills", cfg, out); err != nil {
 		return err
 	}
-	for _, install := range []func(string, config.Config, io.Writer) error{
-		installRepoSourcesSection, installStoreAccessSection, installMemoryContextSection,
-		installKnowledgeTriggerSection, installSpecTriggerSection, installDesignTriggerSection,
-		installDraftPresentationSection, installHistoricalArtifactsSection,
-	} {
-		if err := install(projectPath, cfg, out); err != nil {
-			return err
-		}
-	}
-	return nil
+	return installStandingRules(projectPath, cfg, out)
 }
 
 func init() { register(cursorAgent{}) }

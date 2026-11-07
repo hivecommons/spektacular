@@ -1463,9 +1463,9 @@ func TestFromYAMLFile_GoalCheckModelsRefusesUnknownAgentOrEmptyModel(t *testing.
 		fix     string
 	}{
 		"unknown agent": {
-			models:  "            cursor: fast",
-			message: `implement.goal_check.models names "cursor", which is not a supported agent; valid agents are bob, claude, codex, copilot, omp`,
-			fix:     "rename implement.goal_check.models.cursor in .spektacular/config.yaml to one of bob, claude, codex, copilot, omp, or remove it",
+			models:  "            notanagent: fast",
+			message: `implement.goal_check.models names "notanagent", which is not a supported agent; valid agents are bob, claude, codex, copilot, cursor, omp`,
+			fix:     "rename implement.goal_check.models.notanagent in .spektacular/config.yaml to one of bob, claude, codex, copilot, cursor, omp, or remove it",
 		},
 		"empty model": {
 			models:  `            codex: ""`,
