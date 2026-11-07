@@ -1,0 +1,125 @@
+# RFC: Nightly digest email
+
+## Overview
+
+Operators want one email per day summarising what the hive filed, merged and
+parked, so they can skim the night's work without opening the dashboard.
+
+## Requirements
+
+- [ ] **Digest schedule**: send one digest per day at the configured hour,
+  in the operator's time zone.
+- [ ] **Digest content**: list filed, merged and parked items with links.
+- [ ] **Opt-out**: an operator can turn the digest off from the settings page.
+
+## Acceptance Criteria
+
+- [ ] **Digest schedule**: a digest arrives within five minutes of the hour.
+- [ ] **Digest content**: every item of the last 24 hours appears once.
+- [ ] **Opt-out**: no digest arrives after the operator opts out.
+
+## Non-Goals
+
+- Weekly or monthly digests.
+
+## Children
+
+- [ ] `R1` — Digest schedule
+- [ ] `R2` — Digest content
+- [ ] `R3` — Opt-out
+
+---
+
+Published by Spek · Spek spec `nightly-digest` · artifact_id `demo/spec/nightly-digest` · project `demo` · source `https://github.com/acme/demo@abc1234` · spektacular v0.0.0-test
+
+<!-- spek:publish name=nightly-digest artifact_id=demo/spec/nightly-digest target=github -->
+
+---
+
+# [R1] Digest schedule
+
+## What to build
+
+Digest schedule: send one digest per day at the configured hour, in the operator's time zone.
+
+Requirement R1 of spec `nightly-digest`.
+
+## Context
+
+Operators want one email per day summarising what the hive filed, merged and
+parked, so they can skim the night's work without opening the dashboard.
+
+## Acceptance criteria
+
+- [ ] Digest schedule: a digest arrives within five minutes of the hour.
+
+## Where
+
+- Repo: the project's repo
+
+## Links
+
+- Part of RFC: `RFC: Nightly digest email`
+- Spek spec: `nightly-digest` (artifact_id `demo/spec/nightly-digest`)
+
+<!-- spek:publish name=nightly-digest artifact_id=demo/spec/nightly-digest target=github task=R1 -->
+
+---
+
+# [R2] Digest content
+
+## What to build
+
+Digest content: list filed, merged and parked items with links.
+
+Requirement R2 of spec `nightly-digest`.
+
+## Context
+
+Operators want one email per day summarising what the hive filed, merged and
+parked, so they can skim the night's work without opening the dashboard.
+
+## Acceptance criteria
+
+- [ ] Digest content: every item of the last 24 hours appears once.
+
+## Where
+
+- Repo: the project's repo
+
+## Links
+
+- Part of RFC: `RFC: Nightly digest email`
+- Spek spec: `nightly-digest` (artifact_id `demo/spec/nightly-digest`)
+
+<!-- spek:publish name=nightly-digest artifact_id=demo/spec/nightly-digest target=github task=R2 -->
+
+---
+
+# [R3] Opt-out
+
+## What to build
+
+Opt-out: an operator can turn the digest off from the settings page.
+
+Requirement R3 of spec `nightly-digest`.
+
+## Context
+
+Operators want one email per day summarising what the hive filed, merged and
+parked, so they can skim the night's work without opening the dashboard.
+
+## Acceptance criteria
+
+- [ ] Opt-out: no digest arrives after the operator opts out.
+
+## Where
+
+- Repo: the project's repo
+
+## Links
+
+- Part of RFC: `RFC: Nightly digest email`
+- Spek spec: `nightly-digest` (artifact_id `demo/spec/nightly-digest`)
+
+<!-- spek:publish name=nightly-digest artifact_id=demo/spec/nightly-digest target=github task=R3 -->

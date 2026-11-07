@@ -98,6 +98,25 @@ type Metadata struct {
 	// them. Like Designs, they are modelled here so the closed schema carries
 	// them forward through every ordinary write, including reconcile_spec.
 	Amendments []Amendment
+	// Published records where this artifact was published as an RFC with
+	// child work items, one entry per target. Only publish writes it; like
+	// Designs, it is modelled here so the closed schema carries it forward.
+	Published []Publication
+}
+
+// Publication is one record of an artifact filed into a work source by
+// publish: the target it went to, the RFC's URL, and each child item's ID
+// (the plan task, member spec or requirement it was built from) and URL.
+type Publication struct {
+	Target   string           `yaml:"target" json:"target"`
+	RFCURL   string           `yaml:"rfc_url" json:"rfc_url"`
+	Children []PublishedChild `yaml:"children" json:"children"`
+}
+
+// PublishedChild is one child work item of a Publication.
+type PublishedChild struct {
+	ID  string `yaml:"id" json:"id"`
+	URL string `yaml:"url" json:"url"`
 }
 
 // Amendment is one change recorded on a spec during an implement run: the
@@ -145,6 +164,7 @@ type yamlShape struct {
 	Epic           string         `yaml:"epic,omitempty"`
 	Sources        []SourceRef    `yaml:"sources,omitempty"`
 	Amendments     []Amendment    `yaml:"amendments,omitempty"`
+	Published      []Publication  `yaml:"published,omitempty"`
 }
 
 // yamlInShape is the decode-side twin of yamlShape. It holds document_status
@@ -169,6 +189,8 @@ type yamlInShape struct {
 	Sources yaml.Node `yaml:"sources"`
 	// Amendments is a raw node for the same reason Designs is.
 	Amendments yaml.Node `yaml:"amendments"`
+	// Published is a raw node for the same reason Designs is.
+	Published yaml.Node `yaml:"published"`
 }
 
 // MarshalYAML implements yaml.Marshaler.
@@ -185,6 +207,7 @@ func (m Metadata) MarshalYAML() (interface{}, error) {
 		Epic:           m.Epic,
 		Sources:        m.Sources,
 		Amendments:     m.Amendments,
+		Published:      m.Published,
 	}
 	if !m.ClosedDate.IsZero() {
 		out.ClosedDate = m.ClosedDate.Format(dateFormat)
@@ -229,7 +252,38 @@ func (m *Metadata) UnmarshalYAML(node *yaml.Node) error {
 	m.Epic = in.Epic
 	m.Sources = decodeSourceRefs(in.Sources)
 	m.Amendments = decodeAmendments(in.Amendments)
+	m.Published = DecodePublications(in.Published)
 	return nil
+}
+
+// DecodePublications reads a published list leniently, on the same bargain
+// decodeDesignRefs strikes: an absent, empty, malformed or non-list value
+// yields no records instead of an error. Entries with no target or no RFC
+// URL are dropped, since a record that cannot say where the RFC went points
+// at nothing. It is exported because the epic's own frontmatter type decodes
+// the same list.
+func DecodePublications(node yaml.Node) []Publication {
+	if node.Kind != yaml.SequenceNode {
+		return nil
+	}
+	var out []Publication
+	for _, item := range node.Content {
+		if item.Kind != yaml.MappingNode {
+			continue
+		}
+		var p Publication
+		if err := item.Decode(&p); err != nil {
+			continue
+		}
+		if p.Target == "" || p.RFCURL == "" {
+			continue
+		}
+		if p.Children == nil {
+			p.Children = []PublishedChild{}
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // decodeDesignRefs reads the designs list leniently. An absent, empty,

@@ -45,6 +45,9 @@ type Epic struct {
 	Specs []EpicSpec
 	// Sources are the external materials that directly seeded the epic.
 	Sources []metadata.SourceRef
+	// Published records where the epic was published as an RFC with its
+	// specs as children, one entry per target. Only publish writes it.
+	Published []metadata.Publication
 	// Body is everything after the frontmatter: "## Overview" and "## Specs".
 	Body []byte
 }
@@ -79,6 +82,7 @@ type yamlOut struct {
 	Spec           string                  `yaml:"spec,omitempty"`
 	Specs          []EpicSpec              `yaml:"specs"`
 	Sources        []metadata.SourceRef    `yaml:"sources,omitempty"`
+	Published      []metadata.Publication  `yaml:"published,omitempty"`
 }
 
 // yamlIn is the decode-side twin of yamlOut. document_status is a raw node so
@@ -92,6 +96,7 @@ type yamlIn struct {
 	Spec           string               `yaml:"spec"`
 	Specs          []EpicSpec           `yaml:"specs"`
 	Sources        []metadata.SourceRef `yaml:"sources"`
+	Published      yaml.Node            `yaml:"published"`
 }
 
 // Parse reads an epic document. A document with no frontmatter reads as an
@@ -108,7 +113,7 @@ func Parse(raw []byte) (Epic, error) {
 	if err := yaml.Unmarshal(fm, &in); err != nil {
 		return Epic{}, fmt.Errorf("malformed epic frontmatter: %w", err)
 	}
-	e := Epic{Spec: in.Spec, Specs: in.Specs, Sources: in.Sources, Body: body}
+	e := Epic{Spec: in.Spec, Specs: in.Specs, Sources: in.Sources, Published: metadata.DecodePublications(in.Published), Body: body}
 	if in.CreatedDate != "" {
 		if e.CreatedDate, err = time.Parse(metadata.DateFormat, in.CreatedDate); err != nil {
 			return Epic{}, fmt.Errorf("parsing created_date %q: %w", in.CreatedDate, err)
@@ -136,6 +141,7 @@ func (e Epic) Render() ([]byte, error) {
 		Spec:           e.Spec,
 		Specs:          make([]EpicSpec, len(e.Specs)),
 		Sources:        e.Sources,
+		Published:      e.Published,
 	}
 	for i, s := range e.Specs {
 		deps := s.DependsOn

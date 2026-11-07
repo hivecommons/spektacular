@@ -68,6 +68,17 @@ Every form takes the same selection (`--name`, `--kind`, `--agent`, and a repeat
 
 **Epics.** When a piece of work is split into an epic, ask your agent to *plan this epic*, review the plans, then *implement this epic*. Independent specs are worked on in parallel, each spec is built in its own worktree and merged before the specs that depend on it, and repeating either request picks up where it stopped. Naming an epic in `status` adds a `run` view that says, for planning and for implementing, what each spec still needs and what blocks the epic. See [Epics](https://spektacular.dev/epics/).
 
+**Publishing.** A final spec or epic can be handed to a work source — a GitHub repository today — as one RFC issue plus a child issue per unit of work, so an agent hive can pick the work up:
+
+```bash
+spektacular publish <name> --dry-run                      # render the RFC and children; no network calls
+spektacular publish <name> [--repo owner/repo]            # file them on GitHub (the default target)
+spektacular publish <name> --update                       # re-publish, updating the filed items in place
+spektacular publish <name> --format json                  # the result as structured data
+```
+
+A spec's children are its plan's tasks when it has a task-format plan, else its `## Requirements` entries with the acceptance criteria traced to each; an epic's children are its specs, in epic order, with `depends_on` carried over. Each child is a native sub-issue of the RFC and each dependency a "blocked by" relation. The `epic` label (or `publish.github.parent_label`) goes on the RFC only when the repository already has it; publish never creates labels. Every filed item carries a hidden marker, `<!-- spek:publish name=<name> artifact_id=<id> target=github -->` on the RFC and the same with `task=<child-id> rfc=<url>` on each child, so a re-run finds what it filed: an unchanged publication is a no-op, one that would change filed items is refused with `publish_conflict` and a list of the changes unless `--update` is given. The result is written back to the artifact's frontmatter as `published: [{target, rfc_url, children: [{id, url}]}]`, which `status` reports. A non-final artifact is refused with `publish_not_final` (`--allow-draft` files it as `RFC: [DRAFT] …`); a target that is not github with `publish_target_unconfigured`; a run with no repository to file in with `publish_repo_unknown`, and one with no credential (`GITHUB_TOKEN`, `GH_TOKEN` or `gh auth token`) with `publish_auth_missing`; a body a hive's clarity gate would park — under 80 characters, an unsubstituted `<placeholder>`, an unchosen `high/medium/low` list — with `publish_body_hygiene`. See [docs/publish-hive-handshake.md](docs/publish-hive-handshake.md) for the contract a hive reads.
+
 ### Addressing specs, plans and changelog records
 
 Every document a feature produces is addressed by the feature's bare name, the same name the workflow records in `data.name`, with no file extension:
@@ -372,6 +383,12 @@ design:
       provider: file
       config:
         location: ../design/api     # relative to the folder holding config.yaml; may sit outside the project
+publish:
+  default_target: github            # optional; the work source `publish` files into (only github ships)
+  github:
+    repo: org/my-project            # optional; defaults to `source`, then the current directory's origin
+    parent_label: epic              # optional; applied to the RFC only when the repository has the label
+    labels: [spek]                  # optional; applied to every filed item that the repository has labels for
 ```
 
 Each repo entry needs a slug-safe unique `name` and a `location`: the folder holding that repo's `repo.yaml` (`local` is still accepted and means the same thing). A relative location is resolved from the folder holding `config.yaml`, and nothing is appended to it, so the project's own footprint is `.` and a repo folder in the project is `../repos/<name>`. A repo is normally added through a guided flow: you are asked which repo to add, and its name, description, role and tags are each proposed for you from what the repo says about itself, one question at a time, with a plain-language confirmation before anything is written. Spektacular's files go inside the repo being added unless it cannot take them or you say otherwise, in which case they live in a folder under the project and the repo is left with only its code. An add can be started and finished while a spec or plan is already in progress. A caller that already knows every detail can still register a repo in a single command with `repo add`. Where the code lives is declared in the repo's own `repo.yaml` as `source`; the old `address` key is no longer read, and a config that still carries it fails to load with an error saying where the value now goes. `description`, `role`, and `tags` are optional metadata, also in `repo.yaml`, that cross-repo planning uses to attribute requirements to the right repo. Add to the registry with `spektacular repo new`, or `spektacular repo add` when every detail is already known, and inspect it with `spektacular repo list`; removal is a manual config edit. Cloned repos are never fetched or pulled automatically; a stale clone produces a warning only.

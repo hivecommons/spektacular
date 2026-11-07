@@ -1,0 +1,140 @@
+# RFC: Nightly digest email
+
+## Overview
+
+Operators want one email per day summarising what the hive filed, merged and
+parked, so they can skim the night's work without opening the dashboard.
+
+## Requirements
+
+- [ ] **Digest schedule**: send one digest per day at the configured hour,
+  in the operator's time zone.
+- [ ] **Digest content**: list filed, merged and parked items with links.
+- [ ] **Opt-out**: an operator can turn the digest off from the settings page.
+
+## Acceptance Criteria
+
+- [ ] **Digest schedule**: a digest arrives within five minutes of the hour.
+- [ ] **Digest content**: every item of the last 24 hours appears once.
+- [ ] **Opt-out**: no digest arrives after the operator opts out.
+
+## Non-Goals
+
+- Weekly or monthly digests.
+
+## Children
+
+- [ ] `sched-1` — Add the digest scheduler
+- [ ] `render-2` — Render the digest email
+- [ ] `optout-3` — Add the opt-out toggle
+
+---
+
+Published by Spek · Spek spec `nightly-digest` · artifact_id `demo/spec/nightly-digest` · project `demo` · source `https://github.com/acme/demo@abc1234` · spektacular v0.0.0-test
+
+<!-- spek:publish name=nightly-digest artifact_id=demo/spec/nightly-digest target=github -->
+
+---
+
+# [sched-1] Add the digest scheduler
+
+## What to build
+
+Add the digest scheduler
+
+Task `sched-1` of milestone 1 in plan `nightly-digest`.
+
+## Context
+
+Operators want one email per day summarising what the hive filed, merged and
+parked, so they can skim the night's work without opening the dashboard.
+
+## Acceptance criteria
+
+- [ ] a digest job runs at the configured hour
+- [ ] the job is idempotent within a day
+
+## Where
+
+- Repo: `api`
+- Milestone: 1
+- Execution: agent
+
+## Links
+
+- Part of RFC: `RFC: Nightly digest email`
+- Spek spec: `nightly-digest` (artifact_id `demo/spec/nightly-digest`)
+
+<!-- spek:publish name=nightly-digest artifact_id=demo/spec/nightly-digest target=github task=sched-1 -->
+
+---
+
+# [render-2] Render the digest email
+
+## What to build
+
+Render the digest email
+
+Task `render-2` of milestone 1 in plan `nightly-digest`.
+
+## Context
+
+Operators want one email per day summarising what the hive filed, merged and
+parked, so they can skim the night's work without opening the dashboard.
+
+## Acceptance criteria
+
+- [ ] filed, merged and parked items each have a section
+
+## Where
+
+- Repo: `api`
+- Milestone: 1
+- Execution: agent
+
+## Depends on
+
+- Blocked by `sched-1` — Add the digest scheduler
+
+## Links
+
+- Part of RFC: `RFC: Nightly digest email`
+- Spek spec: `nightly-digest` (artifact_id `demo/spec/nightly-digest`)
+
+<!-- spek:publish name=nightly-digest artifact_id=demo/spec/nightly-digest target=github task=render-2 -->
+
+---
+
+# [optout-3] Add the opt-out toggle
+
+## What to build
+
+Add the opt-out toggle
+
+Task `optout-3` of milestone 2 in plan `nightly-digest`.
+
+## Context
+
+Operators want one email per day summarising what the hive filed, merged and
+parked, so they can skim the night's work without opening the dashboard.
+
+## Acceptance criteria
+
+- [ ] the settings page shows the toggle
+
+## Where
+
+- Repo: `web`
+- Milestone: 2
+- Execution: human — needs a design review
+
+## Depends on
+
+- Blocked by `render-2` — Render the digest email
+
+## Links
+
+- Part of RFC: `RFC: Nightly digest email`
+- Spek spec: `nightly-digest` (artifact_id `demo/spec/nightly-digest`)
+
+<!-- spek:publish name=nightly-digest artifact_id=demo/spec/nightly-digest target=github task=optout-3 -->

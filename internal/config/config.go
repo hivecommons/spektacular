@@ -404,6 +404,53 @@ func (k KnowledgeConfig) PruneMaxAgeDays() int {
 	return k.Prune.MaxAgeDays
 }
 
+// Publish targets. Only GitHub ships; jira and linear are reserved so a
+// config naming one is refused with publish_target_unconfigured rather than
+// an unknown-value error.
+const (
+	PublishTargetGitHub = "github"
+	PublishTargetJira   = "jira"
+	PublishTargetLinear = "linear"
+)
+
+// DefaultPublishParentLabel is the label publish applies to the RFC when the
+// repo has it, so a hive never claims the umbrella itself.
+const DefaultPublishParentLabel = "epic"
+
+// PublishConfig is where `publish` files an artifact as an RFC with child
+// work items. Every field is optional: the default target is github, and the
+// GitHub repo defaults to the project's source or the checkout's origin.
+// Credentials are never stored here; they come from the environment.
+type PublishConfig struct {
+	DefaultTarget string              `yaml:"default_target,omitempty"`
+	GitHub        PublishGitHubConfig `yaml:"github,omitempty"`
+}
+
+// PublishGitHubConfig is the GitHub target's settings. Labels are applied
+// only when the repo already has them; publish never creates a label.
+type PublishGitHubConfig struct {
+	Repo        string   `yaml:"repo,omitempty"`
+	Labels      []string `yaml:"labels,omitempty"`
+	ParentLabel string   `yaml:"parent_label,omitempty"`
+}
+
+// Target is the configured default target, github when unset.
+func (p PublishConfig) Target() string {
+	if p.DefaultTarget == "" {
+		return PublishTargetGitHub
+	}
+	return p.DefaultTarget
+}
+
+// ParentLabelName is the label for the RFC, DefaultPublishParentLabel when
+// unset.
+func (p PublishGitHubConfig) ParentLabelName() string {
+	if p.ParentLabel == "" {
+		return DefaultPublishParentLabel
+	}
+	return p.ParentLabel
+}
+
 // DesignConfig holds the ordered list of the design sources the project
 // declares. A design source points at a folder of design documents the team
 // already keeps, wherever it keeps it, and Spektacular reads and writes
@@ -574,6 +621,7 @@ type Config struct {
 	Implement            ImplementConfig `yaml:"implement"`
 	Knowledge            KnowledgeConfig `yaml:"knowledge,omitempty"`
 	Design               DesignConfig    `yaml:"design,omitempty"`
+	Publish              PublishConfig   `yaml:"publish,omitempty"`
 	Repos                []RepoEntry     `yaml:"repos,omitempty"`
 }
 

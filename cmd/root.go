@@ -708,6 +708,7 @@ func init() {
 	rootCmd.AddCommand(changelogCmd)
 	rootCmd.AddCommand(implementCmd)
 	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(publishCmd)
 	rootCmd.AddCommand(statsCmd)
 	rootCmd.AddCommand(knowledgeCmd)
 	rootCmd.AddCommand(designCmd)
