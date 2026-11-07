@@ -40,7 +40,7 @@ jobs:
           verb: call
           module: ./dagger
           args: all --output=./output --src=. --github-token=GITHUB_TOKEN --notorize-cert=./cert.p12 --notorize-cert-password=QUILL_SIGN_PASSWORD --notorize-key=./key.p8 --notorize-id=${{secrets.QUILL_NOTARY_KEY_ID}} --notorize-issuer=${{secrets.QUILL_NOTARY_ISSUER}}
-          version: "0.19.8"
+          version: "0.21.11"
           dagger-flags: "--progress=plain"
 
       - name: All unsigned
@@ -54,7 +54,7 @@ jobs:
           verb: call
           module: ./dagger
           args: all --output=./output --src=.
-          version: "0.19.8"
+          version: "0.21.11"
           dagger-flags: "--progress=plain"
 
       - name: Upload artifacts
@@ -95,7 +95,7 @@ jobs:
           verb: call
           module: ./dagger
           args: release --src=. --github-token=GITHUB_TOKEN --gemfury-token=GEMFURY_TOKEN --archives=./build_artifacts --output=./version.txt
-          version: "0.19.8"
+          version: "0.21.11"
           dagger-flags: "--progress=plain"
 
       - name: Set output
