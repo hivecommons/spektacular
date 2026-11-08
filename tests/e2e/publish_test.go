@@ -404,7 +404,7 @@ func TestPublish_GitHubHandshake(t *testing.T) {
 		}
 		return c
 	}
-	assertRecordedAndIdempotent(t, root, env, res, "github", count, func() { gh.Issues[1].State = "closed" })
+	assertRecordedAndIdempotent(t, root, env, res, "github", count, func() { gh.Update(1, func(is *githubtest.Issue) { is.State = "closed" }) })
 }
 
 func TestPublish_JiraHandshake(t *testing.T) {
@@ -443,7 +443,7 @@ func TestPublish_JiraHandshake(t *testing.T) {
 			items := map[string]filed{}
 			for key, is := range issues {
 				f := filed{Ref: key, Title: is.Summary, Body: j.DescriptionText(key), Labels: is.Labels, Parent: is.Parent, URL: j.URL + "/browse/" + key}
-				for _, l := range j.Links {
+				for _, l := range j.LinkList() {
 					if blocker, blocked, ok := strings.Cut(l, " blocks "); ok && blocked == key {
 						f.Blocked = append(f.Blocked, blocker)
 					}
@@ -463,7 +463,7 @@ func TestPublish_JiraHandshake(t *testing.T) {
 			}
 			require.NotNil(t, issues["DEMO-2"].Property, "the marker is also in the issue property")
 			count := func() counts {
-				c := counts{Issues: len(j.Snapshot()), Relations: len(j.Links)}
+				c := counts{Issues: len(j.Snapshot()), Relations: len(j.LinkList())}
 				for _, is := range j.Snapshot() {
 					if is.Parent != "" {
 						c.Relations++
@@ -471,7 +471,7 @@ func TestPublish_JiraHandshake(t *testing.T) {
 				}
 				return c
 			}
-			assertRecordedAndIdempotent(t, root, env, res, "jira", count, func() { j.Issues["DEMO-1"].Done = true })
+			assertRecordedAndIdempotent(t, root, env, res, "jira", count, func() { j.Update("DEMO-1", func(is *jiratest.Issue) { is.Done = true }) })
 		})
 	}
 }
@@ -503,7 +503,7 @@ func TestPublish_LinearHandshake(t *testing.T) {
 			f.Labels = append(f.Labels, strings.TrimPrefix(id, "label-"))
 		}
 		f.Parent = byID[is.ParentID]
-		for _, r := range l.Relations {
+		for _, r := range l.RelationList() {
 			if blocker, blocked, ok := strings.Cut(r, " blocks "); ok && blocked == is.Identifier {
 				f.Blocked = append(f.Blocked, blocker)
 			}
@@ -514,7 +514,7 @@ func TestPublish_LinearHandshake(t *testing.T) {
 	assertHandshake(t, res, "ENG-1", items)
 	require.ElementsMatch(t, []string{"epic", configuredLabel}, items["ENG-1"].Labels, "the parent label is on the RFC")
 	count := func() counts {
-		c := counts{Relations: len(l.Relations)}
+		c := counts{Relations: len(l.RelationList())}
 		for _, is := range l.Snapshot() {
 			c.Issues++
 			if is.ParentID != "" {
@@ -524,9 +524,10 @@ func TestPublish_LinearHandshake(t *testing.T) {
 		return c
 	}
 	assertRecordedAndIdempotent(t, root, env, res, "linear", count, func() {
-		rfc := l.ByIdentifier("ENG-1")
-		rfc.StateType = "completed"
-		rfc.Archived = true // Linear auto-archives completed issues; Find must still see it
+		l.Update("ENG-1", func(rfc *lineartest.Issue) {
+			rfc.StateType = "completed"
+			rfc.Archived = true // Linear auto-archives completed issues; Find must still see it
+		})
 	})
 }
 

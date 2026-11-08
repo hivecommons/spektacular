@@ -353,6 +353,23 @@ func (f *Server) ByIdentifier(identifier string) *Issue {
 	return f.byIdentifier(identifier)
 }
 
+// RelationList copies the "BLOCKER blocks BLOCKED" relations under the lock.
+func (f *Server) RelationList() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string{}, f.Relations...)
+}
+
+// Update changes the issue with that identifier under the lock, for
+// tests that alter the workspace's state between runs.
+func (f *Server) Update(identifier string, fn func(*Issue)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if is := f.byIdentifier(identifier); is != nil {
+		fn(is)
+	}
+}
+
 func (f *Server) byIdentifier(identifier string) *Issue {
 	for _, is := range f.Issues {
 		if is.Identifier == identifier {

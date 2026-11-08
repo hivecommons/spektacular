@@ -192,6 +192,14 @@ func (f *Server) Snapshot() State {
 	return st
 }
 
+// Update changes an issue under the lock, for tests that alter the
+// target's state between runs.
+func (f *Server) Update(number int, fn func(*Issue)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	fn(f.Issues[number])
+}
+
 // Calls is how many requests the fake has served.
 func (f *Server) Calls() int {
 	f.mu.Lock()

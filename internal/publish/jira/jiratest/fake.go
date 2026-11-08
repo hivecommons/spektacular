@@ -396,6 +396,21 @@ func (f *Server) Calls() int {
 
 // Snapshot copies the issues under the lock, for readers outside a
 // handler.
+// LinkList copies the "BLOCKER blocks BLOCKED" links under the lock.
+func (f *Server) LinkList() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string{}, f.Links...)
+}
+
+// Update changes an issue under the lock, for tests that alter the
+// site's state between runs.
+func (f *Server) Update(key string, fn func(*Issue)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	fn(f.Issues[key])
+}
+
 func (f *Server) Snapshot() map[string]Issue {
 	f.mu.Lock()
 	defer f.mu.Unlock()
