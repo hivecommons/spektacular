@@ -185,6 +185,9 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := opts.CheckLabels("publish." + targetName); err != nil {
+		return publishRefusal(err, name)
+	}
 	res.Repo = where
 
 	ctx := cmd.Context()

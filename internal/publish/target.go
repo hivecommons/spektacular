@@ -1,6 +1,7 @@
 package publish
 
 import (
+	"fmt"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -31,6 +32,37 @@ type PublishOptions struct {
 	ParentLabel string
 	// Labels are applied to every filed item when they exist.
 	Labels []string
+}
+
+// HiveSuppressLabels are the labels a hive hard-suppresses (hive's
+// src/pkg/github/labels.go): an item carrying one is never claimed, so
+// publish refuses to file with them.
+var HiveSuppressLabels = []string{"hold", "needs-human", "needs-decision", "needs-spec", "needs-direction"}
+
+// CheckLabels refuses options that would put a hive suppress label on a
+// filed item, naming the label and the setting it came from.
+func (o PublishOptions) CheckLabels(section string) error {
+	check := func(label, setting string) error {
+		for _, s := range HiveSuppressLabels {
+			if strings.EqualFold(strings.TrimSpace(label), s) {
+				return &Error{
+					Code:       ErrTargetUnconfigured,
+					Message:    fmt.Sprintf("%s.%s names %q, a label a hive treats as do-not-claim; every filed item would be parked", section, setting, label),
+					NextAction: fmt.Sprintf("remove %q from %s.%s in .spektacular/config.yaml", label, section, setting),
+				}
+			}
+		}
+		return nil
+	}
+	if err := check(o.ParentLabel, "parent_label"); err != nil {
+		return err
+	}
+	for _, l := range o.Labels {
+		if err := check(l, "labels"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Existing is what Find reports: the RFC and the children already filed.

@@ -2,15 +2,11 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -18,6 +14,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/publish"
+	"github.com/hivecommons/spektacular/internal/publish/github/githubtest"
 	"github.com/hivecommons/spektacular/internal/publish/jira/jiratest"
 	"github.com/hivecommons/spektacular/internal/publish/linear/lineartest"
 )
@@ -219,8 +216,9 @@ func TestPublish_Refusals(t *testing.T) {
 
 func TestPublish_FilesThenRecordsThenRefusesThenUpdates(t *testing.T) {
 	root := publishProject(t)
-	gh := newPublishFake(t)
-	t.Setenv("SPEKTACULAR_GITHUB_API", gh.url)
+	gh := githubtest.New(t)
+	t.Setenv("GITHUB_TOKEN", githubtest.Token)
+	t.Setenv("SPEKTACULAR_GITHUB_API", gh.URL)
 
 	stdout, code := runPublishCmd(t, "nightly-digest", "--repo", "acme/demo", "--format", "json")
 	require.Equal(t, 0, code, stdout)
@@ -238,7 +236,7 @@ func TestPublish_FilesThenRecordsThenRefusesThenUpdates(t *testing.T) {
 	require.Equal(t, []string{"rfc", "R1", "R2"}, res.Created)
 	require.Len(t, res.Children, 2)
 	require.Nil(t, res.Pub, "the full model is dry-run output only")
-	require.Equal(t, []string{"epic"}, gh.issues[1].Labels, "the parent label exists so it is applied to the RFC")
+	require.Equal(t, []string{"epic"}, gh.Issues[1].Labels, "the parent label exists so it is applied to the RFC")
 
 	// Written back to the spec's frontmatter.
 	raw, err := os.ReadFile(filepath.Join(root, ".spektacular", "specs", "nightly-digest.md"))
@@ -252,7 +250,7 @@ func TestPublish_FilesThenRecordsThenRefusesThenUpdates(t *testing.T) {
 	require.Contains(t, string(body), "## Requirements", "the body is untouched")
 
 	// A re-run with nothing changed succeeds and creates nothing.
-	before := gh.created()
+	before := gh.Count("POST /repos/acme/demo/issues")
 	stdout, code = runPublishCmd(t, "nightly-digest", "--repo", "acme/demo", "--format", "json")
 	require.Equal(t, 0, code, stdout)
 	var rerun struct {
@@ -262,7 +260,7 @@ func TestPublish_FilesThenRecordsThenRefusesThenUpdates(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(stdout), &rerun))
 	require.Empty(t, rerun.Created)
 	require.Equal(t, []string{"R1", "R2", "rfc"}, rerun.Unchanged)
-	require.Equal(t, before, gh.created())
+	require.Equal(t, before, gh.Count("POST /repos/acme/demo/issues"))
 
 	// A change refuses without --update, naming what would change.
 	writeSpecFixture(t, root, "nightly-digest", strings.Replace(string(raw),
@@ -271,16 +269,16 @@ func TestPublish_FilesThenRecordsThenRefusesThenUpdates(t *testing.T) {
 	resp := requirePublishRefusal(t, stdout, code, publish.ErrConflict)
 	require.Contains(t, resp.Message, "R3 (create)")
 	require.Contains(t, resp.NextAction, "--update")
-	require.Equal(t, before, gh.created())
+	require.Equal(t, before, gh.Count("POST /repos/acme/demo/issues"))
 
 	stdout, code = runPublishCmd(t, "nightly-digest", "--repo", "acme/demo", "--update")
 	require.Equal(t, 0, code, stdout)
 	require.Contains(t, stdout, "created: R3")
-	require.Equal(t, before+1, gh.created())
-	require.Contains(t, gh.issues[1].Body, "- [ ] #4 — Opt-out")
+	require.Equal(t, before+1, gh.Count("POST /repos/acme/demo/issues"))
+	require.Contains(t, gh.Issues[1].Body, "- [ ] #4 — Opt-out")
 
 	// A closed RFC is a conflict however the run is flagged.
-	gh.issues[1].State = "closed"
+	gh.Issues[1].State = "closed"
 	stdout, code = runPublishCmd(t, "nightly-digest", "--repo", "acme/demo", "--update")
 	resp = requirePublishRefusal(t, stdout, code, publish.ErrConflict)
 	require.Contains(t, resp.Message, "closed")
@@ -292,8 +290,9 @@ func TestPublish_EpicPublishesSpecsAsChildren(t *testing.T) {
 	epicPath := filepath.Join(root, ".spektacular", "epics", "notify.md")
 	require.NoError(t, os.MkdirAll(filepath.Dir(epicPath), 0o755))
 	require.NoError(t, os.WriteFile(epicPath, []byte("---\ncreated_date: 2026-02-01\ndocument_status: final\nspecs:\n  - name: nightly-digest\n    depends_on: []\n  - name: chat-alerts\n    depends_on:\n      - nightly-digest\n---\n\n# Epic: Operator notifications\n\n## Overview\n\nOperators hear about the hive's work through the channels they already read.\n\n## Specs\n\n- nightly-digest\n- chat-alerts\n"), 0o644))
-	gh := newPublishFake(t)
-	t.Setenv("SPEKTACULAR_GITHUB_API", gh.url)
+	gh := githubtest.New(t)
+	t.Setenv("GITHUB_TOKEN", githubtest.Token)
+	t.Setenv("SPEKTACULAR_GITHUB_API", gh.URL)
 
 	stdout, code := runPublishCmd(t, "notify", "--repo", "acme/demo", "--format", "json")
 	require.Equal(t, 0, code, stdout)
@@ -304,8 +303,8 @@ func TestPublish_EpicPublishesSpecsAsChildren(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(stdout), &res))
 	require.Equal(t, "epic", res.Kind)
 	require.Equal(t, []string{"rfc", "nightly-digest", "chat-alerts"}, res.Created)
-	require.Equal(t, []int64{1002}, gh.blocked[3], "chat-alerts is blocked by nightly-digest")
-	m, ok := publish.ParseMarker(gh.issues[3].Body)
+	require.Equal(t, []int64{1002}, gh.Blocked[3], "chat-alerts is blocked by nightly-digest")
+	m, ok := publish.ParseMarker(gh.Issues[3].Body)
 	require.True(t, ok)
 	require.Equal(t, "chat-alerts", m.Task)
 	require.Equal(t, "https://github.com/acme/demo/issues/1", m.RFC)
@@ -691,109 +690,5 @@ func TestParseGitHubRepo(t *testing.T) {
 		}
 		require.True(t, ok, in)
 		require.Equal(t, want, owner+"/"+repo, in)
-	}
-}
-
-// publishFake is the slice of GitHub's REST API the verb touches.
-type publishFake struct {
-	mu      sync.Mutex
-	url     string
-	issues  map[int]*publishFakeIssue
-	next    int
-	blocked map[int][]int64
-	posts   int
-}
-
-type publishFakeIssue struct {
-	ID     int64
-	Number int
-	Title  string
-	Body   string
-	State  string
-	Labels []string
-}
-
-func (i *publishFakeIssue) json() map[string]any {
-	labels := []map[string]string{}
-	for _, l := range i.Labels {
-		labels = append(labels, map[string]string{"name": l})
-	}
-	return map[string]any{"id": i.ID, "number": i.Number, "html_url": fmt.Sprintf("https://github.com/acme/demo/issues/%d", i.Number), "title": i.Title, "body": i.Body, "state": i.State, "labels": labels}
-}
-
-func newPublishFake(t *testing.T) *publishFake {
-	t.Helper()
-	f := &publishFake{issues: map[int]*publishFakeIssue{}, next: 1, blocked: map[int][]int64{}}
-	srv := httptest.NewServer(f)
-	t.Cleanup(srv.Close)
-	f.url = srv.URL
-	return f
-}
-
-func (f *publishFake) created() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.posts
-}
-
-var (
-	fakeIssueRE   = regexp.MustCompile(`^/repos/acme/demo/issues/(\d+)$`)
-	fakeSubRE     = regexp.MustCompile(`^/repos/acme/demo/issues/(\d+)/sub_issues$`)
-	fakeBlockedRE = regexp.MustCompile(`^/repos/acme/demo/issues/(\d+)/dependencies/blocked_by$`)
-	fakeArtifact  = regexp.MustCompile(`"artifact_id=([^"]+)"`)
-)
-
-func (f *publishFake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if r.Header.Get("Authorization") != "Bearer test-token" {
-		http.Error(w, `{"message":"Bad credentials"}`, http.StatusUnauthorized)
-		return
-	}
-	var body map[string]any
-	_ = json.NewDecoder(r.Body).Decode(&body)
-	write := func(status int, v any) {
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(v)
-	}
-	path := r.URL.Path
-	switch {
-	case path == "/repos/acme/demo/labels":
-		write(200, []map[string]string{{"name": "epic"}})
-	case path == "/repos/acme/demo/issues" && r.Method == http.MethodPost:
-		n := f.next
-		f.next++
-		f.posts++
-		is := &publishFakeIssue{ID: int64(1000 + n), Number: n, Title: body["title"].(string), Body: body["body"].(string), State: "open"}
-		if raw, ok := body["labels"].([]any); ok {
-			for _, l := range raw {
-				is.Labels = append(is.Labels, l.(string))
-			}
-		}
-		f.issues[n] = is
-		write(201, is.json())
-	case fakeIssueRE.MatchString(path) && r.Method == http.MethodPatch:
-		n, _ := strconv.Atoi(fakeIssueRE.FindStringSubmatch(path)[1])
-		is := f.issues[n]
-		is.Title = body["title"].(string)
-		is.Body = body["body"].(string)
-		write(200, is.json())
-	case fakeSubRE.MatchString(path):
-		write(201, map[string]any{})
-	case fakeBlockedRE.MatchString(path):
-		n, _ := strconv.Atoi(fakeBlockedRE.FindStringSubmatch(path)[1])
-		f.blocked[n] = append(f.blocked[n], int64(body["issue_id"].(float64)))
-		write(201, map[string]any{})
-	case path == "/search/issues":
-		m := fakeArtifact.FindStringSubmatch(r.URL.Query().Get("q"))
-		items := []map[string]any{}
-		for n := 1; n < f.next; n++ {
-			if m != nil && strings.Contains(f.issues[n].Body, "artifact_id="+m[1]+" ") {
-				items = append(items, f.issues[n].json())
-			}
-		}
-		write(200, map[string]any{"items": items})
-	default:
-		write(404, map[string]string{"message": "no route " + r.Method + " " + path})
 	}
 }

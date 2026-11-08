@@ -148,13 +148,30 @@ published:
 binary and runs `spektacular publish` against in-process fakes of GitHub,
 Jira Cloud, Jira Data Center and Linear. On every target it asserts the
 Spek side of this contract: the RFC title starts `RFC:`, its marker has no
-`task=` and is the last line of the body, every child carries a marker with
-`task=` and the RFC URL, hangs off the RFC (sub-issue, Epic parent, Linear
-parent), clears the clarity gate (≥ 80 chars, no `<placeholders>`), carries
-none of hive's suppress labels and never the parent label, each `depends_on`
-edge is filed as the target's blocked-by relation, the RFC checklist names
-every child, the publication lands in the spec's frontmatter, a re-run files
-nothing, and a dry run makes no network call.
+`task=` and ends the body, every child carries a marker with `task=` and
+the RFC URL, hangs off the RFC (sub-issue, Epic parent or Data Center Epic
+Link, Linear parent), clears the clarity gate (≥ 80 chars once the hidden
+marker and digest lines are stripped, no `<placeholders>`), carries the
+configured label and none of hive's suppress labels and never the parent
+label, each `depends_on` edge is filed as the target's blocked-by relation,
+the RFC checklist has a line for every child, the publication and its URLs
+land in the spec's frontmatter, git provenance is recorded, a dry run makes
+no network call, and a configured suppress label is refused before any call
+is made. Idempotence is checked on both sides: a re-run reports everything
+unchanged and the fake holds the same issue and relation counts; a changed
+spec is refused as a conflict until `--update`, which updates the RFC in
+place and files nothing new; a closed (Done, completed-and-archived) RFC is
+refused. The Jira fake runs with a lagging search index throughout, so the
+re-run is shown to find its issues through the recorded URLs and not the
+search.
+
+The fakes are models of the APIs from their documentation, not recordings
+of them, so what they prove is that Spek sends the calls the documentation
+asks for; they cannot prove that a real Jira Data Center build accepts the
+Epic Link field as modelled or that Linear keeps HTML comments in a
+description verbatim. Those are listed as caveats on
+[#117](https://github.com/hivecommons/spektacular/pull/117) and
+[#118](https://github.com/hivecommons/spektacular/pull/118).
 
 What the fakes cannot show is hive's side, still owed under
 [spektacular#114](https://github.com/hivecommons/spektacular/issues/114):

@@ -26,18 +26,28 @@ import (
 	"github.com/hivecommons/spektacular/internal/publish/linear/lineartest"
 )
 
-// Labels hive hard-suppresses (src/pkg/github/labels.go); no filed item may
-// carry one, or the hive never sees it.
-var hiveSuppressLabels = []string{"hold", "needs-human", "needs-decision", "needs-spec", "needs-direction"}
-
-// minBodyChars is hive's clarity-gate floor (runs.triage.clarity_gate).
+// minBodyChars is hive's clarity-gate floor (runs.triage.clarity_gate),
+// applied to what a reader sees: HTML comments do not count.
 const minBodyChars = 80
 
 // placeholderRE is what hive's clarity gate reads as an unfilled template;
 // the marker's own angle brackets are stripped before the check.
 var placeholderRE = regexp.MustCompile(`<[a-z][a-z -]*>`)
 
-var binary string
+// htmlCommentRE strips the marker and digest lines before a body is
+// measured as a hive's clarity gate would measure it.
+var htmlCommentRE = regexp.MustCompile(`(?s)<!--.*?-->\n?`)
+
+// configuredLabel goes on every filed item in each handshake, so the
+// no-suppress-label check below runs over a real label on every target.
+const configuredLabel = "spek"
+
+var (
+	binary string
+	// toolPath is a PATH holding git alone, so provenance is recorded but
+	// no gh is found: the github target must not fall back to `gh auth token`.
+	toolPath string
+)
 
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "spek-e2e-")
@@ -53,9 +63,41 @@ func TestMain(m *testing.M) {
 		os.RemoveAll(dir)
 		os.Exit(1)
 	}
+	if err := dependOnSources(); err != nil {
+		fmt.Fprintln(os.Stderr, "reading the module's sources:", err)
+		os.RemoveAll(dir)
+		os.Exit(1)
+	}
+	toolPath = filepath.Join(dir, "bin")
+	if git, err := exec.LookPath("git"); err == nil {
+		_ = os.MkdirAll(toolPath, 0o755)
+		_ = os.Symlink(git, filepath.Join(toolPath, "git"))
+	}
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)
+}
+
+// dependOnSources stats every Go source and module file in the repository.
+// This package imports none of cmd, so without it the test cache would
+// hand back a stale pass after a change to the binary's code; go test
+// records the files a test stats and reruns it when any of them changes.
+func dependOnSources() error {
+	return filepath.WalkDir("../..", func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if name := d.Name(); name == ".git" || name == "node_modules" || name == "tests" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(path, ".go") || d.Name() == "go.mod" || d.Name() == "go.sum" {
+			_, err = os.Stat(path)
+		}
+		return err
+	})
 }
 
 const specBody = `# Feature: Nightly digest email
@@ -121,6 +163,17 @@ func project(t *testing.T, publishConfig string) string {
 		[]byte("---\ncreated_date: 2026-02-01\ndocument_status: final\n---\n\n"+specBody), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "plans", "nightly-digest", "plan.md"),
 		[]byte("---\ncreated_date: 2026-02-02\ndocument_status: final\nspec: nightly-digest\n---\n\n"+planBody), 0o644))
+	// A commit to record as provenance, as a real project has.
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"-c", "user.name=e2e", "-c", "user.email=e2e@example.com", "commit", "-q", "--allow-empty", "-m", "init"},
+	} {
+		git := exec.Command("git", args...)
+		git.Dir = root
+		git.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+		out, err := git.CombinedOutput()
+		require.NoError(t, err, string(out))
+	}
 	return root
 }
 
@@ -173,8 +226,7 @@ func scrubbedEnv() []string {
 		}
 		env = append(env, kv)
 	}
-	// No gh on PATH: the github target must not fall back to `gh auth token`.
-	return append(env, "PATH=")
+	return append(env, "PATH="+toolPath)
 }
 
 // filed is one item as a fake holds it, in target-neutral terms.
@@ -198,15 +250,16 @@ func assertHandshake(t *testing.T, res result, rfcRef string, items map[string]f
 
 	rfc := items[rfcRef]
 	require.True(t, strings.HasPrefix(rfc.Title, "RFC: "), "the RFC title is what hive's prior-art gate reads: %q", rfc.Title)
+	require.Regexp(t, "commit [`{]*[0-9a-f]{7,}", rfc.Body, "the commit is recorded, so git was on the binary's PATH")
 	m, ok := publish.ParseMarker(rfc.Body)
 	require.True(t, ok, "the RFC carries the marker")
 	require.True(t, m.IsRFC(), "the RFC marker has no task=")
 	require.Equal(t, "testproj/spec/nightly-digest", m.ArtifactID)
 	require.Equal(t, "", rfc.Parent)
 	require.Empty(t, rfc.Blocked)
-	lastLine := strings.TrimSpace(rfc.Body)
-	lastLine = lastLine[strings.LastIndex(lastLine, "\n")+1:]
-	require.Equal(t, m.String(), lastLine, "the marker is the last line of the body")
+	// Jira's renderers fold the search-token line into the marker's
+	// paragraph, so the marker ends the body rather than owning its line.
+	require.True(t, strings.HasSuffix(strings.TrimSpace(rfc.Body), m.String()), "the marker ends the body: %q", rfc.Body)
 
 	childRefs := map[string]string{}
 	for ref, it := range items {
@@ -220,11 +273,13 @@ func assertHandshake(t *testing.T, res result, rfcRef string, items map[string]f
 		childRefs[m.Task] = ref
 		require.False(t, strings.HasPrefix(it.Title, "RFC:"), "children are not RFCs: %q", it.Title)
 		require.Equal(t, rfcRef, it.Parent, "child %s hangs off the RFC", ref)
-		require.GreaterOrEqual(t, len(it.Body), minBodyChars, "child body clears hive's clarity gate")
-		require.Empty(t, placeholderRE.FindAllString(strings.Replace(it.Body, m.String(), "", 1), -1), "no unfilled placeholders in %s", ref)
-		require.Contains(t, rfc.Body, it.Ref, "the RFC checklist names child %s", ref)
+		visible := htmlCommentRE.ReplaceAllString(it.Body, "")
+		require.GreaterOrEqual(t, len(strings.TrimSpace(visible)), minBodyChars, "child body clears hive's clarity gate without its hidden lines: %q", visible)
+		require.Empty(t, placeholderRE.FindAllString(visible, -1), "no unfilled placeholders in %s", ref)
+		require.Regexp(t, `(?m)^([-*] )?\[ \] `+regexp.QuoteMeta(it.Ref)+` — `, rfc.Body, "the RFC checklist has a line for child %s", ref)
+		require.Contains(t, it.Labels, configuredLabel, "the configured label is on child %s", ref)
 		for _, l := range it.Labels {
-			require.NotContains(t, hiveSuppressLabels, l)
+			require.NotContains(t, publish.HiveSuppressLabels, l)
 			require.NotEqual(t, "epic", l, "children never carry the parent label")
 		}
 	}
@@ -237,11 +292,19 @@ func assertHandshake(t *testing.T, res result, rfcRef string, items map[string]f
 	require.Equal(t, rfc.URL, res.RFCURL)
 }
 
-// assertRecordedAndIdempotent checks the frontmatter and that a re-run
-// files nothing more.
-func assertRecordedAndIdempotent(t *testing.T, root string, env []string, res result, target string) {
+// counts is what a fake holds: issues and relations (parent + blocked
+// by), so a re-run can be shown to add none on the fake's side as well as
+// in the binary's output.
+type counts struct{ Issues, Relations int }
+
+// assertRecordedAndIdempotent checks the frontmatter, that a re-run files
+// nothing more (per the binary and per the fake), that a changed spec is
+// refused without --update and applied with it, and that a closed RFC is
+// refused however the run is flagged.
+func assertRecordedAndIdempotent(t *testing.T, root string, env []string, res result, target string, count func() counts, closeRFC func()) {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join(root, ".spektacular", "specs", "nightly-digest.md"))
+	specPath := filepath.Join(root, ".spektacular", "specs", "nightly-digest.md")
+	raw, err := os.ReadFile(specPath)
 	require.NoError(t, err)
 	fm, _, err := metadata.Split(raw)
 	require.NoError(t, err)
@@ -250,23 +313,56 @@ func assertRecordedAndIdempotent(t *testing.T, root string, env []string, res re
 	require.Equal(t, res.RFCURL, fm.Published[0].RFCURL)
 	require.Len(t, fm.Published[0].Children, 2)
 
+	before := count()
+	require.Equal(t, counts{Issues: 3, Relations: 3}, before, "RFC + 2 children; 2 parent relations + 1 blocked-by")
 	again, code := run(t, root, env, "nightly-digest")
 	require.Equal(t, 0, code, again.Message)
 	require.Empty(t, again.Created)
 	require.Empty(t, again.Updated)
 	require.ElementsMatch(t, []string{"rfc", "sched-1", "render-2"}, again.Unchanged)
+	require.Equal(t, before, count(), "the fake holds exactly what it held: nothing was filed twice")
+
+	// A changed body is a conflict until --update, which applies it in
+	// place and files nothing new. Non-Goals is a section only the RFC
+	// carries, so the children stay as they are.
+	edited := strings.TrimRight(string(raw), "\n") + "\n\n## Non-Goals\n\n- Per-operator digest preferences.\n"
+	require.NoError(t, os.WriteFile(specPath, []byte(edited), 0o644))
+	conflict, code := run(t, root, env, "nightly-digest")
+	require.NotEqual(t, 0, code)
+	require.Equal(t, publish.ErrConflict, conflict.Code)
+	require.Contains(t, conflict.Message, "rfc (body)")
+	require.Contains(t, conflict.NextAction, "--update")
+	require.Equal(t, before, count())
+
+	updated, code := run(t, root, env, "nightly-digest", "--update")
+	require.Equal(t, 0, code, updated.Message)
+	require.Empty(t, updated.Created)
+	require.Equal(t, []string{"rfc"}, updated.Updated)
+	require.ElementsMatch(t, []string{"sched-1", "render-2"}, updated.Unchanged)
+	require.Equal(t, before, count())
+	settled, code := run(t, root, env, "nightly-digest")
+	require.Equal(t, 0, code, settled.Message)
+	require.Empty(t, settled.Updated, "the update is read back as the new baseline")
+
+	// Once the RFC is closed on the target, nothing is filed or changed.
+	closeRFC()
+	closed, code := run(t, root, env, "nightly-digest", "--update")
+	require.NotEqual(t, 0, code)
+	require.Equal(t, publish.ErrConflict, closed.Code)
+	require.Contains(t, closed.Message, "closed")
+	require.Equal(t, before, count())
 }
 
 func TestPublish_GitHubHandshake(t *testing.T) {
 	gh := githubtest.New(t)
-	root := project(t, "publish:\n  github:\n    repo: acme/demo\n")
+	gh.Labels = append(gh.Labels, configuredLabel)
+	root := project(t, "publish:\n  github:\n    repo: acme/demo\n    labels: ["+configuredLabel+"]\n")
 	env := []string{"GITHUB_TOKEN=" + githubtest.Token, "SPEKTACULAR_GITHUB_API=" + gh.URL}
 
 	dry, code := run(t, root, env, "nightly-digest", "--dry-run")
 	require.Equal(t, 0, code, dry.Message)
 	require.True(t, dry.DryRun)
-	require.Empty(t, gh.Issues, "a dry run files nothing")
-	require.Zero(t, gh.Count("GET /repos/acme/demo/labels"), "a dry run makes no network call")
+	require.Zero(t, gh.Calls(), "a dry run makes no network call")
 
 	res, code := run(t, root, env, "nightly-digest")
 	require.Equal(t, 0, code, res.Message)
@@ -274,29 +370,41 @@ func TestPublish_GitHubHandshake(t *testing.T) {
 	require.Equal(t, "acme/demo", res.Repo)
 	require.Empty(t, res.Warnings)
 
+	st := gh.Snapshot()
 	items := map[string]filed{}
 	byID := map[int64]string{}
-	for _, is := range gh.Issues {
+	for _, is := range st.Issues {
 		byID[is.ID] = fmt.Sprintf("#%d", is.Number)
 	}
-	for n, is := range gh.Issues {
+	for n, is := range st.Issues {
 		ref := fmt.Sprintf("#%d", n)
 		f := filed{Ref: ref, Title: is.Title, Body: is.Body, Labels: is.Labels, URL: is.URL}
-		for parent, subs := range gh.Subs {
+		for parent, subs := range st.Subs {
 			for _, id := range subs {
 				if id == is.ID {
 					f.Parent = fmt.Sprintf("#%d", parent)
 				}
 			}
 		}
-		for _, id := range gh.Blocked[n] {
+		for _, id := range st.Blocked[n] {
 			f.Blocked = append(f.Blocked, byID[id])
 		}
 		items[ref] = f
 	}
 	assertHandshake(t, res, "#1", items)
-	require.Equal(t, []string{"epic"}, items["#1"].Labels, "the parent label is on the RFC so hive never claims it")
-	assertRecordedAndIdempotent(t, root, env, res, "github")
+	require.ElementsMatch(t, []string{"epic", configuredLabel}, items["#1"].Labels, "the parent label is on the RFC so hive never claims it")
+	count := func() counts {
+		st := gh.Snapshot()
+		c := counts{Issues: len(st.Issues)}
+		for _, ids := range st.Subs {
+			c.Relations += len(ids)
+		}
+		for _, ids := range st.Blocked {
+			c.Relations += len(ids)
+		}
+		return c
+	}
+	assertRecordedAndIdempotent(t, root, env, res, "github", count, func() { gh.Issues[1].State = "closed" })
 }
 
 func TestPublish_JiraHandshake(t *testing.T) {
@@ -307,7 +415,11 @@ func TestPublish_JiraHandshake(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			j := jiratest.New(t, dc)
-			cfg := "publish:\n  default_target: jira\n  jira:\n    project_key: DEMO\n"
+			// The search index lags, as a real site's does: nothing filed is
+			// searchable until Reindex, so a re-run must get by on the issues
+			// the frontmatter recorded.
+			j.SearchLag = true
+			cfg := "publish:\n  default_target: jira\n  jira:\n    project_key: DEMO\n    labels: [" + configuredLabel + "]\n"
 			env := []string{"JIRA_BASE_URL=" + j.URL}
 			if dc {
 				cfg += "    deployment: datacenter\n"
@@ -319,7 +431,7 @@ func TestPublish_JiraHandshake(t *testing.T) {
 
 			dry, code := run(t, root, env, "nightly-digest", "--dry-run")
 			require.Equal(t, 0, code, dry.Message)
-			require.Empty(t, j.Issues, "a dry run files nothing")
+			require.Zero(t, j.Calls(), "a dry run makes no network call")
 
 			res, code := run(t, root, env, "nightly-digest")
 			require.Equal(t, 0, code, res.Message)
@@ -327,8 +439,9 @@ func TestPublish_JiraHandshake(t *testing.T) {
 			require.Equal(t, "DEMO", res.Repo)
 			require.Empty(t, res.Warnings)
 
+			issues := j.Snapshot()
 			items := map[string]filed{}
-			for key, is := range j.Issues {
+			for key, is := range issues {
 				f := filed{Ref: key, Title: is.Summary, Body: j.DescriptionText(key), Labels: is.Labels, Parent: is.Parent, URL: j.URL + "/browse/" + key}
 				for _, l := range j.Links {
 					if blocker, blocked, ok := strings.Cut(l, " blocks "); ok && blocked == key {
@@ -338,23 +451,39 @@ func TestPublish_JiraHandshake(t *testing.T) {
 				items[key] = f
 			}
 			assertHandshake(t, res, "DEMO-1", items)
-			require.Equal(t, "Epic", j.Issues["DEMO-1"].Type, "the RFC is an Epic, which hive's default JQL excludes")
-			require.Equal(t, "Story", j.Issues["DEMO-2"].Type)
-			require.False(t, j.Issues["DEMO-2"].Done)
-			assertRecordedAndIdempotent(t, root, env, res, "jira")
+			require.Equal(t, "Epic", issues["DEMO-1"].Type, "the RFC is an Epic, which hive's default JQL excludes")
+			require.Equal(t, "Story", issues["DEMO-2"].Type)
+			require.False(t, issues["DEMO-2"].Done)
+			_, sentParent := issues["DEMO-2"].Fields["parent"]
+			if dc {
+				require.False(t, sentParent, "Data Center Stories are linked by the Epic Link field, which the site refuses parent for")
+				require.Equal(t, "DEMO-1", issues["DEMO-2"].Fields[jiratest.EpicLinkField])
+			} else {
+				require.True(t, sentParent)
+			}
+			require.NotNil(t, issues["DEMO-2"].Property, "the marker is also in the issue property")
+			count := func() counts {
+				c := counts{Issues: len(j.Snapshot()), Relations: len(j.Links)}
+				for _, is := range j.Snapshot() {
+					if is.Parent != "" {
+						c.Relations++
+					}
+				}
+				return c
+			}
+			assertRecordedAndIdempotent(t, root, env, res, "jira", count, func() { j.Issues["DEMO-1"].Done = true })
 		})
 	}
 }
 
 func TestPublish_LinearHandshake(t *testing.T) {
 	l := lineartest.New(t)
-	root := project(t, "publish:\n  default_target: linear\n  linear:\n    team: ENG\n")
+	root := project(t, "publish:\n  default_target: linear\n  linear:\n    team: ENG\n    labels: ["+configuredLabel+"]\n")
 	env := []string{"LINEAR_API_KEY=" + lineartest.APIKey, "LINEAR_API_URL=" + l.URL}
 
 	dry, code := run(t, root, env, "nightly-digest", "--dry-run")
 	require.Equal(t, 0, code, dry.Message)
-	require.Empty(t, l.Issues, "a dry run files nothing")
-	require.Zero(t, l.Count("teams"), "a dry run makes no network call")
+	require.Zero(t, l.Calls(), "a dry run makes no network call")
 
 	res, code := run(t, root, env, "nightly-digest")
 	require.Equal(t, 0, code, res.Message)
@@ -362,25 +491,63 @@ func TestPublish_LinearHandshake(t *testing.T) {
 	require.Equal(t, "ENG", res.Repo)
 	require.Empty(t, res.Warnings)
 
+	issues := l.Snapshot()
+	byID := map[string]string{}
+	for _, is := range issues {
+		byID[is.ID] = is.Identifier
+	}
 	items := map[string]filed{}
-	for _, is := range l.Issues {
+	for _, is := range issues {
 		f := filed{Ref: is.Identifier, Title: is.Title, Body: is.Description, URL: "https://linear.app/acme/issue/" + is.Identifier}
 		for _, id := range is.LabelIDs {
 			f.Labels = append(f.Labels, strings.TrimPrefix(id, "label-"))
 		}
-		if is.ParentID != "" {
-			f.Parent = l.Issues[is.ParentID].Identifier
-		}
+		f.Parent = byID[is.ParentID]
 		for _, r := range l.Relations {
 			if blocker, blocked, ok := strings.Cut(r, " blocks "); ok && blocked == is.Identifier {
 				f.Blocked = append(f.Blocked, blocker)
 			}
 		}
+		require.Equal(t, lineartest.StateID(lineartest.Todo), is.StateID, "%s is in Todo, where a hive reads", is.Identifier)
 		items[is.Identifier] = f
 	}
 	assertHandshake(t, res, "ENG-1", items)
-	require.Equal(t, []string{"epic"}, items["ENG-1"].Labels, "the parent label is on the RFC")
-	assertRecordedAndIdempotent(t, root, env, res, "linear")
+	require.ElementsMatch(t, []string{"epic", configuredLabel}, items["ENG-1"].Labels, "the parent label is on the RFC")
+	count := func() counts {
+		c := counts{Relations: len(l.Relations)}
+		for _, is := range l.Snapshot() {
+			c.Issues++
+			if is.ParentID != "" {
+				c.Relations++
+			}
+		}
+		return c
+	}
+	assertRecordedAndIdempotent(t, root, env, res, "linear", count, func() {
+		rfc := l.ByIdentifier("ENG-1")
+		rfc.StateType = "completed"
+		rfc.Archived = true // Linear auto-archives completed issues; Find must still see it
+	})
+}
+
+func TestPublish_SuppressLabelsAreRefusedBeforeFiling(t *testing.T) {
+	gh := githubtest.New(t)
+	root := project(t, "publish:\n  github:\n    repo: acme/demo\n    labels: [spek, hold]\n")
+	env := []string{"GITHUB_TOKEN=" + githubtest.Token, "SPEKTACULAR_GITHUB_API=" + gh.URL}
+	res, code := run(t, root, env, "nightly-digest")
+	require.NotEqual(t, 0, code)
+	require.Equal(t, publish.ErrTargetUnconfigured, res.Code)
+	require.Contains(t, res.Message, `"hold"`)
+	require.Contains(t, res.NextAction, "publish.github.labels")
+	require.Zero(t, gh.Calls(), "refused before any network call")
+
+	l := lineartest.New(t)
+	root = project(t, "publish:\n  default_target: linear\n  linear:\n    team: ENG\n    parent_label: needs-human\n")
+	res, code = run(t, root, []string{"LINEAR_API_KEY=" + lineartest.APIKey, "LINEAR_API_URL=" + l.URL}, "nightly-digest")
+	require.NotEqual(t, 0, code)
+	require.Equal(t, publish.ErrTargetUnconfigured, res.Code)
+	require.Contains(t, res.NextAction, "publish.linear.parent_label")
+	require.Zero(t, l.Calls())
 }
 
 func TestPublish_RefusalsCarryNextAction(t *testing.T) {

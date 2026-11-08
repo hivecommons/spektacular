@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/hivecommons/spektacular/internal/publish/github"
 )
@@ -150,7 +150,10 @@ func (f *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case path == "/search/issues" && r.Method == http.MethodGet:
 		q := r.URL.Query().Get("q")
 		m := regexp.MustCompile(`"artifact_id=([^"]+)"`).FindStringSubmatch(q)
-		require.NotNil(f.t, m, "search query carries the artifact_id: %s", q)
+		if !assert.NotNil(f.t, m, "search query carries the artifact_id: %s", q) {
+			write(422, map[string]string{"message": "Validation Failed"})
+			return
+		}
 		items := []map[string]any{}
 		for n := 1; n < f.next; n++ {
 			is := f.Issues[n]
@@ -162,6 +165,38 @@ func (f *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		write(404, map[string]string{"message": "no route " + r.Method + " " + path})
 	}
+}
+
+// State is a copy of the fake's issues and relations taken under the
+// lock, for readers outside a handler.
+type State struct {
+	Issues  map[int]Issue
+	Subs    map[int][]int64
+	Blocked map[int][]int64
+}
+
+// Snapshot copies the issues, sub-issue and blocked-by relations.
+func (f *Server) Snapshot() State {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	st := State{Issues: map[int]Issue{}, Subs: map[int][]int64{}, Blocked: map[int][]int64{}}
+	for n, is := range f.Issues {
+		st.Issues[n] = *is
+	}
+	for n, ids := range f.Subs {
+		st.Subs[n] = append([]int64{}, ids...)
+	}
+	for n, ids := range f.Blocked {
+		st.Blocked[n] = append([]int64{}, ids...)
+	}
+	return st
+}
+
+// Calls is how many requests the fake has served.
+func (f *Server) Calls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
 }
 
 // Count is how many times "METHOD /path" was called.
