@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
@@ -183,6 +185,9 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if hinted, ok := target.(publish.Hinted); ok {
+		hinted.Hint(pub.RecordedURLs)
+	}
 	existing, err := target.Find(ctx, pub.ArtifactID)
 	if err != nil {
 		return output.NewError(publish.ErrTargetFailed, err.Error()).
@@ -212,8 +217,15 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	res.Result = result
 	res.Target = targetName
 	if err != nil {
+		// Record what was filed before the failure, so the re-run can read
+		// those items directly rather than wait for the target's search
+		// index to catch up with them.
+		next := "fix the cause and re-run with --update; items already filed are found by their markers and reused"
+		if recErr := writePublished(cfg, st, pub, filedSoFar(result, existing)); recErr != nil {
+			next += fmt.Sprintf(" (the items filed so far could not be recorded in the %s's frontmatter: %v)", pub.Kind, recErr)
+		}
 		return output.NewError(publish.ErrTargetFailed, fmt.Sprintf("publishing %s %q to %s failed part way: %v", pub.Kind, name, where, err)).
-			WithNextAction("fix the cause and re-run with --update; items already filed are found by their markers and reused")
+			WithNextAction(next)
 	}
 
 	if err := writePublished(cfg, st, pub, result); err != nil {
@@ -318,6 +330,32 @@ const (
 	envJiraCABundle = "JIRA_CA_BUNDLE"
 )
 
+// requireHTTPS refuses a plain-http base URL, which would send the
+// credential in clear, unless the host is loopback or the target's
+// insecure_http setting allows it.
+func requireHTTPS(baseURL string, insecureAllowed bool, section string) error {
+	u, err := url.Parse(baseURL)
+	if err != nil || u.Host == "" {
+		return output.NewError(publish.ErrTargetUnconfigured, fmt.Sprintf("the %s base URL %q is not a URL", section, baseURL)).
+			WithNextAction("set it to https://<host>")
+	}
+	switch u.Scheme {
+	case "https":
+		return nil
+	case "http":
+		host := u.Hostname()
+		if ip := net.ParseIP(host); insecureAllowed || host == "localhost" || (ip != nil && ip.IsLoopback()) {
+			return nil
+		}
+		return output.NewError(publish.ErrTargetUnconfigured,
+			fmt.Sprintf("the %s base URL %s is plain http, which would send the credential in clear", section, baseURL)).
+			WithNextAction(fmt.Sprintf("use https://, or set %s.insecure_http: true to accept the risk", section))
+	default:
+		return output.NewError(publish.ErrTargetUnconfigured, fmt.Sprintf("the %s base URL %s has scheme %q; only https (or http with insecure_http) is accepted", section, baseURL, u.Scheme)).
+			WithNextAction("set it to https://<host>")
+	}
+}
+
 // jiraTarget builds the Jira target from config and the environment. Each
 // refusal names the missing setting.
 func jiraTarget(jc config.PublishJiraConfig) (*jira.Target, error) {
@@ -337,6 +375,9 @@ func jiraTarget(jc config.PublishJiraConfig) (*jira.Target, error) {
 			fmt.Sprintf("the jira target has no site to file into: %s is unset and publish.jira.base_url is not set", envJiraBaseURL)).
 			WithResource(config.PublishTargetJira).
 			WithNextAction(fmt.Sprintf("export %s=https://<site>.atlassian.net (or your Data Center URL), or set publish.jira.base_url", envJiraBaseURL))
+	}
+	if err := requireHTTPS(baseURL, jc.InsecureHTTP, "publish.jira"); err != nil {
+		return nil, err
 	}
 	t := jira.New(baseURL, projectKey)
 	t.DataCenter = jc.IsDataCenter()
@@ -416,6 +457,7 @@ func publishSource(cfg config.Config, st store.Store, name, target string, allow
 		src.ArtifactID = publishArtifactID(cfg, publish.KindEpic, name)
 		src.Draft = e.DocumentStatus != metadata.StatusFinal
 		src.Body = e.Body
+		src.RecordedURLs = recordedURLs(e.Published, target)
 		for _, member := range e.Specs {
 			m := publish.Member{Name: member.Name, DependsOn: append([]string{}, member.DependsOn...)}
 			if specRaw, err := st.Read(specStorePath(cfg, member.Name)); err == nil {
@@ -477,6 +519,9 @@ func publishSource(cfg config.Config, st store.Store, name, target string, allow
 	src.ArtifactID = publishArtifactID(cfg, publish.KindSpec, specName)
 	src.Draft = status != metadata.StatusFinal
 	src.Body = body
+	if fm != nil {
+		src.RecordedURLs = recordedURLs(fm.Published, target)
+	}
 	if planRaw, err := st.Read(planStorePath(cfg, specName)); err == nil {
 		_, planBody, splitErr := metadata.Split(planRaw)
 		if splitErr != nil {
@@ -597,6 +642,45 @@ func githubToken() (string, error) {
 	return "", output.NewError(publish.ErrAuthMissing,
 		"no GitHub credential: GITHUB_TOKEN and GH_TOKEN are unset and `gh auth token` printed nothing").
 		WithNextAction("export GITHUB_TOKEN with a token that can write issues in the repository, or run `gh auth login`")
+}
+
+// filedSoFar is the result of a publish that failed part way, completed
+// with the items an earlier run had already filed, so nothing recorded
+// before is lost from the frontmatter.
+func filedSoFar(result publish.Result, existing *publish.Existing) publish.Result {
+	if existing == nil {
+		return result
+	}
+	if result.RFCURL == "" && existing.RFC != nil {
+		result.RFCURL = existing.RFC.URL
+	}
+	have := map[string]bool{}
+	for _, c := range result.Children {
+		have[c.ID] = true
+	}
+	for _, id := range publish.SortedIDs(existing.Children) {
+		if !have[id] {
+			result.Children = append(result.Children, publish.ResultChild{ID: id, URL: existing.Children[id].URL})
+		}
+	}
+	return result
+}
+
+// recordedURLs are the item URLs the frontmatter holds for target.
+func recordedURLs(published []metadata.Publication, target string) []string {
+	var urls []string
+	for _, p := range published {
+		if p.Target != target {
+			continue
+		}
+		if p.RFCURL != "" {
+			urls = append(urls, p.RFCURL)
+		}
+		for _, c := range p.Children {
+			urls = append(urls, c.URL)
+		}
+	}
+	return urls
 }
 
 // writePublished records the result in the artifact's frontmatter, replacing

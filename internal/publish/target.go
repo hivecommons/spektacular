@@ -60,6 +60,31 @@ type Filed struct {
 	BodyDigest string
 	Closed     bool
 	Marker     Marker
+	// Parent is the Key of the item this one hangs off as the target has
+	// it filed (the RFC's key for a child), "" when it hangs off nothing.
+	// BlockedBy lists the Keys of the items filed as blocking this one. A
+	// Publish reconciles both against the publication on every run, so a
+	// link that failed, a dependency added later or a re-created RFC is
+	// repaired by the next run.
+	Parent    string
+	BlockedBy []string
+}
+
+// Hinted is implemented by a target whose search can lag behind its writes
+// (Jira's index is eventually consistent). The command passes it the URLs
+// the artifact's frontmatter recorded, and Find reads those items directly
+// when the search does not return them.
+type Hinted interface {
+	Hint(urls []string)
+}
+
+// SearchToken is a word a target can put in a filed body to find it again
+// where the artifact id itself cannot be searched for safely (Jira's text
+// search treats /, = and - as operators). It is alphanumeric only, so no
+// query grammar needs escaping.
+func SearchToken(artifactID string) string {
+	sum := sha256.Sum256([]byte("spek:publish " + artifactID))
+	return "spekpub" + hex.EncodeToString(sum[:8])
 }
 
 // SameAsFiled reports whether body is what the filed item carries, by
@@ -82,7 +107,10 @@ type Result struct {
 	Created   []string      `json:"created"`
 	Updated   []string      `json:"updated"`
 	Unchanged []string      `json:"unchanged"`
-	Warnings  []string      `json:"warnings"`
+	// Linked lists the parent and dependency relations this run filed or
+	// repaired, as "<item> under <rfc>" and "<item> blocked by <blocker>".
+	Linked   []string `json:"linked,omitempty"`
+	Warnings []string `json:"warnings"`
 }
 
 // ResultChild is one filed child.

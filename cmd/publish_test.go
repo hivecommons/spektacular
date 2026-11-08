@@ -355,7 +355,7 @@ func TestPublish_JiraDryRunMakesNoNetworkCall(t *testing.T) {
 	require.Contains(t, stdout, `"repo": "DEMO"`)
 	require.Contains(t, stdout, "target=jira task=R1 --\\u003e")
 	require.Empty(t, srv.Issues)
-	require.Zero(t, srv.Count("POST /rest/api/3/search/jql"))
+	require.Zero(t, srv.Calls(), "a dry run touches the site in no way")
 }
 
 func TestPublish_JiraRefusalsNameTheMissingSetting(t *testing.T) {
@@ -396,6 +396,61 @@ func TestPublish_JiraRefusalsNameTheMissingSetting(t *testing.T) {
 		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
 		require.Contains(t, resp.Message, "JIRA_CA_BUNDLE")
 	})
+	t.Run("plain http", func(t *testing.T) {
+		root, _ := publishJiraProject(t, false)
+		t.Setenv("JIRA_BASE_URL", "http://jira.example.com")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+		require.Contains(t, resp.Message, "plain http")
+		require.Contains(t, resp.NextAction, "publish.jira.insecure_http")
+
+		// Opting in is explicit; the request then fails only on reaching the host.
+		writeSpecCommandConfig(t, root, "publish:\n  default_target: jira\n  jira:\n    project_key: DEMO\n    insecure_http: true\n")
+		stdout, code = runPublishCmd(t, "nightly-digest", "--dry-run")
+		require.Equal(t, 0, code, stdout)
+	})
+}
+
+func TestPublish_JiraPartialFailureIsRecordedAndResumed(t *testing.T) {
+	root, srv := publishJiraProject(t, false)
+	srv.SearchLag = true // nothing filed is searchable until Reindex
+	srv.FailCreateAfter = 3
+	stdout, code := runPublishCmd(t, "nightly-digest", "--format", "json")
+	resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetFailed)
+	require.Contains(t, resp.Message, "failed part way")
+	require.Len(t, srv.Issues, 2, "the Epic and R1 were filed before the failure")
+
+	specPath := filepath.Join(root, ".spektacular", "specs", "nightly-digest.md")
+	raw, err := os.ReadFile(specPath)
+	require.NoError(t, err)
+	fm, _, err := metadata.Split(raw)
+	require.NoError(t, err)
+	require.Equal(t, []metadata.Publication{{Target: "jira", RFCURL: srv.URL + "/browse/DEMO-1", Children: []metadata.PublishedChild{
+		{ID: "R1", URL: srv.URL + "/browse/DEMO-2"},
+	}}}, fm.Published, "what was filed is recorded even though the run failed")
+
+	// The re-run reads the recorded issues directly, so it reuses them
+	// although the search index has not caught up, and files only R2.
+	srv.FailCreateAfter = 0
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	var res struct {
+		Created   []string `json:"created"`
+		Unchanged []string `json:"unchanged"`
+		Linked    []string `json:"linked"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &res), stdout)
+	require.Equal(t, []string{"R2"}, res.Created)
+	require.ElementsMatch(t, []string{"R1"}, res.Unchanged)
+	require.Len(t, srv.Issues, 3, "no duplicate of the Epic or R1")
+	require.Equal(t, "DEMO-1", srv.Issues["DEMO-3"].Parent)
+
+	raw, err = os.ReadFile(specPath)
+	require.NoError(t, err)
+	fm, _, err = metadata.Split(raw)
+	require.NoError(t, err)
+	require.Len(t, fm.Published, 1)
+	require.Len(t, fm.Published[0].Children, 2)
 }
 
 func TestPublish_JiraFilesEpicAndStoriesThenUpdates(t *testing.T) {

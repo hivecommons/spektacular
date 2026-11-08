@@ -450,9 +450,13 @@ type PublishJiraConfig struct {
 	// Labels go on every filed issue, whitespace replaced with "-".
 	Labels []string `yaml:"labels,omitempty"`
 	// EpicLinkField is the custom field id (customfield_NNNNN) that links a
-	// child to its Epic on a Data Center site without parent support; the
-	// Epic's key is written there instead of parent.
+	// child to its Epic on a Data Center site, where parent is for
+	// sub-tasks only; the Epic's key is written there instead of parent.
+	// Unset, it is discovered from the site's field list.
 	EpicLinkField string `yaml:"epic_link_field,omitempty"`
+	// InsecureHTTP allows a plain http:// base URL, which sends the
+	// credential in clear. Loopback addresses never need it.
+	InsecureHTTP bool `yaml:"insecure_http,omitempty"`
 	// AcceptanceCriteriaField is a custom field id that receives the child's
 	// acceptance criteria as text, in addition to the description.
 	AcceptanceCriteriaField string `yaml:"acceptance_criteria_field,omitempty"`
