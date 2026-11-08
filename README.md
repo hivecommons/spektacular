@@ -746,6 +746,7 @@ make cross
 |---|---|
 | `make build` | Build the `./bin/spektacular` binary |
 | `make test` | Run `go test ./...` |
+| `make e2e` | Build the binary and run `spektacular publish` against fake GitHub, Jira and Linear servers (`tests/e2e`; no credentials) |
 | `make lint` | Run `go vet ./...` |
 | `make clean` | Remove build artefacts |
 | `make install-local` | Build and copy the binary to `/usr/local/bin` |

@@ -142,7 +142,22 @@ published:
 `status <name> --format json` reports it under `epic.published` and
 `specs[].published`.
 
-## 6. Still owed under #114
+## 6. What is verified, and what is still owed under #114
+
+`make e2e` (`tests/e2e`, also run by `go test ./...` and so by CI) builds the
+binary and runs `spektacular publish` against in-process fakes of GitHub,
+Jira Cloud, Jira Data Center and Linear. On every target it asserts the
+Spek side of this contract: the RFC title starts `RFC:`, its marker has no
+`task=` and is the last line of the body, every child carries a marker with
+`task=` and the RFC URL, hangs off the RFC (sub-issue, Epic parent, Linear
+parent), clears the clarity gate (≥ 80 chars, no `<placeholders>`), carries
+none of hive's suppress labels and never the parent label, each `depends_on`
+edge is filed as the target's blocked-by relation, the RFC checklist names
+every child, the publication lands in the spec's frontmatter, a re-run files
+nothing, and a dry run makes no network call.
+
+What the fakes cannot show is hive's side, still owed under
+[spektacular#114](https://github.com/hivecommons/spektacular/issues/114):
 
 - End-to-end on a test repo with a hive attached (`runs.triage` on): children
   reach `stage/010-actionable`, one is claimed and kicked direct-fix, the RFC
@@ -150,3 +165,4 @@ published:
 - The same with `issue_filter.reporter_trust.enabled: true`, documenting what
   an untrusted publishing identity sees.
 - The hive and crux changes, cross-linked from #109.
+
