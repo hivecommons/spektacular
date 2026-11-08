@@ -18,6 +18,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/publish"
+	"github.com/hivecommons/spektacular/internal/publish/jira/jiratest"
 )
 
 const publishSpecBody = `# Feature: Nightly digest email
@@ -172,7 +173,7 @@ func TestPublish_Refusals(t *testing.T) {
 	})
 	t.Run("target unconfigured", func(t *testing.T) {
 		publishProject(t)
-		for _, target := range []string{"jira", "linear", "trello"} {
+		for _, target := range []string{"linear", "trello"} {
 			stdout, code := runPublishCmd(t, "nightly-digest", "--dry-run", "--target", target)
 			requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
 		}
@@ -318,6 +319,156 @@ func TestPublish_EpicPublishesSpecsAsChildren(t *testing.T) {
 	stdout, code = runPublishCmd(t, "chat-alerts", "--dry-run", "--repo", "acme/demo", "--format", "json")
 	require.Equal(t, 0, code, stdout)
 	require.Contains(t, stdout, `"artifact_id": "testproj/spec/chat-alerts"`)
+}
+
+// publishJiraProject is publishProject configured for the jira target with
+// Cloud credentials in the environment and the site pointed at the fake.
+func publishJiraProject(t *testing.T, dataCenter bool) (string, *jiratest.Server) {
+	t.Helper()
+	root := publishProject(t)
+	deployment := ""
+	if dataCenter {
+		deployment = "    deployment: datacenter\n"
+	}
+	writeSpecCommandConfig(t, root, "publish:\n  default_target: jira\n  jira:\n    project_key: DEMO\n    labels: [spek publish]\n"+deployment)
+	writeSpecFixture(t, root, "nightly-digest", "---\ncreated_date: 2026-02-01\ndocument_status: final\n---\n\n"+publishSpecBody)
+	srv := jiratest.New(t, dataCenter)
+	t.Setenv("JIRA_BASE_URL", srv.URL)
+	if dataCenter {
+		t.Setenv("JIRA_PAT", jiratest.PAT)
+		t.Setenv("JIRA_EMAIL", "")
+		t.Setenv("JIRA_API_TOKEN", "")
+	} else {
+		t.Setenv("JIRA_PAT", "")
+		t.Setenv("JIRA_EMAIL", jiratest.Email)
+		t.Setenv("JIRA_API_TOKEN", jiratest.APIToken)
+	}
+	t.Setenv("JIRA_CA_BUNDLE", "")
+	return root, srv
+}
+
+func TestPublish_JiraDryRunMakesNoNetworkCall(t *testing.T) {
+	_, srv := publishJiraProject(t, false)
+	stdout, code := runPublishCmd(t, "nightly-digest", "--dry-run", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, `"target": "jira"`)
+	require.Contains(t, stdout, `"repo": "DEMO"`)
+	require.Contains(t, stdout, "target=jira task=R1 --\\u003e")
+	require.Empty(t, srv.Issues)
+	require.Zero(t, srv.Count("POST /rest/api/3/search/jql"))
+}
+
+func TestPublish_JiraRefusalsNameTheMissingSetting(t *testing.T) {
+	t.Run("project key", func(t *testing.T) {
+		root, _ := publishJiraProject(t, false)
+		writeSpecCommandConfig(t, root, "publish:\n  default_target: jira\n")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+		require.Contains(t, resp.Message, "publish.jira.project_key")
+		require.Contains(t, resp.NextAction, "publish.jira.project_key")
+	})
+	t.Run("base url", func(t *testing.T) {
+		publishJiraProject(t, false)
+		t.Setenv("JIRA_BASE_URL", "")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+		require.Contains(t, resp.Message, "JIRA_BASE_URL")
+	})
+	t.Run("cloud credential", func(t *testing.T) {
+		publishJiraProject(t, false)
+		t.Setenv("JIRA_API_TOKEN", "")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrAuthMissing)
+		require.Contains(t, resp.Message, "JIRA_EMAIL and JIRA_API_TOKEN")
+		require.Contains(t, resp.NextAction, "DEMO")
+	})
+	t.Run("data center credential", func(t *testing.T) {
+		publishJiraProject(t, true)
+		t.Setenv("JIRA_PAT", "")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrAuthMissing)
+		require.Contains(t, resp.Message, "JIRA_PAT")
+	})
+	t.Run("ca bundle", func(t *testing.T) {
+		publishJiraProject(t, true)
+		t.Setenv("JIRA_CA_BUNDLE", filepath.Join(t.TempDir(), "missing.pem"))
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+		require.Contains(t, resp.Message, "JIRA_CA_BUNDLE")
+	})
+}
+
+func TestPublish_JiraFilesEpicAndStoriesThenUpdates(t *testing.T) {
+	root, srv := publishJiraProject(t, false)
+
+	stdout, code := runPublishCmd(t, "nightly-digest", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	var res struct {
+		Target   string                `json:"target"`
+		Repo     string                `json:"repo"`
+		RFCURL   string                `json:"rfc_url"`
+		RFCKey   string                `json:"rfc_key"`
+		Children []publish.ResultChild `json:"children"`
+		Created  []string              `json:"created"`
+		Warnings []string              `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &res), stdout)
+	require.Equal(t, "jira", res.Target)
+	require.Equal(t, "DEMO", res.Repo)
+	require.Equal(t, "DEMO-1", res.RFCKey)
+	require.Equal(t, srv.URL+"/browse/DEMO-1", res.RFCURL)
+	require.Equal(t, []string{"rfc", "R1", "R2"}, res.Created)
+	require.Equal(t, []publish.ResultChild{
+		{ID: "R1", URL: srv.URL + "/browse/DEMO-2", Key: "DEMO-2"},
+		{ID: "R2", URL: srv.URL + "/browse/DEMO-3", Key: "DEMO-3"},
+	}, res.Children)
+	require.Empty(t, res.Warnings)
+	require.Equal(t, "Epic", srv.Issues["DEMO-1"].Type)
+	require.Equal(t, "Story", srv.Issues["DEMO-2"].Type)
+	require.Equal(t, "DEMO-1", srv.Issues["DEMO-2"].Parent)
+	require.Equal(t, []string{"spek-publish"}, srv.Issues["DEMO-2"].Labels)
+
+	raw, err := os.ReadFile(filepath.Join(root, ".spektacular", "specs", "nightly-digest.md"))
+	require.NoError(t, err)
+	fm, _, err := metadata.Split(raw)
+	require.NoError(t, err)
+	require.Equal(t, []metadata.Publication{{Target: "jira", RFCURL: srv.URL + "/browse/DEMO-1", Children: []metadata.PublishedChild{
+		{ID: "R1", URL: srv.URL + "/browse/DEMO-2"}, {ID: "R2", URL: srv.URL + "/browse/DEMO-3"},
+	}}}, fm.Published)
+
+	// Unchanged re-run is a no-op; a change refuses, then --update applies.
+	stdout, code = runPublishCmd(t, "nightly-digest")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "unchanged: R1, R2, rfc")
+	require.Equal(t, 3, srv.Count("POST /rest/api/3/issue"))
+
+	writeSpecFixture(t, root, "nightly-digest", strings.Replace(string(raw),
+		"with links.\n", "with links.\n- [ ] **Opt-out**: an operator can turn the digest off.\n", 1))
+	stdout, code = runPublishCmd(t, "nightly-digest")
+	resp := requirePublishRefusal(t, stdout, code, publish.ErrConflict)
+	require.Contains(t, resp.Message, "R3 (create)")
+	require.Equal(t, 3, srv.Count("POST /rest/api/3/issue"))
+
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "created: R3")
+	require.Equal(t, 4, srv.Count("POST /rest/api/3/issue"))
+	require.Contains(t, srv.DescriptionText("DEMO-1"), "DEMO-4 — Opt-out")
+
+	// A Done Epic is a conflict however the run is flagged.
+	srv.Issues["DEMO-1"].Done = true
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update")
+	resp = requirePublishRefusal(t, stdout, code, publish.ErrConflict)
+	require.Contains(t, resp.Message, "closed")
+}
+
+func TestPublish_JiraDataCenterUsesV2(t *testing.T) {
+	_, srv := publishJiraProject(t, true)
+	stdout, code := runPublishCmd(t, "nightly-digest", "--target", "jira")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "Published spec nightly-digest to DEMO")
+	require.Equal(t, 3, srv.Count("POST /rest/api/2/issue"))
+	require.IsType(t, "", srv.Issues["DEMO-1"].Description, "Data Center descriptions are wiki text")
 }
 
 func TestPublish_SchemaPublishesFlags(t *testing.T) {

@@ -1,10 +1,9 @@
 # Publish ⇄ Hive handshake
 
 `spektacular publish` turns a final spec or epic into one **RFC** item plus a
-**child** item per unit of work in a work source (GitHub today; Jira and
-Linear are designed to drop in behind the same `Target` interface, see
-[spektacular#112](https://github.com/hivecommons/spektacular/issues/112) and
-[#113](https://github.com/hivecommons/spektacular/issues/113)). A hive
+**child** item per unit of work in a work source (GitHub and Jira today;
+Linear drops in behind the same `Target` interface, see
+[spektacular#113](https://github.com/hivecommons/spektacular/issues/113)). A hive
 attached to that work source must pick the children up, build each against
 the spek's acceptance criteria, leave the RFC alone, and never route a child
 into a fresh Spek `spec` run. This page is the contract both sides read.
@@ -94,7 +93,8 @@ From `hivecommons/hive` at the time of writing; verify against current main.
 | Triage into a spec run (opt-in) | `runs.triage.spec_labels`; `run/fix` forces direct-fix; `src/docs/spektacular.md` → "Triage" | Section 4. |
 | Sub-issues / dependencies | `hive-open-issue --parent`, `--blocked-by` (`src/docs/hive-open-issue.md`) | Each child is added with `POST /repos/{o}/{r}/issues/{rfc}/sub_issues` (`sub_issue_id` = the child's database id); each `depends_on` edge with `POST /repos/{o}/{r}/issues/{child}/dependencies/blocked_by` (`issue_id` = the blocker's database id). Both are best effort: a failure is a warning in the result, and `--update` retries. |
 | PR linkage | closing keywords `Fixes/Closes/Resolves #N` | The child is the issue the kick receives, so its number is what the PR closes. |
-| Jira / Linear | `src/docs/work-sources.md` | Deferred to #112 / #113. |
+| Jira | `src/docs/work-sources.md` → `type: jira`: `project in (<keys>) AND statusCategory != Done AND issuetype != Epic`, `hold_labels` | The RFC is an **Epic** (`publish.jira.parent_issue_type`) in `publish.jira.project_key`, so hive's default JQL never lists it; each child a **Story** (`publish.jira.child_issue_type`) with `parent` = the Epic (or `publish.jira.epic_link_field` = its key on Data Center), created in the project's default status, whose category is not Done, with `publish.jira.labels` (whitespace → `-`) and never a hold label. Each `depends_on` edge is a `Blocks` issue link (blocker outward, dependant inward), best effort. The marker is the last line of the description **and** the issue property `spek.publish` (`{name, artifact_id, target, task, rfc, title, body_digest}`); a re-publish searches `issue.property[spek.publish].artifact_id = "<id>"` and falls back to `description ~ "artifact_id=<id>"` where properties are not searchable. Cloud uses REST v3 with ADF descriptions and `JIRA_EMAIL` + `JIRA_API_TOKEN`; Data Center (`publish.jira.deployment: datacenter`) REST v2 with wiki markup and `JIRA_PAT`, trusting `JIRA_CA_BUNDLE`. The site is `JIRA_BASE_URL`. |
+| Linear | `src/docs/work-sources.md` → `type: linear` | Deferred to #113. |
 | Crux proxy | `crux/proxy/linear_rules.go`; `crux/issueshape` on `POST /repos/*/issues` | Publishing from inside a hive needs `POST /repos/*/issues`, `PATCH /repos/*/issues/*`, `POST …/sub_issues`, `POST …/dependencies/blocked_by`, `GET /repos/*/labels` and `GET /search/issues` allowed at the publishing agent's mode. |
 
 ## 4. The "already specced" signal: option (b), the marker

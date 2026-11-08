@@ -404,9 +404,8 @@ func (k KnowledgeConfig) PruneMaxAgeDays() int {
 	return k.Prune.MaxAgeDays
 }
 
-// Publish targets. Only GitHub ships; jira and linear are reserved so a
-// config naming one is refused with publish_target_unconfigured rather than
-// an unknown-value error.
+// Publish targets. linear is reserved so a config naming it is refused with
+// publish_target_unconfigured rather than an unknown-value error.
 const (
 	PublishTargetGitHub = "github"
 	PublishTargetJira   = "jira"
@@ -417,6 +416,15 @@ const (
 // repo has it, so a hive never claims the umbrella itself.
 const DefaultPublishParentLabel = "epic"
 
+// Jira target defaults: the RFC is an Epic, which hive's default JQL
+// (issuetype != Epic) never treats as a work item, and each child a Story.
+const (
+	DefaultPublishJiraParentIssueType = "Epic"
+	DefaultPublishJiraChildIssueType  = "Story"
+	PublishJiraDeploymentCloud        = "cloud"
+	PublishJiraDeploymentDataCenter   = "datacenter"
+)
+
 // PublishConfig is where `publish` files an artifact as an RFC with child
 // work items. Every field is optional: the default target is github, and the
 // GitHub repo defaults to the project's source or the checkout's origin.
@@ -424,6 +432,55 @@ const DefaultPublishParentLabel = "epic"
 type PublishConfig struct {
 	DefaultTarget string              `yaml:"default_target,omitempty"`
 	GitHub        PublishGitHubConfig `yaml:"github,omitempty"`
+	Jira          PublishJiraConfig   `yaml:"jira,omitempty"`
+}
+
+// PublishJiraConfig is the Jira target's settings. The site, credentials and
+// CA bundle come from the environment (JIRA_BASE_URL, JIRA_EMAIL +
+// JIRA_API_TOKEN for Cloud or JIRA_PAT for Data Center, JIRA_CA_BUNDLE);
+// base_url here is a fallback for the URL only.
+type PublishJiraConfig struct {
+	BaseURL    string `yaml:"base_url,omitempty"`
+	ProjectKey string `yaml:"project_key,omitempty"`
+	// Deployment is cloud (REST v3, ADF descriptions; the default) or
+	// datacenter (REST v2, wiki-markup descriptions).
+	Deployment      string `yaml:"deployment,omitempty"`
+	ParentIssueType string `yaml:"parent_issue_type,omitempty"`
+	ChildIssueType  string `yaml:"child_issue_type,omitempty"`
+	// Labels go on every filed issue, whitespace replaced with "-".
+	Labels []string `yaml:"labels,omitempty"`
+	// EpicLinkField is the custom field id (customfield_NNNNN) that links a
+	// child to its Epic on a Data Center site without parent support; the
+	// Epic's key is written there instead of parent.
+	EpicLinkField string `yaml:"epic_link_field,omitempty"`
+	// AcceptanceCriteriaField is a custom field id that receives the child's
+	// acceptance criteria as text, in addition to the description.
+	AcceptanceCriteriaField string `yaml:"acceptance_criteria_field,omitempty"`
+}
+
+// IsDataCenter reports whether the deployment is Data Center or Server.
+func (p PublishJiraConfig) IsDataCenter() bool {
+	switch strings.ToLower(strings.TrimSpace(p.Deployment)) {
+	case PublishJiraDeploymentDataCenter, "server", "dc":
+		return true
+	}
+	return false
+}
+
+// ParentIssueTypeName is the RFC's issue type, Epic when unset.
+func (p PublishJiraConfig) ParentIssueTypeName() string {
+	if p.ParentIssueType == "" {
+		return DefaultPublishJiraParentIssueType
+	}
+	return p.ParentIssueType
+}
+
+// ChildIssueTypeName is the children's issue type, Story when unset.
+func (p PublishJiraConfig) ChildIssueTypeName() string {
+	if p.ChildIssueType == "" {
+		return DefaultPublishJiraChildIssueType
+	}
+	return p.ChildIssueType
 }
 
 // PublishGitHubConfig is the GitHub target's settings. Labels are applied

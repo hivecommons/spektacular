@@ -20,6 +20,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/plantask"
 	"github.com/hivecommons/spektacular/internal/publish"
 	"github.com/hivecommons/spektacular/internal/publish/github"
+	"github.com/hivecommons/spektacular/internal/publish/jira"
 	"github.com/hivecommons/spektacular/internal/store"
 )
 
@@ -41,9 +42,14 @@ Every filed item carries a hidden marker, so a re-run finds what it filed and
 updates it in place with --update, and refuses with a diff without it. The
 publication is recorded in the artifact's frontmatter under published.
 
+--target jira files the RFC as an Epic in publish.jira.project_key and each
+child as a Story under it, with "Blocks" links for dependencies, on Jira Cloud
+or Data Center.
+
 --dry-run renders what would be filed and makes no network calls. Credentials
-come from GITHUB_TOKEN, GH_TOKEN, or ` + "`gh auth token`" + `; nothing is written
-to config.`,
+come from the environment: GITHUB_TOKEN, GH_TOKEN, or ` + "`gh auth token`" + ` for
+github; JIRA_BASE_URL with JIRA_EMAIL and JIRA_API_TOKEN (Cloud) or JIRA_PAT
+(Data Center) for jira. Nothing is written to config.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runPublish,
 }
@@ -65,13 +71,14 @@ var publishOutputSchema = &schemaObj{
 		"name":        {Type: "string"},
 		"kind":        {Type: "string", Enum: []string{publish.KindSpec, publish.KindEpic}},
 		"artifact_id": {Type: "string", Description: "<project>/<kind>/<name>; the marker's artifact_id"},
-		"target":      {Type: "string", Enum: []string{config.PublishTargetGitHub}},
-		"repo":        {Type: "string", Description: "owner/repo the items were filed in"},
+		"target":      {Type: "string", Enum: []string{config.PublishTargetGitHub, config.PublishTargetJira}},
+		"repo":        {Type: "string", Description: "where the items were filed: owner/repo on github, the project key on jira"},
 		"dry_run":     {Type: "boolean"},
 		"rfc_url":     {Type: "string"},
-		"rfc_number":  {Type: "integer"},
+		"rfc_number":  {Type: "integer", Description: "github only"},
+		"rfc_key":     {Type: "string", Description: "the RFC's issue key on jira"},
 		"children": {Type: "array", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
-			"id": {Type: "string"}, "url": {Type: "string"}, "number": {Type: "integer"},
+			"id": {Type: "string"}, "url": {Type: "string"}, "number": {Type: "integer", Description: "github only"}, "key": {Type: "string", Description: "the issue key on jira"},
 		}}},
 		"created":   {Type: "array", Items: &schemaProp{Type: "string"}, Description: "rfc and child ids filed by this run"},
 		"updated":   {Type: "array", Items: &schemaProp{Type: "string"}},
@@ -93,8 +100,8 @@ func runPublish(cmd *cobra.Command, args []string) error {
 		return output.Write(cmd.OutOrStdout(), commandSchema{
 			Output: publishOutputSchema,
 			Flags: map[string]*schemaProp{
-				"target":      {Type: "string", Enum: []string{config.PublishTargetGitHub, config.PublishTargetJira, config.PublishTargetLinear}, Description: "work source; publish.default_target in config, else github. jira and linear refuse publish_target_unconfigured until implemented"},
-				"repo":        {Type: "string", Description: "owner/repo to file in; else publish.github.repo, else the project's source, else the cwd's origin"},
+				"target":      {Type: "string", Enum: []string{config.PublishTargetGitHub, config.PublishTargetJira, config.PublishTargetLinear}, Description: "work source; publish.default_target in config, else github. linear refuses publish_target_unconfigured until implemented"},
+				"repo":        {Type: "string", Description: "github: owner/repo to file in; else publish.github.repo, else the project's source, else the cwd's origin"},
 				"dry-run":     {Type: "boolean", Description: "render what would be filed; no network calls"},
 				"update":      {Type: "boolean", Description: "update items already filed for this artifact in place instead of refusing"},
 				"allow-draft": {Type: "boolean", Description: "publish an artifact that is not final, as RFC: [DRAFT] …"},
@@ -128,7 +135,7 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	if targetName == "" {
 		targetName = cfg.Publish.Target()
 	}
-	if targetName != config.PublishTargetGitHub {
+	if targetName != config.PublishTargetGitHub && targetName != config.PublishTargetJira {
 		return publishTargetUnconfigured(targetName)
 	}
 
@@ -157,11 +164,7 @@ func runPublish(cmd *cobra.Command, args []string) error {
 		for _, c := range pub.Children {
 			res.Children = append(res.Children, publish.ResultChild{ID: c.ID})
 		}
-		if repo, _ := cmd.Flags().GetString("repo"); repo != "" {
-			res.Repo = repo
-		} else if owner, r, ok := publishRepo(cfg, cmd); ok {
-			res.Repo = owner + "/" + r
-		}
+		res.Repo = publishDryRunWhere(cfg, cmd, targetName)
 		res.Publication = &pub
 		if format == publishFormatJSON {
 			return output.New(cmd.OutOrStdout(), globalFields).WriteResult(res)
@@ -170,21 +173,11 @@ func runPublish(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	owner, repoName, ok := publishRepo(cfg, cmd)
-	if !ok {
-		return output.NewError(publish.ErrRepoUnknown,
-			"no GitHub repository to publish into: none was given with --repo, publish.github.repo is not set, and neither the project's source nor the current directory's origin is a GitHub URL").
-			WithNextAction("re-run with --repo <owner>/<repo>, or set publish.github.repo in .spektacular/config.yaml")
-	}
-	token, err := githubToken()
+	target, opts, where, err := publishTargetFor(cfg, cmd, targetName)
 	if err != nil {
 		return err
 	}
-	target := github.New(owner, repoName, token)
-	if api := os.Getenv("SPEKTACULAR_GITHUB_API"); api != "" {
-		target.API = api
-	}
-	res.Repo = target.Slug()
+	res.Repo = where
 
 	ctx := cmd.Context()
 	if ctx == nil {
@@ -193,36 +186,33 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	existing, err := target.Find(ctx, pub.ArtifactID)
 	if err != nil {
 		return output.NewError(publish.ErrTargetFailed, err.Error()).
-			WithNextAction("check the token's access to the repository and retry")
+			WithNextAction("check the credential's access to " + where + " and retry")
 	}
 	if existing != nil {
 		if existing.RFC != nil && existing.RFC.Closed {
 			return output.NewError(publish.ErrConflict,
-				fmt.Sprintf("%s %q was already published to %s as %s, which is closed", pub.Kind, name, target.Slug(), existing.RFC.URL)).
+				fmt.Sprintf("%s %q was already published to %s as %s, which is closed", pub.Kind, name, where, existing.RFC.URL)).
 				WithResource(existing.RFC.URL).
 				WithNextAction("reopen the RFC and re-run with --update, or change the artifact's name to publish it afresh")
 		}
 		changes := publish.Diff(pub, existing)
 		if len(changes) > 0 && !update {
-			where := "children only"
+			at := "children only"
 			if existing.RFC != nil {
-				where = existing.RFC.URL
+				at = existing.RFC.URL
 			}
 			return output.NewError(publish.ErrConflict,
-				fmt.Sprintf("%s %q is already published to %s (%s) and re-publishing would change: %s", pub.Kind, name, target.Slug(), where, publish.DescribeChanges(changes))).
-				WithResource(where).
+				fmt.Sprintf("%s %q is already published to %s (%s) and re-publishing would change: %s", pub.Kind, name, where, at, publish.DescribeChanges(changes))).
+				WithResource(at).
 				WithNextAction("re-run with --update to apply the changes in place, or --dry-run to see what would be filed")
 		}
 	}
 
-	result, err := target.Publish(ctx, pub, existing, publish.PublishOptions{
-		ParentLabel: cfg.Publish.GitHub.ParentLabelName(),
-		Labels:      cfg.Publish.GitHub.Labels,
-	})
+	result, err := target.Publish(ctx, pub, existing, opts)
 	res.Result = result
 	res.Target = targetName
 	if err != nil {
-		return output.NewError(publish.ErrTargetFailed, fmt.Sprintf("publishing %s %q to %s failed part way: %v", pub.Kind, name, target.Slug(), err)).
+		return output.NewError(publish.ErrTargetFailed, fmt.Sprintf("publishing %s %q to %s failed part way: %v", pub.Kind, name, where, err)).
 			WithNextAction("fix the cause and re-run with --update; items already filed are found by their markers and reused")
 	}
 
@@ -260,16 +250,121 @@ func renderPublishPretty(cmd *cobra.Command, res publishResult) error {
 
 func publishTargetUnconfigured(name string) error {
 	switch name {
-	case config.PublishTargetJira, config.PublishTargetLinear:
+	case config.PublishTargetLinear:
 		return output.NewError(publish.ErrTargetUnconfigured,
 			fmt.Sprintf("the %s target is not available yet in this release", name)).
 			WithResource(name).
-			WithNextAction("re-run with --target github, or set publish.default_target: github in .spektacular/config.yaml")
+			WithNextAction("re-run with --target github or --target jira, or set publish.default_target in .spektacular/config.yaml")
 	}
 	return output.NewError(publish.ErrTargetUnconfigured,
-		fmt.Sprintf("unknown publish target %q; supported targets: %s", name, config.PublishTargetGitHub)).
+		fmt.Sprintf("unknown publish target %q; supported targets: %s, %s", name, config.PublishTargetGitHub, config.PublishTargetJira)).
 		WithResource(name).
-		WithNextAction("re-run with --target github")
+		WithNextAction("re-run with --target github or --target jira")
+}
+
+// publishTargetFor builds the target named, its options, and where it
+// files (owner/repo, a project key), refusing when the target lacks a
+// destination or a credential.
+func publishTargetFor(cfg config.Config, cmd *cobra.Command, name string) (publish.Target, publish.PublishOptions, string, error) {
+	switch name {
+	case config.PublishTargetJira:
+		t, err := jiraTarget(cfg.Publish.Jira)
+		if err != nil {
+			return nil, publish.PublishOptions{}, "", err
+		}
+		return t, publish.PublishOptions{Labels: cfg.Publish.Jira.Labels}, t.Slug(), nil
+	default:
+		owner, repoName, ok := publishRepo(cfg, cmd)
+		if !ok {
+			return nil, publish.PublishOptions{}, "", output.NewError(publish.ErrRepoUnknown,
+				"no GitHub repository to publish into: none was given with --repo, publish.github.repo is not set, and neither the project's source nor the current directory's origin is a GitHub URL").
+				WithNextAction("re-run with --repo <owner>/<repo>, or set publish.github.repo in .spektacular/config.yaml")
+		}
+		token, err := githubToken()
+		if err != nil {
+			return nil, publish.PublishOptions{}, "", err
+		}
+		t := github.New(owner, repoName, token)
+		if api := os.Getenv("SPEKTACULAR_GITHUB_API"); api != "" {
+			t.API = api
+		}
+		opts := publish.PublishOptions{ParentLabel: cfg.Publish.GitHub.ParentLabelName(), Labels: cfg.Publish.GitHub.Labels}
+		return t, opts, t.Slug(), nil
+	}
+}
+
+// publishDryRunWhere is the destination a dry run reports, without
+// touching credentials: it may be empty when none is configured.
+func publishDryRunWhere(cfg config.Config, cmd *cobra.Command, target string) string {
+	if target == config.PublishTargetJira {
+		return strings.TrimSpace(cfg.Publish.Jira.ProjectKey)
+	}
+	if repo, _ := cmd.Flags().GetString("repo"); repo != "" {
+		return repo
+	}
+	if owner, r, ok := publishRepo(cfg, cmd); ok {
+		return owner + "/" + r
+	}
+	return ""
+}
+
+// Environment the Jira target reads. The site and credentials never come
+// from config; JIRA_BASE_URL falls back to publish.jira.base_url.
+const (
+	envJiraBaseURL  = "JIRA_BASE_URL"
+	envJiraEmail    = "JIRA_EMAIL"
+	envJiraAPIToken = "JIRA_API_TOKEN"
+	envJiraPAT      = "JIRA_PAT"
+	envJiraCABundle = "JIRA_CA_BUNDLE"
+)
+
+// jiraTarget builds the Jira target from config and the environment. Each
+// refusal names the missing setting.
+func jiraTarget(jc config.PublishJiraConfig) (*jira.Target, error) {
+	projectKey := strings.TrimSpace(jc.ProjectKey)
+	if projectKey == "" {
+		return nil, output.NewError(publish.ErrTargetUnconfigured,
+			"the jira target has no project to file into: publish.jira.project_key is not set").
+			WithResource(config.PublishTargetJira).
+			WithNextAction("set publish.jira.project_key in .spektacular/config.yaml to the key of the project the hive reads")
+	}
+	baseURL := strings.TrimSpace(os.Getenv(envJiraBaseURL))
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(jc.BaseURL)
+	}
+	if baseURL == "" {
+		return nil, output.NewError(publish.ErrTargetUnconfigured,
+			fmt.Sprintf("the jira target has no site to file into: %s is unset and publish.jira.base_url is not set", envJiraBaseURL)).
+			WithResource(config.PublishTargetJira).
+			WithNextAction(fmt.Sprintf("export %s=https://<site>.atlassian.net (or your Data Center URL), or set publish.jira.base_url", envJiraBaseURL))
+	}
+	t := jira.New(baseURL, projectKey)
+	t.DataCenter = jc.IsDataCenter()
+	t.ParentIssueType = jc.ParentIssueTypeName()
+	t.ChildIssueType = jc.ChildIssueTypeName()
+	t.EpicLinkField = strings.TrimSpace(jc.EpicLinkField)
+	t.AcceptanceCriteriaField = strings.TrimSpace(jc.AcceptanceCriteriaField)
+	t.PAT = strings.TrimSpace(os.Getenv(envJiraPAT))
+	t.Email = strings.TrimSpace(os.Getenv(envJiraEmail))
+	t.APIToken = strings.TrimSpace(os.Getenv(envJiraAPIToken))
+	switch {
+	case t.DataCenter && t.PAT == "" && (t.Email == "" || t.APIToken == ""):
+		return nil, output.NewError(publish.ErrAuthMissing,
+			fmt.Sprintf("no Jira Data Center credential: %s is unset (and %s + %s are not both set)", envJiraPAT, envJiraEmail, envJiraAPIToken)).
+			WithNextAction(fmt.Sprintf("export %s with a personal access token that can create issues in %s", envJiraPAT, projectKey))
+	case !t.DataCenter && t.PAT == "" && (t.Email == "" || t.APIToken == ""):
+		return nil, output.NewError(publish.ErrAuthMissing,
+			fmt.Sprintf("no Jira Cloud credential: %s and %s must both be set", envJiraEmail, envJiraAPIToken)).
+			WithNextAction(fmt.Sprintf("export %s and %s (an Atlassian API token) for an account that can create issues in %s", envJiraEmail, envJiraAPIToken, projectKey))
+	}
+	client, err := jira.NewHTTPClient(strings.TrimSpace(os.Getenv(envJiraCABundle)))
+	if err != nil {
+		return nil, output.NewError(publish.ErrTargetUnconfigured, fmt.Sprintf("%s: %v", envJiraCABundle, err)).
+			WithResource(config.PublishTargetJira).
+			WithNextAction(fmt.Sprintf("point %s at a PEM bundle, or unset it to use the system roots", envJiraCABundle))
+	}
+	t.HTTPClient = client
+	return t, nil
 }
 
 // publishName parses the single <name> argument as a spec or epic name.

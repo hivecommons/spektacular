@@ -2,6 +2,8 @@ package publish
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"sort"
 	"strings"
 )
@@ -39,16 +41,34 @@ type Existing struct {
 
 // Filed is one item already in the target.
 type Filed struct {
-	// ID is the target's own identity: GitHub's database id.
+	// ID is the target's own numeric identity: GitHub's database id. A
+	// target whose identities are strings (a Jira key, a Linear UUID) leaves
+	// it zero and sets Key.
 	ID     int64
+	Key    string
 	Number int
 	URL    string
-	// Ref is how other bodies in the target link to it: "#12" on GitHub.
-	Ref    string
-	Title  string
-	Body   string
-	Closed bool
-	Marker Marker
+	// Ref is how other bodies in the target link to it: "#12" on GitHub,
+	// "PROJ-12" on Jira, "ENG-12" on Linear.
+	Ref   string
+	Title string
+	// Body is the filed body as the target stores it. A target that cannot
+	// read the body back verbatim (Jira stores a converted document) leaves
+	// it empty and sets BodyDigest instead.
+	Body string
+	// BodyDigest is Digest of the body as filed, when the target records it.
+	BodyDigest string
+	Closed     bool
+	Marker     Marker
+}
+
+// SameAsFiled reports whether body is what the filed item carries, by
+// digest when the target recorded one, else by body text.
+func (f Filed) SameAsFiled(body string) bool {
+	if f.BodyDigest != "" {
+		return f.BodyDigest == Digest(body)
+	}
+	return SameBody(f.Body, body)
 }
 
 // Result is what Publish reports.
@@ -57,6 +77,7 @@ type Result struct {
 	Repo      string        `json:"repo"`
 	RFCURL    string        `json:"rfc_url"`
 	RFCNumber int           `json:"rfc_number,omitempty"`
+	RFCKey    string        `json:"rfc_key,omitempty"`
 	Children  []ResultChild `json:"children"`
 	Created   []string      `json:"created"`
 	Updated   []string      `json:"updated"`
@@ -69,6 +90,9 @@ type ResultChild struct {
 	ID     string `json:"id"`
 	URL    string `json:"url"`
 	Number int    `json:"number,omitempty"`
+	// Key is the target's own key for the item when it has one: a Jira
+	// issue key, a Linear identifier.
+	Key string `json:"key,omitempty"`
 }
 
 // Change is one difference between what is filed and what would be.
@@ -101,7 +125,7 @@ func Diff(p Publication, existing *Existing) []Change {
 		if existing.RFC.Title != p.RFC.Title {
 			changes = append(changes, Change{Item: "rfc", Kind: "title"})
 		}
-		if !SameBody(existing.RFC.Body, p.RFCBody(refs)) {
+		if !existing.RFC.SameAsFiled(p.RFCBody(refs)) {
 			changes = append(changes, Change{Item: "rfc", Kind: "body"})
 		}
 	}
@@ -114,7 +138,7 @@ func Diff(p Publication, existing *Existing) []Change {
 		if f.Title != c.Title {
 			changes = append(changes, Change{Item: c.ID, Kind: "title"})
 		}
-		if !SameBody(f.Body, c.Render(p, rfcURL, refs)) {
+		if !f.SameAsFiled(c.Render(p, rfcURL, refs)) {
 			changes = append(changes, Change{Item: c.ID, Kind: "body"})
 		}
 	}
@@ -125,6 +149,13 @@ func Diff(p Publication, existing *Existing) []Change {
 // trailing whitespace normalised.
 func SameBody(a, b string) bool {
 	return normaliseBody(a) == normaliseBody(b)
+}
+
+// Digest is a stable fingerprint of a body as a target stores it, for
+// targets that cannot read the body back verbatim.
+func Digest(body string) string {
+	sum := sha256.Sum256([]byte(normaliseBody(body)))
+	return hex.EncodeToString(sum[:])
 }
 
 func normaliseBody(s string) string {
