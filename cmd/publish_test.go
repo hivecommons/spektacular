@@ -19,6 +19,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/publish"
 	"github.com/hivecommons/spektacular/internal/publish/jira/jiratest"
+	"github.com/hivecommons/spektacular/internal/publish/linear/lineartest"
 )
 
 const publishSpecBody = `# Feature: Nightly digest email
@@ -173,10 +174,9 @@ func TestPublish_Refusals(t *testing.T) {
 	})
 	t.Run("target unconfigured", func(t *testing.T) {
 		publishProject(t)
-		for _, target := range []string{"linear", "trello"} {
-			stdout, code := runPublishCmd(t, "nightly-digest", "--dry-run", "--target", target)
-			requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
-		}
+		stdout, code := runPublishCmd(t, "nightly-digest", "--dry-run", "--target", "trello")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+		require.Contains(t, resp.Message, "github, jira, linear")
 	})
 	t.Run("repo unknown", func(t *testing.T) {
 		publishProject(t)
@@ -524,6 +524,119 @@ func TestPublish_JiraDataCenterUsesV2(t *testing.T) {
 	require.Contains(t, stdout, "Published spec nightly-digest to DEMO")
 	require.Equal(t, 3, srv.Count("POST /rest/api/2/issue"))
 	require.IsType(t, "", srv.Issues["DEMO-1"].Description, "Data Center descriptions are wiki text")
+}
+
+// publishLinearProject is publishProject configured for the linear target
+// with the API key in the environment and the endpoint pointed at the fake.
+func publishLinearProject(t *testing.T) (string, *lineartest.Server) {
+	t.Helper()
+	root := publishProject(t)
+	writeSpecCommandConfig(t, root, "publish:\n  default_target: linear\n  linear:\n    team: ENG\n    state: Todo\n    labels: [spek]\n")
+	writeSpecFixture(t, root, "nightly-digest", "---\ncreated_date: 2026-02-01\ndocument_status: final\n---\n\n"+publishSpecBody)
+	srv := lineartest.New(t)
+	t.Setenv("LINEAR_API_URL", srv.URL)
+	t.Setenv("LINEAR_API_KEY", lineartest.APIKey)
+	return root, srv
+}
+
+func TestPublish_LinearDryRunMakesNoNetworkCall(t *testing.T) {
+	_, srv := publishLinearProject(t)
+	stdout, code := runPublishCmd(t, "nightly-digest", "--dry-run", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, `"target": "linear"`)
+	require.Contains(t, stdout, `"repo": "ENG"`)
+	require.Empty(t, srv.Issues)
+	require.Zero(t, srv.Count("teams"))
+}
+
+func TestPublish_LinearRefusalsNameTheMissingSetting(t *testing.T) {
+	t.Run("team", func(t *testing.T) {
+		root, _ := publishLinearProject(t)
+		writeSpecCommandConfig(t, root, "publish:\n  default_target: linear\n")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+		require.Contains(t, resp.Message, "publish.linear.team")
+	})
+	t.Run("api key", func(t *testing.T) {
+		publishLinearProject(t)
+		t.Setenv("LINEAR_API_KEY", "")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrAuthMissing)
+		require.Contains(t, resp.Message, "LINEAR_API_KEY")
+		require.Contains(t, resp.NextAction, "ENG")
+	})
+	t.Run("unknown team is a publish failure before anything is filed", func(t *testing.T) {
+		root, srv := publishLinearProject(t)
+		writeSpecCommandConfig(t, root, "publish:\n  default_target: linear\n  linear:\n    team: NOPE\n")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetFailed)
+		require.Contains(t, resp.Message, `team "NOPE" does not exist`)
+		require.Empty(t, srv.Issues)
+	})
+}
+
+func TestPublish_LinearFilesIssueAndSubIssuesThenUpdates(t *testing.T) {
+	root, srv := publishLinearProject(t)
+
+	stdout, code := runPublishCmd(t, "nightly-digest", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	var res struct {
+		Target   string                `json:"target"`
+		Repo     string                `json:"repo"`
+		RFCURL   string                `json:"rfc_url"`
+		RFCKey   string                `json:"rfc_key"`
+		Children []publish.ResultChild `json:"children"`
+		Created  []string              `json:"created"`
+		Warnings []string              `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &res), stdout)
+	require.Equal(t, "linear", res.Target)
+	require.Equal(t, "ENG", res.Repo)
+	require.Equal(t, "ENG-1", res.RFCKey)
+	require.Equal(t, "https://linear.app/acme/issue/ENG-1", res.RFCURL)
+	require.Equal(t, []string{"rfc", "R1", "R2"}, res.Created)
+	require.Equal(t, []publish.ResultChild{
+		{ID: "R1", URL: "https://linear.app/acme/issue/ENG-2", Key: "ENG-2"},
+		{ID: "R2", URL: "https://linear.app/acme/issue/ENG-3", Key: "ENG-3"},
+	}, res.Children)
+	require.Empty(t, res.Warnings)
+	rfc := srv.ByIdentifier("ENG-1")
+	require.Equal(t, []string{lineartest.LabelID("epic"), lineartest.LabelID("spek")}, rfc.LabelIDs, "default parent label on the RFC")
+	require.Equal(t, lineartest.StateID("Todo"), rfc.StateID)
+	child := srv.ByIdentifier("ENG-2")
+	require.Equal(t, rfc.ID, child.ParentID)
+	require.Equal(t, []string{lineartest.LabelID("spek")}, child.LabelIDs)
+
+	raw, err := os.ReadFile(filepath.Join(root, ".spektacular", "specs", "nightly-digest.md"))
+	require.NoError(t, err)
+	fm, _, err := metadata.Split(raw)
+	require.NoError(t, err)
+	require.Equal(t, []metadata.Publication{{Target: "linear", RFCURL: "https://linear.app/acme/issue/ENG-1", Children: []metadata.PublishedChild{
+		{ID: "R1", URL: "https://linear.app/acme/issue/ENG-2"}, {ID: "R2", URL: "https://linear.app/acme/issue/ENG-3"},
+	}}}, fm.Published)
+
+	stdout, code = runPublishCmd(t, "nightly-digest")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "unchanged: R1, R2, rfc")
+	require.Equal(t, 3, srv.Count("issueCreate"))
+
+	writeSpecFixture(t, root, "nightly-digest", strings.Replace(string(raw),
+		"with links.\n", "with links.\n- [ ] **Opt-out**: an operator can turn the digest off.\n", 1))
+	stdout, code = runPublishCmd(t, "nightly-digest")
+	resp := requirePublishRefusal(t, stdout, code, publish.ErrConflict)
+	require.Contains(t, resp.Message, "R3 (create)")
+	require.Equal(t, 3, srv.Count("issueCreate"))
+
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "created: R3")
+	require.Equal(t, 4, srv.Count("issueCreate"))
+	require.Contains(t, srv.ByIdentifier("ENG-1").Description, "ENG-4 — Opt-out")
+
+	srv.ByIdentifier("ENG-1").StateType = "completed"
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update")
+	resp = requirePublishRefusal(t, stdout, code, publish.ErrConflict)
+	require.Contains(t, resp.Message, "closed")
 }
 
 func TestPublish_SchemaPublishesFlags(t *testing.T) {

@@ -23,6 +23,7 @@ import (
 	"github.com/hivecommons/spektacular/internal/publish"
 	"github.com/hivecommons/spektacular/internal/publish/github"
 	"github.com/hivecommons/spektacular/internal/publish/jira"
+	"github.com/hivecommons/spektacular/internal/publish/linear"
 	"github.com/hivecommons/spektacular/internal/store"
 )
 
@@ -46,12 +47,15 @@ publication is recorded in the artifact's frontmatter under published.
 
 --target jira files the RFC as an Epic in publish.jira.project_key and each
 child as a Story under it, with "Blocks" links for dependencies, on Jira Cloud
-or Data Center.
+or Data Center. --target linear files the RFC as an issue in team
+publish.linear.team and each child as a sub-issue of it, with "blocks"
+relations for dependencies.
 
 --dry-run renders what would be filed and makes no network calls. Credentials
 come from the environment: GITHUB_TOKEN, GH_TOKEN, or ` + "`gh auth token`" + ` for
 github; JIRA_BASE_URL with JIRA_EMAIL and JIRA_API_TOKEN (Cloud) or JIRA_PAT
-(Data Center) for jira. Nothing is written to config.`,
+(Data Center) for jira; LINEAR_API_KEY for linear. Nothing is written to
+config.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runPublish,
 }
@@ -73,14 +77,14 @@ var publishOutputSchema = &schemaObj{
 		"name":        {Type: "string"},
 		"kind":        {Type: "string", Enum: []string{publish.KindSpec, publish.KindEpic}},
 		"artifact_id": {Type: "string", Description: "<project>/<kind>/<name>; the marker's artifact_id"},
-		"target":      {Type: "string", Enum: []string{config.PublishTargetGitHub, config.PublishTargetJira}},
-		"repo":        {Type: "string", Description: "where the items were filed: owner/repo on github, the project key on jira"},
+		"target":      {Type: "string", Enum: []string{config.PublishTargetGitHub, config.PublishTargetJira, config.PublishTargetLinear}},
+		"repo":        {Type: "string", Description: "where the items were filed: owner/repo on github, the project key on jira, the team key on linear"},
 		"dry_run":     {Type: "boolean"},
 		"rfc_url":     {Type: "string"},
 		"rfc_number":  {Type: "integer", Description: "github only"},
-		"rfc_key":     {Type: "string", Description: "the RFC's issue key on jira"},
+		"rfc_key":     {Type: "string", Description: "the RFC's issue key on jira, its identifier on linear"},
 		"children": {Type: "array", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
-			"id": {Type: "string"}, "url": {Type: "string"}, "number": {Type: "integer", Description: "github only"}, "key": {Type: "string", Description: "the issue key on jira"},
+			"id": {Type: "string"}, "url": {Type: "string"}, "number": {Type: "integer", Description: "github only"}, "key": {Type: "string", Description: "the issue key on jira, the identifier on linear"},
 		}}},
 		"created":   {Type: "array", Items: &schemaProp{Type: "string"}, Description: "rfc and child ids filed by this run"},
 		"updated":   {Type: "array", Items: &schemaProp{Type: "string"}},
@@ -102,7 +106,7 @@ func runPublish(cmd *cobra.Command, args []string) error {
 		return output.Write(cmd.OutOrStdout(), commandSchema{
 			Output: publishOutputSchema,
 			Flags: map[string]*schemaProp{
-				"target":      {Type: "string", Enum: []string{config.PublishTargetGitHub, config.PublishTargetJira, config.PublishTargetLinear}, Description: "work source; publish.default_target in config, else github. linear refuses publish_target_unconfigured until implemented"},
+				"target":      {Type: "string", Enum: []string{config.PublishTargetGitHub, config.PublishTargetJira, config.PublishTargetLinear}, Description: "work source; publish.default_target in config, else github"},
 				"repo":        {Type: "string", Description: "github: owner/repo to file in; else publish.github.repo, else the project's source, else the cwd's origin"},
 				"dry-run":     {Type: "boolean", Description: "render what would be filed; no network calls"},
 				"update":      {Type: "boolean", Description: "update items already filed for this artifact in place instead of refusing"},
@@ -137,7 +141,9 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	if targetName == "" {
 		targetName = cfg.Publish.Target()
 	}
-	if targetName != config.PublishTargetGitHub && targetName != config.PublishTargetJira {
+	switch targetName {
+	case config.PublishTargetGitHub, config.PublishTargetJira, config.PublishTargetLinear:
+	default:
 		return publishTargetUnconfigured(targetName)
 	}
 
@@ -261,17 +267,10 @@ func renderPublishPretty(cmd *cobra.Command, res publishResult) error {
 }
 
 func publishTargetUnconfigured(name string) error {
-	switch name {
-	case config.PublishTargetLinear:
-		return output.NewError(publish.ErrTargetUnconfigured,
-			fmt.Sprintf("the %s target is not available yet in this release", name)).
-			WithResource(name).
-			WithNextAction("re-run with --target github or --target jira, or set publish.default_target in .spektacular/config.yaml")
-	}
 	return output.NewError(publish.ErrTargetUnconfigured,
-		fmt.Sprintf("unknown publish target %q; supported targets: %s, %s", name, config.PublishTargetGitHub, config.PublishTargetJira)).
+		fmt.Sprintf("unknown publish target %q; supported targets: %s, %s, %s", name, config.PublishTargetGitHub, config.PublishTargetJira, config.PublishTargetLinear)).
 		WithResource(name).
-		WithNextAction("re-run with --target github or --target jira")
+		WithNextAction("re-run with --target github, --target jira or --target linear, or set publish.default_target in .spektacular/config.yaml")
 }
 
 // publishTargetFor builds the target named, its options, and where it
@@ -285,6 +284,13 @@ func publishTargetFor(cfg config.Config, cmd *cobra.Command, name string) (publi
 			return nil, publish.PublishOptions{}, "", err
 		}
 		return t, publish.PublishOptions{Labels: cfg.Publish.Jira.Labels}, t.Slug(), nil
+	case config.PublishTargetLinear:
+		t, err := linearTarget(cfg.Publish.Linear)
+		if err != nil {
+			return nil, publish.PublishOptions{}, "", err
+		}
+		opts := publish.PublishOptions{ParentLabel: cfg.Publish.Linear.ParentLabelName(), Labels: cfg.Publish.Linear.Labels}
+		return t, opts, t.Slug(), nil
 	default:
 		owner, repoName, ok := publishRepo(cfg, cmd)
 		if !ok {
@@ -310,6 +316,9 @@ func publishTargetFor(cfg config.Config, cmd *cobra.Command, name string) (publi
 func publishDryRunWhere(cfg config.Config, cmd *cobra.Command, target string) string {
 	if target == config.PublishTargetJira {
 		return strings.TrimSpace(cfg.Publish.Jira.ProjectKey)
+	}
+	if target == config.PublishTargetLinear {
+		return strings.TrimSpace(cfg.Publish.Linear.Team)
 	}
 	if repo, _ := cmd.Flags().GetString("repo"); repo != "" {
 		return repo
@@ -405,6 +414,36 @@ func jiraTarget(jc config.PublishJiraConfig) (*jira.Target, error) {
 			WithNextAction(fmt.Sprintf("point %s at a PEM bundle, or unset it to use the system roots", envJiraCABundle))
 	}
 	t.HTTPClient = client
+	return t, nil
+}
+
+// Environment the Linear target reads. The API key never comes from
+// config; LINEAR_API_URL points tests at a fake.
+const (
+	envLinearAPIKey = "LINEAR_API_KEY"
+	envLinearAPIURL = "LINEAR_API_URL"
+)
+
+// linearTarget builds the Linear target from config and the environment.
+func linearTarget(lc config.PublishLinearConfig) (*linear.Target, error) {
+	team := strings.TrimSpace(lc.Team)
+	if team == "" {
+		return nil, output.NewError(publish.ErrTargetUnconfigured,
+			"the linear target has no team to file into: publish.linear.team is not set").
+			WithResource(config.PublishTargetLinear).
+			WithNextAction("set publish.linear.team in .spektacular/config.yaml to the key of the team the hive reads (ENG in ENG-12)")
+	}
+	apiKey := strings.TrimSpace(os.Getenv(envLinearAPIKey))
+	if apiKey == "" {
+		return nil, output.NewError(publish.ErrAuthMissing,
+			fmt.Sprintf("no Linear credential: %s is unset", envLinearAPIKey)).
+			WithNextAction(fmt.Sprintf("export %s with a personal API key that can create issues in team %s", envLinearAPIKey, team))
+	}
+	t := linear.New(team, apiKey)
+	t.State = strings.TrimSpace(lc.State)
+	if api := strings.TrimSpace(os.Getenv(envLinearAPIURL)); api != "" {
+		t.Endpoint = api
+	}
 	return t, nil
 }
 
@@ -741,7 +780,7 @@ func replacePublication(list []metadata.Publication, entry metadata.Publication)
 
 func init() {
 	publishCmd.Flags().Bool("schema", false, "Print the input/output schema and exit")
-	publishCmd.Flags().String("target", "", "Work source to publish into: github (default), jira, linear")
+	publishCmd.Flags().String("target", "", "Work source to publish into: github (default), jira or linear")
 	publishCmd.Flags().String("repo", "", "GitHub owner/repo to file in; defaults to publish.github.repo, then the project's source, then the cwd's origin")
 	publishCmd.Flags().Bool("dry-run", false, "Render what would be filed and make no network calls")
 	publishCmd.Flags().Bool("update", false, "Update items already filed for this artifact in place")

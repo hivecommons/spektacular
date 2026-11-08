@@ -404,8 +404,7 @@ func (k KnowledgeConfig) PruneMaxAgeDays() int {
 	return k.Prune.MaxAgeDays
 }
 
-// Publish targets. linear is reserved so a config naming it is refused with
-// publish_target_unconfigured rather than an unknown-value error.
+// Publish targets.
 const (
 	PublishTargetGitHub = "github"
 	PublishTargetJira   = "jira"
@@ -433,6 +432,29 @@ type PublishConfig struct {
 	DefaultTarget string              `yaml:"default_target,omitempty"`
 	GitHub        PublishGitHubConfig `yaml:"github,omitempty"`
 	Jira          PublishJiraConfig   `yaml:"jira,omitempty"`
+	Linear        PublishLinearConfig `yaml:"linear,omitempty"`
+}
+
+// PublishLinearConfig is the Linear target's settings. The API key comes
+// from the environment (LINEAR_API_KEY). Labels are applied only when the
+// team already has them; publish never creates a label.
+type PublishLinearConfig struct {
+	// Team is the team key, the prefix of its identifiers (ENG in ENG-12).
+	Team string `yaml:"team,omitempty"`
+	// State is the workflow state new issues are created in; the team's
+	// default when unset.
+	State       string   `yaml:"state,omitempty"`
+	Labels      []string `yaml:"labels,omitempty"`
+	ParentLabel string   `yaml:"parent_label,omitempty"`
+}
+
+// ParentLabelName is the label for the RFC, DefaultPublishParentLabel when
+// unset.
+func (p PublishLinearConfig) ParentLabelName() string {
+	if p.ParentLabel == "" {
+		return DefaultPublishParentLabel
+	}
+	return p.ParentLabel
 }
 
 // PublishJiraConfig is the Jira target's settings. The site, credentials and
