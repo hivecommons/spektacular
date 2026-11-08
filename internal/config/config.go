@@ -441,9 +441,13 @@ type PublishConfig struct {
 type PublishLinearConfig struct {
 	// Team is the team key, the prefix of its identifiers (ENG in ENG-12).
 	Team string `yaml:"team,omitempty"`
-	// State is the workflow state new issues are created in; the team's
-	// default when unset.
-	State       string   `yaml:"state,omitempty"`
+	// State is the workflow state new issues are created in. Unset, the
+	// team's Todo state when it has one, else its first unstarted state,
+	// else the team default.
+	State string `yaml:"state,omitempty"`
+	// Assignee is the email, display name or user name every filed issue
+	// is assigned to; none when unset.
+	Assignee    string   `yaml:"assignee,omitempty"`
 	Labels      []string `yaml:"labels,omitempty"`
 	ParentLabel string   `yaml:"parent_label,omitempty"`
 }

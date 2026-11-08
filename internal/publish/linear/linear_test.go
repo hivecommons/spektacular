@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/hivecommons/spektacular/internal/publish"
+	"github.com/hivecommons/spektacular/internal/publish/linear"
 	"github.com/hivecommons/spektacular/internal/publish/linear/lineartest"
 )
 
@@ -100,15 +101,19 @@ func TestTarget_FindThenRepublishIsIdempotent(t *testing.T) {
 	require.Equal(t, "uuid-1", existing.RFC.Key, "Key is the UUID mutations take")
 	require.Equal(t, "ENG-1", existing.RFC.Ref)
 	require.Equal(t, []string{"R1", "R2"}, publish.SortedIDs(existing.Children))
-	require.Empty(t, publish.Diff(p, existing), "Linear stores Markdown, so the body round-trips")
+	require.NotEmpty(t, existing.RFC.BodyDigest, "the digest line is read back")
+	require.Empty(t, existing.RFC.Body)
+	require.Empty(t, publish.Diff(p, existing), "digests match although the fake normalised the stored Markdown")
 
 	res, err := target.Publish(ctx, p, existing, publish.PublishOptions{})
 	require.NoError(t, err)
 	require.Empty(t, res.Created)
 	require.Empty(t, res.Updated)
+	require.Empty(t, res.Linked)
 	require.Equal(t, []string{"R1", "R2", "rfc"}, res.Unchanged)
 	require.Equal(t, 3, f.Count("issueCreate"), "nothing is created twice")
 	require.Equal(t, 1, f.Count("issueUpdate"), "only the first run's RFC checklist rewrite")
+	require.Equal(t, 1, f.Count("teams"), "a run that creates nothing does not read the team")
 
 	p.Children[0].Title = "Schedule the digest"
 	p.Children = append(p.Children, publish.Child{})
@@ -188,4 +193,156 @@ func TestTarget_BadAPIKey(t *testing.T) {
 	_, err := target.Find(context.Background(), "demo/spec/nightly-digest")
 	require.ErrorContains(t, err, "linear API 401")
 	require.ErrorContains(t, err, "not authenticated")
+}
+
+func TestTarget_DigestLineSitsBeforeMarkerAndSurvivesNormalisation(t *testing.T) {
+	f := lineartest.New(t)
+	target := f.Target()
+	p := testPublication(t)
+	ctx := context.Background()
+	_, err := target.Publish(ctx, p, nil, publish.PublishOptions{})
+	require.NoError(t, err)
+	rfc := f.ByIdentifier("ENG-1")
+	lines := strings.Split(strings.TrimSpace(rfc.Description), "\n")
+	require.True(t, strings.HasPrefix(lines[len(lines)-2], linear.DigestPrefix), "digest line, then marker: %q", lines[len(lines)-2])
+	require.True(t, strings.HasPrefix(lines[len(lines)-1], "<!-- spek:publish "), lines[len(lines)-1])
+
+	// A store that rewrites whitespace, as the fake does, leaves the
+	// comparison alone; a real body change still shows.
+	require.NotEqual(t, p.RFCBody(nil), rfc.Description)
+	existing, err := target.Find(ctx, p.ArtifactID)
+	require.NoError(t, err)
+	require.Empty(t, publish.Diff(p, existing))
+	rfc.Description = strings.Replace(rfc.Description, publish.Digest(p.RFCBody(existingRefs(existing))), strings.Repeat("0", 64), 1)
+	existing, err = target.Find(ctx, p.ArtifactID)
+	require.NoError(t, err)
+	require.Equal(t, "rfc (body)", publish.DescribeChanges(publish.Diff(p, existing)))
+
+	// An issue filed before digests is compared as stored.
+	f.Add(&lineartest.Issue{Title: "Legacy", Description: "body\n\n<!-- spek:publish name=legacy artifact_id=demo/spec/legacy target=linear -->\n"})
+	existing, err = target.Find(ctx, "demo/spec/legacy")
+	require.NoError(t, err)
+	require.Equal(t, "body\n\n<!-- spek:publish name=legacy artifact_id=demo/spec/legacy target=linear -->\n", existing.RFC.Body)
+	require.Empty(t, existing.RFC.BodyDigest)
+}
+
+func existingRefs(e *publish.Existing) map[string]publish.Ref {
+	refs := map[string]publish.Ref{}
+	for id, f := range e.Children {
+		refs[id] = publish.Ref{Ref: f.Ref, URL: f.URL}
+	}
+	return refs
+}
+
+func TestTarget_FindSeesArchivedIssuesAndPages(t *testing.T) {
+	f := lineartest.New(t)
+	target := f.Target()
+	target.PageSize = 2
+	p := testPublication(t)
+	ctx := context.Background()
+	_, err := target.Publish(ctx, p, nil, publish.PublishOptions{})
+	require.NoError(t, err)
+	rfc := f.ByIdentifier("ENG-1")
+	rfc.StateType = "completed"
+	rfc.Archived = true
+
+	existing, err := target.Find(ctx, p.ArtifactID)
+	require.NoError(t, err)
+	require.Equal(t, 2, f.Count("issues"), "three hits at a page size of two")
+	require.NotNil(t, existing.RFC, "an archived RFC is still found")
+	require.True(t, existing.RFC.Closed)
+	require.Len(t, existing.Children, 2)
+}
+
+func TestTarget_ReconcilesParentAndRelationsOnEveryRun(t *testing.T) {
+	f := lineartest.New(t)
+	target := f.Target()
+	p := testPublication(t)
+	ctx := context.Background()
+	f.FailRelations = true
+	res, err := target.Publish(ctx, p, nil, publish.PublishOptions{})
+	require.NoError(t, err)
+	require.Len(t, res.Warnings, 1)
+	require.Empty(t, f.Relations)
+	f.ByIdentifier("ENG-2").ParentID = "" // detached by hand
+
+	f.FailRelations = false
+	existing, err := target.Find(ctx, p.ArtifactID)
+	require.NoError(t, err)
+	require.Equal(t, "", existing.Children["R1"].Parent)
+	require.Equal(t, "uuid-1", existing.Children["R2"].Parent)
+	require.Empty(t, existing.Children["R2"].BlockedBy)
+	require.Empty(t, publish.Diff(p, existing), "a missing relation is not a content change")
+
+	res, err = target.Publish(ctx, p, existing, publish.PublishOptions{})
+	require.NoError(t, err)
+	require.Empty(t, res.Created)
+	require.Equal(t, []string{"ENG-2 under ENG-1", "ENG-3 blocked by ENG-2"}, res.Linked)
+	require.Equal(t, "uuid-1", f.ByIdentifier("ENG-2").ParentID)
+	require.Equal(t, []string{"ENG-2 blocks ENG-3"}, f.Relations)
+	require.Equal(t, 1, f.Count("teams"), "only the first run, which created issues, read the team")
+
+	existing, err = target.Find(ctx, p.ArtifactID)
+	require.NoError(t, err)
+	require.Equal(t, []string{"uuid-2"}, existing.Children["R2"].BlockedBy)
+	res, err = target.Publish(ctx, p, existing, publish.PublishOptions{})
+	require.NoError(t, err)
+	require.Empty(t, res.Linked, "once repaired, nothing is refiled")
+	require.Equal(t, 2, f.Count("issueRelationCreate"), "the refused attempt and the repair; nothing on the third run")
+}
+
+func TestTarget_DefaultStateIsTodoThenFirstUnstarted(t *testing.T) {
+	t.Run("todo", func(t *testing.T) {
+		f := lineartest.New(t)
+		_, err := f.Target().Publish(context.Background(), testPublication(t), nil, publish.PublishOptions{})
+		require.NoError(t, err)
+		require.Equal(t, lineartest.StateID(lineartest.Todo), f.ByIdentifier("ENG-2").StateID, "children land in Todo, which a hive reads, not the team default")
+	})
+	t.Run("no todo", func(t *testing.T) {
+		f := lineartest.New(t)
+		f.NoTodo = true
+		_, err := f.Target().Publish(context.Background(), testPublication(t), nil, publish.PublishOptions{})
+		require.NoError(t, err)
+		require.Equal(t, "", f.ByIdentifier("ENG-2").StateID, "no Todo and no other unstarted state: the team default")
+	})
+	t.Run("configured", func(t *testing.T) {
+		f := lineartest.New(t)
+		target := f.Target()
+		target.State = "backlog"
+		_, err := target.Publish(context.Background(), testPublication(t), nil, publish.PublishOptions{})
+		require.NoError(t, err)
+		require.Equal(t, lineartest.StateID(lineartest.Backlog), f.ByIdentifier("ENG-2").StateID, "state names compare case-insensitively")
+	})
+}
+
+func TestTarget_AssigneeByEmailOrName(t *testing.T) {
+	for _, who := range []string{lineartest.UserEmail, lineartest.UserName} {
+		f := lineartest.New(t)
+		target := f.Target()
+		target.Assignee = who
+		_, err := target.Publish(context.Background(), testPublication(t), nil, publish.PublishOptions{})
+		require.NoError(t, err, who)
+		require.Equal(t, lineartest.UserID, f.ByIdentifier("ENG-1").AssigneeID)
+		require.Equal(t, lineartest.UserID, f.ByIdentifier("ENG-3").AssigneeID)
+		require.Equal(t, 1, f.Count("users"))
+	}
+	f := lineartest.New(t)
+	target := f.Target()
+	target.Assignee = "nobody@acme.test"
+	_, err := target.Publish(context.Background(), testPublication(t), nil, publish.PublishOptions{})
+	require.ErrorContains(t, err, `no Linear user has the email, display name or name "nobody@acme.test"`)
+	require.Zero(t, f.Count("issueCreate"))
+}
+
+func TestTarget_WorkspaceLabelsAndTeamKeyCase(t *testing.T) {
+	f := lineartest.New(t)
+	target := f.Target()
+	target.TeamKey = "eng"
+	res, err := target.Publish(context.Background(), testPublication(t), nil, publish.PublishOptions{Labels: []string{lineartest.WorkspaceLabel}})
+	require.NoError(t, err)
+	require.Empty(t, res.Warnings, "a workspace label counts as existing")
+	require.Equal(t, []string{lineartest.LabelID(lineartest.WorkspaceLabel)}, f.ByIdentifier("ENG-2").LabelIDs)
+	existing, err := target.Find(context.Background(), "demo/spec/nightly-digest")
+	require.NoError(t, err)
+	require.NotNil(t, existing)
 }

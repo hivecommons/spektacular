@@ -1,8 +1,10 @@
 // Package linear files a publication into a Linear team through the
 // GraphQL API: the RFC as an issue, each child as a sub-issue of it, and
-// each depends_on edge as a "blocks" relation. Linear stores Markdown, so
-// bodies round-trip verbatim and the marker is the last line of every
-// description, which is also how a re-publish finds what it filed.
+// each depends_on edge as a "blocks" relation. Linear stores Markdown; the
+// marker is the last line of every description, which is also how a
+// re-publish finds what it filed, and the line before it carries a digest
+// of the body as rendered, so a re-publish compares digests rather than
+// trusting Linear to hand the Markdown back byte for byte.
 package linear
 
 import (
@@ -13,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -26,9 +29,16 @@ const DefaultEndpoint = "https://api.linear.app/graphql"
 // from the blocker: the blocker "blocks" the dependant.
 const RelationBlocks = "blocks"
 
-// pageSize bounds every list the target reads; a team with more labels or
-// filed items than this is not a shape publish produces.
-const pageSize = 250
+// DefaultPageSize is how many nodes each list query asks for; Find pages
+// through the rest.
+const DefaultPageSize = 250
+
+// DigestPrefix opens the HTML comment that carries the body digest, on the
+// line before the marker.
+const DigestPrefix = "<!-- spek:digest "
+
+// digestLineRE matches the digest line Find strips before comparing.
+var digestLineRE = regexp.MustCompile(`(?m)^<!-- spek:digest ([0-9a-f]+) -->\n`)
 
 // Target files into one Linear team.
 type Target struct {
@@ -40,8 +50,16 @@ type Target struct {
 	// for personal API keys.
 	APIKey string
 	// State, when set, is the name of the workflow state new issues are
-	// created in; the team's default otherwise.
+	// created in. Unset, the team's "Todo" state is used when it has one,
+	// else its first unstarted state, else the team default: a hive reads
+	// Todo, not Backlog or Triage.
 	State string
+	// Assignee, when set, is the email, display name or user name of the
+	// user every filed issue is assigned to.
+	Assignee string
+	// PageSize is how many nodes each list query asks for; DefaultPageSize
+	// when 0.
+	PageSize int
 	// HTTPClient defaults to one with a 30s timeout.
 	HTTPClient *http.Client
 }
@@ -64,6 +82,13 @@ func (t *Target) endpoint() string {
 	return t.Endpoint
 }
 
+func (t *Target) pageSize() int {
+	if t.PageSize <= 0 {
+		return DefaultPageSize
+	}
+	return t.PageSize
+}
+
 type issueNode struct {
 	ID          string `json:"id"`
 	Identifier  string `json:"identifier"`
@@ -73,28 +98,60 @@ type issueNode struct {
 	State       struct {
 		Type string `json:"type"`
 	} `json:"state"`
+	Parent *struct {
+		ID string `json:"id"`
+	} `json:"parent"`
+	InverseRelations struct {
+		Nodes []struct {
+			Type  string `json:"type"`
+			Issue struct {
+				ID string `json:"id"`
+			} `json:"issue"`
+		} `json:"nodes"`
+	} `json:"inverseRelations"`
 }
 
-const findQuery = `query($team: String!, $needle: String!, $first: Int!) {
-  issues(filter: { team: { key: { eq: $team } }, description: { contains: $needle } }, first: $first) {
-    nodes { id identifier url title description state { type } }
+// issueFields is what every issue read or mutation returns: enough to
+// build a Filed, including the parent and the relations pointing at it.
+const issueFields = `id identifier url title description state { type } parent { id } inverseRelations { nodes { type issue { id } } }`
+
+// findQuery pages through the team's issues, archived ones included: a
+// completed RFC Linear has auto-archived must still be found, so it is
+// refused as closed rather than filed again.
+const findQuery = `query($team: String!, $needle: String!, $first: Int!, $after: String) {
+  issues(filter: { team: { key: { eqIgnoreCase: $team } }, description: { contains: $needle } }, first: $first, after: $after, includeArchived: true) {
+    nodes { ` + issueFields + ` }
+    pageInfo { hasNextPage endCursor }
   }
 }`
 
 // Find implements publish.Target: the team's issues whose description
 // carries the artifact id, each read back by its marker.
 func (t *Target) Find(ctx context.Context, artifactID string) (*publish.Existing, error) {
-	var out struct {
-		Issues struct {
-			Nodes []issueNode `json:"nodes"`
-		} `json:"issues"`
-	}
-	vars := map[string]any{"team": t.TeamKey, "needle": "artifact_id=" + artifactID, "first": pageSize}
-	if err := t.query(ctx, findQuery, vars, &out); err != nil {
-		return nil, fmt.Errorf("searching team %s for published items: %w", t.TeamKey, err)
+	var nodes []issueNode
+	var after any
+	for {
+		var out struct {
+			Issues struct {
+				Nodes    []issueNode `json:"nodes"`
+				PageInfo struct {
+					HasNextPage bool   `json:"hasNextPage"`
+					EndCursor   string `json:"endCursor"`
+				} `json:"pageInfo"`
+			} `json:"issues"`
+		}
+		vars := map[string]any{"team": t.TeamKey, "needle": "artifact_id=" + artifactID, "first": t.pageSize(), "after": after}
+		if err := t.query(ctx, findQuery, vars, &out); err != nil {
+			return nil, fmt.Errorf("searching team %s for published items: %w", t.TeamKey, err)
+		}
+		nodes = append(nodes, out.Issues.Nodes...)
+		if !out.Issues.PageInfo.HasNextPage || out.Issues.PageInfo.EndCursor == "" {
+			break
+		}
+		after = out.Issues.PageInfo.EndCursor
 	}
 	existing := &publish.Existing{Children: map[string]publish.Filed{}}
-	for _, n := range out.Issues.Nodes {
+	for _, n := range nodes {
 		m, ok := publish.ParseMarker(n.Description)
 		if !ok || m.ArtifactID != artifactID {
 			continue
@@ -118,17 +175,44 @@ func (t *Target) Find(ctx context.Context, artifactID string) (*publish.Existing
 }
 
 // filed maps an issue to a Filed: Key is Linear's UUID, what mutations
-// take; Ref the identifier, what people and other bodies use.
+// take; Ref the identifier, what people and other bodies use. A
+// description with a digest line reports BodyDigest and no Body, so the
+// comparison does not depend on Linear returning the Markdown verbatim;
+// one without (filed before digests) is compared as stored.
 func filed(n issueNode, m publish.Marker) publish.Filed {
-	return publish.Filed{
+	f := publish.Filed{
 		Key:    n.ID,
 		Ref:    n.Identifier,
 		URL:    n.URL,
 		Title:  n.Title,
-		Body:   n.Description,
 		Closed: n.State.Type == "completed" || n.State.Type == "canceled",
 		Marker: m,
 	}
+	if dm := digestLineRE.FindStringSubmatch(n.Description); dm != nil {
+		f.BodyDigest = dm[1]
+	} else {
+		f.Body = n.Description
+	}
+	if n.Parent != nil {
+		f.Parent = n.Parent.ID
+	}
+	for _, r := range n.InverseRelations.Nodes {
+		if r.Type == RelationBlocks && r.Issue.ID != "" {
+			f.BlockedBy = append(f.BlockedBy, r.Issue.ID)
+		}
+	}
+	return f
+}
+
+// description is body as stored: the digest of body on the line before
+// the marker. Find strips the line again, so the digest covers exactly
+// what Render produced.
+func description(body string) string {
+	line := DigestPrefix + publish.Digest(body) + " -->\n"
+	if i := strings.LastIndex(body, "<!-- spek:publish"); i >= 0 {
+		return body[:i] + line + body[i:]
+	}
+	return body + line
 }
 
 type team struct {
@@ -149,44 +233,132 @@ type team struct {
 	} `json:"labels"`
 }
 
+// teamQuery reads the team (key compared case-insensitively, as people
+// type it), its states and labels, and the workspace labels every team
+// shares, in one round trip.
 const teamQuery = `query($key: String!, $first: Int!) {
-  teams(filter: { key: { eq: $key } }, first: 1) {
+  teams(filter: { key: { eqIgnoreCase: $key } }, first: 1) {
     nodes {
       id key
       states(first: $first) { nodes { id name type } }
       labels(first: $first) { nodes { id name } }
     }
   }
+  issueLabels(filter: { team: { null: true } }, first: $first) { nodes { id name } }
 }`
 
 // team reads the team's id, states and labels; an unknown key is an error
-// before anything is filed.
+// before anything is filed. Workspace labels are appended to the team's.
 func (t *Target) team(ctx context.Context) (team, error) {
 	var out struct {
 		Teams struct {
 			Nodes []team `json:"nodes"`
 		} `json:"teams"`
+		IssueLabels struct {
+			Nodes []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"nodes"`
+		} `json:"issueLabels"`
 	}
-	if err := t.query(ctx, teamQuery, map[string]any{"key": t.TeamKey, "first": pageSize}, &out); err != nil {
+	if err := t.query(ctx, teamQuery, map[string]any{"key": t.TeamKey, "first": t.pageSize()}, &out); err != nil {
 		return team{}, fmt.Errorf("reading team %s: %w", t.TeamKey, err)
 	}
 	if len(out.Teams.Nodes) == 0 {
 		return team{}, fmt.Errorf("team %q does not exist or the API key cannot see it", t.TeamKey)
 	}
-	return out.Teams.Nodes[0], nil
+	tm := out.Teams.Nodes[0]
+	tm.Labels.Nodes = append(tm.Labels.Nodes, out.IssueLabels.Nodes...)
+	return tm, nil
 }
 
-// stateID resolves the configured state name; "" means the team default.
+// stateID resolves the state new issues are created in: the configured
+// name, else "Todo" when the team has it, else the first unstarted state,
+// else "" for the team default.
 func (t *Target) stateID(tm team) (string, error) {
-	if t.State == "" {
-		return "", nil
+	if t.State != "" {
+		for _, s := range tm.States.Nodes {
+			if strings.EqualFold(s.Name, t.State) {
+				return s.ID, nil
+			}
+		}
+		return "", fmt.Errorf("team %s has no workflow state named %q", t.TeamKey, t.State)
 	}
 	for _, s := range tm.States.Nodes {
-		if strings.EqualFold(s.Name, t.State) {
+		if strings.EqualFold(s.Name, "Todo") {
 			return s.ID, nil
 		}
 	}
-	return "", fmt.Errorf("team %s has no workflow state named %q", t.TeamKey, t.State)
+	for _, s := range tm.States.Nodes {
+		if s.Type == "unstarted" {
+			return s.ID, nil
+		}
+	}
+	return "", nil
+}
+
+const usersQuery = `query($q: String!) {
+  users(filter: { or: [ { email: { eqIgnoreCase: $q } }, { displayName: { eqIgnoreCase: $q } }, { name: { eqIgnoreCase: $q } } ] }, first: 2) {
+    nodes { id name displayName email }
+  }
+}`
+
+// assigneeID resolves Assignee to a user id; "" when none is configured.
+// A name matching two users is an error, not a guess.
+func (t *Target) assigneeID(ctx context.Context) (string, error) {
+	if t.Assignee == "" {
+		return "", nil
+	}
+	var out struct {
+		Users struct {
+			Nodes []struct {
+				ID string `json:"id"`
+			} `json:"nodes"`
+		} `json:"users"`
+	}
+	if err := t.query(ctx, usersQuery, map[string]any{"q": t.Assignee}, &out); err != nil {
+		return "", fmt.Errorf("resolving assignee %q: %w", t.Assignee, err)
+	}
+	switch len(out.Users.Nodes) {
+	case 0:
+		return "", fmt.Errorf("no Linear user has the email, display name or name %q", t.Assignee)
+	case 1:
+		return out.Users.Nodes[0].ID, nil
+	default:
+		return "", fmt.Errorf("more than one Linear user matches %q; use the email", t.Assignee)
+	}
+}
+
+// filing is what creating an issue needs, read lazily so a run that
+// creates nothing makes no team, label or user query.
+type filing struct {
+	team        team
+	stateID     string
+	assigneeID  string
+	rfcLabels   []string
+	childLabels []string
+}
+
+func (t *Target) prepare(ctx context.Context, opts publish.PublishOptions, res *publish.Result) (*filing, error) {
+	tm, err := t.team(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stateID, err := t.stateID(tm)
+	if err != nil {
+		return nil, err
+	}
+	assigneeID, err := t.assigneeID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &filing{
+		team:        tm,
+		stateID:     stateID,
+		assigneeID:  assigneeID,
+		rfcLabels:   t.pickLabels(tm, res, opts.ParentLabel, opts.Labels...),
+		childLabels: t.pickLabels(tm, res, "", opts.Labels...),
+	}, nil
 }
 
 // pickLabels keeps the wanted labels that exist in the team, warning once
@@ -220,22 +392,26 @@ func (t *Target) pickLabels(tm team, res *publish.Result, parent string, wanted 
 // Publish implements publish.Target in the same order as the GitHub
 // target: the RFC first, then each child as its sub-issue, then the blocks
 // relations, then the RFC again with the children's identifiers in its
-// checklist. Relations are best effort: a failure is a warning.
+// checklist. Every child's parent and relations are compared with what
+// Find read back and repaired when missing, whichever run filed the
+// child; those repairs are best effort and reported as Linked, a failure
+// as a warning.
 func (t *Target) Publish(ctx context.Context, p publish.Publication, existing *publish.Existing, opts publish.PublishOptions) (publish.Result, error) {
 	res := publish.Result{Target: t.Name(), Repo: t.Slug(), Created: []string{}, Updated: []string{}, Unchanged: []string{}, Warnings: []string{}, Children: []publish.ResultChild{}}
 	if existing == nil {
 		existing = &publish.Existing{Children: map[string]publish.Filed{}}
 	}
-	tm, err := t.team(ctx)
-	if err != nil {
-		return res, err
+	var prepared *filing
+	ready := func() (*filing, error) {
+		if prepared == nil {
+			f, err := t.prepare(ctx, opts, &res)
+			if err != nil {
+				return nil, err
+			}
+			prepared = f
+		}
+		return prepared, nil
 	}
-	stateID, err := t.stateID(tm)
-	if err != nil {
-		return res, err
-	}
-	rfcLabels := t.pickLabels(tm, &res, opts.ParentLabel, opts.Labels...)
-	childLabels := t.pickLabels(tm, &res, "", opts.Labels...)
 
 	refs := map[string]publish.Ref{}
 	for id, f := range existing.Children {
@@ -244,7 +420,11 @@ func (t *Target) Publish(ctx context.Context, p publish.Publication, existing *p
 
 	var rfc publish.Filed
 	if existing.RFC == nil {
-		created, err := t.createIssue(ctx, tm.ID, p.RFC.Title, p.RFCBody(refs), rfcLabels, stateID, "")
+		fl, err := ready()
+		if err != nil {
+			return res, err
+		}
+		created, err := t.createIssue(ctx, fl, p.RFC.Title, p.RFCBody(refs), fl.rfcLabels, "")
 		if err != nil {
 			return res, fmt.Errorf("creating the RFC issue: %w", err)
 		}
@@ -264,14 +444,18 @@ func (t *Target) Publish(ctx context.Context, p publish.Publication, existing *p
 				if err := t.updateIssue(ctx, f.Key, c.Title, body); err != nil {
 					return res, fmt.Errorf("updating child %s (%s): %w", c.ID, f.Ref, err)
 				}
-				f.Body = body
+				f.Body, f.BodyDigest = "", publish.Digest(body)
 				res.Updated = append(res.Updated, c.ID)
 			} else {
 				res.Unchanged = append(res.Unchanged, c.ID)
 			}
 			filedChildren[c.ID] = f
 		} else {
-			created, err := t.createIssue(ctx, tm.ID, c.Title, body, childLabels, stateID, rfc.Key)
+			fl, err := ready()
+			if err != nil {
+				return res, err
+			}
+			created, err := t.createIssue(ctx, fl, c.Title, body, fl.childLabels, rfc.Key)
 			if err != nil {
 				return res, fmt.Errorf("creating child %s: %w", c.ID, err)
 			}
@@ -284,7 +468,8 @@ func (t *Target) Publish(ctx context.Context, p publish.Publication, existing *p
 	}
 
 	// Second pass: bodies that named children by ID before those existed
-	// get their identifiers, and the blocks relations are filed.
+	// get their identifiers, and parent and blocks relations are
+	// reconciled with what the issues carry.
 	for _, c := range p.Children {
 		f := filedChildren[c.ID]
 		body := c.Render(p, rfc.URL, refs)
@@ -298,14 +483,15 @@ func (t *Target) Publish(ctx context.Context, p publish.Publication, existing *p
 				res.Unchanged = remove(res.Unchanged, c.ID)
 			}
 		}
+		if f.Parent != rfc.Key {
+			t.setParent(ctx, f, rfc, &res)
+		}
 		for _, dep := range c.DependsOn {
 			blocker, ok := filedChildren[dep]
-			if !ok {
+			if !ok || contains(f.BlockedBy, blocker.Key) {
 				continue
 			}
-			if wasCreated || contains(res.Created, dep) {
-				t.blockedBy(ctx, f, blocker, &res)
-			}
+			t.blockedBy(ctx, f, blocker, &res)
 		}
 	}
 
@@ -326,7 +512,7 @@ func (t *Target) Publish(ctx context.Context, p publish.Publication, existing *p
 }
 
 const createMutation = `mutation($input: IssueCreateInput!) {
-  issueCreate(input: $input) { success issue { id identifier url title description state { type } } }
+  issueCreate(input: $input) { success issue { ` + issueFields + ` } }
 }`
 
 const updateMutation = `mutation($id: String!, $input: IssueUpdateInput!) {
@@ -337,13 +523,16 @@ const relationMutation = `mutation($input: IssueRelationCreateInput!) {
   issueRelationCreate(input: $input) { success }
 }`
 
-func (t *Target) createIssue(ctx context.Context, teamID, title, body string, labelIDs []string, stateID, parentID string) (publish.Filed, error) {
-	input := map[string]any{"teamId": teamID, "title": title, "description": body}
+func (t *Target) createIssue(ctx context.Context, fl *filing, title, body string, labelIDs []string, parentID string) (publish.Filed, error) {
+	input := map[string]any{"teamId": fl.team.ID, "title": title, "description": description(body)}
 	if len(labelIDs) > 0 {
 		input["labelIds"] = labelIDs
 	}
-	if stateID != "" {
-		input["stateId"] = stateID
+	if fl.stateID != "" {
+		input["stateId"] = fl.stateID
+	}
+	if fl.assigneeID != "" {
+		input["assigneeId"] = fl.assigneeID
 	}
 	if parentID != "" {
 		input["parentId"] = parentID
@@ -361,7 +550,9 @@ func (t *Target) createIssue(ctx context.Context, teamID, title, body string, la
 		return publish.Filed{}, errors.New("issueCreate reported no issue")
 	}
 	m, _ := publish.ParseMarker(body)
-	return filed(out.IssueCreate.Issue, m), nil
+	f := filed(out.IssueCreate.Issue, m)
+	f.Body, f.BodyDigest = "", publish.Digest(body)
+	return f, nil
 }
 
 func (t *Target) updateIssue(ctx context.Context, id, title, body string) error {
@@ -370,7 +561,7 @@ func (t *Target) updateIssue(ctx context.Context, id, title, body string) error 
 			Success bool `json:"success"`
 		} `json:"issueUpdate"`
 	}
-	input := map[string]any{"title": title, "description": body}
+	input := map[string]any{"title": title, "description": description(body)}
 	if err := t.query(ctx, updateMutation, map[string]any{"id": id, "input": input}, &out); err != nil {
 		return err
 	}
@@ -378,6 +569,24 @@ func (t *Target) updateIssue(ctx context.Context, id, title, body string) error 
 		return errors.New("issueUpdate reported failure")
 	}
 	return nil
+}
+
+// setParent makes issue a sub-issue of rfc again, best effort.
+func (t *Target) setParent(ctx context.Context, issue, rfc publish.Filed, res *publish.Result) {
+	var out struct {
+		IssueUpdate struct {
+			Success bool `json:"success"`
+		} `json:"issueUpdate"`
+	}
+	err := t.query(ctx, updateMutation, map[string]any{"id": issue.Key, "input": map[string]any{"parentId": rfc.Key}}, &out)
+	if err == nil && !out.IssueUpdate.Success {
+		err = errors.New("issueUpdate reported failure")
+	}
+	if err != nil {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("could not put %s under %s: %v", issue.Ref, rfc.Ref, err))
+		return
+	}
+	res.Linked = append(res.Linked, issue.Ref+" under "+rfc.Ref)
 }
 
 // blockedBy files blocker → issue as a blocks relation, best effort.
@@ -394,7 +603,9 @@ func (t *Target) blockedBy(ctx context.Context, issue, blocker publish.Filed, re
 	}
 	if err != nil {
 		res.Warnings = append(res.Warnings, fmt.Sprintf("could not mark %s as blocked by %s: %v", issue.Ref, blocker.Ref, err))
+		return
 	}
+	res.Linked = append(res.Linked, issue.Ref+" blocked by "+blocker.Ref)
 }
 
 // apiError is a non-2xx response or a GraphQL errors array.

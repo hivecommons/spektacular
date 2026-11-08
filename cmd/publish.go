@@ -441,6 +441,7 @@ func linearTarget(lc config.PublishLinearConfig) (*linear.Target, error) {
 	}
 	t := linear.New(team, apiKey)
 	t.State = strings.TrimSpace(lc.State)
+	t.Assignee = strings.TrimSpace(lc.Assignee)
 	if api := strings.TrimSpace(os.Getenv(envLinearAPIURL)); api != "" {
 		t.Endpoint = api
 	}

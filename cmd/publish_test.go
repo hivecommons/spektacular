@@ -546,7 +546,28 @@ func TestPublish_LinearDryRunMakesNoNetworkCall(t *testing.T) {
 	require.Contains(t, stdout, `"target": "linear"`)
 	require.Contains(t, stdout, `"repo": "ENG"`)
 	require.Empty(t, srv.Issues)
-	require.Zero(t, srv.Count("teams"))
+	require.Zero(t, srv.Calls(), "a dry run touches the API in no way")
+}
+
+func TestPublish_LinearAssigneeAndArchivedRFC(t *testing.T) {
+	root, srv := publishLinearProject(t)
+	writeSpecCommandConfig(t, root, "publish:\n  default_target: linear\n  linear:\n    team: eng\n    assignee: "+lineartest.UserEmail+"\n")
+	stdout, code := runPublishCmd(t, "nightly-digest", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	for _, is := range srv.Snapshot() {
+		require.Equal(t, lineartest.UserID, is.AssigneeID, is.Identifier)
+		require.Equal(t, lineartest.StateID(lineartest.Todo), is.StateID, "Todo by default, where a hive reads")
+	}
+
+	// A completed, auto-archived RFC is still found and refused as closed
+	// rather than filed again.
+	rfc := srv.ByIdentifier("ENG-1")
+	rfc.StateType = "completed"
+	rfc.Archived = true
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update")
+	resp := requirePublishRefusal(t, stdout, code, publish.ErrConflict)
+	require.Contains(t, resp.Message, "closed")
+	require.Equal(t, 3, srv.Count("issueCreate"))
 }
 
 func TestPublish_LinearRefusalsNameTheMissingSetting(t *testing.T) {
