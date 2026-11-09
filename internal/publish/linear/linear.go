@@ -1,5 +1,5 @@
 // Package linear files a publication into a Linear team through the
-// GraphQL API: the RFC as an issue, each child as a sub-issue of it, and
+// GraphQL API: the RFC as an issue or project, each child under it, and
 // each depends_on edge as a "blocks" relation. Linear stores Markdown; the
 // marker is the last line of every description, which is also how a
 // re-publish finds what it filed, and the line before it carries a digest
@@ -25,6 +25,12 @@ import (
 // DefaultEndpoint is Linear's GraphQL API.
 const DefaultEndpoint = "https://api.linear.app/graphql"
 
+// ParentIssue and ParentProject are the supported RFC containers.
+const (
+	ParentIssue   = "issue"
+	ParentProject = "project"
+)
+
 // RelationBlocks is the relation type filed for a depends_on edge, read
 // from the blocker: the blocker "blocks" the dependant.
 const RelationBlocks = "blocks"
@@ -46,6 +52,8 @@ type Target struct {
 	Endpoint string
 	// TeamKey is the team's key, the prefix of its identifiers: ENG in ENG-12.
 	TeamKey string
+	// ParentAs is issue (default) or project.
+	ParentAs string
 	// APIKey is sent bare in the Authorization header, as Linear expects
 	// for personal API keys.
 	APIKey string
@@ -101,6 +109,9 @@ type issueNode struct {
 	Parent *struct {
 		ID string `json:"id"`
 	} `json:"parent"`
+	Project *struct {
+		ID string `json:"id"`
+	} `json:"project"`
 	InverseRelations struct {
 		Nodes []struct {
 			Type  string `json:"type"`
@@ -113,7 +124,7 @@ type issueNode struct {
 
 // issueFields is what every issue read or mutation returns: enough to
 // build a Filed, including the parent and the relations pointing at it.
-const issueFields = `id identifier url title description state { type } parent { id } inverseRelations { nodes { type issue { id } } }`
+const issueFields = `id identifier url title description state { type } parent { id } project { id } inverseRelations { nodes { type issue { id } } }`
 
 // findQuery pages through the team's issues, archived ones included: a
 // completed RFC Linear has auto-archived must still be found, so it is
@@ -125,9 +136,12 @@ const findQuery = `query($team: String!, $needle: String!, $first: Int!, $after:
   }
 }`
 
-// Find implements publish.Target: the team's issues whose description
-// carries the artifact id, each read back by its marker.
+// Find implements publish.Target: the team's issues and RFC project,
+// each read back by its marker.
 func (t *Target) Find(ctx context.Context, artifactID string) (*publish.Existing, error) {
+	if err := t.checkParentAs(); err != nil {
+		return nil, err
+	}
 	var nodes []issueNode
 	var after any
 	for {
@@ -156,8 +170,11 @@ func (t *Target) Find(ctx context.Context, artifactID string) (*publish.Existing
 		if !ok || m.ArtifactID != artifactID {
 			continue
 		}
-		f := filed(n, m)
+		f := t.filedIssue(n, m)
 		if m.IsRFC() {
+			if t.ParentAs == ParentProject {
+				return nil, errors.New("RFC already published as an issue; keep publish.linear.parent_as: issue to update it")
+			}
 			if existing.RFC == nil || (existing.RFC.Closed && !f.Closed) {
 				rfc := f
 				existing.RFC = &rfc
@@ -168,10 +185,31 @@ func (t *Target) Find(ctx context.Context, artifactID string) (*publish.Existing
 			existing.Children[m.Task] = f
 		}
 	}
+	if existing.RFC == nil {
+		rfc, err := t.findProject(ctx, artifactID)
+		if err != nil {
+			return nil, err
+		}
+		if rfc != nil && t.ParentAs != ParentProject {
+			return nil, errors.New("RFC already published as a project; keep publish.linear.parent_as: project to update it")
+		}
+		existing.RFC = rfc
+	}
 	if existing.RFC == nil && len(existing.Children) == 0 {
 		return nil, nil
 	}
 	return existing, nil
+}
+
+func (t *Target) filedIssue(n issueNode, m publish.Marker) publish.Filed {
+	f := filed(n, m)
+	if t.ParentAs == ParentProject {
+		f.Parent = ""
+		if n.Project != nil {
+			f.Parent = n.Project.ID
+		}
+	}
+	return f
 }
 
 // filed maps an issue to a Filed: Key is Linear's UUID, what mutations
@@ -352,11 +390,15 @@ func (t *Target) prepare(ctx context.Context, opts publish.PublishOptions, res *
 	if err != nil {
 		return nil, err
 	}
+	var rfcLabels []string
+	if t.ParentAs != ParentProject {
+		rfcLabels = t.pickLabels(tm, res, opts.ParentLabel, opts.Labels...)
+	}
 	return &filing{
 		team:        tm,
 		stateID:     stateID,
 		assigneeID:  assigneeID,
-		rfcLabels:   t.pickLabels(tm, res, opts.ParentLabel, opts.Labels...),
+		rfcLabels:   rfcLabels,
 		childLabels: t.pickLabels(tm, res, "", opts.Labels...),
 	}, nil
 }
@@ -390,7 +432,7 @@ func (t *Target) pickLabels(tm team, res *publish.Result, parent string, wanted 
 }
 
 // Publish implements publish.Target in the same order as the GitHub
-// target: the RFC first, then each child as its sub-issue, then the blocks
+// target: the RFC first, then each child under its issue or project, then the blocks
 // relations, then the RFC again with the children's identifiers in its
 // checklist. Every child's parent and relations are compared with what
 // Find read back and repaired when missing, whichever run filed the
@@ -398,6 +440,9 @@ func (t *Target) pickLabels(tm team, res *publish.Result, parent string, wanted 
 // as a warning.
 func (t *Target) Publish(ctx context.Context, p publish.Publication, existing *publish.Existing, opts publish.PublishOptions) (publish.Result, error) {
 	res := publish.Result{Target: t.Name(), Repo: t.Slug(), Created: []string{}, Updated: []string{}, Unchanged: []string{}, Warnings: []string{}, Children: []publish.ResultChild{}}
+	if err := t.checkParentAs(); err != nil {
+		return res, err
+	}
 	if existing == nil {
 		existing = &publish.Existing{Children: map[string]publish.Filed{}}
 	}
@@ -424,9 +469,14 @@ func (t *Target) Publish(ctx context.Context, p publish.Publication, existing *p
 		if err != nil {
 			return res, err
 		}
-		created, err := t.createIssue(ctx, fl, p.RFC.Title, p.RFCBody(refs), fl.rfcLabels, "")
+		var created publish.Filed
+		if t.ParentAs == ParentProject {
+			created, err = t.createProject(ctx, fl.team.ID, p.RFC.Title, p.RFCBody(refs))
+		} else {
+			created, err = t.createIssue(ctx, fl, p.RFC.Title, p.RFCBody(refs), fl.rfcLabels, "")
+		}
 		if err != nil {
-			return res, fmt.Errorf("creating the RFC issue: %w", err)
+			return res, fmt.Errorf("creating the RFC: %w", err)
 		}
 		rfc = created
 		res.Created = append(res.Created, "rfc")
@@ -497,11 +547,11 @@ func (t *Target) Publish(ctx context.Context, p publish.Publication, existing *p
 
 	rfcBody := p.RFCBody(refs)
 	if existing.RFC == nil {
-		if err := t.updateIssue(ctx, rfc.Key, p.RFC.Title, rfcBody); err != nil {
+		if err := t.updateRFC(ctx, rfc.Key, p.RFC.Title, rfcBody); err != nil {
 			return res, fmt.Errorf("updating the RFC checklist (%s): %w", rfc.Ref, err)
 		}
 	} else if rfc.Title != p.RFC.Title || !rfc.SameAsFiled(rfcBody) {
-		if err := t.updateIssue(ctx, rfc.Key, p.RFC.Title, rfcBody); err != nil {
+		if err := t.updateRFC(ctx, rfc.Key, p.RFC.Title, rfcBody); err != nil {
 			return res, fmt.Errorf("updating the RFC (%s): %w", rfc.Ref, err)
 		}
 		res.Updated = append(res.Updated, "rfc")
@@ -535,7 +585,7 @@ func (t *Target) createIssue(ctx context.Context, fl *filing, title, body string
 		input["assigneeId"] = fl.assigneeID
 	}
 	if parentID != "" {
-		input["parentId"] = parentID
+		input[t.parentField()] = parentID
 	}
 	var out struct {
 		IssueCreate struct {
@@ -550,7 +600,7 @@ func (t *Target) createIssue(ctx context.Context, fl *filing, title, body string
 		return publish.Filed{}, errors.New("issueCreate reported no issue")
 	}
 	m, _ := publish.ParseMarker(body)
-	f := filed(out.IssueCreate.Issue, m)
+	f := t.filedIssue(out.IssueCreate.Issue, m)
 	f.Body, f.BodyDigest = "", publish.Digest(body)
 	return f, nil
 }
@@ -571,14 +621,14 @@ func (t *Target) updateIssue(ctx context.Context, id, title, body string) error 
 	return nil
 }
 
-// setParent makes issue a sub-issue of rfc again, best effort.
+// setParent restores an issue's RFC parent or project, best effort.
 func (t *Target) setParent(ctx context.Context, issue, rfc publish.Filed, res *publish.Result) {
 	var out struct {
 		IssueUpdate struct {
 			Success bool `json:"success"`
 		} `json:"issueUpdate"`
 	}
-	err := t.query(ctx, updateMutation, map[string]any{"id": issue.Key, "input": map[string]any{"parentId": rfc.Key}}, &out)
+	err := t.query(ctx, updateMutation, map[string]any{"id": issue.Key, "input": map[string]any{t.parentField(): rfc.Key}}, &out)
 	if err == nil && !out.IssueUpdate.Success {
 		err = errors.New("issueUpdate reported failure")
 	}

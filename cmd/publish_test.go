@@ -692,3 +692,61 @@ func TestParseGitHubRepo(t *testing.T) {
 		require.Equal(t, want, owner+"/"+repo, in)
 	}
 }
+
+func TestPublish_LinearProjectLifecycle(t *testing.T) {
+	root, srv := publishLinearProject(t)
+	writeSpecCommandConfig(t, root, "publish:\n  default_target: linear\n  linear:\n    team: ENG\n    parent_as: project\n    labels: [spek]\n")
+
+	stdout, code := runPublishCmd(t, "nightly-digest", "--dry-run", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	require.Zero(t, srv.Calls())
+	stdout, code = runPublishCmd(t, "nightly-digest", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	var res publish.Result
+	require.NoError(t, json.Unmarshal([]byte(stdout), &res))
+	require.Equal(t, "https://linear.app/acme/project/project-1", res.RFCURL)
+	require.Equal(t, "project-1", res.RFCKey)
+	require.Equal(t, []string{"rfc", "R1", "R2"}, res.Created)
+	require.Len(t, srv.ProjectSnapshot(), 1)
+	require.Len(t, srv.Snapshot(), 2)
+	require.Equal(t, "project-1", srv.Snapshot()[0].ProjectID)
+
+	raw, err := os.ReadFile(filepath.Join(root, ".spektacular", "specs", "nightly-digest.md"))
+	require.NoError(t, err)
+	fm, _, err := metadata.Split(raw)
+	require.NoError(t, err)
+	require.Equal(t, res.RFCURL, fm.Published[0].RFCURL)
+	require.Equal(t, res.Children[0].URL, fm.Published[0].Children[0].URL)
+	stdout, code = runPublishCmd(t, "nightly-digest")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "unchanged: R1, R2, rfc")
+	require.Equal(t, 1, srv.Count("projectUpdate"))
+
+	writeSpecFixture(t, root, "nightly-digest", strings.Replace(string(raw),
+		"with links.\n", "with links.\n- [ ] **Opt-out**: an operator can turn the digest off.\n", 1))
+	stdout, code = runPublishCmd(t, "nightly-digest")
+	resp := requirePublishRefusal(t, stdout, code, publish.ErrConflict)
+	require.Contains(t, resp.Message, "R3 (create)")
+	require.Equal(t, 2, srv.Count("issueCreate"))
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "created: R3")
+	require.Len(t, srv.ProjectSnapshot(), 1)
+	require.Equal(t, "project-1", srv.Snapshot()[2].ProjectID)
+	require.Contains(t, srv.ProjectSnapshot()[0].Content, "ENG-3 — Opt-out")
+
+	srv.UpdateProject("project-1", func(p *lineartest.Project) { p.StatusType, p.Archived = "completed", true })
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update")
+	resp = requirePublishRefusal(t, stdout, code, publish.ErrConflict)
+	require.Contains(t, resp.Message, "closed")
+	require.Len(t, srv.ProjectSnapshot(), 1)
+}
+
+func TestPublish_LinearParentModeRefusedBeforeNetwork(t *testing.T) {
+	root, srv := publishLinearProject(t)
+	writeSpecCommandConfig(t, root, "publish:\n  default_target: linear\n  linear:\n    team: ENG\n    parent_as: epic\n")
+	stdout, code := runPublishCmd(t, "nightly-digest")
+	resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+	require.Contains(t, resp.NextAction, "publish.linear.parent_as")
+	require.Zero(t, srv.Calls())
+}

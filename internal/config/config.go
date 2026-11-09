@@ -441,6 +441,8 @@ type PublishConfig struct {
 type PublishLinearConfig struct {
 	// Team is the team key, the prefix of its identifiers (ENG in ENG-12).
 	Team string `yaml:"team,omitempty"`
+	// ParentAs chooses the RFC container: issue (default) or project.
+	ParentAs string `yaml:"parent_as,omitempty"`
 	// State is the workflow state new issues are created in. Unset, the
 	// team's Todo state when it has one, else its first unstarted state,
 	// else the team default.

@@ -565,3 +565,49 @@ func TestPublish_RefusalsCarryNextAction(t *testing.T) {
 	require.Equal(t, publish.ErrAuthMissing, res.Code)
 	require.NotEmpty(t, res.NextAction)
 }
+
+func TestPublish_LinearProjectHandshake(t *testing.T) {
+	l := lineartest.New(t)
+	root := project(t, "publish:\n  default_target: linear\n  linear:\n    team: ENG\n    parent_as: project\n    assignee: "+lineartest.UserEmail+"\n    labels: ["+configuredLabel+"]\n")
+	env := []string{"LINEAR_API_KEY=" + lineartest.APIKey, "LINEAR_API_URL=" + l.URL}
+	dry, code := run(t, root, env, "nightly-digest", "--dry-run")
+	require.Equal(t, 0, code, dry.Message)
+	require.Zero(t, l.Calls())
+	res, code := run(t, root, env, "nightly-digest")
+	require.Equal(t, 0, code, res.Message)
+	require.Empty(t, res.Warnings)
+	projects := l.ProjectSnapshot()
+	require.Len(t, projects, 1)
+	rfc := projects[0]
+	items := map[string]filed{rfc.ID: {Ref: rfc.ID, Title: rfc.Name, Body: rfc.Content, URL: res.RFCURL}}
+	for _, is := range l.Snapshot() {
+		it := filed{Ref: is.Identifier, Title: is.Title, Body: is.Description,
+			URL: "https://linear.app/acme/issue/" + is.Identifier, Parent: is.ProjectID}
+		for _, id := range is.LabelIDs {
+			it.Labels = append(it.Labels, strings.TrimPrefix(id, "label-"))
+		}
+		for _, r := range l.RelationList() {
+			if blocker, blocked, ok := strings.Cut(r, " blocks "); ok && blocked == is.Identifier {
+				it.Blocked = append(it.Blocked, blocker)
+			}
+		}
+		require.Empty(t, is.ParentID, "project children are regular issues")
+		require.Equal(t, lineartest.StateID(lineartest.Todo), is.StateID)
+		require.Equal(t, lineartest.UserID, is.AssigneeID, "assigned_only Hive enumeration can see the children")
+		items[is.Identifier] = it
+	}
+	assertHandshake(t, res, rfc.ID, items)
+	count := func() counts {
+		c := counts{Issues: len(l.ProjectSnapshot()), Relations: len(l.RelationList())}
+		for _, is := range l.Snapshot() {
+			c.Issues++
+			if is.ProjectID != "" {
+				c.Relations++
+			}
+		}
+		return c
+	}
+	assertRecordedAndIdempotent(t, root, env, res, "linear", count, func() {
+		l.UpdateProject(rfc.ID, func(p *lineartest.Project) { p.StatusType, p.Archived = "completed", true })
+	})
+}
