@@ -48,8 +48,9 @@ publication is recorded in the artifact's frontmatter under published.
 --target jira files the RFC as an Epic in publish.jira.project_key and each
 child as a Story under it, with "Blocks" links for dependencies, on Jira Cloud
 or Data Center. --target linear files the RFC as an issue in team
-publish.linear.team and each child as a sub-issue of it, with "blocks"
-relations for dependencies.
+publish.linear.team and each child as a sub-issue of it, or as a project
+with child issues when publish.linear.parent_as is project. Dependencies
+use "blocks" relations in both modes.
 
 --dry-run renders what would be filed and makes no network calls. Credentials
 come from the environment: GITHUB_TOKEN, GH_TOKEN, or ` + "`gh auth token`" + ` for
@@ -82,7 +83,7 @@ var publishOutputSchema = &schemaObj{
 		"dry_run":     {Type: "boolean"},
 		"rfc_url":     {Type: "string"},
 		"rfc_number":  {Type: "integer", Description: "github only"},
-		"rfc_key":     {Type: "string", Description: "the RFC's issue key on jira, its identifier on linear"},
+		"rfc_key":     {Type: "string", Description: "the RFC's issue key on jira, issue identifier or project UUID on linear"},
 		"children": {Type: "array", Items: &schemaProp{Type: "object", Properties: map[string]*schemaProp{
 			"id": {Type: "string"}, "url": {Type: "string"}, "number": {Type: "integer", Description: "github only"}, "key": {Type: "string", Description: "the issue key on jira, the identifier on linear"},
 		}}},
@@ -429,6 +430,13 @@ const (
 
 // linearTarget builds the Linear target from config and the environment.
 func linearTarget(lc config.PublishLinearConfig) (*linear.Target, error) {
+	parentAs := strings.TrimSpace(lc.ParentAs)
+	if parentAs != "" && parentAs != linear.ParentIssue && parentAs != linear.ParentProject {
+		return nil, output.NewError(publish.ErrTargetUnconfigured,
+			fmt.Sprintf("publish.linear.parent_as must be issue or project, not %q", parentAs)).
+			WithResource("publish.linear.parent_as").
+			WithNextAction("set publish.linear.parent_as to issue or project in .spektacular/config.yaml")
+	}
 	team := strings.TrimSpace(lc.Team)
 	if team == "" {
 		return nil, output.NewError(publish.ErrTargetUnconfigured,
@@ -443,6 +451,7 @@ func linearTarget(lc config.PublishLinearConfig) (*linear.Target, error) {
 			WithNextAction(fmt.Sprintf("export %s with a personal API key that can create issues in team %s", envLinearAPIKey, team))
 	}
 	t := linear.New(team, apiKey)
+	t.ParentAs = parentAs
 	t.State = strings.TrimSpace(lc.State)
 	t.Assignee = strings.TrimSpace(lc.Assignee)
 	if api := strings.TrimSpace(os.Getenv(envLinearAPIURL)); api != "" {
