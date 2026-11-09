@@ -177,3 +177,33 @@ func TestErrorCodes(t *testing.T) {
 	require.Equal(t, "unexpected_extension", ErrCodeUnexpectedExtension)
 	require.Equal(t, "document_required", ErrCodeDocumentRequired)
 }
+
+func TestImageLayout(t *testing.T) {
+	require.Equal(t, ".spektacular/plans/f/images", ImagesDir(".spektacular/plans", "f"))
+	require.Equal(t, ".spektacular/plans/f/images/login-flow.svg", ImageStorePath(".spektacular/plans", "f", "login-flow"))
+	require.Equal(t, "images/login-flow.svg", ImageLink("login-flow"))
+}
+
+func TestImageNameFromEntry(t *testing.T) {
+	cases := []struct {
+		name     string
+		entry    string
+		isDir    bool
+		wantName string
+		wantOK   bool
+	}{
+		{"svg file", "login-flow.svg", false, "login-flow", true},
+		{"directory", "login-flow.svg", true, "", false},
+		{"raster file", "mock.png", false, "", false},
+		{"markdown file", "plan.md", false, "", false},
+		{"dotted name", "a.b.svg", false, "", false},
+		{"bare extension", ".svg", false, "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := ImageNameFromEntry(tc.entry, tc.isDir)
+			require.Equal(t, tc.wantOK, ok)
+			require.Equal(t, tc.wantName, got)
+		})
+	}
+}

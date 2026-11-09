@@ -7,7 +7,8 @@
 // This package is also the only place that knows the file provider persists
 // each document as a ".md" file: StorePath maps an address onto that layout
 // and NameFromEntry maps a listed entry back to its bare name, so the two can
-// never disagree.
+// never disagree. ImageStorePath and ImageNameFromEntry do the same for a
+// plan's images.
 package artifact
 
 import (
@@ -163,6 +164,46 @@ func (a Address) StorePath(dir string) string {
 // FeatureDir is the folder holding a plan's documents: <dir>/<feature>.
 func FeatureDir(dir, feature string) string {
 	return dir + "/" + feature
+}
+
+// A plan's images are kept beside its documents, in an images folder, as SVG.
+// SVG is the one format an agent can draw without a design tool, it diffs as
+// text in review, and a Markdown viewer renders it from a relative link.
+const (
+	imagesFolder = "images"
+	imageExt     = ".svg"
+)
+
+// ImagesDir is the folder holding a plan's images: <dir>/<feature>/images.
+func ImagesDir(dir, feature string) string {
+	return FeatureDir(dir, feature) + "/" + imagesFolder
+}
+
+// ImageStorePath is the file provider's location of a plan's image:
+// <dir>/<feature>/images/<image>.svg.
+func ImageStorePath(dir, feature, image string) string {
+	return ImagesDir(dir, feature) + "/" + image + imageExt
+}
+
+// ImageLink is how a plan's documents link the named image: its location
+// relative to the feature folder they share, so the link resolves wherever
+// the store is checked out.
+func ImageLink(image string) string {
+	return imagesFolder + "/" + image + imageExt
+}
+
+// ImageNameFromEntry turns a listed entry of a plan's images folder back into
+// the bare image name that addresses it. ok is false for anything that is not
+// an addressable image.
+func ImageNameFromEntry(entryName string, isDir bool) (name string, ok bool) {
+	if isDir || !strings.HasSuffix(entryName, imageExt) {
+		return "", false
+	}
+	name = strings.TrimSuffix(entryName, imageExt)
+	if !validSegment(name) {
+		return "", false
+	}
+	return name, true
 }
 
 // EntryKind says what kind of listed entry is addressable.
