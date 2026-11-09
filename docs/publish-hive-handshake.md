@@ -1,10 +1,8 @@
 # Publish ⇄ Hive handshake
 
 `spektacular publish` turns a final spec or epic into one **RFC** item plus a
-**child** item per unit of work in a work source (GitHub today; Jira and
-Linear are designed to drop in behind the same `Target` interface, see
-[spektacular#112](https://github.com/hivecommons/spektacular/issues/112) and
-[#113](https://github.com/hivecommons/spektacular/issues/113)). A hive
+**child** item per unit of work in a work source (GitHub, Jira or Linear,
+behind one `Target` interface). A hive
 attached to that work source must pick the children up, build each against
 the spek's acceptance criteria, leave the RFC alone, and never route a child
 into a fresh Spek `spec` run. This page is the contract both sides read.
@@ -94,8 +92,9 @@ From `hivecommons/hive` at the time of writing; verify against current main.
 | Triage into a spec run (opt-in) | `runs.triage.spec_labels`; `run/fix` forces direct-fix; `src/docs/spektacular.md` → "Triage" | Section 4. |
 | Sub-issues / dependencies | `hive-open-issue --parent`, `--blocked-by` (`src/docs/hive-open-issue.md`) | Each child is added with `POST /repos/{o}/{r}/issues/{rfc}/sub_issues` (`sub_issue_id` = the child's database id); each `depends_on` edge with `POST /repos/{o}/{r}/issues/{child}/dependencies/blocked_by` (`issue_id` = the blocker's database id). Both are best effort: a failure is a warning in the result, and `--update` retries. |
 | PR linkage | closing keywords `Fixes/Closes/Resolves #N` | The child is the issue the kick receives, so its number is what the PR closes. |
-| Jira / Linear | `src/docs/work-sources.md` | Deferred to #112 / #113. |
-| Crux proxy | `crux/proxy/linear_rules.go`; `crux/issueshape` on `POST /repos/*/issues` | Publishing from inside a hive needs `POST /repos/*/issues`, `PATCH /repos/*/issues/*`, `POST …/sub_issues`, `POST …/dependencies/blocked_by`, `GET /repos/*/labels` and `GET /search/issues` allowed at the publishing agent's mode. |
+| Jira | `src/docs/work-sources.md` → `type: jira`: `project in (<keys>) AND statusCategory != Done AND issuetype != Epic`, `hold_labels` | The RFC is an **Epic** (`publish.jira.parent_issue_type`) in `publish.jira.project_key`, so hive's default JQL never lists it; each child a **Story** (`publish.jira.child_issue_type`) with `parent` = the Epic on Cloud, or on Data Center, where `parent` is for sub-tasks only, the Epic Link custom field (`publish.jira.epic_link_field`, discovered from `GET field` when unset) = its key, created in the project's default status, whose category is not Done, with `publish.jira.labels` (whitespace → `-`) and never a hold label. Each `depends_on` edge is a `Blocks` issue link (blocker outward, dependant inward); a re-run reads `parent`/Epic Link and `issuelinks` back and refiles whatever is missing. The marker is the last line of the description **and** the issue property `spek.publish` (`{name, artifact_id, target, task, rfc, title, body_digest}`), written in the create request itself; the line before the marker is a search token `spekpub<sha256(artifact_id)[:16]>`, and a re-publish searches `project = <key> AND description ~ "<token>"` (the `issue.property[...]` JQL needs an app to index the property, so it is not used), then reads any issue the artifact's `published:` frontmatter recorded that the search did not return. Cloud uses REST v3 with ADF descriptions and `JIRA_EMAIL` + `JIRA_API_TOKEN`; Data Center (`publish.jira.deployment: datacenter`) REST v2 with wiki markup and `JIRA_PAT`, trusting `JIRA_CA_BUNDLE`. The site is `JIRA_BASE_URL`. |
+| Linear | `src/docs/work-sources.md` → `type: linear`: issues of the team in the configured states, `IsTracker` when the issue has children or its marker has no `task=`, `inverseRelations` of type `blocks` | The RFC is an issue in team `publish.linear.team`, each child a **sub-issue** of it (`parentId`), so hive sees the RFC as a tracker twice over and never claims it; the `epic` label (`publish.linear.parent_label`) goes on the RFC **only if the team has it**, `publish.linear.labels` on every issue, team or workspace labels; publish never creates labels. Issues are created in `publish.linear.state` when set (must exist), else the team's **Todo** state, else its first `unstarted` state, else the team default — Backlog/Triage is where a hive does not look. `publish.linear.assignee` (email, display name or name, resolved through `users`) is set on every issue when configured. Each `depends_on` edge is `issueRelationCreate(issueId: blocker, relatedIssueId: dependant, type: blocks)`, so the dependant's `inverseRelations` carries the blocker; a re-run reads `parent { id }` and `inverseRelations` back and refiles any missing parent or relation (`linked` in the result). The marker is the description's last line and the line before it is `<!-- spek:digest <sha256> -->`, the digest of the body as rendered, so a re-publish compares digests and does not depend on Linear returning the Markdown byte for byte; a re-publish finds items with `issues(filter: {team: {key: {eqIgnoreCase}}, description: {contains: "artifact_id=<id>"}}, includeArchived: true)`, paged, so an auto-archived completed RFC is still seen and refused as closed. Not yet: `parent_as: project`. Auth is `LINEAR_API_KEY` sent bare in `Authorization`, as hive does. |
+| Crux proxy | `crux/proxy/linear_rules.go`; `crux/issueshape` on `POST /repos/*/issues` | Publishing from inside a hive needs `POST /repos/*/issues`, `PATCH /repos/*/issues/*`, `POST …/sub_issues`, `POST …/dependencies/blocked_by`, `GET /repos/*/labels` and `GET /search/issues` allowed at the publishing agent's mode. On Linear it needs `issueCreate`, `issueUpdate` and `issueRelationCreate`, all allowed at `ModeIssuesOnly` today; queries pass. |
 
 ## 4. The "already specced" signal: option (b), the marker
 
@@ -143,7 +142,39 @@ published:
 `status <name> --format json` reports it under `epic.published` and
 `specs[].published`.
 
-## 6. Still owed under #114
+## 6. What is verified, and what is still owed under #114
+
+`make e2e` (`tests/e2e`, also run by `go test ./...` and so by CI) builds the
+binary and runs `spektacular publish` against in-process fakes of GitHub,
+Jira Cloud, Jira Data Center and Linear. On every target it asserts the
+Spek side of this contract: the RFC title starts `RFC:`, its marker has no
+`task=` and ends the body, every child carries a marker with `task=` and
+the RFC URL, hangs off the RFC (sub-issue, Epic parent or Data Center Epic
+Link, Linear parent), clears the clarity gate (≥ 80 chars once the hidden
+marker and digest lines are stripped, no `<placeholders>`), carries the
+configured label and none of hive's suppress labels and never the parent
+label, each `depends_on` edge is filed as the target's blocked-by relation,
+the RFC checklist has a line for every child, the publication and its URLs
+land in the spec's frontmatter, git provenance is recorded, a dry run makes
+no network call, and a configured suppress label is refused before any call
+is made. Idempotence is checked on both sides: a re-run reports everything
+unchanged and the fake holds the same issue and relation counts; a changed
+spec is refused as a conflict until `--update`, which updates the RFC in
+place and files nothing new; a closed (Done, completed-and-archived) RFC is
+refused. The Jira fake runs with a lagging search index throughout, so the
+re-run is shown to find its issues through the recorded URLs and not the
+search.
+
+The fakes are models of the APIs from their documentation, not recordings
+of them, so what they prove is that Spek sends the calls the documentation
+asks for; they cannot prove that a real Jira Data Center build accepts the
+Epic Link field as modelled or that Linear keeps HTML comments in a
+description verbatim. Those are listed as caveats on
+[#117](https://github.com/hivecommons/spektacular/pull/117) and
+[#118](https://github.com/hivecommons/spektacular/pull/118).
+
+What the fakes cannot show is hive's side, still owed under
+[spektacular#114](https://github.com/hivecommons/spektacular/issues/114):
 
 - End-to-end on a test repo with a hive attached (`runs.triage` on): children
   reach `stage/010-actionable`, one is claimed and kicked direct-fix, the RFC
@@ -151,3 +182,4 @@ published:
 - The same with `issue_filter.reporter_trust.enabled: true`, documenting what
   an untrusted publishing identity sees.
 - The hive and crux changes, cross-linked from #109.
+

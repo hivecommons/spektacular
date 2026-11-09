@@ -2,15 +2,11 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -18,6 +14,9 @@ import (
 	"github.com/hivecommons/spektacular/internal/metadata"
 	"github.com/hivecommons/spektacular/internal/output"
 	"github.com/hivecommons/spektacular/internal/publish"
+	"github.com/hivecommons/spektacular/internal/publish/github/githubtest"
+	"github.com/hivecommons/spektacular/internal/publish/jira/jiratest"
+	"github.com/hivecommons/spektacular/internal/publish/linear/lineartest"
 )
 
 const publishSpecBody = `# Feature: Nightly digest email
@@ -172,10 +171,9 @@ func TestPublish_Refusals(t *testing.T) {
 	})
 	t.Run("target unconfigured", func(t *testing.T) {
 		publishProject(t)
-		for _, target := range []string{"jira", "linear", "trello"} {
-			stdout, code := runPublishCmd(t, "nightly-digest", "--dry-run", "--target", target)
-			requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
-		}
+		stdout, code := runPublishCmd(t, "nightly-digest", "--dry-run", "--target", "trello")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+		require.Contains(t, resp.Message, "github, jira, linear")
 	})
 	t.Run("repo unknown", func(t *testing.T) {
 		publishProject(t)
@@ -218,8 +216,9 @@ func TestPublish_Refusals(t *testing.T) {
 
 func TestPublish_FilesThenRecordsThenRefusesThenUpdates(t *testing.T) {
 	root := publishProject(t)
-	gh := newPublishFake(t)
-	t.Setenv("SPEKTACULAR_GITHUB_API", gh.url)
+	gh := githubtest.New(t)
+	t.Setenv("GITHUB_TOKEN", githubtest.Token)
+	t.Setenv("SPEKTACULAR_GITHUB_API", gh.URL)
 
 	stdout, code := runPublishCmd(t, "nightly-digest", "--repo", "acme/demo", "--format", "json")
 	require.Equal(t, 0, code, stdout)
@@ -237,7 +236,7 @@ func TestPublish_FilesThenRecordsThenRefusesThenUpdates(t *testing.T) {
 	require.Equal(t, []string{"rfc", "R1", "R2"}, res.Created)
 	require.Len(t, res.Children, 2)
 	require.Nil(t, res.Pub, "the full model is dry-run output only")
-	require.Equal(t, []string{"epic"}, gh.issues[1].Labels, "the parent label exists so it is applied to the RFC")
+	require.Equal(t, []string{"epic"}, gh.Issues[1].Labels, "the parent label exists so it is applied to the RFC")
 
 	// Written back to the spec's frontmatter.
 	raw, err := os.ReadFile(filepath.Join(root, ".spektacular", "specs", "nightly-digest.md"))
@@ -251,7 +250,7 @@ func TestPublish_FilesThenRecordsThenRefusesThenUpdates(t *testing.T) {
 	require.Contains(t, string(body), "## Requirements", "the body is untouched")
 
 	// A re-run with nothing changed succeeds and creates nothing.
-	before := gh.created()
+	before := gh.Count("POST /repos/acme/demo/issues")
 	stdout, code = runPublishCmd(t, "nightly-digest", "--repo", "acme/demo", "--format", "json")
 	require.Equal(t, 0, code, stdout)
 	var rerun struct {
@@ -261,7 +260,7 @@ func TestPublish_FilesThenRecordsThenRefusesThenUpdates(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(stdout), &rerun))
 	require.Empty(t, rerun.Created)
 	require.Equal(t, []string{"R1", "R2", "rfc"}, rerun.Unchanged)
-	require.Equal(t, before, gh.created())
+	require.Equal(t, before, gh.Count("POST /repos/acme/demo/issues"))
 
 	// A change refuses without --update, naming what would change.
 	writeSpecFixture(t, root, "nightly-digest", strings.Replace(string(raw),
@@ -270,16 +269,16 @@ func TestPublish_FilesThenRecordsThenRefusesThenUpdates(t *testing.T) {
 	resp := requirePublishRefusal(t, stdout, code, publish.ErrConflict)
 	require.Contains(t, resp.Message, "R3 (create)")
 	require.Contains(t, resp.NextAction, "--update")
-	require.Equal(t, before, gh.created())
+	require.Equal(t, before, gh.Count("POST /repos/acme/demo/issues"))
 
 	stdout, code = runPublishCmd(t, "nightly-digest", "--repo", "acme/demo", "--update")
 	require.Equal(t, 0, code, stdout)
 	require.Contains(t, stdout, "created: R3")
-	require.Equal(t, before+1, gh.created())
-	require.Contains(t, gh.issues[1].Body, "- [ ] #4 — Opt-out")
+	require.Equal(t, before+1, gh.Count("POST /repos/acme/demo/issues"))
+	require.Contains(t, gh.Issues[1].Body, "- [ ] #4 — Opt-out")
 
 	// A closed RFC is a conflict however the run is flagged.
-	gh.issues[1].State = "closed"
+	gh.Issues[1].State = "closed"
 	stdout, code = runPublishCmd(t, "nightly-digest", "--repo", "acme/demo", "--update")
 	resp = requirePublishRefusal(t, stdout, code, publish.ErrConflict)
 	require.Contains(t, resp.Message, "closed")
@@ -291,8 +290,9 @@ func TestPublish_EpicPublishesSpecsAsChildren(t *testing.T) {
 	epicPath := filepath.Join(root, ".spektacular", "epics", "notify.md")
 	require.NoError(t, os.MkdirAll(filepath.Dir(epicPath), 0o755))
 	require.NoError(t, os.WriteFile(epicPath, []byte("---\ncreated_date: 2026-02-01\ndocument_status: final\nspecs:\n  - name: nightly-digest\n    depends_on: []\n  - name: chat-alerts\n    depends_on:\n      - nightly-digest\n---\n\n# Epic: Operator notifications\n\n## Overview\n\nOperators hear about the hive's work through the channels they already read.\n\n## Specs\n\n- nightly-digest\n- chat-alerts\n"), 0o644))
-	gh := newPublishFake(t)
-	t.Setenv("SPEKTACULAR_GITHUB_API", gh.url)
+	gh := githubtest.New(t)
+	t.Setenv("GITHUB_TOKEN", githubtest.Token)
+	t.Setenv("SPEKTACULAR_GITHUB_API", gh.URL)
 
 	stdout, code := runPublishCmd(t, "notify", "--repo", "acme/demo", "--format", "json")
 	require.Equal(t, 0, code, stdout)
@@ -303,8 +303,8 @@ func TestPublish_EpicPublishesSpecsAsChildren(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(stdout), &res))
 	require.Equal(t, "epic", res.Kind)
 	require.Equal(t, []string{"rfc", "nightly-digest", "chat-alerts"}, res.Created)
-	require.Equal(t, []int64{1002}, gh.blocked[3], "chat-alerts is blocked by nightly-digest")
-	m, ok := publish.ParseMarker(gh.issues[3].Body)
+	require.Equal(t, []int64{1002}, gh.Blocked[3], "chat-alerts is blocked by nightly-digest")
+	m, ok := publish.ParseMarker(gh.Issues[3].Body)
 	require.True(t, ok)
 	require.Equal(t, "chat-alerts", m.Task)
 	require.Equal(t, "https://github.com/acme/demo/issues/1", m.RFC)
@@ -318,6 +318,345 @@ func TestPublish_EpicPublishesSpecsAsChildren(t *testing.T) {
 	stdout, code = runPublishCmd(t, "chat-alerts", "--dry-run", "--repo", "acme/demo", "--format", "json")
 	require.Equal(t, 0, code, stdout)
 	require.Contains(t, stdout, `"artifact_id": "testproj/spec/chat-alerts"`)
+}
+
+// publishJiraProject is publishProject configured for the jira target with
+// Cloud credentials in the environment and the site pointed at the fake.
+func publishJiraProject(t *testing.T, dataCenter bool) (string, *jiratest.Server) {
+	t.Helper()
+	root := publishProject(t)
+	deployment := ""
+	if dataCenter {
+		deployment = "    deployment: datacenter\n"
+	}
+	writeSpecCommandConfig(t, root, "publish:\n  default_target: jira\n  jira:\n    project_key: DEMO\n    labels: [spek publish]\n"+deployment)
+	writeSpecFixture(t, root, "nightly-digest", "---\ncreated_date: 2026-02-01\ndocument_status: final\n---\n\n"+publishSpecBody)
+	srv := jiratest.New(t, dataCenter)
+	t.Setenv("JIRA_BASE_URL", srv.URL)
+	if dataCenter {
+		t.Setenv("JIRA_PAT", jiratest.PAT)
+		t.Setenv("JIRA_EMAIL", "")
+		t.Setenv("JIRA_API_TOKEN", "")
+	} else {
+		t.Setenv("JIRA_PAT", "")
+		t.Setenv("JIRA_EMAIL", jiratest.Email)
+		t.Setenv("JIRA_API_TOKEN", jiratest.APIToken)
+	}
+	t.Setenv("JIRA_CA_BUNDLE", "")
+	return root, srv
+}
+
+func TestPublish_JiraDryRunMakesNoNetworkCall(t *testing.T) {
+	_, srv := publishJiraProject(t, false)
+	stdout, code := runPublishCmd(t, "nightly-digest", "--dry-run", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, `"target": "jira"`)
+	require.Contains(t, stdout, `"repo": "DEMO"`)
+	require.Contains(t, stdout, "target=jira task=R1 --\\u003e")
+	require.Empty(t, srv.Issues)
+	require.Zero(t, srv.Calls(), "a dry run touches the site in no way")
+}
+
+func TestPublish_JiraRefusalsNameTheMissingSetting(t *testing.T) {
+	t.Run("project key", func(t *testing.T) {
+		root, _ := publishJiraProject(t, false)
+		writeSpecCommandConfig(t, root, "publish:\n  default_target: jira\n")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+		require.Contains(t, resp.Message, "publish.jira.project_key")
+		require.Contains(t, resp.NextAction, "publish.jira.project_key")
+	})
+	t.Run("base url", func(t *testing.T) {
+		publishJiraProject(t, false)
+		t.Setenv("JIRA_BASE_URL", "")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+		require.Contains(t, resp.Message, "JIRA_BASE_URL")
+	})
+	t.Run("cloud credential", func(t *testing.T) {
+		publishJiraProject(t, false)
+		t.Setenv("JIRA_API_TOKEN", "")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrAuthMissing)
+		require.Contains(t, resp.Message, "JIRA_EMAIL and JIRA_API_TOKEN")
+		require.Contains(t, resp.NextAction, "DEMO")
+	})
+	t.Run("data center credential", func(t *testing.T) {
+		publishJiraProject(t, true)
+		t.Setenv("JIRA_PAT", "")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrAuthMissing)
+		require.Contains(t, resp.Message, "JIRA_PAT")
+	})
+	t.Run("ca bundle", func(t *testing.T) {
+		publishJiraProject(t, true)
+		t.Setenv("JIRA_CA_BUNDLE", filepath.Join(t.TempDir(), "missing.pem"))
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+		require.Contains(t, resp.Message, "JIRA_CA_BUNDLE")
+	})
+	t.Run("plain http", func(t *testing.T) {
+		root, _ := publishJiraProject(t, false)
+		t.Setenv("JIRA_BASE_URL", "http://jira.example.com")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+		require.Contains(t, resp.Message, "plain http")
+		require.Contains(t, resp.NextAction, "publish.jira.insecure_http")
+
+		// Opting in is explicit; the request then fails only on reaching the host.
+		writeSpecCommandConfig(t, root, "publish:\n  default_target: jira\n  jira:\n    project_key: DEMO\n    insecure_http: true\n")
+		stdout, code = runPublishCmd(t, "nightly-digest", "--dry-run")
+		require.Equal(t, 0, code, stdout)
+	})
+}
+
+func TestPublish_JiraPartialFailureIsRecordedAndResumed(t *testing.T) {
+	root, srv := publishJiraProject(t, false)
+	srv.SearchLag = true // nothing filed is searchable until Reindex
+	srv.FailCreateAfter = 3
+	stdout, code := runPublishCmd(t, "nightly-digest", "--format", "json")
+	resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetFailed)
+	require.Contains(t, resp.Message, "failed part way")
+	require.Len(t, srv.Issues, 2, "the Epic and R1 were filed before the failure")
+
+	specPath := filepath.Join(root, ".spektacular", "specs", "nightly-digest.md")
+	raw, err := os.ReadFile(specPath)
+	require.NoError(t, err)
+	fm, _, err := metadata.Split(raw)
+	require.NoError(t, err)
+	require.Equal(t, []metadata.Publication{{Target: "jira", RFCURL: srv.URL + "/browse/DEMO-1", Children: []metadata.PublishedChild{
+		{ID: "R1", URL: srv.URL + "/browse/DEMO-2"},
+	}}}, fm.Published, "what was filed is recorded even though the run failed")
+
+	// The re-run reads the recorded issues directly, so it reuses them
+	// although the search index has not caught up, and files only R2.
+	srv.FailCreateAfter = 0
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	var res struct {
+		Created   []string `json:"created"`
+		Unchanged []string `json:"unchanged"`
+		Linked    []string `json:"linked"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &res), stdout)
+	require.Equal(t, []string{"R2"}, res.Created)
+	require.ElementsMatch(t, []string{"R1"}, res.Unchanged)
+	require.Len(t, srv.Issues, 3, "no duplicate of the Epic or R1")
+	require.Equal(t, "DEMO-1", srv.Issues["DEMO-3"].Parent)
+
+	raw, err = os.ReadFile(specPath)
+	require.NoError(t, err)
+	fm, _, err = metadata.Split(raw)
+	require.NoError(t, err)
+	require.Len(t, fm.Published, 1)
+	require.Len(t, fm.Published[0].Children, 2)
+}
+
+func TestPublish_JiraFilesEpicAndStoriesThenUpdates(t *testing.T) {
+	root, srv := publishJiraProject(t, false)
+
+	stdout, code := runPublishCmd(t, "nightly-digest", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	var res struct {
+		Target   string                `json:"target"`
+		Repo     string                `json:"repo"`
+		RFCURL   string                `json:"rfc_url"`
+		RFCKey   string                `json:"rfc_key"`
+		Children []publish.ResultChild `json:"children"`
+		Created  []string              `json:"created"`
+		Warnings []string              `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &res), stdout)
+	require.Equal(t, "jira", res.Target)
+	require.Equal(t, "DEMO", res.Repo)
+	require.Equal(t, "DEMO-1", res.RFCKey)
+	require.Equal(t, srv.URL+"/browse/DEMO-1", res.RFCURL)
+	require.Equal(t, []string{"rfc", "R1", "R2"}, res.Created)
+	require.Equal(t, []publish.ResultChild{
+		{ID: "R1", URL: srv.URL + "/browse/DEMO-2", Key: "DEMO-2"},
+		{ID: "R2", URL: srv.URL + "/browse/DEMO-3", Key: "DEMO-3"},
+	}, res.Children)
+	require.Empty(t, res.Warnings)
+	require.Equal(t, "Epic", srv.Issues["DEMO-1"].Type)
+	require.Equal(t, "Story", srv.Issues["DEMO-2"].Type)
+	require.Equal(t, "DEMO-1", srv.Issues["DEMO-2"].Parent)
+	require.Equal(t, []string{"spek-publish"}, srv.Issues["DEMO-2"].Labels)
+
+	raw, err := os.ReadFile(filepath.Join(root, ".spektacular", "specs", "nightly-digest.md"))
+	require.NoError(t, err)
+	fm, _, err := metadata.Split(raw)
+	require.NoError(t, err)
+	require.Equal(t, []metadata.Publication{{Target: "jira", RFCURL: srv.URL + "/browse/DEMO-1", Children: []metadata.PublishedChild{
+		{ID: "R1", URL: srv.URL + "/browse/DEMO-2"}, {ID: "R2", URL: srv.URL + "/browse/DEMO-3"},
+	}}}, fm.Published)
+
+	// Unchanged re-run is a no-op; a change refuses, then --update applies.
+	stdout, code = runPublishCmd(t, "nightly-digest")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "unchanged: R1, R2, rfc")
+	require.Equal(t, 3, srv.Count("POST /rest/api/3/issue"))
+
+	writeSpecFixture(t, root, "nightly-digest", strings.Replace(string(raw),
+		"with links.\n", "with links.\n- [ ] **Opt-out**: an operator can turn the digest off.\n", 1))
+	stdout, code = runPublishCmd(t, "nightly-digest")
+	resp := requirePublishRefusal(t, stdout, code, publish.ErrConflict)
+	require.Contains(t, resp.Message, "R3 (create)")
+	require.Equal(t, 3, srv.Count("POST /rest/api/3/issue"))
+
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "created: R3")
+	require.Equal(t, 4, srv.Count("POST /rest/api/3/issue"))
+	require.Contains(t, srv.DescriptionText("DEMO-1"), "DEMO-4 — Opt-out")
+
+	// A Done Epic is a conflict however the run is flagged.
+	srv.Issues["DEMO-1"].Done = true
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update")
+	resp = requirePublishRefusal(t, stdout, code, publish.ErrConflict)
+	require.Contains(t, resp.Message, "closed")
+}
+
+func TestPublish_JiraDataCenterUsesV2(t *testing.T) {
+	_, srv := publishJiraProject(t, true)
+	stdout, code := runPublishCmd(t, "nightly-digest", "--target", "jira")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "Published spec nightly-digest to DEMO")
+	require.Equal(t, 3, srv.Count("POST /rest/api/2/issue"))
+	require.IsType(t, "", srv.Issues["DEMO-1"].Description, "Data Center descriptions are wiki text")
+}
+
+// publishLinearProject is publishProject configured for the linear target
+// with the API key in the environment and the endpoint pointed at the fake.
+func publishLinearProject(t *testing.T) (string, *lineartest.Server) {
+	t.Helper()
+	root := publishProject(t)
+	writeSpecCommandConfig(t, root, "publish:\n  default_target: linear\n  linear:\n    team: ENG\n    state: Todo\n    labels: [spek]\n")
+	writeSpecFixture(t, root, "nightly-digest", "---\ncreated_date: 2026-02-01\ndocument_status: final\n---\n\n"+publishSpecBody)
+	srv := lineartest.New(t)
+	t.Setenv("LINEAR_API_URL", srv.URL)
+	t.Setenv("LINEAR_API_KEY", lineartest.APIKey)
+	return root, srv
+}
+
+func TestPublish_LinearDryRunMakesNoNetworkCall(t *testing.T) {
+	_, srv := publishLinearProject(t)
+	stdout, code := runPublishCmd(t, "nightly-digest", "--dry-run", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, `"target": "linear"`)
+	require.Contains(t, stdout, `"repo": "ENG"`)
+	require.Empty(t, srv.Issues)
+	require.Zero(t, srv.Calls(), "a dry run touches the API in no way")
+}
+
+func TestPublish_LinearAssigneeAndArchivedRFC(t *testing.T) {
+	root, srv := publishLinearProject(t)
+	writeSpecCommandConfig(t, root, "publish:\n  default_target: linear\n  linear:\n    team: eng\n    assignee: "+lineartest.UserEmail+"\n")
+	stdout, code := runPublishCmd(t, "nightly-digest", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	for _, is := range srv.Snapshot() {
+		require.Equal(t, lineartest.UserID, is.AssigneeID, is.Identifier)
+		require.Equal(t, lineartest.StateID(lineartest.Todo), is.StateID, "Todo by default, where a hive reads")
+	}
+
+	// A completed, auto-archived RFC is still found and refused as closed
+	// rather than filed again.
+	rfc := srv.ByIdentifier("ENG-1")
+	rfc.StateType = "completed"
+	rfc.Archived = true
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update")
+	resp := requirePublishRefusal(t, stdout, code, publish.ErrConflict)
+	require.Contains(t, resp.Message, "closed")
+	require.Equal(t, 3, srv.Count("issueCreate"))
+}
+
+func TestPublish_LinearRefusalsNameTheMissingSetting(t *testing.T) {
+	t.Run("team", func(t *testing.T) {
+		root, _ := publishLinearProject(t)
+		writeSpecCommandConfig(t, root, "publish:\n  default_target: linear\n")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetUnconfigured)
+		require.Contains(t, resp.Message, "publish.linear.team")
+	})
+	t.Run("api key", func(t *testing.T) {
+		publishLinearProject(t)
+		t.Setenv("LINEAR_API_KEY", "")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrAuthMissing)
+		require.Contains(t, resp.Message, "LINEAR_API_KEY")
+		require.Contains(t, resp.NextAction, "ENG")
+	})
+	t.Run("unknown team is a publish failure before anything is filed", func(t *testing.T) {
+		root, srv := publishLinearProject(t)
+		writeSpecCommandConfig(t, root, "publish:\n  default_target: linear\n  linear:\n    team: NOPE\n")
+		stdout, code := runPublishCmd(t, "nightly-digest")
+		resp := requirePublishRefusal(t, stdout, code, publish.ErrTargetFailed)
+		require.Contains(t, resp.Message, `team "NOPE" does not exist`)
+		require.Empty(t, srv.Issues)
+	})
+}
+
+func TestPublish_LinearFilesIssueAndSubIssuesThenUpdates(t *testing.T) {
+	root, srv := publishLinearProject(t)
+
+	stdout, code := runPublishCmd(t, "nightly-digest", "--format", "json")
+	require.Equal(t, 0, code, stdout)
+	var res struct {
+		Target   string                `json:"target"`
+		Repo     string                `json:"repo"`
+		RFCURL   string                `json:"rfc_url"`
+		RFCKey   string                `json:"rfc_key"`
+		Children []publish.ResultChild `json:"children"`
+		Created  []string              `json:"created"`
+		Warnings []string              `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &res), stdout)
+	require.Equal(t, "linear", res.Target)
+	require.Equal(t, "ENG", res.Repo)
+	require.Equal(t, "ENG-1", res.RFCKey)
+	require.Equal(t, "https://linear.app/acme/issue/ENG-1", res.RFCURL)
+	require.Equal(t, []string{"rfc", "R1", "R2"}, res.Created)
+	require.Equal(t, []publish.ResultChild{
+		{ID: "R1", URL: "https://linear.app/acme/issue/ENG-2", Key: "ENG-2"},
+		{ID: "R2", URL: "https://linear.app/acme/issue/ENG-3", Key: "ENG-3"},
+	}, res.Children)
+	require.Empty(t, res.Warnings)
+	rfc := srv.ByIdentifier("ENG-1")
+	require.Equal(t, []string{lineartest.LabelID("epic"), lineartest.LabelID("spek")}, rfc.LabelIDs, "default parent label on the RFC")
+	require.Equal(t, lineartest.StateID("Todo"), rfc.StateID)
+	child := srv.ByIdentifier("ENG-2")
+	require.Equal(t, rfc.ID, child.ParentID)
+	require.Equal(t, []string{lineartest.LabelID("spek")}, child.LabelIDs)
+
+	raw, err := os.ReadFile(filepath.Join(root, ".spektacular", "specs", "nightly-digest.md"))
+	require.NoError(t, err)
+	fm, _, err := metadata.Split(raw)
+	require.NoError(t, err)
+	require.Equal(t, []metadata.Publication{{Target: "linear", RFCURL: "https://linear.app/acme/issue/ENG-1", Children: []metadata.PublishedChild{
+		{ID: "R1", URL: "https://linear.app/acme/issue/ENG-2"}, {ID: "R2", URL: "https://linear.app/acme/issue/ENG-3"},
+	}}}, fm.Published)
+
+	stdout, code = runPublishCmd(t, "nightly-digest")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "unchanged: R1, R2, rfc")
+	require.Equal(t, 3, srv.Count("issueCreate"))
+
+	writeSpecFixture(t, root, "nightly-digest", strings.Replace(string(raw),
+		"with links.\n", "with links.\n- [ ] **Opt-out**: an operator can turn the digest off.\n", 1))
+	stdout, code = runPublishCmd(t, "nightly-digest")
+	resp := requirePublishRefusal(t, stdout, code, publish.ErrConflict)
+	require.Contains(t, resp.Message, "R3 (create)")
+	require.Equal(t, 3, srv.Count("issueCreate"))
+
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update")
+	require.Equal(t, 0, code, stdout)
+	require.Contains(t, stdout, "created: R3")
+	require.Equal(t, 4, srv.Count("issueCreate"))
+	require.Contains(t, srv.ByIdentifier("ENG-1").Description, "ENG-4 — Opt-out")
+
+	srv.ByIdentifier("ENG-1").StateType = "completed"
+	stdout, code = runPublishCmd(t, "nightly-digest", "--update")
+	resp = requirePublishRefusal(t, stdout, code, publish.ErrConflict)
+	require.Contains(t, resp.Message, "closed")
 }
 
 func TestPublish_SchemaPublishesFlags(t *testing.T) {
@@ -351,109 +690,5 @@ func TestParseGitHubRepo(t *testing.T) {
 		}
 		require.True(t, ok, in)
 		require.Equal(t, want, owner+"/"+repo, in)
-	}
-}
-
-// publishFake is the slice of GitHub's REST API the verb touches.
-type publishFake struct {
-	mu      sync.Mutex
-	url     string
-	issues  map[int]*publishFakeIssue
-	next    int
-	blocked map[int][]int64
-	posts   int
-}
-
-type publishFakeIssue struct {
-	ID     int64
-	Number int
-	Title  string
-	Body   string
-	State  string
-	Labels []string
-}
-
-func (i *publishFakeIssue) json() map[string]any {
-	labels := []map[string]string{}
-	for _, l := range i.Labels {
-		labels = append(labels, map[string]string{"name": l})
-	}
-	return map[string]any{"id": i.ID, "number": i.Number, "html_url": fmt.Sprintf("https://github.com/acme/demo/issues/%d", i.Number), "title": i.Title, "body": i.Body, "state": i.State, "labels": labels}
-}
-
-func newPublishFake(t *testing.T) *publishFake {
-	t.Helper()
-	f := &publishFake{issues: map[int]*publishFakeIssue{}, next: 1, blocked: map[int][]int64{}}
-	srv := httptest.NewServer(f)
-	t.Cleanup(srv.Close)
-	f.url = srv.URL
-	return f
-}
-
-func (f *publishFake) created() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.posts
-}
-
-var (
-	fakeIssueRE   = regexp.MustCompile(`^/repos/acme/demo/issues/(\d+)$`)
-	fakeSubRE     = regexp.MustCompile(`^/repos/acme/demo/issues/(\d+)/sub_issues$`)
-	fakeBlockedRE = regexp.MustCompile(`^/repos/acme/demo/issues/(\d+)/dependencies/blocked_by$`)
-	fakeArtifact  = regexp.MustCompile(`"artifact_id=([^"]+)"`)
-)
-
-func (f *publishFake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if r.Header.Get("Authorization") != "Bearer test-token" {
-		http.Error(w, `{"message":"Bad credentials"}`, http.StatusUnauthorized)
-		return
-	}
-	var body map[string]any
-	_ = json.NewDecoder(r.Body).Decode(&body)
-	write := func(status int, v any) {
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(v)
-	}
-	path := r.URL.Path
-	switch {
-	case path == "/repos/acme/demo/labels":
-		write(200, []map[string]string{{"name": "epic"}})
-	case path == "/repos/acme/demo/issues" && r.Method == http.MethodPost:
-		n := f.next
-		f.next++
-		f.posts++
-		is := &publishFakeIssue{ID: int64(1000 + n), Number: n, Title: body["title"].(string), Body: body["body"].(string), State: "open"}
-		if raw, ok := body["labels"].([]any); ok {
-			for _, l := range raw {
-				is.Labels = append(is.Labels, l.(string))
-			}
-		}
-		f.issues[n] = is
-		write(201, is.json())
-	case fakeIssueRE.MatchString(path) && r.Method == http.MethodPatch:
-		n, _ := strconv.Atoi(fakeIssueRE.FindStringSubmatch(path)[1])
-		is := f.issues[n]
-		is.Title = body["title"].(string)
-		is.Body = body["body"].(string)
-		write(200, is.json())
-	case fakeSubRE.MatchString(path):
-		write(201, map[string]any{})
-	case fakeBlockedRE.MatchString(path):
-		n, _ := strconv.Atoi(fakeBlockedRE.FindStringSubmatch(path)[1])
-		f.blocked[n] = append(f.blocked[n], int64(body["issue_id"].(float64)))
-		write(201, map[string]any{})
-	case path == "/search/issues":
-		m := fakeArtifact.FindStringSubmatch(r.URL.Query().Get("q"))
-		items := []map[string]any{}
-		for n := 1; n < f.next; n++ {
-			if m != nil && strings.Contains(f.issues[n].Body, "artifact_id="+m[1]+" ") {
-				items = append(items, f.issues[n].json())
-			}
-		}
-		write(200, map[string]any{"items": items})
-	default:
-		write(404, map[string]string{"message": "no route " + r.Method + " " + path})
 	}
 }

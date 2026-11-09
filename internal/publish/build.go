@@ -31,6 +31,10 @@ type Source struct {
 	// the project's single registered repo, or empty.
 	DefaultRepo string
 	Provenance  Provenance
+	// RecordedURLs are the item URLs an earlier publish to the same target
+	// recorded in the artifact's frontmatter; a target that can read an
+	// item directly uses them to find items its search has not indexed yet.
+	RecordedURLs []string
 }
 
 // Member is one of an epic's specs.
@@ -71,10 +75,11 @@ func Build(src Source) (Publication, error) {
 	title := documentTitle(body, src.Name)
 
 	p := Publication{
-		Kind:       src.Kind,
-		Name:       src.Name,
-		ArtifactID: src.ArtifactID,
-		Target:     src.Target,
+		Kind:         src.Kind,
+		Name:         src.Name,
+		ArtifactID:   src.ArtifactID,
+		Target:       src.Target,
+		RecordedURLs: append([]string{}, src.RecordedURLs...),
 	}
 	rfcTitle := "RFC: " + title
 	if src.Draft {

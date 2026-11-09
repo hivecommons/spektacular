@@ -280,3 +280,18 @@ func TestListItems_ContinuationAndBold(t *testing.T) {
 	require.Equal(t, "plain item", items[1].Title)
 	require.Equal(t, listItem{Title: "Two", Bold: "Two", Text: "Two"}, items[2])
 }
+
+func TestPublishOptions_CheckLabels(t *testing.T) {
+	require.NoError(t, PublishOptions{ParentLabel: "epic", Labels: []string{"spek", "Needs-Review"}}.CheckLabels("publish.github"))
+
+	err := PublishOptions{Labels: []string{"spek", " Hold "}}.CheckLabels("publish.github")
+	var perr *Error
+	require.ErrorAs(t, err, &perr)
+	require.Equal(t, ErrTargetUnconfigured, perr.Code)
+	require.Contains(t, perr.Message, `publish.github.labels names " Hold "`)
+	require.Contains(t, perr.NextAction, "publish.github.labels")
+
+	err = PublishOptions{ParentLabel: "needs-human"}.CheckLabels("publish.linear")
+	require.ErrorAs(t, err, &perr)
+	require.Contains(t, perr.NextAction, "publish.linear.parent_label")
+}

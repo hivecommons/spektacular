@@ -38,13 +38,18 @@ printf '{"suite": "%s", "scenario": %s, "agent": "%s", "spektacular_version": "%
 	> $(1)/build.json
 endef
 
-.PHONY: build test lint clean install install-local cross harbor-install harbor-report harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-test-epic harbor-test-epic-claude harbor-test-epic-codex harbor-test-epic-bob _harbor-test-epic harbor-test-plan-claude harbor-test-plan-codex harbor-test-plan-bob _harbor-test-plan harbor-test-implement-epic harbor-test-implement-epic-claude harbor-test-implement-epic-codex harbor-test-implement-epic-bob harbor-test-implement-epic-bob-unlimited _harbor-test-implement-epic harbor-test-standing-rules harbor-test-standing-rules-claude harbor-test-standing-rules-codex harbor-test-standing-rules-bob _harbor-test-standing-rules harbor-test-goal-check harbor-test-goal-check-claude harbor-test-goal-check-codex harbor-test-goal-check-bob _harbor-test-goal-check harbor-test-background-child _harbor-test-background-child
+.PHONY: build test e2e lint clean install install-local cross harbor-install harbor-report harbor-test harbor-test-plan harbor-test-spec harbor-test-spec-claude harbor-test-spec-codex _harbor-test-spec harbor-test-implement harbor-test-repo harbor-test-repo-one-at-a-time harbor-test-repo-delegated _harbor-test-repo harbor-test-epic harbor-test-epic-claude harbor-test-epic-codex harbor-test-epic-bob _harbor-test-epic harbor-test-plan-claude harbor-test-plan-codex harbor-test-plan-bob _harbor-test-plan harbor-test-implement-epic harbor-test-implement-epic-claude harbor-test-implement-epic-codex harbor-test-implement-epic-bob harbor-test-implement-epic-bob-unlimited _harbor-test-implement-epic harbor-test-standing-rules harbor-test-standing-rules-claude harbor-test-standing-rules-codex harbor-test-standing-rules-bob _harbor-test-standing-rules harbor-test-goal-check harbor-test-goal-check-claude harbor-test-goal-check-codex harbor-test-goal-check-bob _harbor-test-goal-check harbor-test-background-child _harbor-test-background-child
 
 build:
 	go build -ldflags "-X github.com/hivecommons/spektacular/cmd.version=$(VERSION)" -o ./bin/$(BINARY) .
 
 test:
 	go test -shuffle=on ./...
+
+# Builds the binary and runs `spektacular publish` against fake GitHub, Jira
+# and Linear servers (tests/e2e). Needs no credentials; also part of `test`.
+e2e:
+	go test -count=1 -v ./tests/e2e/...
 
 lint:
 	go vet ./...

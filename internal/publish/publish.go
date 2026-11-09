@@ -53,6 +53,8 @@ type Publication struct {
 	ChildrenFrom string  `json:"children_from"`
 	RFC          RFCDoc  `json:"rfc"`
 	Children     []Child `json:"children"`
+	// RecordedURLs is Source.RecordedURLs, for the target's Hint.
+	RecordedURLs []string `json:"-"`
 
 	// rfcSections is the RFC body's rendered spek sections, and provenance
 	// its footer, kept apart so RFCBody can lay the body out again once the
