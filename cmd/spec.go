@@ -151,6 +151,7 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 					"sources": {Type: "array", Items: specSourceItemSchema,
 						Description: "what directly seeded the spec; each needs a uri, and the CLI stamps retrieved_date with today"},
 					"epic":                   {Type: "string", Description: "an existing epic the spec joins from the start; omit for a standalone spec"},
+					"material":               {Type: "string", Description: "a folder, relative to the project root, where the sources' content has already been fetched; the interview reads it instead of fetching"},
 					"confirm_completed_epic": {Type: "boolean", Description: "true only after the user agrees to add the spec to an epic whose specs are all implemented"},
 				},
 				Required: []string{"name"},
@@ -206,6 +207,7 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 			URI string `json:"uri"`
 		} `json:"sources"`
 		Epic                 string `json:"epic"`
+		Material             string `json:"material"`
 		ConfirmCompletedEpic bool   `json:"confirm_completed_epic"`
 	}
 	if err := json.Unmarshal([]byte(dataStr), &input); err != nil {
@@ -306,6 +308,9 @@ func runSpecNew(cmd *cobra.Command, _ []string) error {
 	}
 	if joinEpic != "" {
 		wf.SetData("epic", joinEpic)
+	}
+	if input.Material != "" {
+		wf.SetData("material", input.Material)
 	}
 
 	if err := wf.Next(); err != nil {

@@ -322,4 +322,19 @@ func TestSpekNewStartsFromAVoiceRecording(t *testing.T) {
 		"the transcript is not a section: write its decisions and the user's exact phrasing for key requirements into `.spektacular/working-context.md`",
 		`mark anything the speaker said tentatively ("maybe", "we could") as a gap to ask about rather than a requirement`,
 	)
+
+	// `voice` stages the recording before the workflow starts; the interview
+	// must read the staged folder rather than fetch again, and the skill must
+	// offer the shortcut.
+	requirePhrases(t, "the interview's material branch", flat(raw[open:closeAt]),
+		"{{#material}}", "{{^material}}",
+		"**Read the material already fetched to `{{material}}`** instead of fetching the source again",
+		"`note.md` is the recorder's summary, `transcript.md` the spoken words, `draft.md` a first mapping onto the spec scaffold",
+	)
+	requirePhrases(t, "Starting from existing material", material,
+		"`"+installedCommand+" voice --from <plaud|wisprflow|file|stdin> --latest`",
+		`starts `+"`spec new`"+` with the provenance and `+"`\"material\"`"+` set, so step 2 above is already done`,
+		`**A transcript handed to you as text**`,
+		"if the task says to finish without asking, draft every section from the transcript",
+	)
 }

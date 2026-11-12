@@ -122,8 +122,9 @@ func interview() workflow.StepCallback {
 }
 
 // interviewExtra is what the interview template is given beyond the standard
-// variables: the links the spec was seeded from and the epic it joined, so the
-// template can open a seeded interview. Both are empty for a plain spec.
+// variables: the links the spec was seeded from, the folder their content was
+// already fetched to (voice stages one), and the epic it joined, so the
+// template can open a seeded interview. All are empty for a plain spec.
 func interviewExtra(data workflow.Data) (map[string]any, error) {
 	sources, err := sourcesFrom(data)
 	if err != nil {
@@ -137,8 +138,9 @@ func interviewExtra(data workflow.Data) (map[string]any, error) {
 		"sources": uris,
 		// seeded gates the template's seeded branch: a mustache section
 		// over the list itself would repeat the branch once per source.
-		"seeded": len(uris) > 0,
-		"epic":   stepkit.GetString(data, "epic"),
+		"seeded":   len(uris) > 0,
+		"material": stepkit.GetString(data, "material"),
+		"epic":     stepkit.GetString(data, "epic"),
 	}, nil
 }
 

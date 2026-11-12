@@ -15,7 +15,12 @@
 - `{{{.}}}`
 {{/sources}}
 
+{{#material}}
+1. **Read the material already fetched to `{{material}}`** instead of fetching the source again: `note.md` is the recorder's summary, `transcript.md` the spoken words, `draft.md` a first mapping onto the spec scaffold. Trust `draft.md` only as a starting point; the transcript is what the user actually said.
+{{/material}}
+{{^material}}
 1. **Fetch each source again with your own tools** (Spektacular prescribes none) and collect its title, body, discussion and child items. If a source cannot be reached, say so and ask the user to paste its content; never fall back to a blank interview without saying so.
+{{/material}}
 2. **Seed the section working files** under `.spektacular/work/{{spec_name}}/` with your own `Write` tool, mapping the material onto the spec:
    - title and body → `overview.md` and `requirements.md`;
    - checklist or task-list items → `acceptance_criteria.md`;

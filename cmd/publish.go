@@ -782,12 +782,18 @@ func replacePublication(list []metadata.Publication, entry metadata.Publication)
 	return append(out, entry)
 }
 
+// publishFlags defines publish's flags on cmd; voice reuses them to run
+// publish on the spec it drafted.
+func publishFlags(cmd *cobra.Command) {
+	cmd.Flags().Bool("schema", false, "Print the input/output schema and exit")
+	cmd.Flags().String("target", "", "Work source to publish into: github (default), jira or linear")
+	cmd.Flags().String("repo", "", "GitHub owner/repo to file in; defaults to publish.github.repo, then the project's source, then the cwd's origin")
+	cmd.Flags().Bool("dry-run", false, "Render what would be filed and make no network calls")
+	cmd.Flags().Bool("update", false, "Update items already filed for this artifact in place")
+	cmd.Flags().Bool("allow-draft", false, "Publish an artifact that is not final, titled RFC: [DRAFT] …")
+	cmd.Flags().String("format", publishFormatPretty, "Output format: pretty or json")
+}
+
 func init() {
-	publishCmd.Flags().Bool("schema", false, "Print the input/output schema and exit")
-	publishCmd.Flags().String("target", "", "Work source to publish into: github (default), jira or linear")
-	publishCmd.Flags().String("repo", "", "GitHub owner/repo to file in; defaults to publish.github.repo, then the project's source, then the cwd's origin")
-	publishCmd.Flags().Bool("dry-run", false, "Render what would be filed and make no network calls")
-	publishCmd.Flags().Bool("update", false, "Update items already filed for this artifact in place")
-	publishCmd.Flags().Bool("allow-draft", false, "Publish an artifact that is not final, titled RFC: [DRAFT] …")
-	publishCmd.Flags().String("format", publishFormatPretty, "Output format: pretty or json")
+	publishFlags(publishCmd)
 }

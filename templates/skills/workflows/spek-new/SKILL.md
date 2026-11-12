@@ -157,6 +157,10 @@ A spec can start from material the team has already written. Recognise a source 
 
 A design document the spec must be built to is also recorded as a normal design reference; `sources` records only where content came from.
 
+**A transcript handed to you as text** ("start a spec from this transcript: …", a transcript file in the task, or one piped to you by an automated runner) needs no recorder and no interview partner: treat the text as the fetched material, record its provenance as the file path or the recording URI the task names (`stdin://` when there is none), and if the task says to finish without asking, draft every section from the transcript, mark anything tentative as an open question rather than a requirement, and continue through the steps without waiting for answers.
+
+**A shortcut for voice notes.** `{{command}} voice --from <plaud|wisprflow|file|stdin> --latest` (or `--title "…"`, `--path <file>`) fetches the recording itself, stages its summary, transcript and a first draft under `.spektacular/tmp/voice/<name>/`, and starts `spec new` with the provenance and `"material"` set, so step 2 above is already done: read the staged files and continue with the interview. Prefer it when the CLI can reach the recorder (Plaud's MCP is signed in; Wispr Flow is installed); fetch with your own tools otherwise.
+
 ### A source with child items
 
 When the user accepts an epic for a source with child items:
