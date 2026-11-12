@@ -1,6 +1,6 @@
 ---
 name: spek-new
-description: Create a new Specification for a feature, from a conversation or from existing material such as an issue, a tracker epic, a design document, a file, a web page or pasted text ("spec from #45", "start a spec from LIN-123", a pasted link), or split an already-written spec into an epic.
+description: Create a new Specification for a feature, from a conversation or from existing material such as an issue, a tracker epic, a design document, a file, a web page, pasted text or a voice recording's transcript and summary ("spec from #45", "start a spec from LIN-123", a pasted link, "spec from my latest Plaud recording"), or split an already-written spec into an epic.
 ---
 
 {{> partials/version-check}}
@@ -146,10 +146,10 @@ Never choose for the user, and never guess from context which they would want â€
 
 ## Starting from existing material
 
-A spec can start from material the team has already written. Recognise a source however the request is phrased: "spec from issue 45", "#45", "start from LIN-123", a pasted link to any tracker, a design document's name, a file path, or pasted text the user says to start from. Being understood must not depend on careful wording.
+A spec can start from material the team has already written. Recognise a source however the request is phrased: "spec from issue 45", "#45", "start from LIN-123", a pasted link to any tracker, a design document's name, a file path, pasted text the user says to start from, or a voice recording ("my latest Plaud recording", "the note titled â€¦", "Tuesday's meeting"). Being understood must not depend on careful wording.
 
-1. **Identify the source.** An issue or epic from any tracker, a design document, a file, a web page, or pasted text. If it is ambiguous, such as a bare issue number with no tracker or repository, ask the user rather than guess.
-2. **Fetch it with your own tools.** Spektacular prescribes no tool and no tracker: a CLI, an MCP server, a web fetch or a file read are all fine. Whatever the tool, collect the title and body, the discussion (comments, since decisions are often made there), its child items (sub-issues, linked children, task-list entries), and a stable link to record as provenance. For pasted text, the user's message is the content; record a link only if one exists.
+1. **Identify the source.** An issue or epic from any tracker, a design document, a file, a web page, pasted text, or a voice recording held by a recorder service (Plaud, Otter, a voice-memo app) whose MCP server or export you can read. If it is ambiguous, such as a bare issue number with no tracker or repository, ask the user rather than guess. The same goes for "my latest recording" when several recordings are from the same day.
+2. **Fetch it with your own tools.** Spektacular prescribes no tool and no tracker: a CLI, an MCP server, a web fetch or a file read are all fine. Whatever the tool, collect the title and body, the discussion (comments, since decisions are often made there), its child items (sub-issues, linked children, task-list entries), and a stable link to record as provenance. For pasted text, the user's message is the content; record a link only if one exists. For a voice recording, fetch **both** the AI summary (the note) and the full transcript: the summary carries the shape, the transcript carries the user's exact phrasing and the decisions the summary dropped. Its provenance is the recorder's own URI for the recording, `plaud://recordings/<id>` for a Plaud note, or the path of the exported transcript file; a recording has no child items unless its summary is an explicit list of separate pieces of work.
 3. **If you cannot reach it,** because no tool you have can read it or fetching fails, say so plainly and ask the user to paste the content. Never fall back to a blank interview without saying so.
 4. **Check for child items.** A source that already has child items is a set of pieces of work, not one spec. Offer to set up an epic for it instead, with one spec per child (see "A source with child items" below). On decline, continue with a single spec.
 5. **Propose a name** from the source's title, and let the user confirm or change it.
