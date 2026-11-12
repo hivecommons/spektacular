@@ -20,7 +20,8 @@
    - title and body → `overview.md` and `requirements.md`;
    - checklist or task-list items → `acceptance_criteria.md`;
    - "must" / "must not" remarks → `constraints.md`;
-   - "out of scope" remarks → `non_goals.md`.
+   - "out of scope" remarks → `non_goals.md`;
+   - for a voice recording, the summary's headings map as above and its action items → `acceptance_criteria.md`; the transcript is not a section: write its decisions and the user's exact phrasing for key requirements into `.spektacular/working-context.md`, and mark anything the speaker said tentatively ("maybe", "we could") as a gap to ask about rather than a requirement.
 
    Write each file in its section's required shape (checklist items for requirements and acceptance criteria, one bullet per item otherwise). Leave a section's file absent when the material says nothing about it.
 3. **List the gaps to the user:** every section the material does not cover, or covers too thinly to build from. A thin source simply leaves more gaps.

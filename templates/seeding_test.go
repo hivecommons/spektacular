@@ -291,3 +291,35 @@ func TestSpekNewIncludesBothSplitPartials(t *testing.T) {
 		"only if they agree, add `\"confirm_completed_epic\": true` to the staged description",
 	)
 }
+
+// Criterion: a voice recording (a Plaud note, a meeting recording) is
+// recognised as source material however the request is phrased; the agent
+// fetches both its summary and its transcript, records the recorder's own URI
+// as provenance, and the interview seeds sections from the summary while the
+// transcript's exact phrasing goes to the working context, never into a
+// section as if it were a settled requirement.
+func TestSpekNewStartsFromAVoiceRecording(t *testing.T) {
+	skill := installedSkill(t)
+
+	require.Contains(t, section(t, skill, "---"), "a voice recording's transcript and summary",
+		"the skill description must name voice recordings so the agent routes the request here")
+
+	material := flat(section(t, skill, "## Starting from existing material"))
+	requirePhrases(t, "Starting from existing material", material,
+		`or a voice recording ("my latest Plaud recording", "the note titled …", "Tuesday's meeting")`,
+		"or a voice recording held by a recorder service (Plaud, Otter, a voice-memo app) whose MCP server or export you can read",
+		`The same goes for "my latest recording" when several recordings are from the same day.`,
+		"For a voice recording, fetch **both** the AI summary (the note) and the full transcript",
+		"`plaud://recordings/<id>` for a Plaud note, or the path of the exported transcript file",
+		"a recording has no child items unless its summary is an explicit list of separate pieces of work",
+	)
+
+	raw := readTemplate(t, interviewStep)
+	open, closeAt := strings.Index(raw, "{{#seeded}}"), strings.Index(raw, "{{/seeded}}")
+	require.True(t, open >= 0 && open < closeAt)
+	requirePhrases(t, "the interview's seeded branch", flat(raw[open:closeAt]),
+		"for a voice recording, the summary's headings map as above and its action items → `acceptance_criteria.md`",
+		"the transcript is not a section: write its decisions and the user's exact phrasing for key requirements into `.spektacular/working-context.md`",
+		`mark anything the speaker said tentatively ("maybe", "we could") as a gap to ask about rather than a requirement`,
+	)
+}
