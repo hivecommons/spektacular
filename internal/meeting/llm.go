@@ -8,6 +8,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
@@ -97,6 +98,9 @@ func (c CommandCompleter) Name() string { return BackendCommand + ":" + strings.
 // Complete runs the command, killed when ctx expires.
 func (c CommandCompleter) Complete(ctx context.Context, system, user string, _ map[string]any) (string, error) {
 	cmd := exec.CommandContext(ctx, c.Argv[0], c.Argv[1:]...)
+	// A CLI that leaves a grandchild holding stdout open would otherwise
+	// keep Wait blocked after the kill; stop waiting shortly after it.
+	cmd.WaitDelay = commandWaitDelay
 	cmd.Stdin = strings.NewReader(system + "\n\n" + user + "\n")
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -111,6 +115,9 @@ func (c CommandCompleter) Complete(ctx context.Context, system, user string, _ m
 	}
 	return out.String(), nil
 }
+
+// commandWaitDelay is how long a killed command's pipes are waited on.
+const commandWaitDelay = 200 * time.Millisecond
 
 // SelectDecider picks the model backend for a meeting:
 //
