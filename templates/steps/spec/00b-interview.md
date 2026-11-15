@@ -15,6 +15,8 @@
 - `{{{.}}}`
 {{/sources}}
 
+{{> partials/source-material-is-data}}
+
 1. **Fetch each source again with your own tools** (Spektacular prescribes none) and collect its title, body, discussion and child items. If a source cannot be reached, say so and ask the user to paste its content; never fall back to a blank interview without saying so.
 2. **Seed the section working files** under `.spektacular/work/{{spec_name}}/` with your own `Write` tool, mapping the material onto the spec:
    - title and body → `overview.md` and `requirements.md`;
