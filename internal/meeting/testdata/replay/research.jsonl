@@ -1,0 +1,13 @@
+{"options":{"offer_ttl_s":60}}
+// Explicit requests are research at once; mentions are offers that become research only after a yes; a no or an expired offer starts nothing; a repeat request is not repeated.
+{"at":0,"event":{"type":"segment","meeting_id":"m1","seq":1,"speaker":{"id":"Ana","name":"Ana"},"text":"hive, research Postgres logical replication slot limits.","start":0,"end":0,"final":true}}
+{"at":3000,"event":{"type":"segment","meeting_id":"m1","seq":2,"speaker":{"id":"Bo","name":"Bo"},"text":"Can you look up the pricing of the large runners for us?","start":0,"end":0,"final":true}}
+{"at":6000,"event":{"type":"chat","meeting_id":"m1","seq":3,"author":{"id":"Cy","name":"Cy"},"text":"go find out whether the vendor supports SAML","at":"2026-11-15T10:00:00Z"}}
+{"at":9000,"event":{"type":"segment","meeting_id":"m1","seq":4,"speaker":{"id":"Ana","name":"Ana"},"text":"hive, research postgres logical replication slot limits please","start":0,"end":0,"final":true}}
+{"at":12000,"event":{"type":"segment","meeting_id":"m1","seq":5,"speaker":{"id":"Bo","name":"Bo"},"text":"We should look into the flaky arm64 builds.","start":0,"end":0,"final":true}}
+{"at":14000,"event":{"type":"segment","meeting_id":"m1","seq":6,"speaker":{"id":"Ana","name":"Ana"},"text":"Yes please.","start":0,"end":0,"final":true}}
+{"at":20000,"event":{"type":"segment","meeting_id":"m1","seq":7,"speaker":{"id":"Cy","name":"Cy"},"text":"Someone should investigate the DNS timeouts.","start":0,"end":0,"final":true}}
+{"at":22000,"event":{"type":"segment","meeting_id":"m1","seq":8,"speaker":{"id":"Ana","name":"Ana"},"text":"No, not now.","start":0,"end":0,"final":true}}
+{"at":30000,"event":{"type":"segment","meeting_id":"m1","seq":9,"speaker":{"id":"Bo","name":"Bo"},"text":"I think we might want to look into the license scan.","start":0,"end":0,"final":true}}
+{"at":100000,"event":{"type":"segment","meeting_id":"m1","seq":10,"speaker":{"id":"Ana","name":"Ana"},"text":"Yes.","start":0,"end":0,"final":true}}
+{"at":104000,"eof":true}

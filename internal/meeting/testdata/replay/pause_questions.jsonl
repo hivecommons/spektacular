@@ -1,0 +1,9 @@
+// Speech at 0, 500 and 1000 ms is one burst: the pause decision comes 1500 ms after the last segment and may ask. An addressed line decides at once but may not ask.
+{"at":0,"event":{"type":"segment","meeting_id":"m1","seq":1,"speaker":{"id":"Ana","name":"Ana"},"text":"Let's talk about the rollout of meeting mode.","start":0,"end":0,"final":true}}
+{"at":500,"event":{"type":"segment","meeting_id":"m1","seq":2,"speaker":{"id":"Bo","name":"Bo"},"text":"I think we start with one hive.","start":0,"end":0,"final":true}}
+{"at":1000,"event":{"type":"segment","meeting_id":"m1","seq":3,"speaker":{"id":"Ana","name":"Ana"},"text":"Agreed, and we keep it behind a flag.","start":0,"end":0,"final":true}}
+{"llm":{"kind":"turn","trigger":"pause","when":"behind a flag","once":true,"response":{"asks":[{"text":"Which hive goes first?","duplicate_of":""}],"notes":[{"section":"decisions","text":"Meeting mode ships behind a flag"}]}}}
+{"at":5000,"event":{"type":"segment","meeting_id":"m1","seq":4,"speaker":{"id":"Bo","name":"Bo"},"text":"spek, what do you think about the flag name?","start":0,"end":0,"final":true}}
+{"llm":{"kind":"turn","trigger":"addressed","when":"flag name","response":{"asks":[{"text":"Should the flag be per hive?","duplicate_of":""}],"say":"I would call it meeting_mode."}}}
+{"at":5200,"event":{"type":"segment","meeting_id":"m1","seq":5,"speaker":{"id":"Ana","name":"Ana"},"text":"Okay.","start":0,"end":0,"final":true}}
+{"at":9000,"eof":true}

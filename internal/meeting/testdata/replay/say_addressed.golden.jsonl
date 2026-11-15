@@ -1,0 +1,6 @@
+{"at":0,"intent":{"type":"heartbeat"}}
+{"at":1500,"decide":{"ask_allowed":true,"kind":"turn","last":"The plan looks fine to me.","say_allowed":false,"trigger":"pause"}}
+{"at":5000,"decide":{"ask_allowed":false,"kind":"turn","last":"Hey hive, can you summarise where we are?","say_allowed":true,"trigger":"addressed"}}
+{"at":5000,"intent":{"type":"say","text":"We agreed to ship behind a flag."}}
+{"at":8000,"decide":{"ask_allowed":false,"kind":"summary","last":"Hey hive, can you summarise where we are?","say_allowed":false,"trigger":""}}
+{"at":8000,"intent":{"type":"notes.append","section":"summary","text":"Replay summary\n\nNo decisions, actions or open questions were recorded."}}

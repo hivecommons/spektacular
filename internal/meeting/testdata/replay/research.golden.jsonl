@@ -1,0 +1,19 @@
+{"at":0,"intent":{"type":"heartbeat"}}
+{"at":0,"intent":{"type":"research","rid":"r-1","query":"Postgres logical replication slot limits","reason":"requested in the meeting by Ana"}}
+{"at":1500,"decide":{"ask_allowed":true,"kind":"turn","last":"hive, research Postgres logical replication slot limits.","say_allowed":true,"trigger":"pause"}}
+{"at":3000,"intent":{"type":"research","rid":"r-2","query":"the pricing of the large runners","reason":"requested in the meeting by Bo"}}
+{"at":4500,"decide":{"ask_allowed":true,"kind":"turn","last":"Can you look up the pricing of the large runners for us?","say_allowed":false,"trigger":"pause"}}
+{"at":6000,"intent":{"type":"research","rid":"r-3","query":"whether the vendor supports SAML","reason":"requested in the meeting by Cy"}}
+{"at":10500,"decide":{"ask_allowed":true,"kind":"turn","last":"hive, research postgres logical replication slot limits please","say_allowed":true,"trigger":"pause"}}
+{"at":12000,"intent":{"type":"chat.post","text":"Want me to research \"the flaky arm64 builds\"? Reply yes and I'll start."}}
+{"at":13500,"decide":{"ask_allowed":true,"kind":"turn","last":"We should look into the flaky arm64 builds.","say_allowed":false,"trigger":"pause"}}
+{"at":14000,"intent":{"type":"research","rid":"r-4","query":"the flaky arm64 builds","reason":"offered by Spek and agreed by Ana"}}
+{"at":15500,"decide":{"ask_allowed":true,"kind":"turn","last":"Yes please.","say_allowed":false,"trigger":"pause"}}
+{"at":20000,"intent":{"type":"chat.post","text":"Want me to research \"the DNS timeouts\"? Reply yes and I'll start."}}
+{"at":21500,"decide":{"ask_allowed":true,"kind":"turn","last":"Someone should investigate the DNS timeouts.","say_allowed":false,"trigger":"pause"}}
+{"at":23500,"decide":{"ask_allowed":true,"kind":"turn","last":"No, not now.","say_allowed":false,"trigger":"pause"}}
+{"at":30000,"intent":{"type":"chat.post","text":"Want me to research \"the license scan\"? Reply yes and I'll start."}}
+{"at":31500,"decide":{"ask_allowed":true,"kind":"turn","last":"I think we might want to look into the license scan.","say_allowed":false,"trigger":"pause"}}
+{"at":101500,"decide":{"ask_allowed":true,"kind":"turn","last":"Yes.","say_allowed":false,"trigger":"pause"}}
+{"at":104000,"decide":{"ask_allowed":false,"kind":"summary","last":"Yes.","say_allowed":false,"trigger":""}}
+{"at":104000,"intent":{"type":"notes.append","section":"summary","text":"Replay summary\n\nResearch:\n- Postgres logical replication slot limits: requested\n- the pricing of the large runners: requested\n- whether the vendor supports SAML: requested\n- the flaky arm64 builds: requested"}}

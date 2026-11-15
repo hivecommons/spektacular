@@ -1,0 +1,12 @@
+// Notes collected during the meeting, an answered ask, research done with a summary, and the end event produce the closing summary; lines after end are ignored.
+{"at":0,"event":{"type":"segment","meeting_id":"m1","seq":1,"speaker":{"id":"Ana","name":"Ana"},"text":"We will ship the meeting mode behind a flag.","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"pause","when":"behind a flag","response":{"asks":[{"text":"Which hive version ships it first?","duplicate_of":""}],"notes":[{"section":"decisions","text":"Ship the meeting mode behind a flag"},{"section":"actions","text":"Ana: write the contract tests"},{"section":"questions","text":"Who owns the hive side rollout?"},{"section":"summary","text":"not allowed mid-meeting"}]}}}
+{"at":3000,"event":{"type":"answer","qid":"q-1","text":"v5.3","by":"Bo"}}
+{"at":3100,"event":{"type":"answer","qid":"q-99","text":"stray","by":"Bo"}}
+{"at":4000,"event":{"type":"segment","meeting_id":"m1","seq":2,"speaker":{"id":"Bo","name":"Bo"},"text":"hive, research the quorum SSE reconnect behaviour","start":0,"end":0,"final":true}}
+{"at":5000,"event":{"type":"research_update","rid":"r-1","status":"running"}}
+{"at":6000,"event":{"type":"research_update","rid":"r-1","status":"done","summary":"Quorum resumes from after_seq on reconnect.","url":"https://example.org/sse"}}
+{"at":6500,"event":{"type":"research_update","rid":"r-1","status":"done","summary":"Quorum resumes from after_seq on reconnect.","url":"https://example.org/sse"}}
+{"llm":{"kind":"summary","response":{"summary":"The team agreed how meeting mode ships.","notes":[{"section":"actions","text":"Bo: update the hive runbook"}]}}}
+{"at":7000,"event":{"type":"end"}}
+{"at":7000,"event":{"type":"segment","meeting_id":"m1","seq":3,"speaker":{"id":"Ana","name":"Ana"},"text":"This line arrives after end and is ignored.","start":0,"end":0,"final":true}}

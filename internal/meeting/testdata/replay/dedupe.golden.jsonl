@@ -1,0 +1,9 @@
+{"at":0,"intent":{"type":"heartbeat"}}
+{"at":1500,"decide":{"ask_allowed":true,"kind":"turn","last":"We need a timeline.","say_allowed":false,"trigger":"pause"}}
+{"at":1500,"intent":{"type":"ask","qid":"q-1","text":"What is the target date?"}}
+{"at":6500,"decide":{"ask_allowed":true,"kind":"turn","last":"The timeline depends on review.","say_allowed":false,"trigger":"pause"}}
+{"at":11500,"decide":{"ask_allowed":true,"kind":"turn","last":"Review could be slow.","say_allowed":false,"trigger":"pause"}}
+{"at":16500,"decide":{"ask_allowed":true,"kind":"turn","last":"Docs are also needed.","say_allowed":false,"trigger":"pause"}}
+{"at":16500,"intent":{"type":"ask","qid":"q-2","text":"Who writes the docs?"}}
+{"at":20000,"decide":{"ask_allowed":false,"kind":"summary","last":"Docs are also needed.","say_allowed":false,"trigger":""}}
+{"at":20000,"intent":{"type":"notes.append","section":"summary","text":"Replay summary\n\nOpen questions:\n- What is the target date?\n- Who writes the docs?"}}

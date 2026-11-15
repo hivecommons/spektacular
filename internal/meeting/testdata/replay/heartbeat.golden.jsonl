@@ -1,0 +1,8 @@
+{"at":0,"intent":{"type":"heartbeat"}}
+{"at":15000,"intent":{"type":"heartbeat"}}
+{"at":21500,"decide":{"ask_allowed":true,"kind":"turn","last":"Quiet meeting.","say_allowed":false,"trigger":"pause"}}
+{"at":30000,"intent":{"type":"heartbeat"}}
+{"at":45000,"intent":{"type":"heartbeat"}}
+{"at":60000,"intent":{"type":"heartbeat"}}
+{"at":61000,"decide":{"ask_allowed":false,"kind":"summary","last":"Quiet meeting.","say_allowed":false,"trigger":""}}
+{"at":61000,"intent":{"type":"notes.append","section":"summary","text":"Replay summary\n\nNo decisions, actions or open questions were recorded."}}
