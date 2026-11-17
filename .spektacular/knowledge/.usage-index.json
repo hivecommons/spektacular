@@ -53,7 +53,13 @@
       "created": "2026-03-05T12:23:51Z",
       "tracked_since": "2026-10-25T17:41:55.748749858Z",
       "discoveries": {
-        "count": 0
+        "count": 1,
+        "last": "2026-11-09T15:57:26.919148201Z",
+        "recent": [
+          {
+            "at": "2026-11-09T15:57:26.919148201Z"
+          }
+        ]
       },
       "retrievals": {
         "count": 0
@@ -63,7 +69,13 @@
       "created": "2026-03-05T12:23:51Z",
       "tracked_since": "2026-10-25T17:41:55.748749858Z",
       "discoveries": {
-        "count": 0
+        "count": 1,
+        "last": "2026-11-09T15:57:26.919148201Z",
+        "recent": [
+          {
+            "at": "2026-11-09T15:57:26.919148201Z"
+          }
+        ]
       },
       "retrievals": {
         "count": 0
@@ -183,7 +195,13 @@
       "created": "2026-10-25T19:17:40.299604989Z",
       "tracked_since": "2026-10-25T19:17:40.299604989Z",
       "discoveries": {
-        "count": 0
+        "count": 1,
+        "last": "2026-11-09T15:57:26.919148201Z",
+        "recent": [
+          {
+            "at": "2026-11-09T15:57:26.919148201Z"
+          }
+        ]
       },
       "retrievals": {
         "count": 0
@@ -193,7 +211,13 @@
       "created": "2026-09-09T14:52:06Z",
       "tracked_since": "2026-10-25T17:41:55.748749858Z",
       "discoveries": {
-        "count": 0
+        "count": 1,
+        "last": "2026-11-09T15:57:26.919148201Z",
+        "recent": [
+          {
+            "at": "2026-11-09T15:57:26.919148201Z"
+          }
+        ]
       },
       "retrievals": {
         "count": 0
@@ -311,6 +335,16 @@
     "gotchas/harbor-working-files-deleted-before-inspection.md": {
       "created": "2026-08-14T10:28:20Z",
       "tracked_since": "2026-10-25T17:41:55.748749858Z",
+      "discoveries": {
+        "count": 0
+      },
+      "retrievals": {
+        "count": 0
+      }
+    },
+    "gotchas/linear-project-markdown.md": {
+      "created": "2026-11-09T15:58:03.213948386Z",
+      "tracked_since": "2026-11-09T15:58:03.213948386Z",
       "discoveries": {
         "count": 0
       },

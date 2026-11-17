@@ -53,6 +53,10 @@ type Server struct {
 	// Issues by UUID, in creation order via Order.
 	Issues map[string]*Issue
 	Order  []string
+	// Projects in creation order; a separate namespace from issue IDs.
+	Projects []*Project
+	// FailOperation returns a GraphQL error for this operation.
+	FailOperation string
 	// Relations records "BLOCKER blocks BLOCKED" by identifier.
 	Relations     []string
 	FailRelations bool
@@ -68,6 +72,7 @@ type Issue struct {
 	Title       string
 	Description string
 	ParentID    string
+	ProjectID   string
 	LabelIDs    []string
 	StateID     string
 	StateType   string
@@ -75,6 +80,13 @@ type Issue struct {
 	// Archived hides the issue from an issues query without
 	// includeArchived, as Linear does once a completed issue is archived.
 	Archived bool
+}
+
+// Project is an RFC container with a full Markdown content field.
+type Project struct {
+	ID, Name, Content, StatusType string
+	TeamID                        string
+	Archived                      bool
 }
 
 // Normalize is what the fake does to a description it stores.
@@ -145,8 +157,52 @@ func (f *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	op := m[1]
 	f.calls = append(f.calls, op)
+	if op == f.FailOperation {
+		gqlErr(op + " refused")
+		return
+	}
 	input, _ := req.Variables["input"].(map[string]any)
 	switch op {
+	case "projects":
+		assert.Contains(f.t, req.Query, "accessibleTeams: { some: { key: { eqIgnoreCase: $team } } }")
+		team, _ := req.Variables["team"].(string)
+		var matching []*Project
+		for _, p := range f.Projects {
+			if strings.EqualFold(team, Team) && p.TeamID == TeamID && (!p.Archived || strings.Contains(req.Query, "includeArchived: true")) {
+				matching = append(matching, p)
+			}
+		}
+		from := 0
+		if c, ok := req.Variables["after"].(string); ok {
+			from, _ = strconv.Atoi(c)
+		}
+		first := int(req.Variables["first"].(float64))
+		end := min(from+first, len(matching))
+		nodes := []any{}
+		for _, p := range matching[from:end] {
+			nodes = append(nodes, projectNode(p))
+		}
+		data(map[string]any{"projects": map[string]any{"nodes": nodes,
+			"pageInfo": map[string]any{"hasNextPage": end < len(matching), "endCursor": strconv.Itoa(end)}}})
+	case "projectCreate":
+		assert.Equal(f.t, []any{TeamID}, input["teamIds"])
+		assert.NotContains(f.t, input, "labelIds", "issue labels are not project labels")
+		assert.NotContains(f.t, input, "description", "full Markdown belongs in content")
+		p := &Project{ID: fmt.Sprintf("project-%d", len(f.Projects)+1), Name: input["name"].(string),
+			Content: Normalize(input["content"].(string)), StatusType: "planned", TeamID: TeamID}
+		f.Projects = append(f.Projects, p)
+		data(map[string]any{"projectCreate": map[string]any{"success": true, "project": projectNode(p)}})
+	case "projectUpdate":
+		id, _ := req.Variables["id"].(string)
+		for _, p := range f.Projects {
+			if p.ID == id {
+				p.Name = input["name"].(string)
+				p.Content = Normalize(input["content"].(string))
+				data(map[string]any{"projectUpdate": map[string]any{"success": true}})
+				return
+			}
+		}
+		gqlErr("Entity not found: Project")
 	case "teams":
 		key, _ := req.Variables["key"].(string)
 		if !strings.EqualFold(key, Team) {
@@ -228,6 +284,13 @@ func (f *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			is.ParentID = p
 		}
+		if p, ok := input["projectId"].(string); ok {
+			if !f.hasProject(p) {
+				gqlErr("Entity not found: Project")
+				return
+			}
+			is.ProjectID = p
+		}
 		if s, ok := input["stateId"].(string); ok {
 			is.StateID = s
 			if s == StateID(Todo) {
@@ -264,6 +327,13 @@ func (f *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			is.ParentID = p
 		}
+		if p, ok := input["projectId"].(string); ok {
+			if !f.hasProject(p) {
+				gqlErr("Entity not found: Project")
+				return
+			}
+			is.ProjectID = p
+		}
 		data(map[string]any{"issueUpdate": map[string]any{"success": true}})
 	case "issueRelationCreate":
 		if f.FailRelations {
@@ -290,10 +360,13 @@ func (f *Server) node(is *Issue) map[string]any {
 	n := map[string]any{
 		"id": is.ID, "identifier": is.Identifier, "url": "https://linear.app/acme/issue/" + is.Identifier,
 		"title": is.Title, "description": is.Description, "state": map[string]any{"type": is.StateType},
-		"parent": nil,
+		"parent": nil, "project": nil,
 	}
 	if is.ParentID != "" {
 		n["parent"] = map[string]any{"id": is.ParentID}
+	}
+	if is.ProjectID != "" {
+		n["project"] = map[string]any{"id": is.ProjectID}
 	}
 	inverse := []any{}
 	for _, rel := range f.Relations {
@@ -306,6 +379,50 @@ func (f *Server) node(is *Issue) map[string]any {
 	}
 	n["inverseRelations"] = map[string]any{"nodes": inverse}
 	return n
+}
+
+func projectNode(p *Project) map[string]any {
+	return map[string]any{"id": p.ID, "name": p.Name, "content": p.Content,
+		"url": "https://linear.app/acme/project/" + p.ID, "status": map[string]any{"type": p.StatusType}}
+}
+
+func (f *Server) hasProject(id string) bool {
+	for _, p := range f.Projects {
+		if p.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// ProjectSnapshot copies the projects under the lock.
+func (f *Server) ProjectSnapshot() []Project {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]Project, 0, len(f.Projects))
+	for _, p := range f.Projects {
+		out = append(out, *p)
+	}
+	return out
+}
+
+// UpdateProject changes a project under the lock between publish runs.
+func (f *Server) UpdateProject(id string, fn func(*Project)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, p := range f.Projects {
+		if p.ID == id {
+			fn(p)
+			return
+		}
+	}
+}
+
+// SetFailure changes the operation refused by the fake under the lock.
+func (f *Server) SetFailure(op string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.FailOperation = op
 }
 
 func (f *Server) add(is *Issue) {
