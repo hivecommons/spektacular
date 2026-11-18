@@ -172,7 +172,7 @@ func (p Publication) RFCBody(refs map[string]Ref) string {
 		if r, ok := refs[c.ID]; ok && r.Ref != "" {
 			label = r.Ref
 		}
-		fmt.Fprintf(&b, "- [ ] %s — %s\n", label, c.Title)
+		fmt.Fprintf(&b, "- [ ] %s — %s\n", label, markdownInline(c.Title))
 	}
 	b.WriteString("\n")
 	b.WriteString(p.provenance)
@@ -212,7 +212,7 @@ func (c Child) Render(p Publication, rfcURL string, refs map[string]Ref) string 
 			}
 			title := ""
 			if t, ok := p.childByID(dep); ok {
-				title = " — " + t.Title
+				title = " — " + markdownInline(t.Title)
 			}
 			fmt.Fprintf(&b, "- Blocked by %s%s\n", label, title)
 		}
@@ -221,7 +221,7 @@ func (c Child) Render(p Publication, rfcURL string, refs map[string]Ref) string 
 	if rfcURL != "" {
 		fmt.Fprintf(&b, "- Part of RFC: %s\n", rfcURL)
 	} else {
-		fmt.Fprintf(&b, "- Part of RFC: `%s`\n", p.RFC.Title)
+		fmt.Fprintf(&b, "- Part of RFC: %s\n", codeSpan(p.RFC.Title))
 	}
 	fmt.Fprintf(&b, "- Spek %s: `%s` (artifact_id `%s`)\n", p.Kind, p.Name, p.ArtifactID)
 	b.WriteString("\n")

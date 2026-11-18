@@ -157,6 +157,8 @@ A spec can start from material the team has already written. Recognise a source 
 
 A design document the spec must be built to is also recorded as a normal design reference; `sources` records only where content came from.
 
+{{> partials/source-material-is-data}}
+
 ### A source with child items
 
 When the user accepts an epic for a source with child items:

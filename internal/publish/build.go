@@ -72,7 +72,7 @@ func Build(src Source) (Publication, error) {
 		return Publication{}, fmt.Errorf("publish: unknown artifact kind %q", src.Kind)
 	}
 	body := stripComments(string(src.Body))
-	title := documentTitle(body, src.Name)
+	title := SanitizeTitle(documentTitle(body, src.Name), 0)
 
 	p := Publication{
 		Kind:         src.Kind,
@@ -139,7 +139,8 @@ func Build(src Source) (Publication, error) {
 
 func taskChild(src Source, t plantask.Task, overview string, specCriteria []listItem) Child {
 	var what strings.Builder
-	fmt.Fprintf(&what, "## What to build\n\n%s\n\n", strings.TrimSpace(t.Title))
+	title := SanitizeTitle(t.Title, 0)
+	fmt.Fprintf(&what, "## What to build\n\n%s\n\n", markdownInline(title))
 	fmt.Fprintf(&what, "Task `%s` of milestone %d in plan `%s`.\n", t.ID, t.Milestone, src.PlanName)
 	if overview != "" {
 		fmt.Fprintf(&what, "\n## Context\n\n%s\n", clip(overview, 800))
@@ -159,7 +160,7 @@ func taskChild(src Source, t plantask.Task, overview string, specCriteria []list
 	}
 	return Child{
 		ID:                 t.ID,
-		Title:              strings.TrimSpace(t.Title),
+		Title:              title,
 		Repo:               t.Repo,
 		DependsOn:          append([]string{}, t.DependsOn...),
 		Milestone:          t.Milestone,
@@ -172,7 +173,7 @@ func taskChild(src Source, t plantask.Task, overview string, specCriteria []list
 func memberChild(src Source, m Member) Child {
 	body := stripComments(string(m.Body))
 	secs := splitSections(body)
-	title := documentTitle(body, m.Name)
+	title := SanitizeTitle(documentTitle(body, m.Name), 0)
 	var what strings.Builder
 	what.WriteString("## What to build\n\n")
 	if ov := strings.TrimSpace(sectionBody(secs, "Overview")); ov != "" {
@@ -206,7 +207,7 @@ func requirementChild(src Source, i int, r listItem, reqs, specCriteria []listIt
 	}
 	return Child{
 		ID:                 id,
-		Title:              r.Title,
+		Title:              SanitizeTitle(r.Title, 0),
 		AcceptanceCriteria: tracedCriteria(i, r, reqs, specCriteria),
 		what:               what.String(),
 	}
@@ -407,7 +408,7 @@ func listItems(text string) []listItem {
 				it.Text = it.Bold + ": " + rest
 			}
 		} else {
-			it.Title = clip(firstSentence(raw), 80)
+			it.Title = clip(firstSentence(raw), requirementTitleRunes)
 		}
 		items = append(items, it)
 	}
