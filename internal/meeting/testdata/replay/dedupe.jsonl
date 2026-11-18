@@ -1,0 +1,10 @@
+// The same question in different case and punctuation is dropped, as is one the model marks duplicate_of; a new question still gets through.
+{"at":0,"event":{"type":"segment","meeting_id":"m1","seq":1,"speaker":{"id":"Ana","name":"Ana"},"text":"We need a timeline.","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"pause","when":"timeline","response":{"asks":[{"text":"What is the target date?","duplicate_of":""}]}}}
+{"at":5000,"event":{"type":"segment","meeting_id":"m1","seq":2,"speaker":{"id":"Bo","name":"Bo"},"text":"The timeline depends on review.","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"pause","when":"depends on review","response":{"asks":[{"text":"what is the TARGET date??","duplicate_of":""}]}}}
+{"at":10000,"event":{"type":"segment","meeting_id":"m1","seq":3,"speaker":{"id":"Ana","name":"Ana"},"text":"Review could be slow.","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"pause","when":"slow","response":{"asks":[{"text":"When do we want this shipped by?","duplicate_of":"q-1"}]}}}
+{"at":15000,"event":{"type":"segment","meeting_id":"m1","seq":4,"speaker":{"id":"Bo","name":"Bo"},"text":"Docs are also needed.","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"pause","when":"docs","response":{"asks":[{"text":"Who writes the docs?","duplicate_of":""}]}}}
+{"at":20000,"eof":true}

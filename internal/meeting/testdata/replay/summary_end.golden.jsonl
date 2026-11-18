@@ -1,0 +1,12 @@
+{"at":0,"intent":{"type":"heartbeat"}}
+{"at":1500,"decide":{"ask_allowed":true,"kind":"turn","last":"We will ship the meeting mode behind a flag.","say_allowed":false,"trigger":"pause"}}
+{"at":1500,"intent":{"type":"ask","qid":"q-1","text":"Which hive version ships it first?"}}
+{"at":1500,"intent":{"type":"notes.append","section":"decisions","text":"Ship the meeting mode behind a flag"}}
+{"at":1500,"intent":{"type":"notes.append","section":"actions","text":"Ana: write the contract tests"}}
+{"at":1500,"intent":{"type":"notes.append","section":"questions","text":"Who owns the hive side rollout?"}}
+{"at":4000,"intent":{"type":"research","rid":"r-1","query":"the quorum SSE reconnect behaviour","reason":"requested in the meeting by Bo"}}
+{"at":5500,"decide":{"ask_allowed":true,"kind":"turn","last":"hive, research the quorum SSE reconnect behaviour","say_allowed":true,"trigger":"pause"}}
+{"at":6000,"intent":{"type":"notes.append","section":"notes","text":"Research \"the quorum SSE reconnect behaviour\": Quorum resumes from after_seq on reconnect. (https://example.org/sse)"}}
+{"at":7000,"decide":{"ask_allowed":false,"kind":"summary","last":"hive, research the quorum SSE reconnect behaviour","say_allowed":false,"trigger":""}}
+{"at":7000,"intent":{"type":"notes.append","section":"actions","text":"Bo: update the hive runbook"}}
+{"at":7000,"intent":{"type":"notes.append","section":"summary","text":"Replay summary\n\nThe team agreed how meeting mode ships.\n\nDecisions:\n- Ship the meeting mode behind a flag\n\nActions:\n- Ana: write the contract tests\n- Bo: update the hive runbook\n\nOpen questions:\n- Who owns the hive side rollout?\n\nAnswered:\n- Which hive version ships it first? v5.3 (Bo)\n\nResearch:\n- the quorum SSE reconnect behaviour: done, Quorum resumes from after_seq on reconnect."}}

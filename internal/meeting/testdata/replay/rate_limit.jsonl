@@ -1,0 +1,14 @@
+// Five pauses each propose a new question; only three asks fit in ten minutes, and a fourth is allowed once the first ask leaves the window.
+{"at":0,"event":{"type":"segment","meeting_id":"m1","seq":1,"speaker":{"id":"Ana","name":"Ana"},"text":"First topic is runners.","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"pause","when":"runners","response":{"asks":[{"text":"How many runners do we need?","duplicate_of":""}]}}}
+{"at":60000,"event":{"type":"segment","meeting_id":"m1","seq":2,"speaker":{"id":"Ana","name":"Ana"},"text":"Second topic is caching.","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"pause","when":"caching","response":{"asks":[{"text":"Which cache backend is in use?","duplicate_of":""}]}}}
+{"at":120000,"event":{"type":"segment","meeting_id":"m1","seq":3,"speaker":{"id":"Ana","name":"Ana"},"text":"Third topic is secrets.","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"pause","when":"secrets","response":{"asks":[{"text":"Where are secrets stored today?","duplicate_of":""}]}}}
+{"at":180000,"event":{"type":"segment","meeting_id":"m1","seq":4,"speaker":{"id":"Ana","name":"Ana"},"text":"Fourth topic is billing.","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"pause","when":"billing","response":{"asks":[{"text":"Who pays for the GPU nodes?","duplicate_of":""}]}}}
+{"at":240000,"event":{"type":"segment","meeting_id":"m1","seq":5,"speaker":{"id":"Ana","name":"Ana"},"text":"Fifth topic is quotas.","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"pause","when":"quotas","response":{"asks":[{"text":"What quota does each team get?","duplicate_of":""}]}}}
+{"at":601000,"event":{"type":"segment","meeting_id":"m1","seq":6,"speaker":{"id":"Ana","name":"Ana"},"text":"Back to monitoring.","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"pause","when":"monitoring","response":{"asks":[{"text":"Which dashboards matter most?","duplicate_of":""}]}}}
+{"at":605000,"eof":true}
