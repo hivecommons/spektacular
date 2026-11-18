@@ -11,6 +11,54 @@ plan is the contract.
 This document describes how the knowledge base is organised and how it behaves, so
 a maintainer new to the project can understand it without reading the source.
 
+## Start here: save and read one rule
+
+Use the knowledge base to save rules, definitions, and lessons for future
+planning. Conventions and glossary entries load for every plan; other
+categories are searched when needed.
+
+The word **tier** has two independent meanings here:
+
+- **Retrieval tier** means *when* an entry loads: always-applied or looked-up.
+- **Storage tier** means *where* it belongs: a repository's store (`repo`) or
+  a shared project store (`project`). A **store** is one configured collection.
+  Both storage tiers can contain both retrieval tiers.
+
+Start in an initialized project's top-level folder with Spektacular on `PATH`.
+In your terminal, discover the configured addresses rather than guessing:
+
+```sh
+spektacular knowledge sources
+spektacular knowledge categories
+```
+
+In your coding agent, invoke the installed `spek-knowledge` skill and ask it to
+record one real rule, for example: “Save our convention that database calls
+accept context cancellation.” The skill writes without asking and reports its
+storage tier, store name, path, and tags. Review that report.
+
+Read the saved entry using those exact reported values. For example, **only if**
+the report names tier `repo`, store `api`, and path
+`conventions/context-cancellation.md`, run:
+
+```sh
+spektacular knowledge read --data '{"tier":"repo","name":"api","path":"conventions/context-cancellation.md"}'
+```
+
+Success means the read returns the intended rule, not just a successful write.
+Use `knowledge always-applied` to inspect conventions and glossary entries;
+they intentionally do not appear in keyword search.
+For looked-up entries, try `knowledge search "your subject"` and inspect the
+returned source before relying on it.
+
+**Before cleanup:** pruning can delete or rewrite entries without asking.
+Preview with `spektacular knowledge prune --dry-run` and review the report.
+Keep recoverable version history for the stores first; recovery uses that
+history, not a built-in undo. See [Pruning](#pruning-the-knowledge-base).
+
+The everyday category and contribution guidance follows. Detailed ranking and
+merge mechanics are kept in optional reference sections below.
+
 ## The category model
 
 Every knowledge entry belongs to a **category**, determined by the first segment of
@@ -100,6 +148,9 @@ Always-applied categories never appear in search results — they are already lo
 in full — so search surfaces only the looked-up reference knowledge.
 
 ### How a result is ranked
+
+<details>
+<summary>Advanced: how search is ranked and where scores are computed</summary>
 
 The query is lower-cased and split on whitespace into terms. There is no stemming,
 no synonyms and no plural handling, so `router` and `routers` are different terms.
@@ -195,6 +246,8 @@ stating for anyone writing a backend: a store must be able to report per-term
 occurrence counts to take part in this ranking at all. The public reference for
 writing a storage backend covers the contract in full.
 
+</details>
+
 ### Tags on an entry
 
 An entry may open with a YAML frontmatter block declaring what it is about,
@@ -245,6 +298,12 @@ it captures an entry, drawn from the vocabulary already in use, writes the entry
 without asking, and then tells you the tags it chose alongside the destination.
 
 ## De-duplication and consolidation
+
+In ordinary use, identical copies are combined and related entries are returned
+as a source-cited answer. Conflicts should be shown, not silently overridden.
+
+<details>
+<summary>Advanced: exact de-duplication and consolidation rationale</summary>
 
 The same knowledge often lives in more than one place — copied across stores, or
 worded differently in two entries. A lookup does not return that pile of
@@ -301,6 +360,8 @@ So exact-equivalence is the most effective *mechanical* primitive precisely beca
 it is narrow: it claims the one provable point — zero difference — for free, and
 routes everything semantic to the judgement layer, fed the inputs that make that
 judgement good (full bodies, the store each came from, and the category label).
+
+</details>
 
 ## Two tiers, and how a store is addressed
 
