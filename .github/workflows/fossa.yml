@@ -49,11 +49,27 @@ jobs:
           team: Hive Commons
           branch: ${{ github.head_ref || github.ref_name }}
 
+      # Policy test on PRs. The diff test compares against the base commit's
+      # scan; a repo whose base was never scanned (new project, or the base
+      # push scan did not run) has no such revision, and `fossa test --diff`
+      # fails with "Revision for locator ... was not found". Only in that
+      # specific case fall back to a plain `fossa test` of the PR revision just
+      # uploaded above. Any other failure (including real policy violations
+      # from either test) still fails the job. Reuses the CLI installed by the
+      # Run FOSSA scan step.
       - name: Run FOSSA policy test
         if: env.FOSSA_API_KEY != '' && github.event_name == 'pull_request'
-        uses: fossas/fossa-action@29693cc50323968e039056be419b32989fc5880c # v2.0.0
-        with:
-          api-key: ${{ secrets.FOSSA_API_KEY }}
-          project: hivecommons/spektacular
-          run-tests: true
-          test-diff-revision: ${{ github.event.pull_request.base.sha }}
+        env:
+          FOSSA_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set +e
+          out="$(fossa test --project hivecommons/spektacular --diff "$FOSSA_BASE_SHA" 2>&1)"
+          rc=$?
+          printf '%s\n' "$out"
+          if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'was not found'; then
+            echo "Base revision $FOSSA_BASE_SHA has no FOSSA scan; testing the PR revision without --diff."
+            echo "FOSSA base revision has no scan; policy test ran on the PR revision without diff." >> "$GITHUB_STEP_SUMMARY"
+            fossa test --project hivecommons/spektacular
+            rc=$?
+          fi
+          exit "$rc"
