@@ -7,6 +7,13 @@ on:
     branches:
       - main
 
+# A push to main builds archives named with the next version, then releases
+# them. Two overlapping runs on main would both compute the same next version
+# at build time, so main runs wait for each other. Other runs are not grouped.
+concurrency:
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'release-main' || format('run-{0}', github.run_id) }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Dagger Build and Test
