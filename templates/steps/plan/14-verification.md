@@ -6,7 +6,7 @@ The three plan documents were assembled and staged in the previous step at:
 - `.spektacular/tmp/{{plan_name}}/context_template.md`
 - `.spektacular/tmp/{{plan_name}}/research_template.md`
 
-Verify them here. This step **only checks correctness** — it writes nothing to the plan store (the write steps that follow do that). If a scratch file is missing (the `.spektacular/tmp/` path is git-ignored and does not survive a crash), re-assemble it from the per-section working files under `.spektacular/work/{{plan_name}}/` before verifying.
+Verify them here. This step **only checks correctness** — it writes no plan document to the plan store (the write steps that follow do that); the one store change it may make is to a plan image, below. If a scratch file is missing (the `.spektacular/tmp/` path is git-ignored and does not survive a crash), re-assemble it from the per-section working files under `.spektacular/work/{{plan_name}}/` before verifying.
 
 ### Step 1: Every required section is present and filled
 
@@ -59,13 +59,14 @@ A common failure mode is silently dropping a section when assembling. Check each
   `{{config.command}} plan file write` enforces the structural rules above and refuses a plan.md that breaks them, naming the task. If a write step is refused, fix the named task in `tasks_plan.md`, re-assemble and retry.
 - **The plan's context.md** — per-task technical notes under headings matching plan.md's `*Technical detail:*` anchors.
 - **research.md** — alternatives considered and rejected with citations. Dense enough to rehydrate a cold session.
+- **Images** — every image a staged document links (`![…](images/<name>.svg)`) is one `{{config.command}} plan image list {{plan_name}}` reports, and every image it reports is linked from a staged document; remove one nothing links with `{{config.command}} plan image delete {{plan_name}} <name>`. A visual change that one line of text cannot explain, or a complex flow, described only in prose is a missing image: draw it as the architecture step describes and link it from the owning working file.
 - **Recorded decisions and knowledge** — check the staged plan against the spec's recorded decisions (its sections, every design it references, and its interview notes only if they still exist) and against the knowledge entries loaded in discovery. If anything in the plan contradicts one of them, STOP and ask the user before Step 3 re-stages; do not record it as an assumption, a `human` task or an open question.
 
 ### Step 3: Fix and re-stage
 
 If any section is missing, empty, or fails a quality check, fix it in the **owning working file** under `.spektacular/work/{{plan_name}}/` (the working files are the durable source), then re-assemble the affected scratch file from the working files so the staged document reflects the change. Re-run this verification until every section in every list above is present and filled. Do **not** advance until the staged documents are correct.
 
-This step does not touch the plan store. Never write or edit the plan documents with the `Write` or `Edit` tools — the write steps that follow commit them through `{{config.command}} plan file write`, which is the only supported way.
+This step writes no plan document. Never write or edit the plan documents with the `Write` or `Edit` tools — the write steps that follow commit them through `{{config.command}} plan file write`, which is the only supported way.
 
 Then advance:
 
