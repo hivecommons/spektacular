@@ -429,6 +429,14 @@ func (d *Spektacular) GithubRelease(
 		return "", d.lastError
 	}
 
+	// fail before anything is published if the archives were built for a
+	// different version than the one this release computed
+	err = d.checkArchives(ctx, archives, version)
+	if err != nil {
+		d.lastError = err
+		return "", err
+	}
+
 	cli := dag
 
 	err = cli.Github().
@@ -503,6 +511,10 @@ func (d *Spektacular) UpdateGemFury(
 	gemFuryToken *dagger.Secret,
 	archives *dagger.Directory,
 ) error {
+	if d.hasError() {
+		return d.lastError
+	}
+
 	cli := dag
 
 	tkn, _ := gemFuryToken.Plaintext(ctx)
@@ -578,6 +590,36 @@ func (d *Spektacular) goCache() *dagger.CacheVolume {
 	}
 
 	return d.goCacheVolume
+}
+
+// checkArchives returns an error unless files holds every archive named for
+// version. The build job names the archives with the version it computed and
+// the release job computes the version again; the two disagree when another
+// release lands between them, and the release must stop before it publishes.
+func (d *Spektacular) checkArchives(ctx context.Context, files *dagger.Directory, version string) error {
+	entries, err := files.Entries(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to list archives: %w", err)
+	}
+
+	present := map[string]bool{}
+	for _, e := range entries {
+		present[e] = true
+	}
+
+	missing := []string{}
+	for _, a := range archives {
+		name := strings.ReplaceAll(a.Output, "%%VERSION%%", version)
+		if !present[name] {
+			missing = append(missing, name)
+		}
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("archives were not built for version %s, missing: %s (found: %s)", version, strings.Join(missing, ", "), strings.Join(entries, ", "))
+	}
+
+	return nil
 }
 
 func (d *Spektacular) hasError() bool {
