@@ -1,0 +1,9 @@
+{"at":0,"intent":{"type":"heartbeat"}}
+{"at":2500,"decide":{"ask_allowed":true,"kind":"turn","last":"Agreed, and we keep it behind a flag.","say_allowed":false,"trigger":"pause"}}
+{"at":2500,"intent":{"type":"ask","qid":"q-1","text":"Which hive goes first?"}}
+{"at":2500,"intent":{"type":"notes.append","section":"decisions","text":"Meeting mode ships behind a flag"}}
+{"at":5000,"decide":{"ask_allowed":false,"kind":"turn","last":"spek, what do you think about the flag name?","say_allowed":true,"trigger":"addressed"}}
+{"at":5000,"intent":{"type":"say","text":"I would call it meeting_mode."}}
+{"at":6700,"decide":{"ask_allowed":true,"kind":"turn","last":"Okay.","say_allowed":false,"trigger":"pause"}}
+{"at":9000,"decide":{"ask_allowed":false,"kind":"summary","last":"Okay.","say_allowed":false,"trigger":""}}
+{"at":9000,"intent":{"type":"notes.append","section":"summary","text":"Replay summary\n\nDecisions:\n- Meeting mode ships behind a flag\n\nOpen questions:\n- Which hive goes first?"}}

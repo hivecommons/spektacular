@@ -1,0 +1,10 @@
+// Malformed and unknown lines are logged to stderr and skipped; the meeting carries on and still closes with a summary on EOF.
+{"at":0,"raw":"this is not json"}
+{"at":100,"raw":"{\"text\":\"no type\"}"}
+{"at":200,"raw":"{\"type\":\"segment\",\"final\":true}"}
+{"at":300,"raw":"{\"type\":\"telepathy\",\"text\":\"hi\"}"}
+{"at":400,"raw":"{\"type\":\"segment\",\"speaker\":{\"name\":\"Ana\"},\"text\":\"still talking\",\"final\":false}"}
+{"at":500,"raw":"{\"type\":\"research_update\",\"rid\":\"r-1\",\"status\":\"exploded\"}"}
+{"at":600,"raw":"[1,2,3]"}
+{"at":700,"raw":""}
+{"at":800,"raw":"{\"type\":\"answer\",\"text\":\"no qid\"}"}

@@ -1,0 +1,6 @@
+// say is emitted only for a decision taken on a line that addressed Spek by name; a pause decision proposing a say has it dropped.
+{"at":0,"event":{"type":"segment","meeting_id":"m1","seq":1,"speaker":{"id":"Ana","name":"Ana"},"text":"The plan looks fine to me.","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"pause","response":{"say":"Sounds good."}}}
+{"at":5000,"event":{"type":"segment","meeting_id":"m1","seq":2,"speaker":{"id":"Bo","name":"Bo"},"text":"Hey hive, can you summarise where we are?","start":0,"end":0,"final":true}}
+{"llm":{"trigger":"addressed","response":{"say":"We agreed to ship behind a flag."}}}
+{"at":8000,"eof":true}

@@ -1,0 +1,4 @@
+{"options":{"heartbeat_s":15}}
+// Heartbeats come at start and then every SPEK_MEETING_HEARTBEAT_S on the fake clock, with or without input.
+{"at":20000,"event":{"type":"segment","meeting_id":"m1","seq":1,"speaker":{"id":"Ana","name":"Ana"},"text":"Quiet meeting.","start":0,"end":0,"final":true}}
+{"at":61000,"eof":true}

@@ -151,7 +151,11 @@ func runRoot() int {
 
 	exitCode := 0
 	if err != nil {
-		output.WriteFailure(rootCmd.OutOrStdout(), toErrorResponse(err), globalFields)
+		// A quiet failure was already reported on stderr by a command whose
+		// stdout is a line protocol (meeting); no envelope is written.
+		if !isQuiet(err) {
+			output.WriteFailure(rootCmd.OutOrStdout(), toErrorResponse(err), globalFields)
+		}
 		exitCode = 1
 	}
 
@@ -719,4 +723,5 @@ func init() {
 	rootCmd.AddCommand(artifactsCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(migrateCmd)
+	rootCmd.AddCommand(meetingCmd)
 }

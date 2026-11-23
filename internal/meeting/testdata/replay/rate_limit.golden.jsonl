@@ -1,0 +1,13 @@
+{"at":0,"intent":{"type":"heartbeat"}}
+{"at":1500,"decide":{"ask_allowed":true,"kind":"turn","last":"First topic is runners.","say_allowed":false,"trigger":"pause"}}
+{"at":1500,"intent":{"type":"ask","qid":"q-1","text":"How many runners do we need?"}}
+{"at":61500,"decide":{"ask_allowed":true,"kind":"turn","last":"Second topic is caching.","say_allowed":false,"trigger":"pause"}}
+{"at":61500,"intent":{"type":"ask","qid":"q-2","text":"Which cache backend is in use?"}}
+{"at":121500,"decide":{"ask_allowed":true,"kind":"turn","last":"Third topic is secrets.","say_allowed":false,"trigger":"pause"}}
+{"at":121500,"intent":{"type":"ask","qid":"q-3","text":"Where are secrets stored today?"}}
+{"at":181500,"decide":{"ask_allowed":false,"kind":"turn","last":"Fourth topic is billing.","say_allowed":false,"trigger":"pause"}}
+{"at":241500,"decide":{"ask_allowed":false,"kind":"turn","last":"Fifth topic is quotas.","say_allowed":false,"trigger":"pause"}}
+{"at":602500,"decide":{"ask_allowed":true,"kind":"turn","last":"Back to monitoring.","say_allowed":false,"trigger":"pause"}}
+{"at":602500,"intent":{"type":"ask","qid":"q-4","text":"Which dashboards matter most?"}}
+{"at":605000,"decide":{"ask_allowed":false,"kind":"summary","last":"Back to monitoring.","say_allowed":false,"trigger":""}}
+{"at":605000,"intent":{"type":"notes.append","section":"summary","text":"Replay summary\n\nOpen questions:\n- How many runners do we need?\n- Which cache backend is in use?\n- Where are secrets stored today?\n- Which dashboards matter most?"}}

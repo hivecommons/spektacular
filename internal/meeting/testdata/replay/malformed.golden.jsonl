@@ -1,0 +1,3 @@
+{"at":0,"intent":{"type":"heartbeat"}}
+{"at":800,"decide":{"ask_allowed":false,"kind":"summary","last":"","say_allowed":false,"trigger":""}}
+{"at":800,"intent":{"type":"notes.append","section":"summary","text":"Replay summary\n\nNo decisions, actions or open questions were recorded."}}
